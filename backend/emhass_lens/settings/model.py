@@ -639,8 +639,10 @@ class InverterLimits(Section):
         json_schema_extra=ui(unit="W"),
     )
     low_export_price: float = Field(
-        default=0.02,
-        title="Block export below this price",
+        default=0.03,
+        title="Block export at or below this price",
+        description="Feed-in 0 W and no PV-export mode when the slot's export price is at or below this "
+        "(an unknown price counts as 0).",
         json_schema_extra=ui(unit="€/kWh"),
     )
 

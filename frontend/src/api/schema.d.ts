@@ -1474,7 +1474,7 @@ export interface components {
              *       "force_charge_grid_cap_above_w": 9000,
              *       "force_charge_grid_margin_w": 1000,
              *       "grid_import_max_w": 18800,
-             *       "low_export_price": 0.02
+             *       "low_export_price": 0.03
              *     }
              */
             limits: components["schemas"]["InverterLimits"];
@@ -1584,8 +1584,9 @@ export interface components {
              */
             grid_import_max_w: number;
             /**
-             * Block export below this price
-             * @default 0.02
+             * Block export at or below this price
+             * @description Feed-in 0 W and no PV-export mode when the slot's export price is at or below this (an unknown price counts as 0).
+             * @default 0.03
              */
             low_export_price: number;
         };
@@ -2569,7 +2570,7 @@ export interface components {
              *         "force_charge_grid_cap_above_w": 9000,
              *         "force_charge_grid_margin_w": 1000,
              *         "grid_import_max_w": 18800,
-             *         "low_export_price": 0.02
+             *         "low_export_price": 0.03
              *       },
              *       "mode": "off"
              *     }

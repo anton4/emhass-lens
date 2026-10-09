@@ -2074,6 +2074,20 @@ dialog.confirm h2 {
   font-size: var(--step--1);
 }
 
+/* rule ids are words (force_charge, self_use, …) */
+.rule-badge.word {
+  width: auto;
+  min-width: 30px;
+  padding: 0 8px;
+  font-size: var(--step--1);
+  letter-spacing: 0.02em;
+}
+
+.rule-badge.small.word {
+  min-width: 20px;
+  padding: 0 6px;
+}
+
 .agreement-value {
   font-size: var(--step-2);
   font-weight: 600;
@@ -2086,10 +2100,6 @@ dialog.confirm h2 {
 
 .rules-list li + li {
   margin-top: 8px;
-}
-
-.rules-list li[data-unreachable] {
-  color: var(--ink-muted);
 }
 
 /* Getting started checklist */

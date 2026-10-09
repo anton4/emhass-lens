@@ -76,6 +76,20 @@ triggers:
 mode: queued
 ```
 
+## Inverter control (experimental)
+
+EMHASS Lens can set a Sofar inverter's passive mode from the plan itself, instead of a Home Assistant automation doing it. It mirrors the automation "EMHASS: Consolidated Inverter Control" rule for rule: the plan's grid power picks the branch (importing, exporting or neutral), the battery power picks the mode (force charge, force discharge, use only grid, self-use, …), and when exporting with an idle battery the export price decides whether the PV is exported or kept. The feed-in limit is 0 W whenever the export price is at or below **Settings → Inverter control → Limits → Block export at or below this price**, otherwise the export maximum.
+
+| Mode | What happens |
+|---|---|
+| Off | Nothing is decided. |
+| Dry run | Right after each publish the decision is recorded (rule, why, targets) and 40 s later the inverter entities are read and compared with it. The **Inverter** page shows the agreement over 24 h and 7 days. The inverter is never touched. |
+| Live | EMHASS Lens applies the decision itself (the passive-state select, the three passive-mode numbers and their apply button, the feed-in limit and its button) and reads them back. Only values that differ are written. |
+
+Nothing is written while the inverter isn't in passive mode, while the automation switch (`input_boolean.emhass_automation`) is off, for example during an mFRR session, or when the plan is stale.
+
+**Moving the automation over:** set the thresholds under Limits to the automation's values, run **Dry run** for about a week and watch the agreement. When it stays at 99 % or more, turn the Home Assistant automation off (keep it) and switch to **Live**. To go back, set the mode to Off and turn the automation on again.
+
 ## App options (Configuration tab)
 
 | Option | Meaning |

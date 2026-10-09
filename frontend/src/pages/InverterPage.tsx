@@ -237,7 +237,7 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
                     <td>
                       {parsed ? (
                         <>
-                          <span className="rule-badge small">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
+                          <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
                         </>
                       ) : (
                         <span className="faint">—</span>

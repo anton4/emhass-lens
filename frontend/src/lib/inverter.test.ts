@@ -24,13 +24,17 @@ describe('formatAgreement', () => {
 
 describe('parseDecisionSummary', () => {
   it('reads the rule from dry-run and live summaries', () => {
-    expect(parseDecisionSummary("Would set 'Force charge' (rule g): grid 5600 W, battery -3000…20000 W, feed-in 0 W")).toEqual(
-      { rule: 'g', label: 'Force charge' },
-    )
+    expect(
+      parseDecisionSummary("Would set 'Force charge' (rule force_charge): grid 5600 W, battery -3000…20000 W, feed-in 0 W"),
+    ).toEqual({ rule: 'force_charge', label: 'Force charge' })
+    expect(parseDecisionSummary("Set 'Self-use battery or PV' (rule self_use): grid 0 W")).toEqual({
+      rule: 'self_use',
+      label: 'Self-use battery or PV',
+    })
     expect(parseDecisionSummary("Set 'Self-use battery or PV' (rule b): grid 0 W")).toEqual({
       rule: 'b',
       label: 'Self-use battery or PV',
-    })
+    }) // runs made before 0.2.11
     expect(parseDecisionSummary('Would set no passive-mode change (no rule matches); feed-in 15500 W')).toEqual({
       rule: 'none',
       label: 'No change',
@@ -67,11 +71,21 @@ describe('mergeBySlot', () => {
 })
 
 describe('rules', () => {
-  it('lists nine rules in the automation order with the configured thresholds', () => {
+  it('lists the rules in the automation order with the configured thresholds', () => {
     const list = rules(undefined)
-    expect(list.map((r) => r.id).join('')).toBe('abcdefghi')
-    expect(list.find((r) => r.id === 'e')?.note).toContain('unreachable')
-    expect(list.find((r) => r.id === 'g')?.sets).toContain('18800 W if P_grid > 9000 W')
+    expect(list.map((r) => r.id)).toEqual([
+      'force_charge',
+      'use_bat_import',
+      'use_only_grid',
+      'charge_export',
+      'force_discharge',
+      'self_use_pv_export',
+      'self_use',
+      'self_use_restrict',
+      'self_use',
+    ])
+    expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('18800 W if P_grid > 9000 W')
+    expect(list.find((r) => r.id === 'self_use_pv_export')?.when).toContain('above 0.03 €/kWh')
   })
 })
 

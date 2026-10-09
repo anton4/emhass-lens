@@ -18,7 +18,7 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 | 2. EMHASS orchestration (dry run → live, take over / hand back) | done; verified against real EMHASS 0.18.3 (e2e) |
 | 3. MQTT entities and the plan-published event | done; verified against a real HA and Mosquitto (e2e) |
 | 4. Retire the HACS integration | waiting for your validation; runbook in docs/RETIRING_HACS.md |
-| 5. Inverter control in the App (optional) | done, experimental: off by default; dry run compares with your automation |
+| 5. Inverter control in the App (optional) | done, experimental: off by default; dry run compares with your automation. Rules follow the template version of the automation (2026-10-10) |
 
 ## Decisions for the owner (left open on purpose)
 - **License:** the repo has no LICENSE file yet (the old repo didn't either). Pick one (MIT is common for HA Apps).
@@ -33,6 +33,11 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-10: inverter rules follow the template automation (unreleased)
+- **Why:** the owner rewrote "EMHASS: Consolidated Inverter Control" as a template automation (±100 W bands for grid and battery, "Charge battery and export some to grid" reachable, PV export gated on the export price, feed-in purely price-based). The App still mirrored the older `choose` version, so dry run would have disagreed.
+- **Done:** `domain/inverter.py` decides exactly like the template version; rule ids are the automation's mode names (`force_charge`, `self_use`, …); every grid/battery combination maps to a mode. `low_export_price` now means "at or below" and defaults to 0.03 (the live value; the stored 0.02 of an existing install is kept, set it by hand). DOCS.md gained an "Inverter control" section.
+- **Plan for the other automations:** `~/.claude/plans/if-i-want-to-async-pixel.md` (hold and resume around market sessions, EV charger control, the Qilowatt market controller).
 
 ### 2026-10-09 (late night): 0.2.5–0.2.8 after trying it on the real HA
 - **Saving through the user's nginx.** The proxy refuses PUT/PATCH; the browser only shows "Failed to fetch" / `ERR_HTTP2_PROTOCOL_ERROR`. The UI now writes with POST only (`/api/settings/save`, `/api/settings/change`), and the API client offers only get/post (0.2.5).
@@ -106,5 +111,5 @@ These come from docs/PLAN.md §10:
    2. EMHASS should be found automatically; otherwise set the address in Settings → EMHASS.
    3. Run "Import from the HACS integration" (Health). Keep the mode **Off** and watch parity for a week, including the DST change on 2026-10-25.
    4. Switch to **Dry run** for a few days, then **Take over**.
-   5. Optionally turn inverter control to **Dry run** and watch the agreement rate.
+   5. Optionally turn inverter control to **Dry run** and watch the agreement rate. First set Settings → Inverter control → Limits → "Block export at or below this price" to 0.03 (the live automation's value; installs made before this change still hold 0.02).
 2. Phase 4 when happy: follow docs/RETIRING_HACS.md.

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Inverter control: the rules now follow the current, template-based version of the automation "EMHASS: Consolidated Inverter Control": ±100 W bands for grid and battery power, "Charge battery and export some to grid" can match, PV export depends on the export price, and the feed-in limit depends only on the export price. Every combination of grid and battery power now maps to a mode. Rule ids are the automation's mode names (`force_charge`, `self_use`, …).
+- Settings → Inverter control → Limits: "Block export at or below this price" replaces "Block export below this price" and now defaults to 0.03 €/kWh. An existing install keeps its stored value; set it to the automation's value by hand.
+- DOCS: a section on inverter control and how to move the automation over.
+
 ## 0.2.10
 
 - Parity: when only the slots filled from the price forecast differ because the two sides fetched the forecast at different times, the check passes and says so, with both fetch times. Differences in Nord Pool prices are still reported.

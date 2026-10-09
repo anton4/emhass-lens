@@ -27,7 +27,7 @@ export function DecisionView({
   return (
     <>
       <div className="decision-head">
-        <span className="rule-badge" aria-label={`Rule ${decision.rule}`}>
+        <span className="rule-badge word" aria-label={`Rule ${decision.rule}`}>
           {decision.rule === 'none' ? '–' : decision.rule}
         </span>
         <div>
@@ -220,27 +220,29 @@ export function RulesExplainer({ limits }: { limits: InverterSettings['limits'] 
         </h3>
       </summary>
       <p>
-        Each slot, the plan's values are checked against these rules <strong>in this order</strong>. The first one that
-        matches sets the Sofar passive-mode targets. They are the same rules, thresholds and order as the Home Assistant
-        automation "EMHASS: Consolidated Inverter Control", so dry-run decisions can be compared with it slot by slot.
-        Signs follow EMHASS: <strong>P_batt</strong> + discharges / − charges the battery; <strong>P_grid</strong> + imports /
-        − exports.
+        Each slot, the plan's values pick one of these modes: <strong>P_grid</strong> picks the branch (importing above
+        100 W, exporting below −100 W, otherwise neutral), <strong>P_batt</strong> picks the mode (charging below −100 W,
+        discharging above 100 W, otherwise idle), and when exporting with an idle battery the export price breaks the tie.
+        They are the same rules and thresholds as the Home Assistant automation "EMHASS: Consolidated Inverter Control", so
+        dry-run decisions can be compared with it slot by slot. Signs follow EMHASS: P_batt + discharges / − charges the
+        battery; P_grid + imports / − exports.
       </p>
-      <ol className="rules-list" type="a">
-        {rules(limits).map((r) => (
-          <li key={r.id} data-unreachable={r.note ? true : undefined}>
-            <div className="cell-title">{r.label}</div>
+      <ol className="rules-list">
+        {rules(limits).map((r, i) => (
+          <li key={`${r.id}-${i}`}>
+            <div className="cell-title">
+              <span className="rule-badge small word">{r.id}</span> {r.label}
+            </div>
             <div>
               <span className="muted">When</span> {r.when}
             </div>
             <div>
               <span className="muted">Sets</span> {r.sets}
             </div>
-            {r.note && <div className="cell-sub">{r.note}</div>}
           </li>
         ))}
       </ol>
-      <p className="cell-sub">If no rule matches, the passive-mode settings are left as they are.</p>
+      <p className="cell-sub">Every combination of grid and battery power matches one of these, so a decision is made every slot.</p>
       <h3 className="sub-head">Feed-in limit</h3>
       <ul>
         {feedinRules(limits).map((text) => (

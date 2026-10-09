@@ -12,10 +12,10 @@ export interface InverterTargets {
 }
 
 export interface InverterDecision {
-  rule: string // a..i or "none"
+  rule: string // the automation's mode name, e.g. "force_charge" ("a".."i" or "none" in runs made before 0.2.11)
   label: string
   why: string
-  targets: InverterTargets | null
+  targets: InverterTargets | null // null only in runs made before 0.2.11
   feedin_max_w: number
   feedin_why: string
   notes?: string[]
@@ -107,10 +107,10 @@ export function formatAgreement(a: Agreement | null | undefined): { text: string
   return { text: `${a.agreed} of ${a.compared} slot${a.compared === 1 ? '' : 's'} agreed`, percent: `${pct} %`, color }
 }
 
-/** Rule letter and label from a decide run's summary, e.g. "Would set 'Force charge' (rule g): …". */
+/** Rule id and label from a decide run's summary, e.g. "Would set 'Force charge' (rule force_charge): …". */
 export function parseDecisionSummary(summary: string | null | undefined): { rule: string; label: string } | null {
   if (!summary) return null
-  const match = /'([^']+)' \(rule ([a-i])\)/.exec(summary)
+  const match = /'([^']+)' \(rule ([a-z_]+)\)/.exec(summary)
   if (match) return { rule: match[2]!, label: match[1]! }
   if (summary.includes('no passive-mode change')) return { rule: 'none', label: 'No change' }
   return null
@@ -171,10 +171,10 @@ export interface RuleText {
   label: string
   when: string
   sets: string
-  note?: string
 }
 
-/** The nine rules in their order, with the thresholds from the current limits (Settings → Inverter control). */
+/** The rules in the automation's order (importing, exporting, neutral), with the thresholds from the current limits
+ * (Settings → Inverter control). "Self-use battery or PV" appears twice because two branches end there. */
 export function rules(limits: InverterSettings['limits'] | undefined): RuleText[] {
   const l = limits ?? {
     battery_max_w: 20000,
@@ -185,74 +185,73 @@ export function rules(limits: InverterSettings['limits'] | undefined): RuleText[
     force_charge_battery_min_w: -3000,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
-    low_export_price: 0.02,
+    low_export_price: 0.03,
   }
   const full = `battery ${l.battery_min_w}…${l.battery_max_w} W`
+  const price = `${l.low_export_price} €/kWh`
   return [
     {
-      id: 'a',
-      label: 'Self-use battery or PV, restrict export to grid',
-      when: 'Grid ≈ 0 (−100 < P_grid < 1 W) and PV is curtailed (curtailment > 0)',
-      sets: `grid 0 W, ${full}`,
-    },
-    {
-      id: 'b',
-      label: 'Self-use battery or PV',
-      when: 'Grid ≈ 0 (−100 < P_grid < 1 W), no curtailment (−1…1 W)',
-      sets: `grid 0 W, ${full}`,
-    },
-    {
-      id: 'c',
-      label: 'Self-use PV and export excess to grid',
-      when: 'Exporting (P_grid < −100 W), battery idle (−1 < P_batt < 1 W), PV producing',
-      sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may charge, not discharge)`,
-    },
-    {
-      id: 'd',
-      label: 'Vahepealne',
-      when: 'Charging the battery (P_batt < −1 W) while exporting (P_grid < −1 W)',
-      sets: `grid 0 W, ${full}`,
-    },
-    {
-      id: 'e',
-      label: 'Charge battery and export some to grid',
-      when: 'Exporting > 101 W, PV > 500 W and charging > 500 W',
-      sets: `grid 0 W, ${full}`,
-      note: 'Never matches: rule d already covers these cases. It is unreachable in the original automation too and kept so decisions stay comparable.',
-    },
-    {
-      id: 'f',
-      label: 'Use only grid power',
-      when: 'Importing (P_grid > 1 W), battery idle (−1 < P_batt < 1 W)',
-      sets: `grid 0 W, battery 0…${l.battery_max_w} W (no charging)`,
-    },
-    {
-      id: 'g',
+      id: 'force_charge',
       label: 'Force charge',
-      when: 'Charging > 100 W and importing > 100 W',
+      when: 'Importing (P_grid > 100 W) and charging the battery (P_batt < −100 W)',
       sets: `grid target = ${l.grid_import_max_w} W if P_grid > ${l.force_charge_grid_cap_above_w} W, else P_grid rounded to 100 W + ${l.force_charge_grid_margin_w} W; battery ${l.force_charge_battery_min_w}…${l.battery_max_w} W`,
     },
     {
-      id: 'h',
-      label: 'Force discharge',
-      when: 'Discharging (P_batt > 1 W) and exporting (P_grid < −1 W)',
-      sets: `grid target = P_grid rounded to 100 W; ${full}`,
+      id: 'use_bat_import',
+      label: 'Self-use battery or PV',
+      when: 'Importing and discharging the battery (P_batt > 100 W): use the battery, import the rest',
+      sets: `grid 0 W, ${full}`,
     },
     {
-      id: 'i',
+      id: 'use_only_grid',
+      label: 'Use only grid power',
+      when: 'Importing, battery idle (−100…100 W)',
+      sets: `grid 0 W, battery 0…${l.battery_max_w} W (no charging)`,
+    },
+    {
+      id: 'charge_export',
+      label: 'Charge battery and export some to grid',
+      when: 'Exporting (P_grid < −100 W) and charging the battery',
+      sets: `grid 0 W, ${full}`,
+    },
+    {
+      id: 'force_discharge',
+      label: 'Force discharge',
+      when: 'Exporting and discharging the battery',
+      sets: `grid target = P_grid rounded to 100 W (negative); ${full}`,
+    },
+    {
+      id: 'self_use_pv_export',
+      label: 'Self-use PV and export excess to grid',
+      when: `Exporting, battery idle, export price above ${price}`,
+      sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may charge, not discharge)`,
+    },
+    {
+      id: 'self_use',
       label: 'Self-use battery or PV',
-      when: 'Importing > 100 W and discharging > 100 W (use the battery, import the rest)',
+      when: `Exporting, battery idle, export price at or below ${price} (an unknown price counts as 0): keep the PV`,
+      sets: `grid 0 W, ${full}`,
+    },
+    {
+      id: 'self_use_restrict',
+      label: 'Self-use battery or PV, restrict export to grid',
+      when: 'Grid neutral (−100…100 W) and PV is curtailed',
+      sets: `grid 0 W, ${full}`,
+    },
+    {
+      id: 'self_use',
+      label: 'Self-use battery or PV',
+      when: 'Grid neutral, no curtailment',
       sets: `grid 0 W, ${full}`,
     },
   ]
 }
 
 export function feedinRules(limits: InverterSettings['limits'] | undefined): string[] {
-  const price = limits?.low_export_price ?? 0.02
+  const price = limits?.low_export_price ?? 0.03
   const max = limits?.export_max_w ?? 15500
   return [
-    `0 W when the slot's export price is below ${price} €/kWh`,
-    '0 W when PV is curtailed and nothing is exported (P_grid < 1 W)',
+    `0 W when the slot's export price is at or below ${price} €/kWh (an unknown price counts as 0)`,
     `otherwise ${max} W (the export maximum)`,
   ]
 }

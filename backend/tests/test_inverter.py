@@ -15,16 +15,30 @@ def v(g: float, b: float, pv: float = 0.0, c: float = 0.0, price: float | None =
 @pytest.mark.parametrize(
     ("values", "rule", "state", "grid", "bmax", "bmin"),
     [
-        (v(0, 500, c=300), "a", "Self-use battery or PV, restrict export to grid", 0, 20000, -20000),
-        (v(-50, 800), "b", "Self-use battery or PV", 0, 20000, -20000),
-        (v(-3000, 0, pv=5000), "c", "Self-use PV and export excess to grid", 0, 0, -16000),
-        (v(-2000, -3000, pv=6000), "d", "Vahepealne", 0, 20000, -20000),
-        (v(2500, 0), "f", "Use only grid power", 0, 20000, 0),
-        (v(4560, -6000), "g", "Force charge", 5600, 20000, -3000),
-        (v(9500, -15000), "g", "Force charge", 18800, 20000, -3000),
-        (v(-15500, 17000), "h", "Force discharge", -15500, 20000, -20000),
-        (v(-4449, 6000), "h", "Force discharge", -4400, 20000, -20000),
-        (v(3000, 2000), "i", "Self-use battery or PV", 0, 20000, -20000),
+        # importing (P_grid > 100 W)
+        (v(4560, -6000), "force_charge", "Force charge", 5600, 20000, -3000),
+        (v(9500, -15000), "force_charge", "Force charge", 18800, 20000, -3000),
+        (v(9000, -500), "force_charge", "Force charge", 10000, 20000, -3000),  # 9000 is not above the cap
+        (v(101, -101), "force_charge", "Force charge", 1100, 20000, -3000),
+        (v(3000, 2000), "use_bat_import", "Self-use battery or PV", 0, 20000, -20000),
+        (v(2500, 0), "use_only_grid", "Use only grid power", 0, 20000, 0),
+        (v(2500, 100), "use_only_grid", "Use only grid power", 0, 20000, 0),  # the idle band is inclusive
+        (v(2500, -100), "use_only_grid", "Use only grid power", 0, 20000, 0),
+        # exporting (P_grid < -100 W)
+        (v(-2000, -3000, pv=6000), "charge_export", "Charge battery and export some to grid", 0, 20000, -20000),
+        (v(-15500, 17000), "force_discharge", "Force discharge", -15500, 20000, -20000),
+        (v(-4449, 6000), "force_discharge", "Force discharge", -4400, 20000, -20000),
+        (v(-101, 101), "force_discharge", "Force discharge", -100, 20000, -20000),
+        (v(-3000, 0, pv=5000, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -16000),
+        (v(-3000, 50, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -16000),
+        (v(-3000, 0, price=0.03), "self_use", "Self-use battery or PV", 0, 20000, -20000),  # not above the threshold
+        (v(-3000, 0, price=None), "self_use", "Self-use battery or PV", 0, 20000, -20000),  # unknown counts as 0
+        # neutral (-100…100 W)
+        (v(0, 500, c=300), "self_use_restrict", "Self-use battery or PV, restrict export to grid", 0, 20000, -20000),
+        (v(-100, 6000, c=1), "self_use_restrict", "Self-use battery or PV, restrict export to grid", 0, 20000, -20000),
+        (v(-50, 800), "self_use", "Self-use battery or PV", 0, 20000, -20000),
+        (v(100, -6000), "self_use", "Self-use battery or PV", 0, 20000, -20000),  # 100 W is still neutral
+        (v(50, 50), "self_use", "Self-use battery or PV", 0, 20000, -20000),
     ],
 )
 def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> None:
@@ -39,29 +53,34 @@ def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> No
     )
 
 
-def test_rule_e_is_unreachable_like_in_the_automation() -> None:
-    d = decide(v(-3000, -2000, pv=6000), L)  # meets e's conditions, but d comes first
-    assert d.rule == "d"
-
-
 def test_jinja_round_is_half_to_even() -> None:
     assert decide(v(4450, -6000), L).targets.grid_power_w == 5400  # type: ignore[union-attr]  # 44.5 -> 44
     assert decide(v(4550, -6000), L).targets.grid_power_w == 5600  # type: ignore[union-attr]  # 45.5 -> 46
+    assert decide(v(-4450, 6000), L).targets.grid_power_w == -4400  # type: ignore[union-attr]
+    assert decide(v(-4550, 6000), L).targets.grid_power_w == -4600  # type: ignore[union-attr]
 
 
-def test_no_rule_means_no_change() -> None:
-    d = decide(v(50, 50), L)  # importing a little, battery discharging a little: nothing matches
-    assert d.rule == "none"
-    assert d.targets is None
+def test_every_combination_has_targets() -> None:
+    for g in (-5000, -100, 0, 100, 5000):
+        for b in (-5000, -100, 0, 100, 5000):
+            d = decide(v(g, b), L)
+            assert d.rule != "none" and d.targets is not None, (g, b)
+
+
+def test_unknown_export_price_is_noted() -> None:
+    d = decide(v(-3000, 0, price=None), L)
+    assert d.notes == ["export price unknown; treated as 0 like the automation"]
+    assert decide(v(-3000, 0, price=0.05), L).notes == []
 
 
 @pytest.mark.parametrize(
     ("values", "feedin"),
     [
-        (v(-3000, 0, pv=5000, price=0.015), 0),  # cheap export
-        (v(0, 0, c=400, price=0.05), 0),  # curtailing, nothing exported
-        (v(-3000, 0, pv=5000, price=0.05), 15500),
-        (v(-3000, 0, pv=5000, price=None), 15500),
+        (v(-3000, 0, pv=5000, price=0.03), 0),  # at the threshold: blocked
+        (v(-3000, 0, pv=5000, price=0.0301), 15500),
+        (v(-3000, 0, pv=5000, price=None), 0),  # unknown counts as 0
+        (v(0, 0, c=400, price=0.05), 15500),  # curtailment no longer matters
+        (v(4560, -6000, price=0.05), 15500),
     ],
 )
 def test_feedin_limit(values, feedin) -> None:
