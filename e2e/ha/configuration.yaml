@@ -1,0 +1,58 @@
+homeassistant:
+  name: EMHASS Lens test
+  time_zone: Europe/Tallinn
+  country: EE
+  currency: EUR
+  unit_system: metric
+  latitude: 59.437
+  longitude: 24.7536
+  elevation: 30
+
+http:
+
+api:
+websocket_api:
+config:
+recorder:
+  purge_keep_days: 2
+logger:
+  default: warning
+  logs:
+    custom_components.homeassistant-ee-nordpool: info
+
+input_number:
+  emhass_target_soc:
+    name: EMHASS target SOC
+    min: 0
+    max: 100
+    initial: 80
+  ev6_soc_helper:
+    name: Home battery SOC (test)
+    min: 0
+    max: 100
+    initial: 62
+
+input_boolean:
+  ev_charging_enabled:
+    name: EV charging enabled
+    initial: false
+  ev_force_continuous_charging:
+    name: EV force continuous charging
+    initial: false
+
+template:
+  - sensor:
+      - name: ev6_battery_soc
+        unique_id: test_ev6_battery_soc
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.ev6_soc_helper') }}"
+      - name: ev_operating_hours
+        unique_id: test_ev_operating_hours
+        state: "3"
+      - name: ev_charging_timesteps
+        unique_id: test_ev_charging_timesteps
+        state: "20"
+      - name: house_power_without_deferrable
+        unique_id: test_house_power
+        unit_of_measurement: W
+        state: "1500"

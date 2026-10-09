@@ -88,7 +88,8 @@ class HaClient:
         await self.rest.aclose()
 
     # --- watching ----------------------------------------------------------------------------------
-    def set_watched(self, entity_ids: set[str]) -> None:
+    def set_watched(self, entity_ids: set[str]) -> asyncio.Task[None] | None:
+        """Watch these entities; returns the task loading newly added ones (None if nothing to load)."""
         added = {e for e in entity_ids if e} - self.watched
         self.watched = {e for e in entity_ids if e}
         for entity_id in list(self.states):
@@ -98,6 +99,8 @@ class HaClient:
             task = asyncio.create_task(self._refresh(added))
             self._background.add(task)
             task.add_done_callback(self._background.discard)
+            return task
+        return None
 
     def on_state(self, predicate: Callable[[str], bool], listener: StateListener) -> None:
         self._state_listeners.append((predicate, listener))

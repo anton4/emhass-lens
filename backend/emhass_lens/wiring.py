@@ -238,7 +238,9 @@ def subscribe(c: Container) -> None:
     ha: HaClient = x["ha"]
 
     def rewatch(*_: Any) -> None:
-        ha.set_watched(watched_entities(c))
+        loading = ha.set_watched(watched_entities(c))
+        if loading is not None:
+            _spawn(c, _evaluate_after(c, loading))
 
     def on_prices(old: Settings, new: Settings, paths: list[str]) -> None:
         if old.prices.nordpool.area != new.prices.nordpool.area:
@@ -285,6 +287,12 @@ def subscribe(c: Container) -> None:
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
     rewatch()
+
+
+async def _evaluate_after(c: Container, loading: asyncio.Task[None]) -> None:
+    """Re-check health as soon as newly watched entities are loaded, not a minute later."""
+    await loading
+    c.scheduler.run_now("health.evaluate")
 
 
 async def _resolve_and_check(c: Container) -> None:
