@@ -1,45 +1,204 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { PageHead } from '../components/PageHead'
+import { usePlan } from '../api/queries'
+import type { PlanRow } from '../api/types'
+import { LabelledLamp } from '../components/Lamp'
+import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
+import { useNow } from '../components/useNow'
+import { formatDuration, formatSlot, formatTime } from '../lib/format'
+import { planChanges, rowAt } from '../lib/plan'
+import { formatPower } from '../lib/units'
+import { PlanCharts } from './plan/PlanCharts'
+import { ThisSlot } from './plan/ThisSlot'
+
+const DRIVERS: Record<string, string> = {
+  app: 'EMHASS Lens',
+  legacy: 'the HACS integration',
+  external: 'someone else (not EMHASS Lens)',
+}
 
 export function PlanPage() {
+  const plan = usePlan()
+  const now = useNow(30_000)
+  const nowS = now.getTime() / 1000
+  const data = plan.data
+  const currentRows = data?.current?.rows
+  const previousRows = data?.previous?.rows
+  const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
+  const changes = useMemo(() => planChanges(rows, (previousRows ?? []) as PlanRow[]), [rows, previousRows])
+  const [table, setTable] = useState(false)
+
+  if (plan.isLoading) return <PageHead title="Plan" />
+  if (!data?.available || !data.current) {
+    return (
+      <>
+        <PageHead title="Plan" intro="What EMHASS wants the battery, grid and loads to do in each quarter-hour." />
+        <ErrorNotice error={plan.error} />
+        <section className="panel">
+          <Empty title="No EMHASS plan yet">
+            In shadow mode EMHASS Lens shows the plans EMHASS makes for whoever drives it, for example the HACS
+            integration. Check <Link to="/health">Health → EMHASS</Link> to see whether EMHASS is reachable.
+          </Empty>
+        </section>
+      </>
+    )
+  }
+
+  const current = data.current
+  const lastRun = (current.last_run ?? {}) as Record<string, unknown>
+  const status = typeof lastRun.status === 'string' ? lastRun.status : null
+  const duration = typeof lastRun.duration_total_seconds === 'number' ? lastRun.duration_total_seconds * 1000 : null
+  const currentRow = (data.current_row as PlanRow | null) ?? rowAt(rows, nowS)
+  const first = rows[0]?.timestamp
+  const last = rows[rows.length - 1]?.timestamp
+
   return (
     <>
-      <PageHead
-        title="Plan"
-        intro="What EMHASS wants the battery, grid and EV to do in each quarter-hour, and why. This page fills in once EMHASS Lens builds and runs the MPC itself."
-      />
-      <div className="phase">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>This slot</h2>
-            <span className="muted">Phase 2</span>
+      <PageHead title="Plan" intro="What EMHASS wants the battery, grid and loads to do in each quarter-hour.">
+        <div className="toolbar">
+          <LabelledLamp color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'} text={`EMHASS ${status ?? '—'}`} />
+        </div>
+      </PageHead>
+      <ErrorNotice error={plan.error} />
+
+      <section className="panel">
+        <div className="panel-body">
+          <dl className="facts">
+            <div>
+              <dt>Planned at</dt>
+              <dd>
+                <time dateTime={current.generated_at}>{formatTime(current.generated_at, now)}</time>
+              </dd>
+            </div>
+            <div>
+              <dt>Made for</dt>
+              <dd>{DRIVERS[current.driver] ?? current.driver}</dd>
+            </div>
+            {duration !== null && (
+              <div>
+                <dt>Solve took</dt>
+                <dd>{formatDuration(duration)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Horizon</dt>
+              <dd>
+                {rows.length} slots
+                <div className="cell-sub">
+                  {formatTime(first, now)} → {formatTime(last, now)}
+                </div>
+              </dd>
+            </div>
+            {current.run_id && (
+              <div>
+                <dt>Run</dt>
+                <dd>
+                  <Link to={`/runs/${current.run_id}`}>#{current.run_id}</Link>
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>This slot</h2>
+          {currentRow?.timestamp && <span className="muted">from {formatTime(String(currentRow.timestamp), now)}</span>}
+        </div>
+        <div className="panel-body">
+          {currentRow ? (
+            <ThisSlot row={currentRow} columns={data.columns} />
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              The plan doesn't cover the current quarter-hour (it starts {formatTime(first, now)}).
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Plan</h2>
+          <button type="button" className="quiet" aria-pressed={table} onClick={() => setTable((t) => !t)}>
+            {table ? 'Show charts' : 'Show as a table'}
+          </button>
+        </div>
+        <div className="panel-body">{table ? <PlanTable rows={rows} columns={data.columns} nowS={nowS} /> : <PlanCharts data={data} nowS={nowS} />}</div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Changes vs the previous plan</h2>
+          {data.previous && <span className="muted">previous: {formatTime(data.previous.generated_at, now)}</span>}
+        </div>
+        {!data.previous ? (
+          <Empty title="No earlier plan stored yet" />
+        ) : changes.length === 0 ? (
+          <Empty title="No slot moved by more than 500 W">Battery and grid power are the same as in the previous plan.</Empty>
+        ) : (
+          <div className="table-wrap sticky-table">
+            <table className="num-table">
+              <thead>
+                <tr>
+                  <th>Slot</th>
+                  <th className="r">Battery before</th>
+                  <th className="r">Battery now</th>
+                  <th className="r">Grid before</th>
+                  <th className="r">Grid now</th>
+                </tr>
+              </thead>
+              <tbody>
+                {changes.slice(0, 96).map((c) => (
+                  <tr key={c.time}>
+                    <td className="num">{formatSlot(c.timestamp, now)}</td>
+                    <td className="num r">{formatPower(c.battBefore)}</td>
+                    <td className="num r">{formatPower(c.battNow)}</td>
+                    <td className="num r">{formatPower(c.gridBefore)}</td>
+                    <td className="num r">{formatPower(c.gridNow)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="panel-body">
-            <ul>
-              <li>Battery, grid, PV, curtailment and EV power EMHASS planned for the current quarter-hour.</li>
-              <li>The exact values the inverter automation receives in the emhass_lens_plan_published event.</li>
-              <li>Last run: when, how long, optimizer status and expected profit; countdown to the next run.</li>
-            </ul>
-          </div>
-        </section>
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Plan chart</h2>
-            <span className="muted">Phase 1–2</span>
-          </div>
-          <div className="panel-body">
-            <ul>
-              <li>Battery state of charge and charge/discharge power over the whole horizon.</li>
-              <li>Grid import/export, PV and load, with import and export prices on the same time axis.</li>
-              <li>The previous plan as a ghost line, and a list of the slots that changed.</li>
-            </ul>
-          </div>
-        </section>
-      </div>
-      <p className="muted" style={{ marginTop: 20 }}>
-        Until then, every job EMHASS Lens runs is listed under <Link to="/runs">Runs</Link>, with its logs under{' '}
-        <Link to="/logs">Logs</Link>.
-      </p>
+        )}
+      </section>
     </>
+  )
+}
+
+function PlanTable({ rows, columns, nowS }: { rows: PlanRow[]; columns: string[]; nowS: number }) {
+  const shown = columns.filter((c) => !c.startsWith('cost_fun_'))
+  const current = rowAt(rows, nowS)
+  return (
+    <div className="table-wrap sticky-table">
+      <table className="num-table">
+        <thead>
+          <tr>
+            <th>Slot</th>
+            {shown.map((c) => (
+              <th key={c} className="r">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={String(row.timestamp)} data-current={row === current || undefined}>
+              <td className="num">{formatSlot(String(row.timestamp))}</td>
+              {shown.map((c) => {
+                const v = row[c]
+                return (
+                  <td key={c} className="num r">
+                    {typeof v === 'number' ? (c === 'SOC_opt' ? `${(v * 100).toFixed(1)} %` : Math.abs(v) >= 10 ? Math.round(v) : v.toFixed(4)) : String(v ?? '—')}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

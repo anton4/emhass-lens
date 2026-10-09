@@ -22,9 +22,19 @@ const EventsContext = createContext<EventsContextValue>({
   subscribeLogs: () => () => {},
 })
 
-const TOPICS = 'log,run,job,settings'
+const TOPICS = 'log,run,job,settings,plan,problem,ha'
 const MAX_FAILURES_BEFORE_POLLING = 5
 const POLL_MS = 10_000
+
+/** Which cached data a finished job may have changed. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function familiesForJob(job: string): string[] {
+  if (job === 'emhass.plan_watch' || job === 'emhass.mpc') return ['plan', 'emhass']
+  if (job === 'nordpool.poll' || job.startsWith('forecast.')) return ['prices']
+  if (job.startsWith('emhass.')) return ['emhass']
+  if (job === 'parity.check') return []
+  return []
+}
 
 export function EventsProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
@@ -56,6 +66,23 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: keys.settings })
             void queryClient.invalidateQueries({ queryKey: keys.revisions })
             void queryClient.invalidateQueries({ queryKey: keys.status })
+            void queryClient.invalidateQueries({ queryKey: ['prices'] })
+            void queryClient.invalidateQueries({ queryKey: keys.inputs })
+            void queryClient.invalidateQueries({ queryKey: keys.emhass })
+          } else if (name === 'plan') {
+            void queryClient.invalidateQueries({ queryKey: keys.plan })
+          } else if (name === 'prices') {
+            void queryClient.invalidateQueries({ queryKey: ['prices'] })
+            void queryClient.invalidateQueries({ queryKey: keys.inputs })
+          } else if (name === 'emhass') {
+            void queryClient.invalidateQueries({ queryKey: keys.emhass })
+            void queryClient.invalidateQueries({ queryKey: keys.status })
+          } else if (name === 'problems') {
+            void queryClient.invalidateQueries({ queryKey: keys.problems })
+            void queryClient.invalidateQueries({ queryKey: keys.status })
+          } else if (name === 'status') {
+            void queryClient.invalidateQueries({ queryKey: keys.status })
+            void queryClient.invalidateQueries({ queryKey: keys.inputs })
           }
         }
         pending.clear()
@@ -99,8 +126,23 @@ export function EventsProvider({ children }: { children: ReactNode }) {
         const entry = JSON.parse((event as MessageEvent<string>).data) as LogEntry
         for (const listener of listeners.current) listener(entry)
       })
-      for (const topic of ['run.started', 'run.finished']) {
-        source.addEventListener(topic, () => invalidate('runs'))
+      source.addEventListener('run.started', () => invalidate('runs'))
+      source.addEventListener('run.finished', (event) => {
+        invalidate('runs')
+        let job = ''
+        try {
+          job = String((JSON.parse((event as MessageEvent<string>).data) as { job?: string }).job ?? '')
+        } catch {
+          /* ignore malformed event data */
+        }
+        for (const family of familiesForJob(job)) invalidate(family)
+      })
+      source.addEventListener('plan.updated', () => invalidate('plan'))
+      for (const topic of ['problem.opened', 'problem.updated', 'problem.resolved']) {
+        source.addEventListener(topic, () => invalidate('problems'))
+      }
+      for (const topic of ['ha.connected', 'ha.disconnected']) {
+        source.addEventListener(topic, () => invalidate('status'))
       }
       source.addEventListener('job.updated', () => invalidate('jobs'))
       source.addEventListener('settings.changed', () => invalidate('settings'))

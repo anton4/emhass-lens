@@ -2,6 +2,8 @@ import { NavLink, Outlet } from 'react-router'
 import { useEvents } from '../api/events'
 import { useStatus, useVersion } from '../api/queries'
 import { LabelledLamp } from './Lamp'
+import { COMPONENT_NAMES } from '../lib/components'
+import { driverSpec } from '../lib/driver'
 import { statusColor } from '../lib/status'
 import { ModeSwitch } from './ModeSwitch'
 
@@ -15,14 +17,6 @@ const NAV = [
   { to: '/health', label: 'Health' },
   { to: '/settings', label: 'Settings' },
 ]
-
-const COMPONENT_NAMES: Record<string, string> = {
-  scheduler: 'Scheduler',
-  home_assistant: 'Home Assistant',
-  emhass: 'EMHASS',
-  nordpool: 'Nord Pool',
-  mqtt: 'MQTT',
-}
 
 function reload() {
   const url = new URL(window.location.href)
@@ -64,7 +58,11 @@ export function Layout() {
           </div>
           <ModeSwitch mode={s?.emhass_mode} />
           <div className="lamps" aria-label="Status">
-            <span className="muted">Driving EMHASS: —</span>
+            {s && (
+              <span title={driverSpec(s.driver).explain}>
+                <LabelledLamp color={driverSpec(s.driver).color} text={`Driving EMHASS: ${driverSpec(s.driver).text}`} />
+              </span>
+            )}
             {s &&
               Object.entries(s.components).map(([name, comp]) => (
                 <span key={name} title={comp.detail ?? undefined}>

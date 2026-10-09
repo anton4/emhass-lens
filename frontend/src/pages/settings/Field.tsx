@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { deepEqual } from '../../lib/diff'
 import { formatQuarterOffset } from '../../lib/format'
 import { defaultFor, fieldInfo, getPath, hasErrorsUnder, type FieldInfo, type SchemaNode } from '../../lib/schema'
+import { EmhassUrlStatus, EntityPicker } from './EntityPicker'
 
 export const MASK = '********'
 
@@ -270,14 +271,40 @@ function Input({ id, info, path, value, ctx, invalid }: InputProps) {
           </>
         )
       }
+      if (widget === 'entity') {
+        return (
+          <EntityPicker
+            id={id}
+            value={value === null || value === undefined ? '' : String(value)}
+            domains={info.ui.domain}
+            disabled={ctx.disabled}
+            invalid={invalid}
+            onValue={(v) => set(v === '' && info.nullable ? null : v)}
+          />
+        )
+      }
       const type = widget === 'time' ? 'time' : widget === 'url' ? 'url' : 'text'
+      if (pathKey(path) === 'emhass.base_url') {
+        return (
+          <div className="entity-picker">
+            <input
+              {...common}
+              type="url"
+              spellCheck={false}
+              placeholder="Empty: find the EMHASS App automatically"
+              value={value === null || value === undefined ? '' : String(value)}
+              onChange={(e) => set(e.target.value)}
+            />
+            <EmhassUrlStatus disabled={ctx.disabled} />
+          </div>
+        )
+      }
       return (
         <>
           <input
             {...common}
             type={type}
             spellCheck={false}
-            placeholder={widget === 'entity' ? entityPlaceholder(info) : undefined}
             value={value === null || value === undefined ? '' : String(value)}
             onChange={(e) => set(e.target.value === '' && info.nullable ? null : e.target.value)}
           />
@@ -288,12 +315,6 @@ function Input({ id, info, path, value, ctx, invalid }: InputProps) {
     default:
       return <code>{JSON.stringify(value)}</code>
   }
-}
-
-function entityPlaceholder(info: FieldInfo): string {
-  const domain = info.ui.domain
-  const first = Array.isArray(domain) ? domain[0] : domain
-  return `${first ?? 'sensor'}.example`
 }
 
 function parseNumber(t: string): number | null | undefined {

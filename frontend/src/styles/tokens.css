@@ -28,6 +28,18 @@
   --focus: #2b62b0;
   --link: #22549c;
 
+  /* Chart series: categorical slots in fixed order (validated for CVD on this surface, light and dark).
+     Series 1 battery / import, 2 grid / export, 3 PV / spot, 4 load / fees, 5 deferrable / VAT. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --chart-grid: #e2e6e2;
+  --chart-axis: #a9b0ab;
+  --chart-wash: rgba(23, 35, 43, 0.06);
+  --chart-now: #c23b2a;
+
   --font-readout: 'Bahnschrift', 'DIN Alternate', 'DIN 2014', 'D-DIN', 'Barlow', 'Roboto Condensed',
     'Arial Narrow', system-ui, sans-serif;
   --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -70,6 +82,16 @@
 
     --focus: #6b9be0;
     --link: #8fb3ea;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --chart-grid: #26343c;
+    --chart-axis: #3d4d56;
+    --chart-wash: rgba(227, 233, 231, 0.07);
+    --chart-now: #e8604d;
     color-scheme: dark;
   }
 }

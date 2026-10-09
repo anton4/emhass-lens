@@ -9,6 +9,7 @@ import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { copyText, downloadText } from '../lib/download'
 import { formatBytes, formatDuration, formatTime } from '../lib/format'
+import { RunInsights } from './RunInsights'
 
 export function RunDetailPage() {
   const id = Number(useParams().id)
@@ -96,6 +97,8 @@ export function RunDetailPage() {
             </div>
           </section>
 
+          <RunInsights runId={id} kinds={r.artifacts.map((a) => a.kind)} />
+
           <section className="panel">
             <div className="panel-head">
               <h2>Details</h2>
@@ -149,6 +152,12 @@ const ARTIFACT_NAMES: Record<string, string> = {
   response: 'Response',
   emhass_last_run: 'EMHASS last run',
   plan: 'Plan',
+  checks: 'Configuration checks',
+  emhass_config: 'EMHASS configuration',
+  parity: 'Parity report',
+  forecast: 'Forecast',
+  next: 'Next fetches',
+  last_run: 'EMHASS last run',
 }
 
 function Artifact({ runId, artifact }: { runId: number; artifact: ArtifactInfo }) {

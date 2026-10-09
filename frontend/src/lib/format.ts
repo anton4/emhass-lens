@@ -97,3 +97,13 @@ export function formatValue(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return JSON.stringify(value)
 }
+
+const slotFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+const slotDayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+
+/** A quarter-hour slot start: "17:45" today, "Sat 17:45" on other days (24-hour, browser time). */
+export function formatSlot(iso: string | null | undefined, now: Date = new Date()): string {
+  const d = parseTime(iso)
+  if (!d) return '—'
+  return sameDay(d, now) ? slotFmt.format(d) : slotDayFmt.format(d)
+}

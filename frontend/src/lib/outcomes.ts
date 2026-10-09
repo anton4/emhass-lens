@@ -4,6 +4,8 @@ export const OUTCOMES: Record<string, { color: LampColor; text: string }> = {
   ok: { color: 'green', text: 'OK' },
   running: { color: 'green', text: 'Running' },
   dry_run: { color: 'blue', text: 'Dry run' },
+  shadow: { color: 'blue', text: 'Shadow build' },
+  mismatch: { color: 'amber', text: 'Differences' },
   noop: { color: 'neutral', text: 'Nothing to do' },
   skipped: { color: 'neutral', text: 'Skipped' },
   cancelled: { color: 'neutral', text: 'Cancelled' },

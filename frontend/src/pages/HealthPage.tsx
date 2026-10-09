@@ -1,22 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
-import { keys, useJobs, useStatus } from '../api/queries'
-import type { JobInfo } from '../api/types'
+import { keys, useJobs, useProblems, useStatus } from '../api/queries'
+import type { JobInfo, RunStarted } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { statusColor } from '../lib/status'
 import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
+import { ProblemList } from '../components/Problems'
 import { useNow } from '../components/useNow'
+import { COMPONENT_NAMES } from '../lib/components'
 import { formatCountdown, formatTime } from '../lib/format'
-
-const COMPONENT_NAMES: Record<string, string> = {
-  scheduler: 'Scheduler',
-  home_assistant: 'Home Assistant',
-  emhass: 'EMHASS',
-  nordpool: 'Nord Pool',
-  mqtt: 'MQTT',
-}
+import { DriverCard } from './health/DriverCard'
+import { EmhassCard } from './health/EmhassCard'
+import { LegacyImportCard } from './health/LegacyImportCard'
+import { ParityCard } from './health/ParityCard'
 
 export function HealthPage() {
   const status = useStatus()
@@ -31,26 +29,14 @@ export function HealthPage() {
       />
       <ErrorNotice error={status.error ?? jobs.error} />
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Problems</h2>
-          {s && <span className="muted">{s.problems.length === 0 ? 'None active' : `${s.problems.length} active`}</span>}
-        </div>
-        {s && s.problems.length === 0 ? (
-          <Empty title="No problems">
-            Failed fetches, unavailable sensors, refused runs and stale plans show up here once those jobs exist.
-          </Empty>
-        ) : (
-          <ul className="diff-list" style={{ padding: '4px 16px' }}>
-            {(s?.problems ?? []).map((p, i) => (
-              <li key={i}>
-                <span className="diff-path">{String(p.key ?? i)}</span>
-                <span>{String(p.title ?? p.detail ?? JSON.stringify(p))}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <ProblemsPanel />
+
+      <div className="two-col">
+        <DriverCard />
+        <ComponentsPanel />
+      </div>
+
+      <EmhassCard writable={s?.writable ?? false} />
 
       <section className="panel">
         <div className="panel-head">
@@ -80,32 +66,98 @@ export function HealthPage() {
         {jobs.isSuccess && jobs.data.length === 0 && <Empty title="No jobs registered" />}
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Components</h2>
-        </div>
-        <div className="components">
-          {s &&
-            Object.entries(s.components).map(([name, comp]) => (
-              <div key={name} className="component">
-                <div className="component-name">
-                  <LabelledLamp color={statusColor(comp.status)} text={COMPONENT_NAMES[name] ?? name} />
-                </div>
-                <div className="cell-sub">{comp.detail ?? statusText(comp.status)}</div>
-              </div>
-            ))}
-          {s && (
-            <div className="component">
-              <div className="component-name">Installation</div>
-              <div className="cell-sub">
-                {s.under_supervisor ? 'Home Assistant App' : 'Standalone'}, timezone {s.timezone}, settings revision{' '}
-                {s.settings_revision}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
+      <ParityCard />
+      <LegacyImportCard writable={s?.writable ?? false} />
     </>
+  )
+}
+
+function ProblemsPanel() {
+  const problems = useProblems()
+  const active = problems.data?.active ?? []
+  const history = (problems.data?.history ?? []) as {
+    id: number
+    severity: string
+    title: string
+    detail: string | null
+    started_at: string
+    ended_at: string | null
+  }[]
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Problems</h2>
+        {problems.data && <span className="muted">{active.length === 0 ? 'None active' : `${active.length} active`}</span>}
+      </div>
+      <ErrorNotice error={problems.error} />
+      {problems.isSuccess && active.length === 0 ? (
+        <Empty title="No problems">Failed fetches, unreadable sensors, an unreachable EMHASS and missed jobs show up here.</Empty>
+      ) : (
+        <div className="panel-body">
+          <ProblemList problems={active} />
+        </div>
+      )}
+      {history.length > 0 && (
+        <details className="history">
+          <summary>History ({history.length})</summary>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Problem</th>
+                  <th>Started</th>
+                  <th>Ended</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td>
+                      <LabelledLamp color={h.severity === 'error' ? 'red' : 'amber'} text={h.title} />
+                      {h.detail && <div className="cell-sub">{h.detail}</div>}
+                    </td>
+                    <td className="num">{formatTime(h.started_at)}</td>
+                    <td className="num">{h.ended_at ? formatTime(h.ended_at) : <span className="chip">open</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </section>
+  )
+}
+
+function ComponentsPanel() {
+  const status = useStatus()
+  const s = status.data
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Components</h2>
+      </div>
+      <div className="components">
+        {s &&
+          Object.entries(s.components).map(([name, comp]) => (
+            <div key={name} className="component">
+              <div className="component-name">
+                <LabelledLamp color={statusColor(comp.status)} text={COMPONENT_NAMES[name] ?? name} />
+              </div>
+              <div className="cell-sub">{comp.detail ?? statusText(comp.status)}</div>
+            </div>
+          ))}
+        {s && (
+          <div className="component">
+            <div className="component-name">Installation</div>
+            <div className="cell-sub">
+              {s.under_supervisor ? 'Home Assistant App' : 'Standalone'}, timezone {s.timezone}, settings revision{' '}
+              {s.settings_revision}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -118,8 +170,13 @@ function statusText(status: string): string {
 function JobRow({ job, writable }: { job: JobInfo; writable: boolean }) {
   const now = useNow(1000)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const action = useMutation({
-    mutationFn: (what: 'run' | 'pause' | 'resume') => api.post(`/api/jobs/${encodeURIComponent(job.id)}/${what}`),
+    mutationFn: (what: 'run' | 'pause' | 'resume') =>
+      api.post<RunStarted | JobInfo>(`/api/jobs/${encodeURIComponent(job.id)}/${what}`),
+    onSuccess: (result, what) => {
+      if (what === 'run' && result && 'run_id' in result && result.run_id) navigate(`/runs/${result.run_id}`)
+    },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.jobs }),
   })
 

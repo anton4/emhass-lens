@@ -41,3 +41,14 @@ describe('formatBytes / formatValue', () => {
     expect(formatValue({ a: 1 })).toBe('{"a":1}')
   })
 })
+
+describe('formatSlot', () => {
+  it('shows 24-hour times, with the weekday on other days', async () => {
+    const { formatSlot } = await import('./format')
+    const now = new Date(2026, 9, 9, 12, 0)
+    expect(formatSlot(new Date(2026, 9, 9, 17, 45).toISOString(), now)).toMatch(/17[:.]45/)
+    expect(formatSlot(new Date(2026, 9, 10, 7, 0).toISOString(), now)).toMatch(/07[:.]00/)
+    expect(formatSlot(new Date(2026, 9, 10, 7, 0).toISOString(), now)).not.toBe(formatSlot(new Date(2026, 9, 9, 7, 0).toISOString(), now))
+    expect(formatSlot(null)).toBe('—')
+  })
+})
