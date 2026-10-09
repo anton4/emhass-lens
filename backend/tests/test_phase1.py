@@ -28,20 +28,39 @@ def make_client(tmp_path: Path, world: World, clock: FakeClock, **boot_kwargs) -
     return TestClient(create_app(boot, clock=clock, http_transport=world.transport()))
 
 
+def _wait_idle(client: TestClient, job: str) -> dict:
+    for _ in range(400):
+        info = next(j for j in client.get("/api/jobs").json() if j["id"] == job)
+        if not info["running"]:
+            return info
+    raise AssertionError(f"{job} didn't finish")
+
+
 def run_job(client: TestClient, job: str) -> dict:
-    started = client.post(f"/api/jobs/{job}/run").json()
-    run_id = started["run_id"]
-    if run_id is None:  # jobs that don't record runs: wait until the job is idle again
-        for _ in range(200):
-            info = next(j for j in client.get("/api/jobs").json() if j["id"] == job)
-            if not info["running"]:
-                return info
-        raise AssertionError(f"{job} didn't finish")
+    """Run a job now and return its finished run (or the job info for jobs that don't record runs).
+    If the job is busy (e.g. the startup check), wait for it and start a fresh run."""
+    if not _records(client, job):
+        _wait_idle(client, job)
+        client.post(f"/api/jobs/{job}/run")
+        return _wait_idle(client, job)
+    run_id = None
+    for _ in range(10):
+        _wait_idle(client, job)
+        run_id = client.post(f"/api/jobs/{job}/run").json()["run_id"]
+        if run_id is not None:
+            break
+    assert run_id is not None, f"{job} never started"
     for _ in range(200):
         run = client.get(f"/api/runs/{run_id}").json()
         if run["outcome"] != "running":
             return run
     raise AssertionError(f"{job} didn't finish")
+
+
+def _records(client: TestClient, job: str) -> bool:
+    container = client.app.state.container  # type: ignore[attr-defined]
+    record = container.scheduler.jobs[job].record
+    return bool(record()) if callable(record) else bool(record)
 
 
 def prime(client: TestClient, world: World) -> None:
