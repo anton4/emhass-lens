@@ -61,7 +61,9 @@ def test_live_mpc_sends_payload_and_verifies_the_plan(tmp_path: Path, world: Wor
         assert plan["current"]["run_id"] == run["id"]
         assert plan["driver"] == "app"
 
-        # the next slot starts: publish-data, then the event with the current row
+        # the next slot starts: publish-data, then the event with the current row. The scheduler is live in
+        # this test, so pause the scheduled publish to keep exactly one (manual) publish.
+        assert client.post("/api/jobs/emhass.publish/pause").status_code == 200
         clock.set(datetime(2026, 10, 9, 11, 15, 2, tzinfo=UTC))
         pub = run_job(client, "emhass.publish")
         assert pub["outcome"] == "ok", pub
