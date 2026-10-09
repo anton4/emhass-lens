@@ -1,5 +1,5 @@
 name: EMHASS Lens
-version: "0.2.3"
+version: "0.2.4"
 slug: emhass_lens
 description: A companion App for EMHASS that feeds it prices and forecasts, runs it on schedule and shows what it planned and why
 url: https://github.com/anton4/emhass-lens

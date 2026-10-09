@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.4
+
+Fixes from a code review:
+- **Nord Pool polling:** never runs more than once a minute, and backs off when an already-delivered day has no prices or the response is malformed.
+- **Inverter control:**
+  - decides right after EMHASS Lens publishes, and ignores EMHASS sensors left over from the previous slot
+  - in live mode, re-reads the passive-mode and mFRR interlocks before writing, and refuses without a Home Assistant connection
+- **MPC runs:** EMHASS's status is only trusted when its last run is newer than the request, and a missing plan read-back counts as an error.
+- **MQTT:** entities show as unavailable when EMHASS Lens stops, and are removed when MQTT entities are turned off.
+- **Take over:** a stale page can no longer leave nobody driving EMHASS.
+- **Entity list:** only available through the Home Assistant sidebar (the optional direct port has no login).
+
 ## 0.2.3
 
 - Entity fields in Settings search Home Assistant as you type: matches are listed best first with their current value, also on installs with thousands of entities.
