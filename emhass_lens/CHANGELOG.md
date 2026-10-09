@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- The Plan page's "This slot" shows the row EMHASS publishes right now (the next slot between a :13 run and the slot start) instead of saying the plan doesn't cover it.
+
 ## 0.2.0
 
 The first version meant for trying on a real Home Assistant, next to the HACS integration.

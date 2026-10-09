@@ -34,6 +34,12 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-09 (night): 0.2.0 / 0.2.1 released
+- **0.2.0** contains all phases so far: Plan, Inputs, Inverter, Runs, Logs, Health and Settings. **0.2.1** adds one Plan page fix.
+- **Images:** `ghcr.io/anton4/emhass-lens-{amd64,aarch64}` are public.
+- **Checked by hand in Chrome** with real data from the e2e stack: the Plan page (charts, SOC, prices, changes), the Inputs page (price breakdown) and the Inverter page.
+- **e2e:** 16/16 checks pass.
+
 ### 2026-10-09 (late evening): verified end to end, inverter control started
 - **New e2e harness** (`e2e/`). It runs a real HA 2026.10, the real HACS integration, Mosquitto and the real EMHASS 0.18.3 in Docker, and `./check.sh` passes 13/13 checks:
   - **Home Assistant:** the WebSocket and entity readings with provenance work.
