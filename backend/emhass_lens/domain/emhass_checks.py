@@ -124,7 +124,7 @@ def run_checks(
     )
 
     tz = get("time_zone")
-    if ha_time_zone:
+    if ha_time_zone and tz:  # EMHASS often takes its time zone from secrets and doesn't report it here
         checks.append(
             _check(
                 "time_zone",

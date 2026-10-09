@@ -11,7 +11,7 @@ Modes:
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
@@ -39,6 +39,17 @@ class Shadow:
     result: BuildResult
     compat: BuildResult | None
     run_id: int | None
+
+
+def describe_horizon(slots: int, anchor: datetime, tz: Any) -> str:
+    """e.g. "125 slots, Fri 17:45 → Sat 01:00" in local time."""
+    if not slots:
+        return "no slots"
+    start = anchor.astimezone(tz)
+    end = (anchor + timedelta(minutes=15 * slots)).astimezone(tz)
+    if start.date() == end.date():
+        return f"{slots} slots, {start:%H:%M} → {end:%H:%M}"
+    return f"{slots} slots, {start:%a %H:%M} → {end:%a %H:%M}"
 
 
 class MpcService:
@@ -110,8 +121,7 @@ class MpcService:
         )
         ctx.run.artifact("validation", [i.as_dict() for i in issues])
 
-        end = result.explain[-1]["start"] if result.explain else None
-        horizon = f"{result.horizon} slots from {anchor:%H:%M} UTC" + (f" to {end[11:16]}" if end else "")
+        horizon = describe_horizon(result.horizon, anchor, self.c.extras["prices"].tz)
         blocking = errors(issues)
         warn_note = (
             f"; {sum(1 for i in issues if i.level == 'warning')} warning(s)"

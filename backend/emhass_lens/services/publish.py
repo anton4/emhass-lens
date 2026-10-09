@@ -82,10 +82,9 @@ class PublishService:
         if row is None:
             ctx.run.summary = ctx.run.summary or "Published; the stored plan has no row for this slot"
         else:
-            batt = row.get("P_batt")
-            grid = row.get("P_grid")
+            local = slot_floor(now).astimezone(self.c.extras["prices"].tz)
             ctx.run.summary = ctx.run.summary or (
-                f"Published slot {event['slot_start'][11:16]} UTC: battery {_w(batt)}, grid {_w(grid)}"
+                f"Published {local:%H:%M}: {battery(row.get('P_batt'))}, {grid(row.get('P_grid'))}"
             )
         self.c.bus.publish("plan.published", event)
 
@@ -115,7 +114,21 @@ class PublishService:
         return data
 
 
-def _w(value: Any) -> str:
-    if value is None:
-        return "—"
-    return f"{float(value) / 1000:+.1f} kW"
+def battery(p_batt: Any) -> str:
+    """EMHASS sign convention: P_batt > 0 discharges the battery, < 0 charges it."""
+    if p_batt is None:
+        return "battery —"
+    kw = float(p_batt) / 1000
+    if abs(kw) < 0.05:
+        return "battery idle"
+    return f"battery {'discharges' if kw > 0 else 'charges'} {abs(kw):.1f} kW"
+
+
+def grid(p_grid: Any) -> str:
+    """P_grid > 0 imports from the grid, < 0 exports."""
+    if p_grid is None:
+        return "grid —"
+    kw = float(p_grid) / 1000
+    if abs(kw) < 0.05:
+        return "grid ~0"
+    return f"{'imports' if kw > 0 else 'exports'} {abs(kw):.1f} kW"

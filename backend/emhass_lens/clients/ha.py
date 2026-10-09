@@ -164,6 +164,8 @@ class HaClient:
             try:
                 await self._session()
                 backoff = 1.0
+                self.last_error = "connection closed by Home Assistant (restarting?)"
+                log.warning("Home Assistant closed the connection; reconnecting")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
