@@ -154,8 +154,8 @@ class HaClient:
         self._next_id += 1
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         self._pending[msg_id] = future
-        await self._ws.send(json.dumps({"id": msg_id, **payload}))
         try:
+            await self._ws.send(json.dumps({"id": msg_id, **payload}))
             async with asyncio.timeout(timeout):
                 return await future
         finally:

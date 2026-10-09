@@ -33,6 +33,15 @@ PLAN_SENSORS = {
 ROW_KEYS = {"p_batt": "P_batt", "p_grid": "P_grid", "p_pv": "P_PV", "p_pv_curtailment": "P_PV_curtailment"}
 
 
+def _updated(state: dict[str, Any] | None) -> datetime | None:
+    """When HA last wrote the state (last_reported also moves when the value didn't change)."""
+    if not state:
+        return None
+    stamps = [parse_iso(str(state.get(k))) for k in ("last_reported", "last_updated") if state.get(k)]
+    stamps = [t for t in stamps if t is not None]
+    return max(stamps) if stamps else None
+
+
 def _num(state: dict[str, Any] | None) -> float | None:
     try:
         return float((state or {}).get("state"))  # type: ignore[arg-type]
@@ -54,6 +63,13 @@ class InverterService:
     def active(self) -> bool:
         return self.mode != "off"
 
+    def decided_this_slot(self) -> bool:
+        return bool(self.last and self.last.get("slot") == iso(slot_floor(self.c.clock.now())))
+
+    def should_record_decide(self) -> bool:
+        """The scheduled decision is only a fallback when no decision was made right after publish."""
+        return self.active() and not self.decided_this_slot()
+
     def entities(self) -> set[str]:
         if self.mode == "off":
             return set()
@@ -70,30 +86,33 @@ class InverterService:
 
     # --- inputs ---------------------------------------------------------------------------------------------
     async def plan_values(self, now: datetime) -> tuple[PlanValues | None, str]:
-        """The current slot's plan, from EMHASS's published sensors (what the automation reads) or the stored plan."""
+        """The current slot's plan: EMHASS's published sensors (what the automation reads) when they were
+        updated during this slot, otherwise the row of the stored plan that EMHASS publishes now."""
         ha = self.c.extras["ha"]
         slot = slot_floor(now)
         prices = self.c.extras["prices"].priced(slot, self.c.extras["forecasts"].current())
         export = prices[0].export_price if prices and prices[0].start == slot else None
-        values = {k: _num(ha.state(eid)) for k, eid in PLAN_SENSORS.items()}
-        if all(values[k] is not None for k in ("p_batt", "p_grid")):
+        states = {k: ha.state(eid) for k, eid in PLAN_SENSORS.items()}
+        values = {k: _num(st) for k, st in states.items()}
+        fresh = all(
+            _updated(states[k]) is not None and (_updated(states[k]) or slot) >= slot for k in ("p_batt", "p_grid")
+        )
+        if fresh and values["p_batt"] is not None and values["p_grid"] is not None:
             return PlanValues(
-                values["p_batt"] or 0.0,
-                values["p_grid"] or 0.0,
-                values["p_pv"] or 0.0,
-                values["p_pv_curtailment"] or 0.0,
-                export,
+                values["p_batt"], values["p_grid"], values["p_pv"] or 0.0, values["p_pv_curtailment"] or 0.0, export
             ), "EMHASS sensors (sensor.p_*)"
-        row, _plan = await self.c.extras["publish"].current_row(now)
-        if row is None:
-            return None, "no plan row for this slot"
+        row, plan = await self.c.extras["publish"].current_row(now)
+        generated = parse_iso(plan["generated_at"]) if plan else None
+        max_age = timedelta(minutes=15 * self.c.settings.current.health.plan_max_age_slots)
+        if row is None or generated is None or now - generated > max_age:
+            return None, "EMHASS's sensors weren't updated for this slot and no recent plan is stored"
         return PlanValues(
             float(row.get(ROW_KEYS["p_batt"]) or 0.0),
             float(row.get(ROW_KEYS["p_grid"]) or 0.0),
             float(row.get(ROW_KEYS["p_pv"]) or 0.0),
             float(row.get(ROW_KEYS["p_pv_curtailment"]) or 0.0),
             export,
-        ), "stored EMHASS plan"
+        ), "stored EMHASS plan (the sensors weren't updated for this slot yet)"
 
     def observed(self) -> Observed:
         ha = self.c.extras["ha"]
@@ -123,7 +142,7 @@ class InverterService:
 
     # --- jobs --------------------------------------------------------------------------------------------------
     async def decide_job(self, ctx: JobContext) -> None:
-        if not self.active() and ctx.trigger != "manual":
+        if ctx.trigger == "schedule" and (not self.active() or self.decided_this_slot()):
             return
         assert ctx.run is not None
         now = self.c.clock.now()
@@ -163,6 +182,27 @@ class InverterService:
         if generated is None or now - generated > max_age:
             raise RunRefused(f"The plan is stale (made {iso(generated) or 'never'}); not touching the inverter")
         ha = self.c.extras["ha"]
+        if not ha.connected:
+            raise RunRefused("Not connected to Home Assistant; not touching the inverter")
+        # The WebSocket cache can lag (e.g. during a reconnect): re-read the interlocks and targets right now.
+        for entity_id in (
+            e.charger_mode_select,
+            e.enable_boolean,
+            e.state_select,
+            e.grid_power_number,
+            e.battery_max_number,
+            e.battery_min_number,
+            e.feedin_number,
+        ):
+            if entity_id:
+                state = await ha.get_state(entity_id)
+                if state is None:
+                    ha.states.pop(entity_id, None)
+                else:
+                    ha.states[entity_id] = state
+        blocked = self.preconditions()
+        if blocked:
+            raise RunRefused(f"Not in control: {blocked}")
         calls: list[tuple[str, str, dict[str, Any]]] = []
         before = self.observed()
         t = decision.targets

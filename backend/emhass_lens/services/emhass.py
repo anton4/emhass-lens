@@ -204,6 +204,11 @@ class EmhassService:
     # --- plans -------------------------------------------------------------------------------------------
     async def watch_plan(self, ctx: JobContext, *, driver: str = "external", run_id: int | None = None) -> bool:
         """Store the EMHASS plan if it is newer than the last one stored. True if a new plan was stored."""
+        if driver == "external" and self.action_lock.locked():
+            # EMHASS Lens itself is running an action; its MPC run stores (and claims) the plan
+            if ctx.run:
+                ctx.run.outcome, ctx.run.summary = "noop", "EMHASS Lens is running an EMHASS action"
+            return False
         if not self.url:
             await self.resolve()
         if not self.url:
@@ -259,6 +264,24 @@ class EmhassService:
             ),
         )
         return cur.rowcount > 0
+
+    async def claim_plan(self, generated_at: str, run_id: int) -> bool:
+        """Mark the stored plan with this generated_at as made by EMHASS Lens run `run_id`. False if not stored."""
+        stamp = parse_iso(generated_at)
+        if stamp is None:
+            return False
+
+        def go() -> bool:
+            rows = self.c.app_db.query("SELECT id, generated_at FROM plan_snapshot ORDER BY generated_at DESC LIMIT 5")
+            for row in rows:
+                if parse_iso(row["generated_at"]) == stamp:
+                    self.c.app_db.execute(
+                        "UPDATE plan_snapshot SET driver = 'app', run_id = ? WHERE id = ?", (run_id, row["id"])
+                    )
+                    return True
+            return False
+
+        return await self.c.app_db.run(go)
 
     async def plans(self, limit: int = 2) -> list[dict[str, Any]]:
         rows = await self.c.app_db.aquery(

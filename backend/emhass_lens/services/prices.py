@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("emhass_lens.prices")
 
 KEEP_DAYS = 120
+MIN_POLL_GAP = timedelta(seconds=60)
 
 
 def area_tz(settings: Settings) -> ZoneInfo:
@@ -42,6 +43,7 @@ class PriceService:
         self.states: dict[date, DayState] = {}
         self.day_info: dict[date, dict[str, Any]] = {}
         self.version = 0  # bumps whenever stored prices change
+        self.last_poll_started: datetime | None = None
         self._cache: dict[tuple[str, str], list[nordpool.PriceEntry]] = {}
 
     # --- configuration -----------------------------------------------------------------------------
@@ -93,11 +95,15 @@ class PriceService:
         if not decisions:
             return after + timedelta(minutes=15)  # re-evaluate (a new day becomes "needed" at midnight)
         due = decisions[0].due_at
-        return max(due, after + timedelta(seconds=1))
+        # Never poll more than once a minute: the scheduler asks for the next time while a poll is still
+        # running, and every answer path must have a floor or an unexpected state turns into a tight loop.
+        floor = (self.last_poll_started + MIN_POLL_GAP) if self.last_poll_started else after
+        return max(due, floor, after + timedelta(seconds=1))
 
     # --- polling job ------------------------------------------------------------------------------------
     async def poll(self, ctx: JobContext) -> None:
         now = self.c.clock.now()
+        self.last_poll_started = now
         force = ctx.trigger == "manual"
         decisions = self.decisions(now)
         due = decisions if force else [d for d in decisions if d.due_at <= now]
@@ -106,9 +112,14 @@ class PriceService:
         results = []
         for decision in due:
             log.info("Fetching Nord Pool %s delivery day %s: %s", self.area, decision.day, decision.reason)
-            fetched = await fetch_day(self.http, decision.day, self.area)
-            prev = self.states.get(fetched.day, DayState(fetched.day))
-            state, info = await self.c.app_db.run(self._store, fetched, now, prev)
+            prev = self.states.get(decision.day, DayState(decision.day))
+            try:
+                fetched = await fetch_day(self.http, decision.day, self.area)
+                state, info = await self.c.app_db.run(self._store, fetched, now, prev)
+            except Exception as exc:  # an unexpected response or a DB error counts as a failed fetch (backoff)
+                log.exception("Fetching or storing delivery day %s failed", decision.day)
+                fetched = NordpoolFetch(decision.day, None, None, False, f"{type(exc).__name__}: {exc}", 0)
+                state, info = await self.c.app_db.run(self._store, fetched, now, prev)
             self.states[fetched.day] = state
             self.day_info[fetched.day] = info
             results.append(self._describe(fetched))
@@ -161,8 +172,15 @@ class PriceService:
             )
             row = {"http_status": f.http_status, "error": f.error}
         elif f.not_published or f.result is None:
-            state = DayState(f.day, prev.state, prev.slots, now, prev.last_success, 0, prev.slots == 0)
-            row = {"http_status": f.http_status, "error": None}
+            # Normal for tomorrow before publication; for a day already being delivered it's an anomaly
+            # (e.g. the API changed) and must back off like an error, not be retried every second.
+            delivered = f.day <= now.astimezone(nordpool.CET).date()
+            errors = prev.consecutive_errors + 1 if delivered else 0
+            state = DayState(f.day, prev.state, prev.slots, now, prev.last_success, errors, prev.slots == 0)
+            row = {
+                "http_status": f.http_status,
+                "error": "no prices for a day that is already being delivered" if delivered else None,
+            }
         else:
             quarters = nordpool.to_quarter_hours(f.result.entries)
 

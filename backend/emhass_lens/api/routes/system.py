@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from emhass_lens.api.deps import ContainerDep, Writable, actor
+from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
 from emhass_lens.api.schemas import (
     DiffEntry,
     DriverRequest,
@@ -70,11 +70,16 @@ ENTITY_CACHE_S = 30
 @router.get("/ha/entities")
 async def ha_entities(
     c: ContainerDep,
+    request: Request,
     domain: Annotated[str | None, Query(description="Comma-separated domains, e.g. sensor,input_number")] = None,
     q: Annotated[str | None, Query(description="Words to find in the entity id or name; best matches first")] = None,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
 ) -> list[EntityOption]:
-    """Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s)."""
+    """Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s). Only for
+    requests that may change settings: the optional direct port has no login and mustn't expose every state."""
+    reason = write_block_reason(request)
+    if reason:
+        raise HTTPException(403, reason)
     cache: dict[str, Any] = c.extras.setdefault("ha_entity_cache", {"at": None, "states": []})
     if cache["at"] is None or time.monotonic() - cache["at"] > ENTITY_CACHE_S:
         try:
@@ -139,7 +144,10 @@ async def legacy_apply(c: ContainerDep, request: Request, body: LegacyApplyReque
 @router.post("/driver/take-over", dependencies=[Writable])
 async def take_over(c: ContainerDep, request: Request, body: DriverRequest) -> DriverResult:
     """Turn the HACS integration's Auto MPC off and make EMHASS Lens drive EMHASS (live, Auto MPC on)."""
-    return DriverResult(**await driver.take_over(c, actor(request), body.base_revision))
+    try:
+        return DriverResult(**await driver.take_over(c, actor(request), body.base_revision))
+    except StaleRevision as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.post("/driver/hand-back", dependencies=[Writable])

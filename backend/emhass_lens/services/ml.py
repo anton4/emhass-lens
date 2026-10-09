@@ -44,12 +44,13 @@ class MlService:
         if not emhass.url:
             raise RunRefused("No EMHASS address")
         ctx.run.artifact("request", payload)
-        self.c.extras["ml_running"] = action
+        # a counter, not a flag: a second ML action finishing first mustn't unblock MPC while one still runs
+        self.c.extras["ml_running"] = self.c.extras.get("ml_running", 0) + 1
         try:
             async with emhass.action_lock:
                 result = await emhass.client.action(action, payload, timeout)
         finally:
-            self.c.extras["ml_running"] = None
+            self.c.extras["ml_running"] = max(0, self.c.extras.get("ml_running", 1) - 1)
         ctx.run.artifact(
             "response",
             {

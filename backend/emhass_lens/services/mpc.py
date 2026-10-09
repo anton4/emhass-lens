@@ -201,29 +201,43 @@ class MpcService:
         status = last_run.get("status")
         stamp = parse_iso(str(last_run.get("timestamp"))) if last_run.get("timestamp") else None
         fresh = stamp is not None and stamp >= sent_at.replace(microsecond=0)
-        if response.error or status == "error":
+        if response.error:
             ctx.run.outcome = "error"
-            ctx.run.error = response.error or last_run.get("error_message") or "EMHASS reported an error"
+            ctx.run.error = response.error
             return
-        if status == "infeasible":
-            ctx.run.outcome = "infeasible"
-            ctx.run.summary = f"EMHASS found no feasible plan for {horizon}; the previous plan stays in place"
-            return
-        if not fresh:
+        if not fresh:  # anything EMHASS reports about an older run says nothing about this request
             ctx.run.outcome = "error"
             ctx.run.error = (
                 f"EMHASS answered, but its last run ({last_run.get('timestamp')}) is older than this request"
             )
             return
+        if status == "error":
+            ctx.run.outcome = "error"
+            ctx.run.error = last_run.get("error_message") or "EMHASS reported an error"
+            return
+        if status == "infeasible":
+            ctx.run.outcome = "infeasible"
+            ctx.run.summary = f"EMHASS found no feasible plan for {horizon}; the previous plan stays in place"
+            return
         await emhass.watch_plan(ctx, driver="app", run_id=ctx.run.id)
+        # the plan watch job may have stored this plan first (as someone else's): claim it, then make sure it exists
+        stored = await emhass.claim_plan(str(last_run.get("timestamp")), ctx.run.id)
+        if not stored:
+            ctx.run.outcome = "error"
+            ctx.run.error = "EMHASS made a plan, but reading it back from /api/v1/plan failed"
+            return
         self.last_live_run_id = ctx.run.id
         self.last_success_at = self.c.clock.now()
         ctx.run.outcome = "ok"
+        ctx.run.error = None
         ctx.run.summary = f"Planned {horizon} in {response.duration_ms / 1000:.1f} s{warn_note}"
         self.c.bus.publish("plan.updated", {"run_id": ctx.run.id})
         outputs = self.c.extras.get("outputs")
         if outputs is not None:
-            await outputs.refresh()
+            try:
+                await outputs.refresh()
+            except Exception as exc:  # MQTT trouble mustn't turn a good plan into a failed run
+                log.warning("Refreshing the MQTT entities failed: %s", exc)
 
     def status(self) -> dict[str, Any]:
         shadow = self.last_shadow

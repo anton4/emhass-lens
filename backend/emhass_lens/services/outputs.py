@@ -214,7 +214,19 @@ class OutputService:
         if self.enabled() and self._task is None:
             self._task = asyncio.create_task(self._run(), name="mqtt")
 
-    async def stop(self) -> None:
+    async def stop(self, clear: bool = False) -> None:
+        """Disconnect. A clean disconnect discards the broker's last will, so say "offline" ourselves first
+        (HA then shows the entities as unavailable instead of frozen); clear=True also removes the entities."""
+        if self.link is not None:
+            settings = self.c.settings.current
+            try:
+                async with asyncio.timeout(3):
+                    if clear:
+                        for message in discovery(settings, self.c.boot.version):
+                            await self.link.publish(message.topic, "", True)
+                    await self.link.publish(topics(settings)["availability"], "offline", True)
+            except Exception as exc:
+                log.info("Couldn't announce going offline: %s", exc)
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

@@ -208,7 +208,7 @@ def register_jobs(c: Container) -> None:
             description="Decides the Sofar passive-mode settings for the slot from the plan (dry run: records only).",
             trigger=QuarterHour(settings.inverter.decide_offset_s),
             func=x["inverter"].decide_job,
-            record=x["inverter"].active,
+            record=x["inverter"].should_record_decide,
             grace=timedelta(minutes=5),
         )
     )
@@ -288,6 +288,9 @@ def subscribe(c: Container) -> None:
         c.scheduler.retime("emhass.publish", QuarterHour(new.emhass.publish.slot_offset_s))
 
     async def on_outputs(old: Settings, new: Settings, paths: list[str]) -> None:
+        if old.outputs.mqtt_enabled and not new.outputs.mqtt_enabled:
+            await x["outputs"].stop(clear=True)  # remove the device's entities from Home Assistant
+            return
         if (
             old.outputs.mqtt_enabled != new.outputs.mqtt_enabled
             or old.outputs.broker != new.outputs.broker

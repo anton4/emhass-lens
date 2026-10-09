@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.runs.recorder import RunRefused
+from emhass_lens.settings.store import StaleRevision
 
 if TYPE_CHECKING:
     from emhass_lens.container import Container
@@ -32,6 +33,9 @@ async def _set_legacy(c: Container, on: bool) -> str | None:
 
 async def take_over(c: Container, actor: str, base_revision: int | None) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    if base_revision is not None and base_revision != c.settings.revision:
+        # check before touching the switch, so a stale page can't leave nobody driving EMHASS
+        raise StaleRevision(c.settings.revision)
     async with c.recorder.start("driver.take_over", trigger="manual", mode="live") as run:
         result = {"run_id": run.id, "ok": False}
         switch = c.settings.current.parity.legacy_auto_mpc_switch

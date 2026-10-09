@@ -79,7 +79,10 @@ class PublishService:
                 ctx.run.summary = f"Published, but the event failed: {exc}"
         outputs = self.c.extras.get("outputs")
         if outputs is not None:
-            await outputs.refresh()
+            try:
+                await outputs.refresh()
+            except Exception as exc:  # MQTT trouble mustn't hide that EMHASS published
+                log.warning("Refreshing the MQTT entities failed: %s", exc)
         if row is None:
             ctx.run.summary = ctx.run.summary or "Published; the stored plan has no row for this slot"
         else:
@@ -88,6 +91,10 @@ class PublishService:
                 f"Published {local:%H:%M}: {battery(row.get('P_batt'))}, {grid(row.get('P_grid'))}"
             )
         self.c.bus.publish("plan.published", event)
+        inverter = self.c.extras.get("inverter")
+        if inverter is not None and inverter.active():
+            # decide on the values just published, not on a fixed second
+            self.c.scheduler.run_now("inverter.decide", {"after_publish": True})
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         """The row publish-data shows now: chosen exactly the way EMHASS chooses it, so the event matches
