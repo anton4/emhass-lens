@@ -1,10 +1,12 @@
 // A time-series chart on uPlot: step lines per 15-minute slot, a synced crosshair across charts,
 // shaded ranges (forecast), hairlines (midnights) and a "now" marker. The live legend under the
-// plot is the readout: it lists every series' value at the crosshair.
+// plot is the readout: it lists every series' value at the crosshair. Optionally the y-axis hugs
+// the visible data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
 
 import { useEffect, useRef } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
+import { fitRange, type FitOptions } from '../../lib/chartRange'
 import { cssColor, useThemeVersion } from './useTheme'
 
 export interface ChartSeries {
@@ -27,6 +29,12 @@ interface TimeChartProps {
   height?: number
   yFormat?: (value: number) => string
   yRange?: [number | null, number | null]
+  /** Fit the y-axis to the visible data instead of uPlot's zero-including default (ignored with yRange). */
+  fit?: FitOptions
+  /** Zoomed time window in unix seconds; null shows all of x. */
+  xRange?: [number, number] | null
+  /** Turns on drag-to-zoom: called with the selected window, or null on double-click. */
+  onZoom?: (range: [number, number] | null) => void
   syncKey?: string
   timeZone?: string
   bands?: [number, number][]
@@ -66,17 +74,31 @@ function readoutTime(ts: number, timeZone?: string): string {
   return fmt.format(new Date(ts * 1000))
 }
 
+/** Show `range` (or all of `x` when null) on the chart's time axis; the y-axis refits to it. */
+function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) {
+  const first = x[0]
+  const last = x[x.length - 1]
+  if (range) chart.setScale('x', { min: range[0], max: range[1] })
+  else if (first !== undefined && last !== undefined) chart.setScale('x', { min: first, max: last })
+}
+
 export function TimeChart({
-  x, series, ariaLabel, height = 220, yFormat, yRange, syncKey, timeZone, bands = [], markers = [], now,
+  x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
+  markers = [], now,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
-  // Everything the hooks draw reads from this ref, so data updates don't need a rebuild.
-  const extras = useRef({ bands, markers, now })
+  // Everything the hooks read comes from this ref, so data and zoom updates don't need a rebuild.
+  const extras = useRef({ bands, markers, now, x, xRange, onZoom })
+  useEffect(() => {
+    extras.current = { bands, markers, now, x, xRange, onZoom }
+  })
 
+  const zoomable = Boolean(onZoom)
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step]), height, yRange, syncKey, timeZone, theme,
+    series.map((s) => [s.label, s.color, s.width, s.dash, s.step]), height, yRange, fit, zoomable, syncKey, timeZone,
+    theme,
   ])
 
   useEffect(() => {
@@ -92,10 +114,20 @@ export function TimeChart({
       cursor: {
         sync: syncKey ? { key: syncKey, setSeries: false } : undefined,
         points: { size: 8, width: 2 },
-        drag: { x: false, y: false },
+        // Zooming: uPlot only draws the selection; the setSelect hook hands the window to onZoom
+        drag: zoomable ? { x: true, y: false, setScale: false } : { x: false, y: false },
+        // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
+        bind: zoomable ? { dblclick: () => null } : undefined,
       },
       legend: { live: true },
-      scales: { x: { time: true }, y: yRange ? { range: () => [yRange[0] ?? 0, yRange[1] ?? 1] } : {} },
+      scales: {
+        x: { time: true },
+        y: yRange
+          ? { range: () => [yRange[0] ?? 0, yRange[1] ?? 1] }
+          : fit
+            ? { range: (_u, dataMin, dataMax) => fitRange(dataMin, dataMax, fit) }
+            : {},
+      },
       axes: [
         {
           stroke: ink,
@@ -126,6 +158,19 @@ export function TimeChart({
         })),
       ],
       hooks: {
+        ready: [
+          (u) => {
+            u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
+          },
+        ],
+        setSelect: [
+          (u) => {
+            const { left, width } = u.select
+            if (width < 10) return
+            extras.current.onZoom?.([u.posToVal(left, 'x'), u.posToVal(left + width, 'x')])
+            u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false)
+          },
+        ],
         drawClear: [
           (u) => {
             const { ctx, bbox } = u
@@ -163,6 +208,7 @@ export function TimeChart({
     }
     const chart = new uPlot(opts, [x, ...series.map((s) => s.values)] as uPlot.AlignedData, el)
     plot.current = chart
+    if (extras.current.xRange) applyXRange(chart, x, extras.current.xRange)
     const observer = new ResizeObserver(() => {
       chart.setSize({ width: Math.max(320, el.clientWidth), height })
     })
@@ -177,11 +223,18 @@ export function TimeChart({
   }, [specKey])
 
   useEffect(() => {
-    plot.current?.setData([x, ...series.map((s) => s.values)] as uPlot.AlignedData)
+    const chart = plot.current
+    if (!chart) return
+    chart.setData([x, ...series.map((s) => s.values)] as uPlot.AlignedData)
+    // setData resets the scales; keep a zoomed window
+    if (extras.current.xRange) applyXRange(chart, x, extras.current.xRange)
   }, [x, series])
 
   useEffect(() => {
-    extras.current = { bands, markers, now }
+    if (plot.current) applyXRange(plot.current, extras.current.x, xRange)
+  }, [xRange])
+
+  useEffect(() => {
     plot.current?.redraw(false)
   }, [bands, markers, now])
 

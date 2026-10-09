@@ -1228,6 +1228,14 @@ button.diff-locate {
   color: var(--ink-muted);
 }
 
+.chart-zoom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+}
+
 .time-chart {
   width: 100%;
   min-width: 0;

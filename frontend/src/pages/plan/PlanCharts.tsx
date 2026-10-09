@@ -1,10 +1,27 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { PlanPrice, PlanResponse, PlanRow } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
+import { snapWindow } from '../../lib/chartRange'
 import { alignTo, deferrableColumns, hasColumn, stepSeries } from '../../lib/plan'
 import { formatPower } from '../../lib/units'
 
 const SYNC = 'plan'
+
+// Each y-axis hugs its own data; the minimum spans keep near-flat lines from turning into noise.
+const POWER_FIT = { minSpan: 500 }
+const SOC_FIT = { minSpan: 5, clamp: [0, 100] as [number, number] }
+const PRICE_FIT = { minSpan: 1 }
+
+const windowFormats = new Map<string, Intl.DateTimeFormat>()
+function windowLabel([a, b]: [number, number], timeZone?: string): string {
+  const key = timeZone ?? ''
+  let fmt = windowFormats.get(key)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(undefined, { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+    windowFormats.set(key, fmt)
+  }
+  return `${fmt.format(new Date(a * 1000))} – ${fmt.format(new Date(b * 1000))}`
+}
 
 function kwTick(v: number): string {
   return `${(v / 1000).toFixed(Math.abs(v) < 10_000 ? 1 : 0)} kW`
@@ -25,6 +42,9 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
 
 /** Power, state of charge and prices on one synced time axis. */
 export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number }) {
+  // One zoom window for all three charts (unix seconds); null shows the whole plan
+  const [zoom, setZoom] = useState<[number, number] | null>(null)
+  const zoomTo = (range: [number, number] | null) => setZoom(range && snapWindow(range, 900))
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
@@ -113,6 +133,18 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
 
   return (
     <div className="chart-stack">
+      <p className="chart-note chart-zoom" role="status">
+        {zoom ? (
+          <>
+            Showing {windowLabel(zoom, data.timezone)}
+            <button type="button" className="quiet" onClick={() => setZoom(null)}>
+              Reset zoom
+            </button>
+          </>
+        ) : (
+          'Drag across a chart to zoom in; double-click to see the whole plan again.'
+        )}
+      </p>
       <section className="chart-block">
         <h3>Power</h3>
         <TimeChart
@@ -121,6 +153,9 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
           ariaLabel="Planned power per quarter-hour: battery, grid, PV, house load and deferrable loads"
           syncKey={SYNC}
           yFormat={kwTick}
+          fit={POWER_FIT}
+          xRange={zoom}
+          onZoom={zoomTo}
           now={nowS}
           timeZone={data.timezone}
           height={240}
@@ -134,10 +169,12 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             series={soc.series}
             ariaLabel="Planned battery state of charge, with the previous plan for comparison"
             syncKey={SYNC}
-            yRange={[0, 100]}
             yFormat={(v) => `${v.toFixed(0)} %`}
+            fit={SOC_FIT}
+            xRange={zoom}
+            onZoom={zoomTo}
             now={nowS}
-          timeZone={data.timezone}
+            timeZone={data.timezone}
             height={170}
           />
         </section>
@@ -151,9 +188,12 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             ariaLabel="Import and export price per quarter-hour; shaded where the price is a forecast"
             syncKey={SYNC}
             yFormat={(v) => `${v.toFixed(0)} c`}
+            fit={PRICE_FIT}
+            xRange={zoom}
+            onZoom={zoomTo}
             bands={prices.bands}
             now={nowS}
-          timeZone={data.timezone}
+            timeZone={data.timezone}
             height={170}
           />
           {prices.bands.length > 0 && <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>}
