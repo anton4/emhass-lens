@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- Settings: the review before saving names each change by its place in the form; click one to jump to the field. Changed fields are highlighted, and each one can be reverted on its own, from the form or from the review. Discard all is also offered while reviewing.
+
 ## 0.2.5
 
 - Saving settings and switching the mode work behind reverse proxies that only allow GET and POST (they failed with "Failed to fetch").
