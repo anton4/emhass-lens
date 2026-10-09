@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Health page: a getting-started checklist that shows how far the move from the HACS integration is, step by step, with links.
+
 ## 0.2.1
 
 - The Plan page's "This slot" shows the row EMHASS publishes right now (the next slot between a :13 run and the slot start) instead of saying the plan doesn't cover it.
