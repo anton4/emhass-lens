@@ -17,6 +17,16 @@ class ComponentStatus(BaseModel):
     detail: str | None = None
 
 
+class ProblemInfo(BaseModel):
+    key: str
+    severity: str  # warning | error
+    title: str
+    detail: str | None = None
+    hint: str | None = None
+    link: str | None = None  # UI route, e.g. "#/inputs"
+    since: str | None = None
+
+
 class StatusInfo(BaseModel):
     version: str
     started_at: str
@@ -31,7 +41,8 @@ class StatusInfo(BaseModel):
     write_block_reason: str | None
     actor: str
     components: dict[str, ComponentStatus]
-    problems: list[dict[str, Any]]
+    problems: list[ProblemInfo]
+    driver: str = "none"  # who drives EMHASS: app | legacy | both | none
 
 
 class LogEntry(BaseModel):
@@ -58,6 +69,11 @@ class JobInfo(BaseModel):
     last_outcome: str | None
     last_run_id: int | None
     grace_s: int
+
+
+class RunStarted(BaseModel):
+    job: JobInfo
+    run_id: int | None  # None when the run was skipped because the job is still running
 
 
 class RunSummary(BaseModel):

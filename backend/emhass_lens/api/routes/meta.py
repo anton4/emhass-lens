@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 
 from emhass_lens.api.deps import ContainerDep, actor, write_block_reason
-from emhass_lens.api.schemas import ComponentStatus, StatusInfo, VersionInfo
+from emhass_lens.api.schemas import ComponentStatus, ProblemInfo, StatusInfo, VersionInfo
 
 router = APIRouter(prefix="/api", tags=["meta"])
 
@@ -31,7 +31,8 @@ async def status(c: ContainerDep, request: Request) -> StatusInfo:
     }
     for name, provider in c.extras.get("status_providers", {}).items():
         components[name] = provider()
-    problems = c.extras["problems"].active() if "problems" in c.extras else []
+    problems = [ProblemInfo(**p) for p in c.extras["problems"].active()] if "problems" in c.extras else []
+    driver = c.extras["mpc"].driver() if "mpc" in c.extras else "none"
     return StatusInfo(
         version=c.boot.version,
         started_at=c.started_at_iso,
@@ -47,4 +48,5 @@ async def status(c: ContainerDep, request: Request) -> StatusInfo:
         actor=actor(request),
         components=components,
         problems=problems,
+        driver=driver,
     )

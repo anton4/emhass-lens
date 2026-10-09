@@ -160,10 +160,10 @@ class Emhass(Section):
         "not send it. Live: runs and publishes.",
         json_schema_extra=ui(labels={"off": "Off", "dry_run": "Dry run", "live": "Live"}),
     )
-    mpc: EmhassMpc = EmhassMpc()
-    publish: EmhassPublish = EmhassPublish()
-    ml: EmhassMl = EmhassMl()
-    timeouts: EmhassTimeouts = Field(default=EmhassTimeouts(), json_schema_extra=ui(advanced=True))
+    mpc: EmhassMpc = Field(default=EmhassMpc(), title="MPC optimization")
+    publish: EmhassPublish = Field(default=EmhassPublish(), title="Publishing")
+    ml: EmhassMl = Field(default=EmhassMl(), title="ML load forecast")
+    timeouts: EmhassTimeouts = Field(default=EmhassTimeouts(), title="Timeouts", json_schema_extra=ui(advanced=True))
     extra_runtime_params: dict[str, Any] = Field(
         default_factory=dict,
         title="Extra runtime parameters",

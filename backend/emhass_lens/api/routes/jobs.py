@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from emhass_lens.api.deps import ContainerDep, Writable
-from emhass_lens.api.schemas import JobInfo
+from emhass_lens.api.schemas import JobInfo, RunStarted
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -19,10 +19,11 @@ async def list_jobs(c: ContainerDep) -> list[JobInfo]:
 
 
 @router.post("/{job_id}/run", dependencies=[Writable], status_code=202)
-async def run_job(c: ContainerDep, job_id: str) -> JobInfo:
+async def run_job(c: ContainerDep, job_id: str) -> RunStarted:
+    """Start the job now; answers with the new run's id as soon as the run exists."""
     job = _job(c, job_id)
-    c.scheduler.run_now(job.id)
-    return JobInfo(**job.info())
+    run_id = await c.scheduler.start_now(job.id)
+    return RunStarted(job=JobInfo(**job.info()), run_id=run_id)
 
 
 @router.post("/{job_id}/pause", dependencies=[Writable])

@@ -1,6 +1,6 @@
 """Write the API's OpenAPI schema (for the frontend's generated TypeScript types).
 
-    uv run python -m emhass_lens.openapi_dump ../frontend/src/api/openapi.json
+uv run python -m emhass_lens.openapi_dump ../frontend/src/api/openapi.json
 """
 
 import json

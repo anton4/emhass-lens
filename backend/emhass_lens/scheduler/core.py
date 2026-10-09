@@ -128,6 +128,20 @@ class Scheduler:
         job = self.jobs[job_id]
         return self._fire(job, trigger="manual", scheduled_at=None, params=params or {})
 
+    async def start_now(self, job_id: str, params: dict[str, Any] | None = None, wait_s: float = 3.0) -> int | None:
+        """Start a job and return the id of its run once it exists (None if skipped or not recorded)."""
+        job = self.jobs[job_id]
+        if job.lock.locked():
+            await self._execute(job, "manual", None, params or {})  # records the skip
+            return None
+        started: asyncio.Future[int | None] = asyncio.get_running_loop().create_future()
+        self._fire(job, trigger="manual", scheduled_at=None, params=params or {}, started=started)
+        try:
+            async with asyncio.timeout(wait_s):
+                return await started
+        except TimeoutError:
+            return None
+
     async def run_pending(self) -> list[asyncio.Task[None]]:
         """Fire every due job once. The loop calls this; tests call it with a FakeClock."""
         now = self.clock.now()
@@ -156,14 +170,30 @@ class Scheduler:
         return started
 
     def _fire(
-        self, job: Job, trigger: str, scheduled_at: datetime | None, params: dict[str, Any]
+        self,
+        job: Job,
+        trigger: str,
+        scheduled_at: datetime | None,
+        params: dict[str, Any],
+        started: asyncio.Future[int | None] | None = None,
     ) -> asyncio.Task[None]:
-        task = asyncio.create_task(self._execute(job, trigger, scheduled_at, params), name=f"job:{job.id}")
+        task = asyncio.create_task(self._execute(job, trigger, scheduled_at, params, started), name=f"job:{job.id}")
         self._running.add(task)
         task.add_done_callback(self._running.discard)
         return task
 
-    async def _execute(self, job: Job, trigger: str, scheduled_at: datetime | None, params: dict[str, Any]) -> None:
+    async def _execute(
+        self,
+        job: Job,
+        trigger: str,
+        scheduled_at: datetime | None,
+        params: dict[str, Any],
+        started: asyncio.Future[int | None] | None = None,
+    ) -> None:
+        def report(run_id: int | None) -> None:
+            if started is not None and not started.done():
+                started.set_result(run_id)
+
         if job.lock.locked():
             log.info("Job %s is still running; skipping this %s run", job.id, trigger)
             if job.record:
@@ -174,6 +204,7 @@ class Scheduler:
                     summary="Previous run still in progress",
                     scheduled_at=scheduled_at,
                 )
+            report(None)
             return
         async with job.lock:
             job.last_started = self.clock.now()
@@ -183,9 +214,11 @@ class Scheduler:
                 if job.record:
                     async with self.recorder.start(job.id, trigger, mode, scheduled_at) as run:
                         job.last_run_id = run.id
+                        report(run.id)
                         await job.func(JobContext(run, trigger, scheduled_at, params))
                     job.last_outcome = run.outcome
                 else:
+                    report(None)
                     await job.func(JobContext(None, trigger, scheduled_at, params))
                     job.last_outcome = "ok"
             except asyncio.CancelledError:
@@ -195,6 +228,7 @@ class Scheduler:
                 job.last_outcome = "error"
                 log.exception("Job %s failed", job.id)
             finally:
+                report(None)
                 job.last_finished = self.clock.now()
                 self._publish(job)
 

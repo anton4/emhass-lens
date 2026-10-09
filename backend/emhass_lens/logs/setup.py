@@ -31,8 +31,20 @@ class LoggingHandles:
     base_level: int = logging.INFO
 
     def attach_sqlite(self, db: Database) -> None:
+        """Start persisting log lines. Lines logged before this (startup, migrations) get fresh ids after
+        the newest stored line and are written too, so the UI's history has them."""
         row = db.query_one("SELECT MAX(id) AS id FROM log")
-        reset_sequence(int((row or {}).get("id") or 0) + 1)
+        next_id = int((row or {}).get("id") or 0) + 1
+        early = self.ring.renumber(next_id)
+        if early:
+            db.executemany(
+                "INSERT OR IGNORE INTO log (id, ts, level, component, msg, run_id, job, exc) VALUES (?,?,?,?,?,?,?,?)",
+                [
+                    (e["id"], e["ts"], e["level"], e["component"], e["msg"], e["run_id"], e["job"], e["exc"])
+                    for e in early
+                ],
+            )
+        reset_sequence(next_id + len(early))
         handler = SqliteLogHandler(db)
         _prepare(handler)
         logging.getLogger().addHandler(handler)

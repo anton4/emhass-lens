@@ -98,6 +98,13 @@ class RingHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
+    def renumber(self, start: int) -> list[dict[str, Any]]:
+        """Give every line held so far consecutive ids from `start` (used once, at sink attach)."""
+        with self._entry_lock:
+            for offset, entry in enumerate(self.entries):
+                entry["id"] = start + offset
+            return list(self.entries)
+
     def tail(self, limit: int = 500) -> list[dict[str, Any]]:
         with self._entry_lock:
             items = list(self.entries)
