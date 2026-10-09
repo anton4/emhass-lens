@@ -1,0 +1,3495 @@
+{
+  "components": {
+    "schemas": {
+      "ArtifactInfo": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "created_at",
+          "size"
+        ],
+        "title": "ArtifactInfo",
+        "type": "object"
+      },
+      "ComponentStatus": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ComponentStatus",
+        "type": "object"
+      },
+      "DeferrableLoad": {
+        "additionalProperties": false,
+        "properties": {
+          "deadline_timesteps_entity": {
+            "default": "sensor.ev_charging_timesteps",
+            "description": "Number of 15-minute steps from now by which the load must be done; 0 = no deadline.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Deadline (time steps from now) from",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "sensor",
+                "input_number"
+              ],
+              "widget": "entity"
+            }
+          },
+          "enabled_entity": {
+            "default": "input_boolean.ev_charging_enabled",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Enabled when on",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "input_boolean",
+                "switch",
+                "binary_sensor"
+              ],
+              "widget": "entity"
+            }
+          },
+          "name": {
+            "default": "EV",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal_power_w": {
+            "default": 11000,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Power",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "operating_hours_entity": {
+            "default": "sensor.ev_operating_hours",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Operating hours from",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "sensor",
+                "input_number"
+              ],
+              "widget": "entity"
+            }
+          },
+          "single_constant_entity": {
+            "default": "input_boolean.ev_force_continuous_charging",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Run in one block when on",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "input_boolean",
+                "switch"
+              ],
+              "widget": "entity"
+            }
+          }
+        },
+        "title": "DeferrableLoad",
+        "type": "object"
+      },
+      "DiffEntry": {
+        "properties": {
+          "new": {
+            "title": "New"
+          },
+          "old": {
+            "title": "Old"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DiffEntry",
+        "type": "object"
+      },
+      "EeForecast": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "default": "",
+            "description": "eupowerprices.com API key.",
+            "title": "API key",
+            "type": "string",
+            "ui": {
+              "widget": "secret"
+            }
+          },
+          "poll_hours": {
+            "default": 1,
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Poll every",
+            "type": "integer",
+            "ui": {
+              "unit": "h"
+            }
+          }
+        },
+        "title": "EeForecast",
+        "type": "object"
+      },
+      "Emhass": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "default": "",
+            "description": "Base URL of the EMHASS App, e.g. http://5b918bf2-emhass:5000. Leave empty to look it up through the Supervisor.",
+            "title": "EMHASS address",
+            "type": "string",
+            "ui": {
+              "widget": "url"
+            }
+          },
+          "extra_runtime_params": {
+            "additionalProperties": true,
+            "description": "Added to every MPC payload as-is (shown in each run's Explain view).",
+            "title": "Extra runtime parameters",
+            "type": "object",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
+            }
+          },
+          "ml": {
+            "$ref": "#/components/schemas/EmhassMl",
+            "default": {
+              "historic_days": 30,
+              "n_trials": 10,
+              "sklearn_model": "KNeighborsRegressor",
+              "var_model": "sensor.house_power_without_deferrable"
+            },
+            "title": "ML load forecast"
+          },
+          "mode": {
+            "default": "off",
+            "description": "Off: never calls EMHASS actions. Dry run: builds and checks every payload but does not send it. Live: runs and publishes.",
+            "enum": [
+              "off",
+              "dry_run",
+              "live"
+            ],
+            "title": "Mode",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "dry_run": "Dry run",
+                "live": "Live",
+                "off": "Off"
+              }
+            }
+          },
+          "mpc": {
+            "$ref": "#/components/schemas/EmhassMpc",
+            "default": {
+              "auto": false,
+              "hazard_guard_s": 30,
+              "max_horizon": 672,
+              "min_horizon": 8,
+              "slot_offset_s": 780
+            },
+            "title": "MPC optimization"
+          },
+          "publish": {
+            "$ref": "#/components/schemas/EmhassPublish",
+            "default": {
+              "enabled": true,
+              "slot_offset_s": 2
+            },
+            "title": "Publishing"
+          },
+          "timeouts": {
+            "$ref": "#/components/schemas/EmhassTimeouts",
+            "default": {
+              "fit": 3600,
+              "mpc": 180,
+              "predict": 180,
+              "publish": 60,
+              "tune": 7200
+            },
+            "title": "Timeouts",
+            "ui": {
+              "advanced": true
+            }
+          }
+        },
+        "title": "Emhass",
+        "type": "object"
+      },
+      "EmhassMl": {
+        "additionalProperties": false,
+        "properties": {
+          "historic_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 9.0,
+            "title": "Training history",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "n_trials": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 5.0,
+            "title": "Tuning trials",
+            "type": "integer",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "num_lags": {
+            "anyOf": [
+              {
+                "maximum": 2016.0,
+                "minimum": 24.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Leave empty to derive it like before: 192 + 96 × forecast extension days.",
+            "title": "Lags",
+            "ui": {
+              "advanced": true,
+              "unit": "slots"
+            }
+          },
+          "sklearn_model": {
+            "default": "KNeighborsRegressor",
+            "enum": [
+              "KNeighborsRegressor",
+              "RandomForestRegressor",
+              "GradientBoostingRegressor",
+              "RidgeRegression",
+              "MLPRegressor"
+            ],
+            "title": "Model type",
+            "type": "string"
+          },
+          "var_model": {
+            "default": "sensor.house_power_without_deferrable",
+            "description": "The household power sensor (without deferrable loads) EMHASS learns from.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Load sensor for the ML model",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          }
+        },
+        "title": "EmhassMl",
+        "type": "object"
+      },
+      "EmhassMpc": {
+        "additionalProperties": false,
+        "properties": {
+          "auto": {
+            "default": false,
+            "description": "Run naive-mpc-optim every quarter-hour. Only acts when the mode is dry run or live.",
+            "title": "Run MPC automatically",
+            "type": "boolean"
+          },
+          "hazard_guard_s": {
+            "default": 30,
+            "description": "Older EMHASS versions (< 0.18.2) can fail when a run starts within this many seconds of a slot rounding boundary; the run waits it out.",
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Grid-boundary guard",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "max_horizon": {
+            "default": 672,
+            "description": "Cap the number of slots sent to EMHASS.",
+            "maximum": 1344.0,
+            "minimum": 8.0,
+            "title": "Maximum horizon",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "slots"
+            }
+          },
+          "min_horizon": {
+            "default": 8,
+            "description": "Refuse to run when fewer future slots than this have prices.",
+            "maximum": 96.0,
+            "minimum": 1.0,
+            "title": "Minimum horizon",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "slots"
+            }
+          },
+          "slot_offset_s": {
+            "default": 780,
+            "description": "780 = mm:13:00, two minutes before the next quarter starts, so the plan for the next slot is ready before it is published.",
+            "exclusiveMaximum": 900.0,
+            "minimum": 0.0,
+            "title": "Run at (seconds into each quarter)",
+            "type": "integer",
+            "ui": {
+              "unit": "s",
+              "widget": "quarter_offset"
+            }
+          }
+        },
+        "title": "EmhassMpc",
+        "type": "object"
+      },
+      "EmhassPublish": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "description": "Call publish-data right after each quarter starts (live mode), so EMHASS's sensor.p_* entities show the slot that just began.",
+            "title": "Publish each quarter",
+            "type": "boolean"
+          },
+          "slot_offset_s": {
+            "default": 2,
+            "exclusiveMaximum": 300.0,
+            "minimum": 0.0,
+            "title": "Publish at (seconds into each quarter)",
+            "type": "integer",
+            "ui": {
+              "unit": "s",
+              "widget": "quarter_offset"
+            }
+          }
+        },
+        "title": "EmhassPublish",
+        "type": "object"
+      },
+      "EmhassTimeouts": {
+        "additionalProperties": false,
+        "properties": {
+          "fit": {
+            "default": 3600,
+            "maximum": 14400.0,
+            "minimum": 60.0,
+            "title": "ML fit",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "mpc": {
+            "default": 180,
+            "maximum": 900.0,
+            "minimum": 10.0,
+            "title": "MPC",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "predict": {
+            "default": 180,
+            "maximum": 900.0,
+            "minimum": 10.0,
+            "title": "ML predict",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "publish": {
+            "default": 60,
+            "maximum": 300.0,
+            "minimum": 5.0,
+            "title": "Publish",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "tune": {
+            "default": 7200,
+            "maximum": 28800.0,
+            "minimum": 60.0,
+            "title": "ML tune",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          }
+        },
+        "title": "EmhassTimeouts",
+        "type": "object"
+      },
+      "EntityInput": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
+          "entity": {
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "sensor",
+                "input_number"
+              ],
+              "widget": "entity"
+            }
+          },
+          "on_unavailable": {
+            "default": "refuse",
+            "description": "Refuse: skip the run and raise a problem. Default: use the value below.",
+            "enum": [
+              "refuse",
+              "default"
+            ],
+            "title": "When unavailable",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "default": "Use the default",
+                "refuse": "Skip the run"
+              }
+            }
+          },
+          "scale": {
+            "default": 0.01,
+            "description": "0.01 turns a percentage into the 0–1 EMHASS expects.",
+            "title": "Multiply by",
+            "type": "number"
+          }
+        },
+        "required": [
+          "entity"
+        ],
+        "title": "EntityInput",
+        "type": "object"
+      },
+      "FiForecast": {
+        "additionalProperties": false,
+        "properties": {
+          "attribute": {
+            "default": "forecast",
+            "title": "Attribute with the forecast list",
+            "type": "string"
+          },
+          "entity": {
+            "default": "sensor.nordpool_predict_fi_price",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Forecast entity",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "unit": {
+            "default": "c_per_kwh",
+            "enum": [
+              "c_per_kwh",
+              "eur_per_kwh",
+              "eur_per_mwh"
+            ],
+            "title": "Unit",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "c_per_kwh": "c/kWh",
+                "eur_per_kwh": "€/kWh",
+                "eur_per_mwh": "€/MWh"
+              }
+            }
+          },
+          "vat_included_pct": {
+            "default": 0.0,
+            "description": "Removed before Estonian tariffs are applied. 0 if the values exclude VAT.",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "VAT included in the values",
+            "type": "number",
+            "ui": {
+              "unit": "%"
+            }
+          }
+        },
+        "title": "FiForecast",
+        "type": "object"
+      },
+      "Forecast": {
+        "additionalProperties": false,
+        "properties": {
+          "ee": {
+            "$ref": "#/components/schemas/EeForecast",
+            "default": {
+              "api_key": "",
+              "poll_hours": 1
+            },
+            "title": "eupowerprices.com"
+          },
+          "extend_days": {
+            "default": 1,
+            "maximum": 7.0,
+            "minimum": 1.0,
+            "title": "Extend by",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "fi": {
+            "$ref": "#/components/schemas/FiForecast",
+            "default": {
+              "attribute": "forecast",
+              "entity": "sensor.nordpool_predict_fi_price",
+              "unit": "c_per_kwh",
+              "vat_included_pct": 0.0
+            },
+            "title": "nordpool-predict-fi"
+          },
+          "source": {
+            "default": "none",
+            "description": "Extends the price horizon beyond the published day-ahead prices.",
+            "enum": [
+              "none",
+              "ee_eupowerprices",
+              "fi_ha_entity"
+            ],
+            "title": "Price forecast",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "ee_eupowerprices": "Estonia (EE) – eupowerprices.com",
+                "fi_ha_entity": "Finland (FI) – nordpool-predict-fi entity",
+                "none": "None"
+              }
+            }
+          }
+        },
+        "title": "Forecast",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_max_age_slots": {
+            "default": 2,
+            "maximum": 96.0,
+            "minimum": 1.0,
+            "title": "Plan is stale after",
+            "type": "integer",
+            "ui": {
+              "unit": "slots"
+            }
+          },
+          "problem_grace_min": {
+            "default": 10,
+            "maximum": 240.0,
+            "minimum": 0.0,
+            "title": "Notify after a problem lasts",
+            "type": "integer",
+            "ui": {
+              "unit": "min"
+            }
+          },
+          "tomorrow_error_after": {
+            "default": "18:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Error if tomorrow's prices are missing after",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          },
+          "tomorrow_warn_after": {
+            "default": "15:30",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Warn if tomorrow's prices are missing after",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          }
+        },
+        "title": "Health",
+        "type": "object"
+      },
+      "ImportPreview": {
+        "properties": {
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DiffEntry"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "required": [
+          "diff",
+          "errors"
+        ],
+        "title": "ImportPreview",
+        "type": "object"
+      },
+      "ImportRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "yaml": {
+            "title": "Yaml",
+            "type": "string"
+          }
+        },
+        "required": [
+          "yaml"
+        ],
+        "title": "ImportRequest",
+        "type": "object"
+      },
+      "Inputs": {
+        "additionalProperties": false,
+        "properties": {
+          "deferrable_loads": {
+            "items": {
+              "$ref": "#/components/schemas/DeferrableLoad"
+            },
+            "maxItems": 4,
+            "title": "Deferrable loads",
+            "type": "array"
+          },
+          "soc_final": {
+            "$ref": "#/components/schemas/EntityInput",
+            "default": {
+              "default": 0.8,
+              "entity": "input_number.emhass_target_soc",
+              "on_unavailable": "default",
+              "scale": 0.01
+            },
+            "title": "Battery state of charge at the end of the horizon"
+          },
+          "soc_init": {
+            "$ref": "#/components/schemas/EntityInput",
+            "default": {
+              "entity": "sensor.ev6_battery_soc",
+              "on_unavailable": "refuse",
+              "scale": 0.01
+            },
+            "title": "Battery state of charge now"
+          }
+        },
+        "title": "Inputs",
+        "type": "object"
+      },
+      "JobInfo": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "grace_s": {
+            "title": "Grace S",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_finished": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Finished"
+          },
+          "last_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Outcome"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "last_started": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started"
+          },
+          "next_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "trigger",
+          "paused",
+          "running",
+          "next_run",
+          "last_started",
+          "last_finished",
+          "last_outcome",
+          "last_run_id",
+          "grace_s"
+        ],
+        "title": "JobInfo",
+        "type": "object"
+      },
+      "LogEntry": {
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "exc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exc"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "msg": {
+            "title": "Msg",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "level",
+          "component",
+          "msg"
+        ],
+        "title": "LogEntry",
+        "type": "object"
+      },
+      "Logging": {
+        "additionalProperties": false,
+        "properties": {
+          "component_levels": {
+            "additionalProperties": {
+              "enum": [
+                "debug",
+                "info",
+                "warning",
+                "error"
+              ],
+              "type": "string"
+            },
+            "description": "e.g. {\"emhass\": \"debug\"} for more detail from one part only.",
+            "title": "Per-component levels",
+            "type": "object",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
+            }
+          },
+          "level": {
+            "default": "default",
+            "description": "Default follows the log_level option in the App's Configuration tab.",
+            "enum": [
+              "default",
+              "debug",
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Log level",
+            "type": "string"
+          },
+          "retention": {
+            "$ref": "#/components/schemas/Retention",
+            "default": {
+              "artifacts_days": 7,
+              "logs_days": 7,
+              "runs_days": 30
+            }
+          }
+        },
+        "title": "Logging",
+        "type": "object"
+      },
+      "NetworkRates": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "default": 0.0369,
+            "minimum": 0.0,
+            "title": "Day",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "day_peak": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Working days 09–12 and 16–20, November–March. Empty = no peak rate.",
+            "title": "Day peak",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "holiday_peak": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Weekends and holidays 16–20, November–March. Empty = no peak rate.",
+            "title": "Weekend peak",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "night": {
+            "default": 0.021,
+            "minimum": 0.0,
+            "title": "Night / weekend / holiday",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          }
+        },
+        "title": "NetworkRates",
+        "type": "object"
+      },
+      "NightWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "clock_basis": {
+            "default": "local",
+            "description": "Local: the window follows the wall clock. Standard time: it is defined in winter time, so in summer it shifts one hour later (e.g. 23–08).",
+            "enum": [
+              "local",
+              "standard_time"
+            ],
+            "title": "Clock",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "local": "Wall clock",
+                "standard_time": "Winter time"
+              }
+            }
+          },
+          "end": {
+            "default": "07:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "End",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          },
+          "start": {
+            "default": "22:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          }
+        },
+        "title": "NightWindow",
+        "type": "object"
+      },
+      "NordpoolPolling": {
+        "additionalProperties": false,
+        "properties": {
+          "area": {
+            "default": "EE",
+            "enum": [
+              "EE",
+              "FI",
+              "LV",
+              "LT"
+            ],
+            "title": "Bidding zone",
+            "type": "string"
+          },
+          "fast_interval_min": {
+            "default": 5,
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Fast poll interval",
+            "type": "integer",
+            "ui": {
+              "unit": "min"
+            }
+          },
+          "fast_until": {
+            "default": "15:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Poll fast until",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          },
+          "publish_time": {
+            "default": "13:45",
+            "description": "Local time from which tomorrow's prices are polled.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Day-ahead results expected at",
+            "type": "string",
+            "ui": {
+              "widget": "time"
+            }
+          },
+          "slow_interval_min": {
+            "default": 60,
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Slow poll interval",
+            "type": "integer",
+            "ui": {
+              "unit": "min"
+            }
+          }
+        },
+        "title": "NordpoolPolling",
+        "type": "object"
+      },
+      "Notifications": {
+        "additionalProperties": false,
+        "properties": {
+          "persistent": {
+            "default": false,
+            "description": "Raise a persistent notification for problems that last longer than the grace time.",
+            "title": "Home Assistant notifications",
+            "type": "boolean"
+          }
+        },
+        "title": "Notifications",
+        "type": "object"
+      },
+      "Outputs": {
+        "additionalProperties": false,
+        "properties": {
+          "discovery_prefix": {
+            "default": "homeassistant",
+            "title": "Discovery prefix",
+            "type": "string",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "fire_event": {
+            "default": true,
+            "description": "emhass_lens_plan_published, with the current slot's plan values in the event data.",
+            "title": "Fire an event after each publish",
+            "type": "boolean"
+          },
+          "mqtt_enabled": {
+            "default": false,
+            "description": "Publish the EMHASS Lens device (prices, problem, last MPC, Auto MPC switch, Run MPC button) through MQTT discovery. Needs the Mosquitto broker App.",
+            "title": "MQTT entities",
+            "type": "boolean"
+          }
+        },
+        "title": "Outputs",
+        "type": "object"
+      },
+      "Parity": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "description": "While the old integration still runs, compare its prices and MPC payload with ours.",
+            "title": "Compare with the HACS integration",
+            "type": "boolean"
+          },
+          "legacy_auto_mpc_switch": {
+            "default": "switch.nordpool_ee_prices_emhass_auto_mpc",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Legacy Auto MPC switch",
+            "type": "string",
+            "ui": {
+              "advanced": true,
+              "domain": "switch",
+              "widget": "entity"
+            }
+          },
+          "legacy_prefix": {
+            "default": "nordpool_ee_prices_",
+            "title": "Legacy entity prefix",
+            "type": "string",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "tolerance": {
+            "default": 1e-06,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number",
+            "ui": {
+              "advanced": true,
+              "unit": "€/kWh"
+            }
+          }
+        },
+        "title": "Parity",
+        "type": "object"
+      },
+      "Prices": {
+        "additionalProperties": false,
+        "properties": {
+          "nordpool": {
+            "$ref": "#/components/schemas/NordpoolPolling",
+            "default": {
+              "area": "EE",
+              "fast_interval_min": 5,
+              "fast_until": "15:00",
+              "publish_time": "13:45",
+              "slow_interval_min": 60
+            },
+            "title": "Nord Pool day-ahead"
+          },
+          "tariff": {
+            "$ref": "#/components/schemas/Tariff",
+            "default": {
+              "balancing": 0.00373,
+              "excise": 0.0021,
+              "export_balancing": 0.00373,
+              "export_margin": 0.01,
+              "margin": 0.00328,
+              "network": {
+                "day": 0.0369,
+                "night": 0.021
+              },
+              "night_window": {
+                "clock_basis": "local",
+                "end": "07:00",
+                "start": "22:00"
+              },
+              "package": "custom",
+              "renewable": 0.0084,
+              "supply_security": 0.00758,
+              "vat_pct": 24.0
+            }
+          }
+        },
+        "title": "Prices",
+        "type": "object"
+      },
+      "ProblemInfo": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "severity",
+          "title"
+        ],
+        "title": "ProblemInfo",
+        "type": "object"
+      },
+      "Pv": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "default": 7,
+            "maximum": 7.0,
+            "minimum": 1.0,
+            "title": "Days to read",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "entity_prefix": {
+            "default": "sensor.solcast_pv_forecast_forecast_",
+            "description": "Day sensors are <prefix>today, <prefix>tomorrow, <prefix>day_3 … day_7.",
+            "title": "Solcast sensor prefix",
+            "type": "string"
+          },
+          "field": {
+            "default": "from_select",
+            "enum": [
+              "from_select",
+              "estimate",
+              "estimate10",
+              "estimate90"
+            ],
+            "title": "Estimate",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "estimate": "Estimate (P50)",
+                "estimate10": "Pessimistic (P10)",
+                "estimate90": "Optimistic (P90)",
+                "from_select": "Follow the Solcast select entity"
+              }
+            }
+          },
+          "field_select_entity": {
+            "default": "select.solcast_pv_forecast_use_forecast_field",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Solcast select entity",
+            "type": "string",
+            "ui": {
+              "advanced": true,
+              "domain": "select",
+              "widget": "entity"
+            }
+          },
+          "scale": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Multiply by",
+            "type": "number",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "source": {
+            "default": "solcast",
+            "enum": [
+              "solcast",
+              "none"
+            ],
+            "title": "PV forecast",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "none": "None",
+                "solcast": "Solcast (HA integration)"
+              }
+            }
+          }
+        },
+        "title": "Pv",
+        "type": "object"
+      },
+      "Retention": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts_days": {
+            "default": 7,
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Keep run details",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "logs_days": {
+            "default": 7,
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Keep logs",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "runs_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Keep run summaries",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          }
+        },
+        "title": "Retention",
+        "type": "object"
+      },
+      "RevertRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "title": "RevertRequest",
+        "type": "object"
+      },
+      "Revision": {
+        "properties": {
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DiffEntry"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor",
+          "source",
+          "schema_version",
+          "comment",
+          "diff"
+        ],
+        "title": "Revision",
+        "type": "object"
+      },
+      "RunDetail": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactInfo"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "pinned": {
+            "default": 0,
+            "title": "Pinned",
+            "type": "integer"
+          },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
+          },
+          "settings_rev": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings Rev"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job",
+          "trigger",
+          "started_at",
+          "outcome",
+          "artifacts"
+        ],
+        "title": "RunDetail",
+        "type": "object"
+      },
+      "RunStarted": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/JobInfo"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "job",
+          "run_id"
+        ],
+        "title": "RunStarted",
+        "type": "object"
+      },
+      "RunSummary": {
+        "properties": {
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "pinned": {
+            "default": 0,
+            "title": "Pinned",
+            "type": "integer"
+          },
+          "scheduled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled At"
+          },
+          "settings_rev": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings Rev"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job",
+          "trigger",
+          "started_at",
+          "outcome"
+        ],
+        "title": "RunSummary",
+        "type": "object"
+      },
+      "SaveResponse": {
+        "properties": {
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DiffEntry"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision",
+          "diff"
+        ],
+        "title": "SaveResponse",
+        "type": "object"
+      },
+      "Settings": {
+        "additionalProperties": false,
+        "properties": {
+          "emhass": {
+            "$ref": "#/components/schemas/Emhass",
+            "default": {
+              "base_url": "",
+              "extra_runtime_params": {},
+              "ml": {
+                "historic_days": 30,
+                "n_trials": 10,
+                "sklearn_model": "KNeighborsRegressor",
+                "var_model": "sensor.house_power_without_deferrable"
+              },
+              "mode": "off",
+              "mpc": {
+                "auto": false,
+                "hazard_guard_s": 30,
+                "max_horizon": 672,
+                "min_horizon": 8,
+                "slot_offset_s": 780
+              },
+              "publish": {
+                "enabled": true,
+                "slot_offset_s": 2
+              },
+              "timeouts": {
+                "fit": 3600,
+                "mpc": 180,
+                "predict": 180,
+                "publish": 60,
+                "tune": 7200
+              }
+            },
+            "title": "EMHASS"
+          },
+          "forecast": {
+            "$ref": "#/components/schemas/Forecast",
+            "default": {
+              "ee": {
+                "api_key": "",
+                "poll_hours": 1
+              },
+              "extend_days": 1,
+              "fi": {
+                "attribute": "forecast",
+                "entity": "sensor.nordpool_predict_fi_price",
+                "unit": "c_per_kwh",
+                "vat_included_pct": 0.0
+              },
+              "source": "none"
+            },
+            "title": "Price forecast"
+          },
+          "health": {
+            "$ref": "#/components/schemas/Health",
+            "default": {
+              "plan_max_age_slots": 2,
+              "problem_grace_min": 10,
+              "tomorrow_error_after": "18:00",
+              "tomorrow_warn_after": "15:30"
+            }
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/Inputs",
+            "default": {
+              "deferrable_loads": [
+                {
+                  "deadline_timesteps_entity": "sensor.ev_charging_timesteps",
+                  "enabled_entity": "input_boolean.ev_charging_enabled",
+                  "name": "EV",
+                  "nominal_power_w": 11000,
+                  "operating_hours_entity": "sensor.ev_operating_hours",
+                  "single_constant_entity": "input_boolean.ev_force_continuous_charging"
+                }
+              ],
+              "soc_final": {
+                "default": 0.8,
+                "entity": "input_number.emhass_target_soc",
+                "on_unavailable": "default",
+                "scale": 0.01
+              },
+              "soc_init": {
+                "entity": "sensor.ev6_battery_soc",
+                "on_unavailable": "refuse",
+                "scale": 0.01
+              }
+            }
+          },
+          "logging": {
+            "$ref": "#/components/schemas/Logging",
+            "default": {
+              "component_levels": {},
+              "level": "default",
+              "retention": {
+                "artifacts_days": 7,
+                "logs_days": 7,
+                "runs_days": 30
+              }
+            }
+          },
+          "notifications": {
+            "$ref": "#/components/schemas/Notifications",
+            "default": {
+              "persistent": false
+            }
+          },
+          "outputs": {
+            "$ref": "#/components/schemas/Outputs",
+            "default": {
+              "discovery_prefix": "homeassistant",
+              "fire_event": true,
+              "mqtt_enabled": false
+            },
+            "title": "Home Assistant outputs"
+          },
+          "parity": {
+            "$ref": "#/components/schemas/Parity",
+            "default": {
+              "enabled": true,
+              "legacy_auto_mpc_switch": "switch.nordpool_ee_prices_emhass_auto_mpc",
+              "legacy_prefix": "nordpool_ee_prices_",
+              "tolerance": 1e-06
+            },
+            "title": "Parity with the HACS integration"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/Prices",
+            "default": {
+              "nordpool": {
+                "area": "EE",
+                "fast_interval_min": 5,
+                "fast_until": "15:00",
+                "publish_time": "13:45",
+                "slow_interval_min": 60
+              },
+              "tariff": {
+                "balancing": 0.00373,
+                "excise": 0.0021,
+                "export_balancing": 0.00373,
+                "export_margin": 0.01,
+                "margin": 0.00328,
+                "network": {
+                  "day": 0.0369,
+                  "night": 0.021
+                },
+                "night_window": {
+                  "clock_basis": "local",
+                  "end": "07:00",
+                  "start": "22:00"
+                },
+                "package": "custom",
+                "renewable": 0.0084,
+                "supply_security": 0.00758,
+                "vat_pct": 24.0
+              }
+            }
+          },
+          "pv": {
+            "$ref": "#/components/schemas/Pv",
+            "default": {
+              "days": 7,
+              "entity_prefix": "sensor.solcast_pv_forecast_forecast_",
+              "field": "from_select",
+              "field_select_entity": "select.solcast_pv_forecast_use_forecast_field",
+              "scale": 1.0,
+              "source": "solcast"
+            },
+            "title": "PV forecast"
+          }
+        },
+        "title": "Settings",
+        "type": "object"
+      },
+      "SettingsPatchRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "changes": {
+            "additionalProperties": true,
+            "title": "Changes",
+            "type": "object"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "changes"
+        ],
+        "title": "SettingsPatchRequest",
+        "type": "object"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          },
+          "write_block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Write Block Reason"
+          }
+        },
+        "required": [
+          "revision",
+          "settings",
+          "errors",
+          "writable",
+          "write_block_reason"
+        ],
+        "title": "SettingsResponse",
+        "type": "object"
+      },
+      "SettingsSaveRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "title": "SettingsSaveRequest",
+        "type": "object"
+      },
+      "StatusInfo": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "components": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ComponentStatus"
+            },
+            "title": "Components",
+            "type": "object"
+          },
+          "driver": {
+            "default": "none",
+            "title": "Driver",
+            "type": "string"
+          },
+          "emhass_mode": {
+            "title": "Emhass Mode",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemInfo"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "safe_mode": {
+            "title": "Safe Mode",
+            "type": "boolean"
+          },
+          "scheduler_running": {
+            "title": "Scheduler Running",
+            "type": "boolean"
+          },
+          "settings_errors": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Settings Errors",
+            "type": "array"
+          },
+          "settings_revision": {
+            "title": "Settings Revision",
+            "type": "integer"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "under_supervisor": {
+            "title": "Under Supervisor",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          },
+          "write_block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Write Block Reason"
+          }
+        },
+        "required": [
+          "version",
+          "started_at",
+          "safe_mode",
+          "under_supervisor",
+          "timezone",
+          "emhass_mode",
+          "settings_revision",
+          "settings_errors",
+          "scheduler_running",
+          "writable",
+          "write_block_reason",
+          "actor",
+          "components",
+          "problems"
+        ],
+        "title": "StatusInfo",
+        "type": "object"
+      },
+      "Tariff": {
+        "additionalProperties": false,
+        "properties": {
+          "balancing": {
+            "default": 0.00373,
+            "minimum": 0.0,
+            "title": "Balancing capacity fee (tasakaalustamine)",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "excise": {
+            "default": 0.0021,
+            "minimum": 0.0,
+            "title": "Electricity excise (aktsiis)",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "export_balancing": {
+            "default": 0.00373,
+            "minimum": 0.0,
+            "title": "Export balancing fee",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "export_margin": {
+            "default": 0.01,
+            "minimum": 0.0,
+            "title": "Export margin",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "margin": {
+            "default": 0.00328,
+            "minimum": 0.0,
+            "title": "Seller margin",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkRates",
+            "default": {
+              "day": 0.0369,
+              "night": 0.021
+            },
+            "title": "Network rates (custom package)"
+          },
+          "night_window": {
+            "$ref": "#/components/schemas/NightWindow",
+            "default": {
+              "clock_basis": "local",
+              "end": "07:00",
+              "start": "22:00"
+            },
+            "title": "Night rate hours"
+          },
+          "package": {
+            "default": "custom",
+            "description": "Elektrilevi Võrk 1/2/4/5 bring their own network rates; Custom uses the rates below.",
+            "enum": [
+              "vork1",
+              "vork2",
+              "vork4",
+              "vork5",
+              "custom"
+            ],
+            "title": "Network package",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "custom": "Custom",
+                "vork1": "Võrk 1",
+                "vork2": "Võrk 2",
+                "vork4": "Võrk 4",
+                "vork5": "Võrk 5"
+              }
+            }
+          },
+          "renewable": {
+            "default": 0.0084,
+            "minimum": 0.0,
+            "title": "Renewable energy fee (taastuvenergia tasu)",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "supply_security": {
+            "default": 0.00758,
+            "minimum": 0.0,
+            "title": "Security of supply fee (varustuskindlus)",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          },
+          "vat_pct": {
+            "default": 24.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "VAT",
+            "type": "number",
+            "ui": {
+              "unit": "%"
+            }
+          }
+        },
+        "title": "Tariff",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VersionInfo": {
+        "properties": {
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "started_at"
+        ],
+        "title": "VersionInfo",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "EMHASS Lens",
+    "version": "schema"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/events": {
+      "get": {
+        "description": "Server-sent events: log, run.*, job.updated, settings.changed, ... (comma-separated prefixes).",
+        "operationId": "events_api_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "topics",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Topics"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "logs"
+        ]
+      }
+    },
+    "/api/health/live": {
+      "get": {
+        "description": "Liveness for the Supervisor watchdog: answers as long as the event loop does.",
+        "operationId": "live_api_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Live Api Health Live Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "list_jobs_api_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobInfo"
+                  },
+                  "title": "Response List Jobs Api Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/pause": {
+      "post": {
+        "operationId": "pause_job_api_jobs__job_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/resume": {
+      "post": {
+        "operationId": "resume_job_api_jobs__job_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/run": {
+      "post": {
+        "description": "Start the job now; answers with the new run's id as soon as the run exists.",
+        "operationId": "run_job_api_jobs__job_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/logs": {
+      "get": {
+        "description": "Log history, newest last. Combines the database with the newest lines not yet flushed.",
+        "operationId": "logs_api_logs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "default": "DEBUG",
+              "title": "Level",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "component",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Component"
+            }
+          },
+          {
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LogEntry"
+                  },
+                  "title": "Response Logs Api Logs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Logs",
+        "tags": [
+          "logs"
+        ]
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "operationId": "list_runs_api_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "job",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunSummary"
+                  },
+                  "title": "Response List Runs Api Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/{run_id}/artifacts/{kind}": {
+      "get": {
+        "operationId": "get_artifact_api_runs__run_id__artifacts__kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Artifact Api Runs  Run Id  Artifacts  Kind  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Artifact",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/{run_id}/bundle": {
+      "get": {
+        "description": "Everything about one run in a single JSON file, for bug reports.",
+        "operationId": "run_bundle_api_runs__run_id__bundle_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Bundle",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/{run_id}/logs": {
+      "get": {
+        "operationId": "run_logs_api_runs__run_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LogEntry"
+                  },
+                  "title": "Response Run Logs Api Runs  Run Id  Logs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Logs",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/{run_id}/pin": {
+      "post": {
+        "operationId": "pin_run_api_runs__run_id__pin_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Pinned",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pin Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "operationId": "get_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Change some fields; nested objects merge, lists and values replace.",
+        "operationId": "patch_settings_api_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Patch Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Replace the whole settings document (the form sends everything it shows).",
+        "operationId": "put_settings_api_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/export": {
+      "get": {
+        "description": "The current settings as YAML (secrets masked; importing the file keeps the stored secrets).",
+        "operationId": "export_yaml_api_settings_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Yaml",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/import": {
+      "post": {
+        "description": "Preview (dry_run) or apply a YAML settings file. Missing keys fall back to defaults.",
+        "operationId": "import_yaml_api_settings_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Yaml",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/revert/{revision}": {
+      "post": {
+        "operationId": "revert_api_settings_revert__revision__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Revert",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/revisions": {
+      "get": {
+        "operationId": "revisions_api_settings_revisions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Revision"
+                  },
+                  "title": "Response Revisions Api Settings Revisions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revisions",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/revisions/{revision}": {
+      "get": {
+        "operationId": "revision_api_settings_revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revision Api Settings Revisions  Revision  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revision",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/schema": {
+      "get": {
+        "description": "JSON schema of the settings with UI hints (json_schema_extra.ui), $refs inlined.",
+        "operationId": "get_schema_api_settings_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Schema Api Settings Schema Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Schema",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "status_api_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/version": {
+      "get": {
+        "description": "Used by the UI to notice an App update or restart and offer a reload.",
+        "operationId": "version_api_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version",
+        "tags": [
+          "meta"
+        ]
+      }
+    }
+  }
+}
