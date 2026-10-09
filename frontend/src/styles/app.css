@@ -973,6 +973,48 @@ td.wrap {
   font-weight: 400;
 }
 
+/* Secret fields: the eye button sits inside the input's right edge */
+.secret-input {
+  position: relative;
+  display: inline-flex;
+  width: min(100%, 42ch);
+}
+
+.field-input .secret-input input {
+  width: 100%;
+  padding-right: 36px;
+}
+
+.secret-eye {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.secret-eye:hover:not(:disabled) {
+  color: var(--ink);
+  background: transparent;
+}
+
+.secret-eye[aria-pressed='true'] {
+  color: var(--link);
+}
+
+.secret-eye:disabled {
+  opacity: 0.4;
+  background: transparent;
+}
+
 /* Shown from the review list: a short pulse on the field */
 .field-flash {
   animation: field-flash 1.8s ease-out;

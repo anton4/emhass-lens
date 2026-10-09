@@ -213,6 +213,78 @@ function ListField({
   )
 }
 
+/**
+ * A password-style input with an eye button that shows what was typed. A stored secret reaches the
+ * browser only as the mask, so there is nothing to reveal until a new value is typed.
+ */
+function SecretInput({
+  id,
+  disabled,
+  invalid,
+  value,
+  onValue,
+}: {
+  id: string
+  disabled: boolean
+  invalid: boolean
+  value: unknown
+  onValue: (v: unknown) => void
+}) {
+  const [shown, setShown] = useState(false)
+  const stored = value === MASK
+  const typed = stored ? '' : String(value ?? '')
+  const hint = typed
+    ? shown
+      ? 'Hide'
+      : 'Show'
+    : stored
+      ? 'The stored key is never sent to the browser. Type a new one to see it here.'
+      : 'Nothing typed yet'
+  return (
+    <>
+      <span className="secret-input">
+        <input
+          id={id}
+          type={shown ? 'text' : 'password'}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={disabled}
+          aria-invalid={invalid || undefined}
+          placeholder={stored ? 'Stored; type to replace' : 'Not set'}
+          value={typed}
+          onChange={(e) => onValue(e.target.value === '' && stored ? MASK : e.target.value)}
+        />
+        <button
+          type="button"
+          className="secret-eye"
+          aria-label={shown ? 'Hide what was typed' : 'Show what was typed'}
+          aria-pressed={shown}
+          title={hint}
+          disabled={disabled || typed === ''}
+          onClick={() => setShown((v) => !v)}
+        >
+          <EyeIcon crossed={shown} />
+        </button>
+      </span>
+      {stored && (
+        <button type="button" className="quiet" disabled={disabled} onClick={() => onValue('')}>
+          Remove
+        </button>
+      )}
+    </>
+  )
+}
+
+function EyeIcon({ crossed }: { crossed: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {crossed && <path d="M4 4l16 16" />}
+    </svg>
+  )
+}
+
 /** Puts one changed field back to its saved value. */
 function RevertButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
   return (
@@ -277,23 +349,7 @@ function Input({ id, info, path, value, ctx, invalid }: InputProps) {
     case 'string': {
       const widget = info.ui.widget
       if (widget === 'secret') {
-        return (
-          <>
-            <input
-              {...common}
-              type="password"
-              autoComplete="off"
-              placeholder={value === MASK ? 'Stored; type to replace' : 'Not set'}
-              value={value === MASK ? '' : String(value ?? '')}
-              onChange={(e) => set(e.target.value === '' && value === MASK ? MASK : e.target.value)}
-            />
-            {value === MASK && (
-              <button type="button" className="quiet" disabled={ctx.disabled} onClick={() => set('')}>
-                Remove
-              </button>
-            )}
-          </>
-        )
+        return <SecretInput id={id} disabled={ctx.disabled} invalid={invalid} value={value} onValue={set} />
       }
       if (widget === 'entity') {
         return (
