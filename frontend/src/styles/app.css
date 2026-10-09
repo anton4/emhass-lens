@@ -946,7 +946,52 @@ td.wrap {
   display: grid;
   grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
   gap: 4px 20px;
-  padding: 8px 0;
+  /* The side padding is taken back by the margin, so the changed-field tint has room without moving anything */
+  padding: 8px 10px;
+  margin: 0 -10px;
+  border-radius: var(--radius-control);
+}
+
+/* A changed field stands out until it is saved, discarded or reverted */
+.field-modified {
+  background: color-mix(in srgb, var(--tint-blue) 70%, transparent);
+  box-shadow: inset 3px 0 0 var(--lamp-blue);
+}
+
+.group-modified {
+  box-shadow: inset 3px 0 0 var(--lamp-blue);
+}
+
+.field-revert {
+  font-size: var(--step--1);
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.group > h3 .field-revert {
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+/* Shown from the review list: a short pulse on the field */
+.field-flash {
+  animation: field-flash 1.8s ease-out;
+}
+
+@keyframes field-flash {
+  0%,
+  35% {
+    background: var(--tint-amber);
+    box-shadow: inset 3px 0 0 var(--lamp-amber), 0 0 0 2px var(--lamp-amber);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-flash {
+    animation: none;
+    outline: 2px solid var(--lamp-amber);
+    outline-offset: 2px;
+  }
 }
 
 .field-label {
@@ -1046,16 +1091,47 @@ td.wrap {
 
 .diff-list li {
   display: grid;
-  grid-template-columns: minmax(12ch, 30ch) minmax(0, 1fr);
+  grid-template-columns: minmax(16ch, 36ch) minmax(0, 1fr);
   gap: 4px 16px;
   padding: 6px 0;
   border-bottom: 1px solid var(--surface-sunk);
 }
 
+.diff-where {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+button.diff-locate {
+  padding: 0;
+  text-align: left;
+  font-weight: 500;
+}
+
+.diff-label {
+  font-weight: 500;
+}
+
 .diff-path {
   font-family: var(--font-code);
   font-size: 12px;
+  color: var(--ink-faint);
   word-break: break-all;
+}
+
+.diff-revert {
+  margin-left: 8px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Many changes: the review scrolls instead of covering the form */
+.save-bar .diff-list {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
 }
 
 .diff-change {

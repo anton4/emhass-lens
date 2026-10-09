@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { deepEqual } from '../../lib/diff'
 import { formatQuarterOffset } from '../../lib/format'
-import { defaultFor, fieldInfo, getPath, hasErrorsUnder, type FieldInfo, type SchemaNode } from '../../lib/schema'
+import { defaultFor, fieldInfo, getPath, hasErrorsUnder, idFor, type FieldInfo, type SchemaNode } from '../../lib/schema'
 import { EmhassUrlStatus, EntityPicker } from './EntityPicker'
 
 export const MASK = '********'
@@ -28,10 +28,6 @@ function pathKey(path: (string | number)[]): string {
   return path.join('.')
 }
 
-function idFor(path: (string | number)[]): string {
-  return `f-${path.join('-')}`
-}
-
 /** Renders one property: an object becomes a group of fields, everything else an input row. */
 export function Field({ name, node, path, ctx, depth }: FieldProps) {
   const info = fieldInfo(name, node)
@@ -48,7 +44,18 @@ export function Field({ name, node, path, ctx, depth }: FieldProps) {
     return <ObjectGroup info={info} path={path} ctx={ctx} depth={depth} ownErrors={ownErrors} />
   }
   if (info.kind === 'list') {
-    return <ListField info={info} path={path} ctx={ctx} depth={depth} value={value} ownErrors={ownErrors} />
+    return (
+      <ListField
+        info={info}
+        path={path}
+        ctx={ctx}
+        depth={depth}
+        value={value}
+        original={original}
+        modified={modified}
+        ownErrors={ownErrors}
+      />
+    )
   }
 
   const id = idFor(path)
@@ -60,6 +67,7 @@ export function Field({ name, node, path, ctx, depth }: FieldProps) {
       </label>
       <div className="field-input">
         <Input id={id} info={info} path={path} value={value} ctx={ctx} invalid={ownErrors.length > 0} />
+        {modified && <RevertButton disabled={ctx.disabled} onClick={() => ctx.onChange(path, original)} />}
       </div>
       {info.description && <p className="field-help">{info.description}</p>}
       {ownErrors.map((msg) => (
@@ -136,6 +144,8 @@ function ListField({
   ctx,
   depth,
   value,
+  original,
+  modified,
   ownErrors,
 }: {
   info: FieldInfo
@@ -143,6 +153,8 @@ function ListField({
   ctx: FormContext
   depth: number
   value: unknown
+  original: unknown
+  modified: boolean
   ownErrors: string[]
 }) {
   const items = Array.isArray(value) ? value : []
@@ -153,8 +165,11 @@ function ListField({
     return name || `Item ${index + 1}`
   }
   return (
-    <div className="group">
-      <h3>{info.title}</h3>
+    <div id={idFor(path)} className={modified ? 'group group-modified' : 'group'}>
+      <h3>
+        {info.title}
+        {modified && <RevertButton disabled={ctx.disabled} onClick={() => ctx.onChange(path, original)} />}
+      </h3>
       {info.description && <p className="field-help" style={{ gridColumn: 'auto' }}>{info.description}</p>}
       {ownErrors.map((msg) => (
         <p key={msg} className="field-error" role="alert">
@@ -195,6 +210,15 @@ function ListField({
         Add {info.title.toLowerCase().replace(/s$/, '')}
       </button>
     </div>
+  )
+}
+
+/** Puts one changed field back to its saved value. */
+function RevertButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="quiet field-revert" disabled={disabled} onClick={onClick} title="Back to the saved value">
+      Revert
+    </button>
   )
 }
 

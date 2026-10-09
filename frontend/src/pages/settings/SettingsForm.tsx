@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError, api } from '../../api/client'
 import { keys } from '../../api/queries'
 import type { SaveResponse, SettingsResponse } from '../../api/types'
 import { Lamp } from '../../components/Lamp'
 import { diffDocs } from '../../lib/diff'
-import { errorsByPath, fieldInfo, hasErrorsUnder, secretPathsOf, setPath, type SchemaNode } from '../../lib/schema'
+import { errorsByPath, fieldInfo, getPath, hasErrorsUnder, idFor, secretPathsOf, setPath, type SchemaNode } from '../../lib/schema'
 import { DiffList } from './DiffList'
 import { Field, type FormContext } from './Field'
 
@@ -34,6 +34,8 @@ export function SettingsForm({ schema, server }: Props) {
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
+  // The field to scroll to and flash after a click on a change in the review (`at` repeats the flash).
+  const [shown, setShown] = useState<{ fieldPath: string[]; at: number } | null>(null)
 
   const diff = useMemo(() => diffDocs(base.doc, draft), [base.doc, draft])
   const dirty = diff.length > 0
@@ -67,6 +69,40 @@ export function SettingsForm({ schema, server }: Props) {
       return prev[path] === message ? prev : { ...prev, [path]: message }
     })
   }, [])
+
+  useEffect(() => {
+    if (!shown) return
+    const target = document.getElementById(idFor(shown.fieldPath))
+    const row = target?.closest<HTMLElement>('.field, .group') ?? target
+    if (!row) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    row.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
+    row.classList.remove('field-flash')
+    void row.offsetWidth // restart the animation when the same field is shown again
+    row.classList.add('field-flash')
+    const timer = setTimeout(() => row.classList.remove('field-flash'), 2000)
+    return () => clearTimeout(timer)
+  }, [shown])
+
+  const showField = (fieldPath: string[]) => {
+    const [first] = fieldPath
+    if (first) setSection(first)
+    setShown({ fieldPath, at: Date.now() })
+  }
+
+  const revertChange = (path: string) => {
+    const parts = path.split('.')
+    setDraft((d: unknown) => setPath(d, parts, getPath(base.doc, parts)))
+    if (diff.length <= 1) setConfirming(false)
+  }
+
+  const discardAll = () => {
+    setDraft(base.doc)
+    setErrors([])
+    setLocalErrors({})
+    setNotice(null)
+    setConfirming(false)
+  }
 
   const ctx: FormContext = {
     draft,
@@ -221,7 +257,7 @@ export function SettingsForm({ schema, server }: Props) {
               {confirming ? (
                 <div style={{ width: '100%' }}>
                   <h3 style={{ marginBottom: 8 }}>Save these changes</h3>
-                  <DiffList diff={diff} secretPaths={secretPaths} />
+                  <DiffList diff={diff} secretPaths={secretPaths} onLocate={showField} onRevert={revertChange} />
                   <div className="toolbar" style={{ marginTop: 12 }}>
                     <label style={{ flex: '1 1 260px' }}>
                       <span className="visually-hidden">Comment</span>
@@ -233,6 +269,9 @@ export function SettingsForm({ schema, server }: Props) {
                         onChange={(e) => setComment(e.target.value)}
                       />
                     </label>
+                    <button type="button" onClick={discardAll}>
+                      Discard all
+                    </button>
                     <button type="button" onClick={() => setConfirming(false)}>
                       Keep editing
                     </button>
@@ -247,16 +286,8 @@ export function SettingsForm({ schema, server }: Props) {
                     {diff.length} unsaved {diff.length === 1 ? 'change' : 'changes'}
                     {hasLocalErrors && <span className="field-error"> Fix the invalid JSON first.</span>}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraft(base.doc)
-                      setErrors([])
-                      setLocalErrors({})
-                      setNotice(null)
-                    }}
-                  >
-                    Discard
+                  <button type="button" onClick={discardAll}>
+                    Discard all
                   </button>
                   <button
                     type="button"

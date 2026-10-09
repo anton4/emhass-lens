@@ -183,6 +183,38 @@ export function hasErrorsUnder(errors: Map<string, string[]>, path: string): boo
   return false
 }
 
+/** DOM id of a field's input (and of a list's group), used for labels and to scroll to a field. */
+export function idFor(path: (string | number)[]): string {
+  return `f-${path.join('-')}`
+}
+
+export interface PathLocation {
+  /** Titles from the section down to the value, e.g. ["Price forecast", "eupowerprices.com", "API key"]. */
+  titles: string[]
+  /** The form row that shows the value; a list or JSON field shows all of its entries in one row. */
+  fieldPath: string[]
+}
+
+/** Where a dotted settings path (as in a diff) appears in the form. */
+export function locatePath(schema: SchemaNode, path: string): PathLocation {
+  const titles: string[] = []
+  const fieldPath: string[] = []
+  let node: SchemaNode | undefined = schema
+  for (const part of path.split('.')) {
+    const child: SchemaNode | undefined = node?.properties?.[part]
+    if (!child) {
+      titles.push(part) // a key inside a JSON field, or a path the schema no longer has
+      node = undefined
+      continue
+    }
+    const info = fieldInfo(part, child)
+    titles.push(info.title)
+    fieldPath.push(part)
+    node = info.kind === 'object' ? info.node : undefined
+  }
+  return { titles, fieldPath }
+}
+
 /** Dotted paths of fields with ui.widget = secret (shown as "changed" in diffs, never as values). */
 export function secretPathsOf(schema: SchemaNode, prefix = ''): string[] {
   const out: string[] = []

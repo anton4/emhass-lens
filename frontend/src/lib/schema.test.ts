@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultFor, errorsByPath, fieldInfo, getPath, hasErrorsUnder, setPath, type SchemaNode } from './schema'
+import { defaultFor, errorsByPath, fieldInfo, getPath, hasErrorsUnder, locatePath, setPath, type SchemaNode } from './schema'
 
 describe('fieldInfo', () => {
   it('unwraps anyOf with null into a nullable field', () => {
@@ -62,5 +62,49 @@ describe('paths', () => {
     expect(hasErrorsUnder(errors, 'prices')).toBe(true)
     expect(hasErrorsUnder(errors, 'inputs.deferrable_loads')).toBe(true)
     expect(hasErrorsUnder(errors, 'emhass')).toBe(false)
+  })
+})
+
+describe('locatePath', () => {
+  const schema: SchemaNode = {
+    type: 'object',
+    properties: {
+      forecast: {
+        type: 'object',
+        title: 'Price forecast',
+        properties: {
+          ee: {
+            type: 'object',
+            title: 'eupowerprices.com',
+            properties: { api_key: { type: 'string', title: 'API key' } },
+          },
+        },
+      },
+      emhass: {
+        type: 'object',
+        title: 'EMHASS',
+        properties: {
+          extra: { type: 'object', title: 'Extra parameters', additionalProperties: true, ui: { widget: 'json' } },
+          mpc: { type: 'object', title: 'EmhassMpc', properties: { slot_offset_s: { type: 'integer' } } },
+        },
+      },
+    },
+  }
+
+  it('names every level and points at the form row', () => {
+    expect(locatePath(schema, 'forecast.ee.api_key')).toEqual({
+      titles: ['Price forecast', 'eupowerprices.com', 'API key'],
+      fieldPath: ['forecast', 'ee', 'api_key'],
+    })
+    // class-name titles fall back to the key, like the form does
+    expect(locatePath(schema, 'emhass.mpc.slot_offset_s').titles).toEqual(['EMHASS', 'MPC', 'Slot offset s'])
+  })
+
+  it('stops at a JSON field and keeps unknown keys as they are', () => {
+    expect(locatePath(schema, 'emhass.extra.weight_battery')).toEqual({
+      titles: ['EMHASS', 'Extra parameters', 'weight_battery'],
+      fieldPath: ['emhass', 'extra'],
+    })
+    expect(locatePath(schema, 'gone.thing')).toEqual({ titles: ['gone', 'thing'], fieldPath: [] })
   })
 })
