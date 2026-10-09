@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Entity fields in Settings search Home Assistant as you type: matches are listed best first with their current value, also on installs with thousands of entities.
+- The log no longer shows every Home Assistant WebSocket message at debug level while the log level is info.
+
 ## 0.2.2
 
 - Health page: a getting-started checklist that shows how far the move from the HACS integration is, step by step, with links.
