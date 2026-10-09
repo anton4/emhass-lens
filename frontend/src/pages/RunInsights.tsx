@@ -10,6 +10,8 @@ import { ValidationList } from '../components/Validation'
 import { PublishEventView } from '../components/PublishEventView'
 import { AgreeHeadline, CallsList, CompareTable, DecisionView } from '../components/InverterViews'
 import { ChargerDecisionView } from '../components/ChargerViews'
+import { MarketDecisionView } from '../components/MarketViews'
+import { MARKET_FIELD_LABELS, marketFieldValue, type MarketComparison, type MarketLast } from '../lib/market'
 import type { DecisionArtifact, InverterCall, InverterComparison } from '../lib/inverter'
 import {
   CHARGER_FIELD_LABELS,
@@ -56,6 +58,14 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
   const chargerCalls = useArtifact<ChargerCall[]>(runId, 'charger_calls', has('charger_calls'))
   const chargerReadback = useArtifact<ChargerComparison>(runId, 'charger_readback', has('charger_readback'))
   const chargerComparison = useArtifact<ChargerComparison>(runId, 'charger_comparison', has('charger_comparison'))
+  const marketDecision = useArtifact<MarketLast>(runId, 'market_decision', has('market_decision'))
+  const marketComparison = useArtifact<MarketComparison>(runId, 'market_comparison', has('market_comparison'))
+  const notification = useArtifact<{ message: string; ok: boolean | null; error?: string; dry_run?: boolean; skipped?: string }>(
+    runId,
+    'notification',
+    has('notification'),
+  )
+  const handback = useArtifact<InverterCall[]>(runId, 'handback_calls', has('handback_calls'))
 
   return (
     <>
@@ -236,6 +246,58 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
                 <CompareTable comparison={chargerComparison.data} labels={CHARGER_FIELD_LABELS} format={chargerFieldValue} />
               </>
             )}
+          </div>
+        </section>
+      )}
+      {marketDecision.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Market decision</h2>
+            <span className="muted">trigger {marketDecision.data.trigger}</span>
+          </div>
+          <div className="panel-body">
+            {marketDecision.data.blocked && (
+              <div className="notice" data-color="amber" role="note">
+                Not in control: {marketDecision.data.blocked}. Nothing was written; this is what it would have done.
+              </div>
+            )}
+            <MarketDecisionView decision={marketDecision.data.decision} sessionBefore={marketDecision.data.session_before} />
+          </div>
+        </section>
+      )}
+      {notification.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Phone message</h2>
+            <span className="muted">
+              {notification.data.ok ? 'sent' : notification.data.ok === null ? (notification.data.dry_run ? 'not sent (dry run)' : (notification.data.skipped ?? 'not sent')) : `failed: ${notification.data.error ?? ''}`}
+            </span>
+          </div>
+          <div className="panel-body">“{notification.data.message}”</div>
+        </section>
+      )}
+      {handback.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Hand-back</h2>
+            <span className="muted">session select and the EMHASS automation switch</span>
+          </div>
+          <CallsList calls={handback.data} nothing="Nothing to change." />
+        </section>
+      )}
+      {marketComparison.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Compared with the automation</h2>
+            {marketComparison.data.decision_run_id !== undefined && (
+              <Link to={`/runs/${marketComparison.data.decision_run_id}`}>decision run {marketComparison.data.decision_run_id}</Link>
+            )}
+          </div>
+          <div className="panel-body">
+            <p style={{ marginTop: 0 }}>
+              <AgreeHeadline comparison={marketComparison.data} what="Automation vs EMHASS Lens" />
+            </p>
+            <CompareTable comparison={marketComparison.data} observedLabel="Home Assistant shows" labels={MARKET_FIELD_LABELS} format={marketFieldValue} />
           </div>
         </section>
       )}

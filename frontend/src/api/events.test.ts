@@ -19,4 +19,8 @@ describe('familiesForJob', () => {
     expect(familiesForJob('charger.decide')).toEqual(['charger'])
     expect(familiesForJob('charger.compare')).toEqual(['charger'])
   })
+  it('refreshes the market status after its runs and the driver after a resume', () => {
+    expect(familiesForJob('market.reconcile')).toEqual(['market'])
+    expect(familiesForJob('external.resume')).toEqual(['emhass', 'inverter'])
+  })
 })

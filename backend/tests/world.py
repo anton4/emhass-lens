@@ -139,6 +139,9 @@ class World:
                 return httpx.Response(500, text="service failed")
             if domain_service in ("number/set_value", "input_number/set_value") and entity:
                 self.set_state(entity, float(body["value"]))
+            if domain_service == "button/press" and entity:
+                now = self.clock_now() if self.clock_now else datetime.now(UTC)
+                self.set_state(entity, now.isoformat(), updated=now)  # a button's state is the time of its last press
             if domain_service == "input_select/select_option" and entity:
                 self.set_state(entity, body["option"])
             toggles = ("switch/turn_off", "switch/turn_on", "input_boolean/turn_off", "input_boolean/turn_on")
@@ -155,11 +158,13 @@ class World:
     def set_state(
         self, entity_id: str, state: Any, attributes: dict[str, Any] | None = None, updated: datetime | None = None
     ) -> dict[str, Any]:
+        stamp = (updated or datetime(2026, 10, 9, 11, 0, tzinfo=UTC)).isoformat()
         value = {
             "entity_id": entity_id,
             "state": str(state),
             "attributes": attributes or {},
-            "last_updated": (updated or datetime(2026, 10, 9, 11, 0, tzinfo=UTC)).isoformat(),
+            "last_updated": stamp,
+            "last_changed": stamp,
         }
         self.ha_states[entity_id] = value
         return value

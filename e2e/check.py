@@ -253,6 +253,48 @@ def main() -> int:
             )
             patch(http, {"charger": {"mode": "off"}}, "e2e: charger off")
 
+            for entity, value in {
+                "sensor.qw_source": "kratt",
+                "sensor.qw_mode": "none",
+                "sensor.qw_powerlimit": "0",
+                "sensor.sofar_battery_capacity_1": "55",
+                "sensor.sofar_pv_power_total_watt": "0",
+                "input_boolean.qilowatt_automation": "on",
+                "input_select.qilowatt_session_state": "none",
+            }.items():
+                ha.post(f"/api/states/{entity}", json={"state": value})
+            patch(http, {"market": {"mode": "shadow"}}, "e2e: market shadow")
+            time.sleep(1)
+            market_runs = http.get("/api/runs", params={"job": "market.reconcile"}).json()
+            market_before = max((r["id"] for r in market_runs), default=0)
+            # REST state posts emit state_changed, so the WebSocket listener and the settle time run for real
+            ha.post("/api/states/sensor.qw_powerlimit", json={"state": "5000"})
+            ha.post("/api/states/sensor.qw_mode", json={"state": "mfrrup"})
+
+            def sell_decision() -> dict[str, Any] | None:
+                runs = http.get("/api/runs", params={"job": "market.reconcile"}).json()
+                return next(
+                    (
+                        r
+                        for r in runs
+                        if r["id"] > market_before and r["trigger"] == "event" and "sell 5000W" in (r["summary"] or "")
+                    ),
+                    None,
+                )
+
+            decided = wait_for(sell_decision, 30)
+            check(
+                "decides a market session in shadow mode after a Qilowatt command change",
+                isinstance(decided, dict) and decided["outcome"] == "dry_run",
+                decided["summary"] if isinstance(decided, dict) else decided,
+            )
+            check(
+                "shadow mode never writes to the inverter",
+                ha.get("/api/states/number.sofar_passive_mode_grid_power").json()["state"] == "0",
+            )
+            ha.post("/api/states/sensor.qw_mode", json={"state": "none"})
+            patch(http, {"market": {"mode": "off"}}, "e2e: market off")
+
             patch(
                 http, {"outputs": {"mqtt_enabled": True, "broker": {"host": "localhost", "port": 11883}}}, "e2e: MQTT"
             )

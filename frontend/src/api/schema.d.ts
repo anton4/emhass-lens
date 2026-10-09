@@ -387,6 +387,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/market": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market Status
+         * @description Qilowatt market control (experimental): the session, the last decision and comparison, agreement, wear.
+         */
+        get: operations["market_status_api_market_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/market/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Market Reconcile
+         * @description Reconcile now (live: acts; force_end ends the open session whatever the command says).
+         */
+        post: operations["market_reconcile_api_market_reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/market/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Market Sessions */
+        get: operations["market_sessions_api_market_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/{action}": {
         parameters: {
             query?: never;
@@ -2039,6 +2096,257 @@ export interface components {
              */
             retention: components["schemas"]["Retention"];
         };
+        /** Market */
+        Market: {
+            /**
+             * Compare with the automation after
+             * @default 12
+             */
+            compare_delay_s: number;
+            /**
+             * Market entities
+             * @default {
+             *       "enable_boolean": "input_boolean.qilowatt_automation",
+             *       "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
+             *       "ha_automation": "",
+             *       "mode_sensor": "sensor.qw_mode",
+             *       "powerlimit_sensor": "sensor.qw_powerlimit",
+             *       "pv_sensor": "sensor.sofar_pv_power_total_watt",
+             *       "session_select": "input_select.qilowatt_session_state",
+             *       "soc_sensor": "sensor.sofar_battery_capacity_1",
+             *       "source_sensor": "sensor.qw_source"
+             *     }
+             */
+            entities: components["schemas"]["MarketEntities"];
+            /**
+             * Qilowatt market control
+             * @description Shadow: decides on every command change and every minute and compares with what the Home Assistant automation did. Live: EMHASS Lens runs the sessions itself (disable the automation first).
+             * @default off
+             * @enum {string}
+             */
+            mode: "off" | "shadow" | "live";
+            /**
+             * Reconcile every minute at (seconds)
+             * @description 15 s after the automation's own minute tick, so shadow comparisons read what it did.
+             * @default 15
+             */
+            reconcile_offset_s: number;
+            /**
+             * Low SoC must hold for
+             * @default 10
+             */
+            soc_low_for_s: number;
+            /**
+             * Thresholds
+             * @default {
+             *       "big_change_w": 2500,
+             *       "buy_cap_w": 18200,
+             *       "buy_modes": [
+             *         "buy",
+             *         "mfrrdown",
+             *         "frrdown"
+             *       ],
+             *       "cooldown_s": 180,
+             *       "deadband_pct": 0.15,
+             *       "deadband_w": 300,
+             *       "enter_w": 1000,
+             *       "exit_w": 400,
+             *       "low_pv_w": 100,
+             *       "min_soc": 10,
+             *       "sell_cap_w": 15500,
+             *       "sell_modes": [
+             *         "sell",
+             *         "mfrrup",
+             *         "frrup"
+             *       ],
+             *       "settle_s": 2,
+             *       "sources": [
+             *         "fusebox",
+             *         "kratt"
+             *       ],
+             *       "unavailable_timeout_s": 300
+             *     }
+             */
+            thresholds: components["schemas"]["MarketThresholds"];
+        };
+        /** MarketEntities */
+        MarketEntities: {
+            /**
+             * Enabled when on
+             * @default input_boolean.qilowatt_automation
+             */
+            enable_boolean: string;
+            /**
+             * Fusebox sell power helper
+             * @default input_number.fusebox_sell_power_helper
+             */
+            fusebox_sell_helper: string;
+            /**
+             * Home Assistant automation (interlock)
+             * @description Live mode refuses to act while this automation is on, so the two never both drive the inverter.
+             * @default
+             */
+            ha_automation: string;
+            /**
+             * Market command
+             * @default sensor.qw_mode
+             */
+            mode_sensor: string;
+            /**
+             * Commanded power
+             * @default sensor.qw_powerlimit
+             */
+            powerlimit_sensor: string;
+            /**
+             * PV power now
+             * @default sensor.sofar_pv_power_total_watt
+             */
+            pv_sensor: string;
+            /**
+             * Session state select
+             * @description Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation kept as a fallback; followed in shadow mode.
+             * @default input_select.qilowatt_session_state
+             */
+            session_select: string;
+            /**
+             * Battery SoC
+             * @default sensor.sofar_battery_capacity_1
+             */
+            soc_sensor: string;
+            /**
+             * Market source
+             * @description Who sends the command: kratt or fusebox (through Qilowatt).
+             * @default sensor.qw_source
+             */
+            source_sensor: string;
+        };
+        /** MarketReconcileRequest */
+        MarketReconcileRequest: {
+            /**
+             * Force End
+             * @default false
+             */
+            force_end: boolean;
+            /** Trigger Entity */
+            trigger_entity?: string | null;
+        };
+        /** MarketSession */
+        MarketSession: {
+            /** Direction */
+            direction: string;
+            /** End Reason */
+            end_reason?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Id */
+            id: number;
+            /** Mode */
+            mode: string | null;
+            /** Power W */
+            power_w: number | null;
+            /** Source */
+            source: string | null;
+            /** Started At */
+            started_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MarketStatus */
+        MarketStatus: {
+            agreement_24h: components["schemas"]["Agreement"];
+            agreement_7d: components["schemas"]["Agreement"];
+            /** Last */
+            last: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Compare */
+            last_compare: {
+                [key: string]: unknown;
+            } | null;
+            /** Mode */
+            mode: string;
+            /** Notice */
+            notice: string | null;
+            /** Preconditions */
+            preconditions: string | null;
+            /** Sensors */
+            sensors: {
+                [key: string]: unknown;
+            };
+            session: components["schemas"]["MarketSession"] | null;
+            wear_24h: components["schemas"]["WearStats"];
+            wear_7d: components["schemas"]["WearStats"];
+        };
+        /** MarketThresholds */
+        MarketThresholds: {
+            /**
+             * Bypass the cooldown for changes of
+             * @default 2500
+             */
+            big_change_w: number;
+            /**
+             * Buy: grid target cap
+             * @default 18200
+             */
+            buy_cap_w: number;
+            /** Buy commands */
+            buy_modes?: string[];
+            /**
+             * Cooldown between writes
+             * @default 180
+             */
+            cooldown_s: number;
+            /**
+             * Deadband as a share of the target
+             * @default 0.15
+             */
+            deadband_pct: number;
+            /**
+             * Deadband
+             * @default 300
+             */
+            deadband_w: number;
+            /**
+             * Start or flip a session at
+             * @default 1000
+             */
+            enter_w: number;
+            /**
+             * Continue a session down to
+             * @default 400
+             */
+            exit_w: number;
+            /**
+             * PV counts as none below
+             * @default 100
+             */
+            low_pv_w: number;
+            /**
+             * No selling below
+             * @default 10
+             */
+            min_soc: number;
+            /**
+             * Sell: grid and feed-in cap
+             * @default 15500
+             */
+            sell_cap_w: number;
+            /** Sell commands */
+            sell_modes?: string[];
+            /**
+             * Settle time
+             * @description How long to wait after a command changes, so a burst of three sensor updates lands first.
+             * @default 2
+             */
+            settle_s: number;
+            /** Known sources */
+            sources?: string[];
+            /**
+             * End a session when the source is lost for
+             * @default 300
+             */
+            unavailable_timeout_s: number;
+        };
         /** MlRequest */
         MlRequest: {
             /** Historic Days */
@@ -2970,6 +3278,55 @@ export interface components {
              */
             logging: components["schemas"]["Logging"];
             /**
+             * Qilowatt market control (experimental)
+             * @default {
+             *       "compare_delay_s": 12,
+             *       "entities": {
+             *         "enable_boolean": "input_boolean.qilowatt_automation",
+             *         "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
+             *         "ha_automation": "",
+             *         "mode_sensor": "sensor.qw_mode",
+             *         "powerlimit_sensor": "sensor.qw_powerlimit",
+             *         "pv_sensor": "sensor.sofar_pv_power_total_watt",
+             *         "session_select": "input_select.qilowatt_session_state",
+             *         "soc_sensor": "sensor.sofar_battery_capacity_1",
+             *         "source_sensor": "sensor.qw_source"
+             *       },
+             *       "mode": "off",
+             *       "reconcile_offset_s": 15,
+             *       "soc_low_for_s": 10,
+             *       "thresholds": {
+             *         "big_change_w": 2500,
+             *         "buy_cap_w": 18200,
+             *         "buy_modes": [
+             *           "buy",
+             *           "mfrrdown",
+             *           "frrdown"
+             *         ],
+             *         "cooldown_s": 180,
+             *         "deadband_pct": 0.15,
+             *         "deadband_w": 300,
+             *         "enter_w": 1000,
+             *         "exit_w": 400,
+             *         "low_pv_w": 100,
+             *         "min_soc": 10,
+             *         "sell_cap_w": 15500,
+             *         "sell_modes": [
+             *           "sell",
+             *           "mfrrup",
+             *           "frrup"
+             *         ],
+             *         "settle_s": 2,
+             *         "sources": [
+             *           "fusebox",
+             *           "kratt"
+             *         ],
+             *         "unavailable_timeout_s": 300
+             *       }
+             *     }
+             */
+            market: components["schemas"]["Market"];
+            /**
              * @default {
              *       "mobile_service": "",
              *       "persistent": false
@@ -3246,6 +3603,26 @@ export interface components {
             started_at: string;
             /** Version */
             version: string;
+        };
+        /**
+         * WearStats
+         * @description Presses of the Sofar apply and feed-in buttons (EEPROM wear), ours and anyone's.
+         */
+        WearStats: {
+            /** Apply Presses */
+            apply_presses: number;
+            /** Feedin Presses */
+            feedin_presses: number;
+            /** Hours */
+            hours: number;
+            /** Last Apply At */
+            last_apply_at: string | null;
+            /** Last Feedin At */
+            last_feedin_at: string | null;
+            /** Our Commits */
+            our_commits: number;
+            /** Presses Not Ours */
+            presses_not_ours: number;
         };
     };
     responses: never;
@@ -3764,6 +4141,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    market_status_api_market_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketStatus"];
+                };
+            };
+        };
+    };
+    market_reconcile_api_market_reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarketReconcileRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStarted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    market_sessions_api_market_sessions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketSession"][];
                 };
             };
             /** @description Validation Error */

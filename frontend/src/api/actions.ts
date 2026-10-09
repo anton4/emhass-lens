@@ -73,6 +73,19 @@ export function useMlAction() {
   })
 }
 
+/** Reconcile the market controller now; `force_end` ends the open session (live mode). Answers with the run id. */
+export function useMarketReconcile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { force_end?: boolean }) => api.post<RunStarted>('/api/market/reconcile', body),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.market })
+      void queryClient.invalidateQueries({ queryKey: keys.marketSessions })
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  })
+}
+
 /** Decide for the EV charger now (applied only in live mode); answers with the run id. */
 export function useChargerDecide() {
   const queryClient = useQueryClient()

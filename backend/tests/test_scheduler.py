@@ -119,3 +119,39 @@ async def test_loop_runs_with_real_clock_quickly() -> None:
     scheduler.run_now("m")
     await asyncio.wait_for(done.wait(), 2)
     await scheduler.stop()
+
+
+async def test_event_runs_are_recorded_even_for_unrecorded_jobs(clock, recorder, bus) -> None:
+    seen: list[str] = []
+
+    async def job(ctx: JobContext) -> None:
+        seen.append(ctx.trigger)
+
+    scheduler = make(clock, recorder, bus)
+    scheduler.add(Job(id="e", title="E", description="", trigger=Manual(), func=job, record=False))
+    await scheduler.run_now("e", {"x": 1}, trigger="event")
+    assert seen == ["event"]
+    [run] = await recorder.list(job="e")
+    assert run["trigger"] == "event" and run["outcome"] == "ok"
+
+
+async def test_a_coalescing_job_runs_once_more_with_the_newest_params(clock, recorder, bus) -> None:
+    release = asyncio.Event()
+    seen: list[dict] = []
+
+    async def slow(ctx: JobContext) -> None:
+        seen.append(dict(ctx.params))
+        if len(seen) == 1:
+            await release.wait()
+
+    scheduler = make(clock, recorder, bus)
+    scheduler.add(Job(id="c", title="C", description="", trigger=Manual(), func=slow, coalesce=True))
+    first = scheduler.run_now("c", {"n": 1})
+    await asyncio.sleep(0.01)
+    await scheduler.run_now("c", {"n": 2}, trigger="event")  # queued, not skipped
+    await scheduler.run_now("c", {"n": 3}, trigger="event")  # replaces the queued params
+    release.set()
+    await first
+    assert seen == [{"n": 1}, {"n": 3}]
+    outcomes = [r["outcome"] for r in await recorder.list(job="c")]
+    assert sorted(outcomes) == ["ok", "ok"]  # no "skipped" record

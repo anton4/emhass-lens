@@ -5,6 +5,7 @@ import { HealthPage } from './pages/HealthPage'
 import { InputsPage } from './pages/InputsPage'
 import { InverterPage } from './pages/InverterPage'
 import { LogsPage } from './pages/LogsPage'
+import { MarketPage } from './pages/MarketPage'
 import { PlanPage } from './pages/PlanPage'
 import { RunDetailPage } from './pages/RunDetailPage'
 import { RunsPage } from './pages/RunsPage'
@@ -19,6 +20,7 @@ export function App() {
           <Route path="inputs" element={<InputsPage />} />
           <Route path="inverter" element={<InverterPage />} />
           <Route path="charger" element={<ChargerPage />} />
+          <Route path="market" element={<MarketPage />} />
           <Route path="runs" element={<RunsPage />} />
           <Route path="runs/:id" element={<RunDetailPage />} />
           <Route path="logs" element={<LogsPage />} />

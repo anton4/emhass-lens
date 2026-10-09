@@ -556,6 +556,49 @@ class InverterStatus(BaseModel):
     agreement_7d: Agreement
 
 
+class MarketSession(BaseModel):
+    id: int
+    direction: str
+    source: str | None
+    mode: str | None
+    power_w: int | None
+    started_at: str
+    updated_at: str
+    ended_at: str | None = None
+    end_reason: str | None = None
+
+
+class WearStats(BaseModel):
+    """Presses of the Sofar apply and feed-in buttons (EEPROM wear), ours and anyone's."""
+
+    hours: int
+    apply_presses: int
+    feedin_presses: int
+    our_commits: int
+    presses_not_ours: int
+    last_apply_at: str | None
+    last_feedin_at: str | None
+
+
+class MarketStatus(BaseModel):
+    mode: str
+    session: MarketSession | None
+    last: dict[str, Any] | None
+    last_compare: dict[str, Any] | None
+    preconditions: str | None
+    sensors: dict[str, Any]
+    agreement_24h: Agreement
+    agreement_7d: Agreement
+    wear_24h: WearStats
+    wear_7d: WearStats
+    notice: str | None
+
+
+class MarketReconcileRequest(BaseModel):
+    trigger_entity: str | None = None
+    force_end: bool = False  # live: end the open session whatever the command says
+
+
 class SocTracking(BaseModel):
     since: str | None
     fired: bool

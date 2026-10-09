@@ -121,6 +121,22 @@ Settings → **EV charger control** holds the entities (charger state, current l
 
 **Moving the automation over:** run **Dry run** for about a week with the automation still on and watch the agreement. Then set the automation's entity under Charger entities → *Home Assistant automation (interlock)*, turn the automation off and switch to **Live**: EMHASS Lens refuses to act while that automation is on, so the two never both drive the charger. To go back, set the mode to Off and turn the automation on again.
 
+## Qilowatt market control (experimental)
+
+Kratt and Fusebox activations (mFRR, aFRR) arrive through Qilowatt as three sensors: the source (`sensor.qw_source`), the command (`sensor.qw_mode`) and the power limit (`sensor.qw_powerlimit`). EMHASS Lens can run these sessions on the inverter the way the automation "Qilowatt: Master Market Controller" does: on every command change (after a short settle time), every minute and at start-up it derives the wanted inverter state from the current values and reconciles it with the registers, with three guards against needless writes to the inverter's EEPROM (a direction-aware hysteresis, a proportional deadband and a cooldown; a session end is never throttled). The **Market** page explains the guards with your thresholds and shows the live command, the session, each decision with its reasoning, and how many times the inverter's apply and feed-in buttons were pressed.
+
+| Mode | What happens |
+|---|---|
+| Off | Nothing is watched. "Reconcile now" still shows what it would do. |
+| Shadow | Every decision is recorded, and a few seconds later the session select, the EMHASS automation switch and the inverter registers are read to see whether the automation did the same. The App's session follows the automation's select. Nothing is written. |
+| Live | The App runs the sessions: it keeps `input_select.qilowatt_session_state` and `input_boolean.emhass_automation` like the automation does, writes feed-in first and the passive-mode registers after, and when a session ends it hands the inverter straight back to the plan with one write (the automation's safe state only when no fresh plan exists). Sessions are stored, so a restart continues or ends them from the current sensors. "End session now" on the Market page is the kill switch. |
+
+Settings → **Qilowatt market control** holds the entities and thresholds (the automation's values are the defaults). The Sofar registers and buttons come from Settings → Inverter control.
+
+**Moving the automation over:** 1) inverter control must be live, so that the plan can be re-applied after a session. 2) Run **Shadow** for at least a week with real sessions and watch the agreement on the Market page; 99 % or more is the bar. 3) With no session open, turn the Home Assistant automation off (keep it; set it under Market entities → *Home Assistant automation (interlock)*) and switch to **Live**; watch the first session. Going back: set the mode to Off and turn the automation on again. Because the App mirrored the session select and the switch, the automation carries on from where things are.
+
+What stays as it was: the automation wrote feed-in only while selling, and a command under the gate during a session ends the session rather than flipping it. What is different on purpose: a session end goes straight to the plan's targets instead of the automation's "self-use, grid 0" defaults, and a burst of three sensor updates becomes one decision.
+
 ## App options (Configuration tab)
 
 | Option | Meaning |

@@ -8,6 +8,8 @@ import type {
   InverterStatus,
   JobInfo,
   LegacyPreview,
+  MarketSession,
+  MarketStatus,
   OutputsStatus,
   PlanResponse,
   PricesResponse,
@@ -43,6 +45,8 @@ export const keys = {
   outputs: ['outputs'] as const,
   inverter: ['inverter'] as const,
   charger: ['charger'] as const,
+  market: ['market'] as const,
+  marketSessions: ['market-sessions'] as const,
   setup: ['setup'] as const,
 }
 
@@ -172,6 +176,19 @@ export function useInverter() {
 /** EV charger control: mode, preconditions, the last decision, comparison and minute check, agreement. */
 export function useCharger() {
   return useQuery({ queryKey: keys.charger, queryFn: () => api.get<ChargerStatus>('/api/charger'), refetchInterval: 30_000 })
+}
+
+/** Qilowatt market control: mode, the session, the last decision and comparison, agreement, inverter wear. */
+export function useMarket() {
+  return useQuery({ queryKey: keys.market, queryFn: () => api.get<MarketStatus>('/api/market'), refetchInterval: 10_000 })
+}
+
+export function useMarketSessions() {
+  return useQuery({
+    queryKey: keys.marketSessions,
+    queryFn: () => api.get<MarketSession[]>('/api/market/sessions?limit=50'),
+    refetchInterval: 30_000,
+  })
 }
 
 export function useSetup() {

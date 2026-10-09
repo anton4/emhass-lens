@@ -20,6 +20,7 @@ from emhass_lens.services.external import ExternalControlService
 from emhass_lens.services.forecasts import ForecastService
 from emhass_lens.services.inputs import InputsService
 from emhass_lens.services.inverter import InverterService
+from emhass_lens.services.market import MarketService
 from emhass_lens.services.ml import MlService
 from emhass_lens.services.mpc import MpcService
 from emhass_lens.services.outputs import OutputService
@@ -28,6 +29,7 @@ from emhass_lens.services.prices import PriceService
 from emhass_lens.services.problems import ProblemService
 from emhass_lens.services.publish import PublishService
 from emhass_lens.services.pv import PvService
+from emhass_lens.services.sofar import SofarWriter
 from emhass_lens.settings.model import Settings
 
 log = logging.getLogger("emhass_lens")
@@ -53,10 +55,14 @@ def build(c: Container) -> None:
     x["ml"] = MlService(c)
     x["outputs"] = OutputService(c)
     x["external"] = ExternalControlService(c)
+    x["sofar"] = SofarWriter(c)
     x["inverter"] = InverterService(c)
     x["charger"] = ChargerService(c)
+    x["market"] = MarketService(c)
     x["prices"].load()
     x["problems"].load()
+    x["sofar"].load()
+    x["market"].load()
     x["status_providers"] = {
         "home_assistant": lambda: _ha_status(c),
         "emhass": lambda: _emhass_status(c),
@@ -76,6 +82,7 @@ def watched_entities(c: Container) -> set[str]:
         | x["inverter"].entities()
         | x["external"].entities()
         | x["charger"].entities()
+        | x["market"].entities()
     )
     if settings.forecast.source == "fi_ha_entity":
         ids.add(settings.forecast.fi.entity)
@@ -280,6 +287,30 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="market.reconcile",
+            title="Market reconcile",
+            description="Qilowatt market control: derives the wanted inverter state from the current command and "
+            "reconciles (shadow: records and compares; live: acts). Every minute, and after each command change.",
+            trigger=Periodic(60, settings.market.reconcile_offset_s),
+            func=x["market"].reconcile_job,
+            record=x["market"].should_record,
+            coalesce=True,
+            grace=timedelta(seconds=45),
+        )
+    )
+    s.add(
+        Job(
+            id="market.compare",
+            title="Market comparison",
+            description="Shadow: compares a market decision with what the HA automation did.",
+            trigger=Dynamic(x["market"].next_compare, "A few seconds after each shadow decision"),
+            func=x["market"].compare_job,
+            record=x["market"].compare_active,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
             id="external.resume",
             title="Resume after a market session",
             description="Re-applies the plan right after a market session (e.g. Qilowatt mFRR) hands the inverter "
@@ -370,8 +401,14 @@ def subscribe(c: Container) -> None:
 
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
-    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "charger", "external_control"), rewatch)
+    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "charger", "market", "external_control"), rewatch)
     c.settings.subscribe("external_control", x["external"].on_settings)
+
+    def on_market_time(old: Settings, new: Settings, paths: list[str]) -> None:
+        c.scheduler.retime("market.reconcile", Periodic(60, new.market.reconcile_offset_s))
+
+    c.settings.subscribe("market.reconcile_offset_s", on_market_time)
+    c.settings.subscribe("market.mode", x["market"].on_mode_change)
 
     def on_charger_times(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.retime("charger.tick", Periodic(60, new.charger.tick_offset_s))
@@ -402,6 +439,17 @@ def subscribe(c: Container) -> None:
         x["charger"].on_soc_state,
     )
     ha.on_state(lambda entity_id: entity_id == charger_entities().current_limit_number, x["charger"].on_limit_state)
+    inverter_entities = lambda: c.settings.current.inverter.entities  # noqa: E731
+    ha.on_state(
+        lambda entity_id: entity_id in (inverter_entities().apply_button, inverter_entities().feedin_button),
+        x["sofar"].on_button_state,
+    )
+    market_entities = lambda: c.settings.current.market.entities  # noqa: E731
+    ha.on_state(
+        lambda entity_id: entity_id in x["market"].trigger_entities() or entity_id == market_entities().soc_sensor,
+        x["market"].on_state,
+    )
+    ha.on_connect(x["market"].on_connect)
     rewatch()
 
 
@@ -432,6 +480,7 @@ async def start(c: Container) -> None:
 
 async def stop(c: Container) -> None:
     x = c.extras
+    x["market"].stop()
     await x["outputs"].stop()
     await x["ha"].stop()
     for key in ("http_nordpool", "http_forecast"):

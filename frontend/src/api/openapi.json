@@ -2878,6 +2878,581 @@
         "title": "Logging",
         "type": "object"
       },
+      "Market": {
+        "additionalProperties": false,
+        "properties": {
+          "compare_delay_s": {
+            "default": 12,
+            "maximum": 60.0,
+            "minimum": 3.0,
+            "title": "Compare with the automation after",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "entities": {
+            "$ref": "#/components/schemas/MarketEntities",
+            "default": {
+              "enable_boolean": "input_boolean.qilowatt_automation",
+              "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
+              "ha_automation": "",
+              "mode_sensor": "sensor.qw_mode",
+              "powerlimit_sensor": "sensor.qw_powerlimit",
+              "pv_sensor": "sensor.sofar_pv_power_total_watt",
+              "session_select": "input_select.qilowatt_session_state",
+              "soc_sensor": "sensor.sofar_battery_capacity_1",
+              "source_sensor": "sensor.qw_source"
+            },
+            "title": "Market entities",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "mode": {
+            "default": "off",
+            "description": "Shadow: decides on every command change and every minute and compares with what the Home Assistant automation did. Live: EMHASS Lens runs the sessions itself (disable the automation first).",
+            "enum": [
+              "off",
+              "shadow",
+              "live"
+            ],
+            "title": "Qilowatt market control",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "live": "Live",
+                "off": "Off",
+                "shadow": "Shadow"
+              }
+            }
+          },
+          "reconcile_offset_s": {
+            "default": 15,
+            "description": "15 s after the automation's own minute tick, so shadow comparisons read what it did.",
+            "exclusiveMaximum": 60.0,
+            "minimum": 0.0,
+            "title": "Reconcile every minute at (seconds)",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "soc_low_for_s": {
+            "default": 10,
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Low SoC must hold for",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/MarketThresholds",
+            "default": {
+              "big_change_w": 2500,
+              "buy_cap_w": 18200,
+              "buy_modes": [
+                "buy",
+                "mfrrdown",
+                "frrdown"
+              ],
+              "cooldown_s": 180,
+              "deadband_pct": 0.15,
+              "deadband_w": 300,
+              "enter_w": 1000,
+              "exit_w": 400,
+              "low_pv_w": 100,
+              "min_soc": 10.0,
+              "sell_cap_w": 15500,
+              "sell_modes": [
+                "sell",
+                "mfrrup",
+                "frrup"
+              ],
+              "settle_s": 2.0,
+              "sources": [
+                "fusebox",
+                "kratt"
+              ],
+              "unavailable_timeout_s": 300
+            },
+            "title": "Thresholds"
+          }
+        },
+        "title": "Market",
+        "type": "object"
+      },
+      "MarketEntities": {
+        "additionalProperties": false,
+        "properties": {
+          "enable_boolean": {
+            "default": "input_boolean.qilowatt_automation",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Enabled when on",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "input_boolean",
+                "switch"
+              ],
+              "widget": "entity"
+            }
+          },
+          "fusebox_sell_helper": {
+            "default": "input_number.fusebox_sell_power_helper",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Fusebox sell power helper",
+            "type": "string",
+            "ui": {
+              "domain": "input_number",
+              "widget": "entity"
+            }
+          },
+          "ha_automation": {
+            "default": "",
+            "description": "Live mode refuses to act while this automation is on, so the two never both drive the inverter.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Home Assistant automation (interlock)",
+            "type": "string",
+            "ui": {
+              "domain": "automation",
+              "widget": "entity"
+            }
+          },
+          "mode_sensor": {
+            "default": "sensor.qw_mode",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Market command",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "powerlimit_sensor": {
+            "default": "sensor.qw_powerlimit",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Commanded power",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "pv_sensor": {
+            "default": "sensor.sofar_pv_power_total_watt",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "PV power now",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "session_select": {
+            "default": "input_select.qilowatt_session_state",
+            "description": "Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation kept as a fallback; followed in shadow mode.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Session state select",
+            "type": "string",
+            "ui": {
+              "domain": "input_select",
+              "widget": "entity"
+            }
+          },
+          "soc_sensor": {
+            "default": "sensor.sofar_battery_capacity_1",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Battery SoC",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "source_sensor": {
+            "default": "sensor.qw_source",
+            "description": "Who sends the command: kratt or fusebox (through Qilowatt).",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Market source",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          }
+        },
+        "title": "MarketEntities",
+        "type": "object"
+      },
+      "MarketReconcileRequest": {
+        "properties": {
+          "force_end": {
+            "default": false,
+            "title": "Force End",
+            "type": "boolean"
+          },
+          "trigger_entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Entity"
+          }
+        },
+        "title": "MarketReconcileRequest",
+        "type": "object"
+      },
+      "MarketSession": {
+        "properties": {
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "power_w": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power W"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "source",
+          "mode",
+          "power_w",
+          "started_at",
+          "updated_at"
+        ],
+        "title": "MarketSession",
+        "type": "object"
+      },
+      "MarketStatus": {
+        "properties": {
+          "agreement_24h": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "agreement_7d": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "last_compare": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Compare"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "sensors": {
+            "additionalProperties": true,
+            "title": "Sensors",
+            "type": "object"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wear_24h": {
+            "$ref": "#/components/schemas/WearStats"
+          },
+          "wear_7d": {
+            "$ref": "#/components/schemas/WearStats"
+          }
+        },
+        "required": [
+          "mode",
+          "session",
+          "last",
+          "last_compare",
+          "preconditions",
+          "sensors",
+          "agreement_24h",
+          "agreement_7d",
+          "wear_24h",
+          "wear_7d",
+          "notice"
+        ],
+        "title": "MarketStatus",
+        "type": "object"
+      },
+      "MarketThresholds": {
+        "additionalProperties": false,
+        "properties": {
+          "big_change_w": {
+            "default": 2500,
+            "maximum": 50000.0,
+            "minimum": 0.0,
+            "title": "Bypass the cooldown for changes of",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "buy_cap_w": {
+            "default": 18200,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Buy: grid target cap",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "buy_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Buy commands",
+            "type": "array",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
+            }
+          },
+          "cooldown_s": {
+            "default": 180,
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Cooldown between writes",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "deadband_pct": {
+            "default": 0.15,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Deadband as a share of the target",
+            "type": "number"
+          },
+          "deadband_w": {
+            "default": 300,
+            "maximum": 50000.0,
+            "minimum": 0.0,
+            "title": "Deadband",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "enter_w": {
+            "default": 1000,
+            "maximum": 50000.0,
+            "minimum": 0.0,
+            "title": "Start or flip a session at",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "exit_w": {
+            "default": 400,
+            "maximum": 50000.0,
+            "minimum": 0.0,
+            "title": "Continue a session down to",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "low_pv_w": {
+            "default": 100,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "PV counts as none below",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "W"
+            }
+          },
+          "min_soc": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "No selling below",
+            "type": "number",
+            "ui": {
+              "unit": "%"
+            }
+          },
+          "sell_cap_w": {
+            "default": 15500,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Sell: grid and feed-in cap",
+            "type": "integer",
+            "ui": {
+              "unit": "W"
+            }
+          },
+          "sell_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sell commands",
+            "type": "array",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
+            }
+          },
+          "settle_s": {
+            "default": 2,
+            "description": "How long to wait after a command changes, so a burst of three sensor updates lands first.",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Settle time",
+            "type": "number",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Known sources",
+            "type": "array",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
+            }
+          },
+          "unavailable_timeout_s": {
+            "default": 300,
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "End a session when the source is lost for",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          }
+        },
+        "title": "MarketThresholds",
+        "type": "object"
+      },
       "MlRequest": {
         "properties": {
           "historic_days": {
@@ -5190,6 +5765,55 @@
               }
             }
           },
+          "market": {
+            "$ref": "#/components/schemas/Market",
+            "default": {
+              "compare_delay_s": 12,
+              "entities": {
+                "enable_boolean": "input_boolean.qilowatt_automation",
+                "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
+                "ha_automation": "",
+                "mode_sensor": "sensor.qw_mode",
+                "powerlimit_sensor": "sensor.qw_powerlimit",
+                "pv_sensor": "sensor.sofar_pv_power_total_watt",
+                "session_select": "input_select.qilowatt_session_state",
+                "soc_sensor": "sensor.sofar_battery_capacity_1",
+                "source_sensor": "sensor.qw_source"
+              },
+              "mode": "off",
+              "reconcile_offset_s": 15,
+              "soc_low_for_s": 10,
+              "thresholds": {
+                "big_change_w": 2500,
+                "buy_cap_w": 18200,
+                "buy_modes": [
+                  "buy",
+                  "mfrrdown",
+                  "frrdown"
+                ],
+                "cooldown_s": 180,
+                "deadband_pct": 0.15,
+                "deadband_w": 300,
+                "enter_w": 1000,
+                "exit_w": 400,
+                "low_pv_w": 100,
+                "min_soc": 10.0,
+                "sell_cap_w": 15500,
+                "sell_modes": [
+                  "sell",
+                  "mfrrup",
+                  "frrup"
+                ],
+                "settle_s": 2.0,
+                "sources": [
+                  "fusebox",
+                  "kratt"
+                ],
+                "unavailable_timeout_s": 300
+              }
+            },
+            "title": "Qilowatt market control (experimental)"
+          },
           "notifications": {
             "$ref": "#/components/schemas/Notifications",
             "default": {
@@ -5773,6 +6397,64 @@
           "started_at"
         ],
         "title": "VersionInfo",
+        "type": "object"
+      },
+      "WearStats": {
+        "description": "Presses of the Sofar apply and feed-in buttons (EEPROM wear), ours and anyone's.",
+        "properties": {
+          "apply_presses": {
+            "title": "Apply Presses",
+            "type": "integer"
+          },
+          "feedin_presses": {
+            "title": "Feedin Presses",
+            "type": "integer"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "integer"
+          },
+          "last_apply_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Apply At"
+          },
+          "last_feedin_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Feedin At"
+          },
+          "our_commits": {
+            "title": "Our Commits",
+            "type": "integer"
+          },
+          "presses_not_ours": {
+            "title": "Presses Not Ours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hours",
+          "apply_presses",
+          "feedin_presses",
+          "our_commits",
+          "presses_not_ours",
+          "last_apply_at",
+          "last_feedin_at"
+        ],
+        "title": "WearStats",
         "type": "object"
       }
     }
@@ -6533,6 +7215,126 @@
         "summary": "Logs",
         "tags": [
           "logs"
+        ]
+      }
+    },
+    "/api/market": {
+      "get": {
+        "description": "Qilowatt market control (experimental): the session, the last decision and comparison, agreement, wear.",
+        "operationId": "market_status_api_market_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Market Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/market/reconcile": {
+      "post": {
+        "description": "Reconcile now (live: acts; force_end ends the open session whatever the command says).",
+        "operationId": "market_reconcile_api_market_reconcile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MarketReconcileRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Market Reconcile",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/market/sessions": {
+      "get": {
+        "operationId": "market_sessions_api_market_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MarketSession"
+                  },
+                  "title": "Response Market Sessions Api Market Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Market Sessions",
+        "tags": [
+          "system"
         ]
       }
     },

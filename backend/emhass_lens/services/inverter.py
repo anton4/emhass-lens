@@ -8,7 +8,6 @@
            and read back. Turn the HA automation off first, or both will write.
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -41,6 +40,7 @@ class InverterService:
         self.last: dict[str, Any] | None = None  # {slot, decision, source, run_id, blocked} for the API
         self.last_decision: Decision | None = None
         self.last_compare: dict[str, Any] | None = None
+        self.last_apply: dict[str, Any] | None = None  # {slot, run_id, ok, wrote}: the newest live write
 
     @property
     def mode(self) -> str:
@@ -59,16 +59,7 @@ class InverterService:
     def entities(self) -> set[str]:
         if self.mode == "off":
             return set()
-        e = self.c.settings.current.inverter.entities
-        return set(PLAN_SENSORS.values()) | {
-            e.charger_mode_select,
-            e.enable_boolean,
-            e.state_select,
-            e.grid_power_number,
-            e.battery_max_number,
-            e.battery_min_number,
-            e.feedin_number,
-        } - {""}
+        return set(PLAN_SENSORS.values()) | self.c.extras["sofar"].entities()
 
     # --- inputs ---------------------------------------------------------------------------------------------
     async def plan_values(self, now: datetime) -> tuple[PlanValues | None, str]:
@@ -101,15 +92,7 @@ class InverterService:
         ), "stored EMHASS plan (the sensors weren't updated for this slot yet)"
 
     def observed(self) -> Observed:
-        ha = self.c.extras["ha"]
-        e = self.c.settings.current.inverter.entities
-        return Observed(
-            state=(ha.state(e.state_select) or {}).get("state"),
-            grid_power_w=_num(ha.state(e.grid_power_number)),
-            battery_max_w=_num(ha.state(e.battery_max_number)),
-            battery_min_w=_num(ha.state(e.battery_min_number)),
-            feedin_max_w=_num(ha.state(e.feedin_number)),
-        )
+        return self.c.extras["sofar"].observed()
 
     def preconditions(self) -> str | None:
         ha = self.c.extras["ha"]
@@ -164,7 +147,6 @@ class InverterService:
     async def apply(self, ctx: JobContext, decision: Decision, now: datetime) -> None:
         assert ctx.run is not None
         settings = self.c.settings.current
-        limits, e = settings.inverter.limits, settings.inverter.entities
         plan = await self.c.extras["emhass"].plans(1)
         generated = parse_iso(plan[0]["generated_at"]) if plan else None
         max_age = timedelta(minutes=15 * settings.health.plan_max_age_slots)
@@ -173,92 +155,19 @@ class InverterService:
         ha = self.c.extras["ha"]
         if not ha.connected:
             raise RunRefused("Not connected to Home Assistant; not touching the inverter")
-        # The WebSocket cache can lag (e.g. during a reconnect): re-read the interlocks and targets right now.
-        for entity_id in (
-            e.charger_mode_select,
-            e.enable_boolean,
-            e.state_select,
-            e.grid_power_number,
-            e.battery_max_number,
-            e.battery_min_number,
-            e.feedin_number,
-        ):
-            if entity_id:
-                state = await ha.get_state(entity_id)
-                if state is None:
-                    ha.states.pop(entity_id, None)
-                else:
-                    ha.states[entity_id] = state
+        writer = self.c.extras["sofar"]
+        await writer.refresh()  # the WebSocket cache can lag (e.g. during a reconnect): re-read before writing
         blocked = self.preconditions()
         if blocked:
             raise RunRefused(f"Not in control: {blocked}")
-        calls: list[tuple[str, str, dict[str, Any]]] = []
-        before = self.observed()
-        t = decision.targets
-        if t is not None:
-            if not (limits.battery_min_w <= t.battery_min_w <= t.battery_max_w <= limits.battery_max_w):
-                raise RunRefused(
-                    f"Battery limits {t.battery_min_w}…{t.battery_max_w} W are outside the configured range"
-                )
-            if not (-limits.export_max_w <= t.grid_power_w <= limits.grid_import_max_w):
-                raise RunRefused(f"Grid target {t.grid_power_w} W is outside the configured range")
-            if e.state_select and before.state != t.state:
-                calls.append(("input_select", "select_option", {"entity_id": e.state_select, "option": t.state}))
-            if (before.grid_power_w, before.battery_max_w, before.battery_min_w) != (
-                float(t.grid_power_w),
-                float(t.battery_max_w),
-                float(t.battery_min_w),
-            ):
-                calls += [
-                    ("number", "set_value", {"entity_id": e.grid_power_number, "value": t.grid_power_w}),
-                    ("number", "set_value", {"entity_id": e.battery_max_number, "value": t.battery_max_w}),
-                    ("number", "set_value", {"entity_id": e.battery_min_number, "value": t.battery_min_w}),
-                    ("button", "press", {"entity_id": e.apply_button}),
-                ]
-        if before.feedin_max_w is None or abs(before.feedin_max_w - decision.feedin_max_w) >= 0.5:
-            calls += [
-                ("number", "set_value", {"entity_id": e.feedin_number, "value": decision.feedin_max_w}),
-                ("button", "press", {"entity_id": e.feedin_button}),
-            ]
-        done = []
-        for domain, service, data in calls:
-            try:
-                await ha.call_service(domain, service, data)
-                done.append({"service": f"{domain}.{service}", **data, "ok": True})
-            except Exception as exc:
-                done.append({"service": f"{domain}.{service}", **data, "ok": False, "error": str(exc)})
-                log.error("Inverter call %s.%s failed: %s", domain, service, exc)
-        ctx.run.artifact("calls", done)
-        result = await self._read_back(decision)
-        ctx.run.artifact("readback", result)
-        failed = [c for c in done if not c["ok"]]
-        if failed or not result["agree"]:
+        writer.check_limits(decision.targets, decision.feedin_max_w)
+        result = await writer.commit(ctx, owner="plan", targets=decision.targets, feedin_w=decision.feedin_max_w)
+        wrote = result.wrote_passive or result.wrote_feedin
+        self.last_apply = {"slot": iso(slot_floor(now)), "run_id": ctx.run.id, "ok": result.ok, "wrote": wrote}
+        if not result.ok:
             ctx.run.outcome = "error"
-            ctx.run.error = "; ".join(c.get("error", "") for c in failed) or "the inverter doesn't show the targets"
-        ctx.run.summary = f"Set {describe(decision)}" if calls else f"Already set: {describe(decision)}"
-
-    async def _read_back(self, decision: Decision, attempts: int = 10, every_s: float = 0.5) -> dict[str, Any]:
-        """Re-read the inverter entities until they show the targets (or give up after ~5 s)."""
-        ha = self.c.extras["ha"]
-        e = self.c.settings.current.inverter.entities
-        result: dict[str, Any] = {}
-        for attempt in range(attempts):
-            for entity_id in (
-                e.state_select,
-                e.grid_power_number,
-                e.battery_max_number,
-                e.battery_min_number,
-                e.feedin_number,
-            ):
-                if entity_id:
-                    state = await ha.get_state(entity_id)
-                    if state is not None:
-                        ha.states[entity_id] = state
-            result = compare(decision, self.observed())
-            if result["agree"] or attempt == attempts - 1:
-                break
-            await asyncio.sleep(every_s)
-        return result
+            ctx.run.error = result.error
+        ctx.run.summary = f"Set {describe(decision)}" if wrote else f"Already set: {describe(decision)}"
 
     def compare_job_active(self) -> bool:
         return self.mode == "dry_run"

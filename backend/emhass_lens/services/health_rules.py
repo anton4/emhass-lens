@@ -240,6 +240,61 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 )
             )
 
+    # Qilowatt market control
+    market = x.get("market")
+    if market is not None and market.active():
+        me = settings.market.entities
+        if market.mode == "live" and x["inverter"].mode != "live":
+            out.append(
+                Problem(
+                    "market.live_without_inverter_live",
+                    "warning",
+                    "Market control is live but inverter control isn't",
+                    "After a session EMHASS Lens can't hand the inverter back to the plan itself",
+                    "Set Settings → Inverter control to Live, or market control to Shadow.",
+                    "#/market",
+                )
+            )
+        if ha.connected:
+            missing = [
+                eid
+                for eid in (me.source_sensor, me.mode_sensor, me.powerlimit_sensor, me.soc_sensor)
+                if eid and ha.state(eid) is None
+            ]
+            if missing:
+                out.append(
+                    Problem(
+                        "market.entities_missing",
+                        "warning",
+                        "Market entities aren't found",
+                        ", ".join(missing),
+                        "Check Settings → Qilowatt market control.",
+                        "#/settings?section=market",
+                    )
+                )
+            if market.mode == "live" and me.ha_automation and (ha.state(me.ha_automation) or {}).get("state") == "on":
+                out.append(
+                    Problem(
+                        "market.automation_still_on",
+                        "error",
+                        "The Home Assistant market automation is still on",
+                        f"{me.ha_automation} is on while EMHASS Lens runs the sessions",
+                        "Turn the automation off, or set market control to Shadow.",
+                        "#/market",
+                    )
+                )
+    if market is not None and c.boot.safe_mode and market.session is not None:
+        out.append(
+            Problem(
+                "market.session_in_safe_mode",
+                "error",
+                "A market session is open but safe mode is on",
+                "Nobody ends the session; the inverter may stay in force charge or discharge",
+                "Turn safe mode off, or end the session in Home Assistant.",
+                "#/market",
+            )
+        )
+
     # ML model and MQTT
     mismatch = x["ml"].lags_mismatch()
     if mismatch:

@@ -14,6 +14,7 @@ const NAV: { to: string; label: string; end?: boolean; tag?: string }[] = [
   { to: '/inputs', label: 'Inputs' },
   { to: '/inverter', label: 'Inverter', tag: 'experimental' },
   { to: '/charger', label: 'EV charger', tag: 'experimental' },
+  { to: '/market', label: 'Market', tag: 'experimental' },
   { to: '/runs', label: 'Runs' },
   { to: '/logs', label: 'Logs' },
   { to: '/health', label: 'Health' },

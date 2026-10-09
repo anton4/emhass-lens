@@ -39,12 +39,18 @@ class ExternalControlService:
             return set()
         return {self.c.settings.current.external_control.entity} - {""}
 
+    def _market_holds(self) -> bool:
+        market = self.c.extras.get("market")
+        return market is not None and market.holds_inverter()
+
     @property
     def holding(self) -> bool:
-        """True while someone else owns the inverter."""
-        return self.busy
+        """True while someone else owns the inverter: the session entity says so, or the App runs a session itself."""
+        return self.busy or self._market_holds()
 
     def hold_text(self) -> str:
+        if not self.busy and self._market_holds():
+            return f"the App's own market session, {self.c.extras['market'].session_text()}"
         return f"{self.c.settings.current.external_control.entity} is {self.busy_value!r}"
 
     def is_busy_state(self, state: dict[str, Any] | None) -> bool:
@@ -55,6 +61,9 @@ class ExternalControlService:
 
     # --- listeners ---------------------------------------------------------------------------------------------
     async def on_state(self, entity_id: str, state: dict[str, Any] | None) -> None:
+        market = self.c.extras.get("market")
+        if market is not None and market.mode == "live":
+            return  # the App runs the sessions itself and hands the inverter back on its own
         if not self.enabled():
             if self.busy:
                 await self._clear("the hold is turned off")
@@ -121,6 +130,17 @@ class ExternalControlService:
 
         if self.busy:
             return finish("noop", "Not resuming: a session is active again")
+
+        if ctx.params.get("skip_apply"):  # the market controller already handed the inverter back; only re-plan
+            step("re-apply", "done by the market controller")
+            if not (external.replan and mpc.mode == "live"):
+                return finish("noop", "Nothing to do: the plan was re-applied and no re-plan is wanted")
+            await self.c.clock.wait(asyncio.Event(), external.resume_delay_s)
+            await self.c.scheduler.run_now("emhass.mpc", {"reason": "resume"})
+            await self.c.scheduler.run_now("emhass.publish", {"reason": "resume", "chain_inverter": False})
+            step("re-plan", "ran MPC with the battery state after the session and published it")
+            local = started.astimezone(self.c.extras["prices"].tz)
+            return finish("ok", f"Resumed {local:%H:%M}: re-planned after the session")
 
         if inverter.active():
             enable = settings.inverter.entities.enable_boolean

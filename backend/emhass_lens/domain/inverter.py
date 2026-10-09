@@ -58,9 +58,12 @@ class Decision:
         return asdict(self)
 
 
-def _round100(value: float) -> int:
-    """Jinja's round(0) (Python's round) on value/100, times 100."""
+def round100(value: float) -> int:
+    """Jinja's round(0) (Python's round, half to even) on value/100, times 100."""
     return int(round(value / 100) * 100)
+
+
+_round100 = round100
 
 
 def decide(v: PlanValues, limits: InverterLimits) -> Decision:
@@ -127,26 +130,26 @@ class Observed:
     feedin_max_w: float | None
 
 
-def compare(decision: Decision, observed: Observed) -> dict[str, Any]:
-    """Field-by-field agreement between a decision and what the entities show."""
+def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Observed) -> dict[str, Any]:
+    """Field-by-field agreement between targets (None: not judged) and what the entities show."""
     rows = []
-    if decision.targets is not None:
-        t = decision.targets
+    if targets is not None:
         for name, want, got in (
-            ("state", t.state, observed.state),
-            ("grid_power_w", t.grid_power_w, observed.grid_power_w),
-            ("battery_max_w", t.battery_max_w, observed.battery_max_w),
-            ("battery_min_w", t.battery_min_w, observed.battery_min_w),
+            ("state", targets.state, observed.state),
+            ("grid_power_w", targets.grid_power_w, observed.grid_power_w),
+            ("battery_max_w", targets.battery_max_w, observed.battery_max_w),
+            ("battery_min_w", targets.battery_min_w, observed.battery_min_w),
         ):
             same = (want == got) if isinstance(want, str) else (got is not None and abs(float(got) - want) < 0.5)
             rows.append({"field": name, "decided": want, "observed": got, "same": same})
-    same_feedin = observed.feedin_max_w is not None and abs(observed.feedin_max_w - decision.feedin_max_w) < 0.5
-    rows.append(
-        {
-            "field": "feedin_max_w",
-            "decided": decision.feedin_max_w,
-            "observed": observed.feedin_max_w,
-            "same": same_feedin,
-        }
-    )
+    if feedin_w is not None:
+        same_feedin = observed.feedin_max_w is not None and abs(observed.feedin_max_w - feedin_w) < 0.5
+        rows.append(
+            {"field": "feedin_max_w", "decided": feedin_w, "observed": observed.feedin_max_w, "same": same_feedin}
+        )
     return {"agree": all(r["same"] for r in rows), "fields": rows}
+
+
+def compare(decision: Decision, observed: Observed) -> dict[str, Any]:
+    """Field-by-field agreement between a decision and what the entities show."""
+    return compare_targets(decision.targets, decision.feedin_max_w, observed)

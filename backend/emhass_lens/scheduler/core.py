@@ -48,6 +48,10 @@ class Job:
     # (e.g. publish only records runs while it actually publishes)
     record: bool | Callable[[], bool] = True
     mode: Callable[[], str | None] | None = None  # e.g. EMHASS mode, stored with each run
+    # True: a fire while the job runs queues one rerun (with the newest params) instead of being skipped,
+    # for level-triggered jobs that must see the latest state (the market controller's reconcile)
+    coalesce: bool = False
+    pending: dict[str, Any] | None = None
     paused: bool = False
     next_fire: datetime | None = None
     last_started: datetime | None = None
@@ -125,10 +129,11 @@ class Scheduler:
         return job
 
     # --- execution ------------------------------------------------------------------------------------
-    def run_now(self, job_id: str, params: dict[str, Any] | None = None) -> asyncio.Task[None]:
-        """Start a job immediately (ignores pause). Overlap still applies."""
+    def run_now(self, job_id: str, params: dict[str, Any] | None = None, trigger: str = "manual") -> asyncio.Task[None]:
+        """Start a job immediately (ignores pause). Overlap still applies, unless the job coalesces.
+        `trigger` names what started it ("manual", or "event" for a state change); both are always recorded."""
         job = self.jobs[job_id]
-        return self._fire(job, trigger="manual", scheduled_at=None, params=params or {})
+        return self._fire(job, trigger=trigger, scheduled_at=None, params=params or {})
 
     async def start_now(self, job_id: str, params: dict[str, Any] | None = None, wait_s: float = 3.0) -> int | None:
         """Start a job and return the id of its run once it exists (None if skipped or not recorded)."""
@@ -197,6 +202,11 @@ class Scheduler:
                 started.set_result(run_id)
 
         if job.lock.locked():
+            if job.coalesce:
+                job.pending = {**(job.pending or {}), **params, "_trigger": trigger}
+                log.info("Job %s is still running; it will run once more (%s)", job.id, trigger)
+                report(None)
+                return
             log.info("Job %s is still running; skipping this %s run", job.id, trigger)
             if self._records(job):
                 job.last_run_id = await self.recorder.record(
@@ -209,31 +219,45 @@ class Scheduler:
             report(None)
             return
         async with job.lock:
-            job.last_started = self.clock.now()
-            self._publish(job)
-            mode = job.mode() if job.mode else None
-            record = job.record() if callable(job.record) else job.record
-            try:
-                if record or trigger == "manual":
-                    async with self.recorder.start(job.id, trigger, mode, scheduled_at) as run:
-                        job.last_run_id = run.id
-                        report(run.id)
-                        await job.func(JobContext(run, trigger, scheduled_at, params))
-                    job.last_outcome = run.outcome
-                else:
-                    report(None)
-                    await job.func(JobContext(None, trigger, scheduled_at, params))
-                    job.last_outcome = "ok"
-            except asyncio.CancelledError:
-                job.last_outcome = "cancelled"
-                raise
-            except Exception:
-                job.last_outcome = "error"
-                log.exception("Job %s failed", job.id)
-            finally:
+            await self._run_once(job, trigger, scheduled_at, params, report)
+            while job.pending is not None:
+                queued = job.pending
+                job.pending = None
+                await self._run_once(job, str(queued.pop("_trigger", "event")), None, queued, lambda _: None)
+
+    async def _run_once(
+        self,
+        job: Job,
+        trigger: str,
+        scheduled_at: datetime | None,
+        params: dict[str, Any],
+        report: Callable[[int | None], None],
+    ) -> None:
+        job.last_started = self.clock.now()
+        self._publish(job)
+        mode = job.mode() if job.mode else None
+        record = job.record() if callable(job.record) else job.record
+        try:
+            if record or trigger != "schedule":  # runs started by hand or by an event are always recorded
+                async with self.recorder.start(job.id, trigger, mode, scheduled_at) as run:
+                    job.last_run_id = run.id
+                    report(run.id)
+                    await job.func(JobContext(run, trigger, scheduled_at, params))
+                job.last_outcome = run.outcome
+            else:
                 report(None)
-                job.last_finished = self.clock.now()
-                self._publish(job)
+                await job.func(JobContext(None, trigger, scheduled_at, params))
+                job.last_outcome = "ok"
+        except asyncio.CancelledError:
+            job.last_outcome = "cancelled"
+            raise
+        except Exception:
+            job.last_outcome = "error"
+            log.exception("Job %s failed", job.id)
+        finally:
+            report(None)
+            job.last_finished = self.clock.now()
+            self._publish(job)
 
     @staticmethod
     def _records(job: Job) -> bool:

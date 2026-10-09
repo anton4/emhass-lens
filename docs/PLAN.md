@@ -37,7 +37,7 @@ The exploration also found real bugs (section 9). The most important ones:
 | HA entities | MQTT discovery: one device, 6 small entities. Uses the Mosquitto broker App. |
 | Inverter automation | Stays in HA. The App fires an event after each publish. Moving inverter control into the App is an optional last phase. |
 | EV charger automation | Moved into the App as Phase 6 with all three branches (target-SoC stop, EMHASS mode, Excess Solar), so the charger has one writer. The HA helpers (charge mode, target SoC, maximum current) stay the owner's controls. Dry run with agreement first. |
-| Market sessions (mFRR) | The App holds MPC sends, publishes and inverter writes while the market automation's session select is busy, and re-applies the plan with at most one inverter write when it ends (Phase 5c). Moving the market controller itself into the App is Phase 7, after Phase 5 is live; a session end then goes straight to the plan's targets. |
+| Market sessions (mFRR) | The App holds MPC sends, publishes and inverter writes while the market automation's session select is busy, and re-applies the plan with at most one inverter write when it ends (Phase 5c). The market controller itself moved into the App as Phase 7 behind one Sofar writer (shadow first; go live only after Phase 5 is live); a session end goes straight to the plan's targets. |
 | Old repo | `homeassistant-ee-nordpool` stays untouched while both run side by side. Then it gets a deprecation release and is archived. |
 
 ---

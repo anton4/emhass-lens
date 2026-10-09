@@ -851,6 +851,133 @@ class Charger(Section):
     limits: ChargerLimits = Field(default=ChargerLimits(), title="Limits and thresholds")
 
 
+class MarketEntities(Section):
+    source_sensor: EntityId = Field(
+        default="sensor.qw_source",
+        title="Market source",
+        description="Who sends the command: kratt or fusebox (through Qilowatt).",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    mode_sensor: EntityId = Field(
+        default="sensor.qw_mode", title="Market command", json_schema_extra=ui(widget="entity", domain="sensor")
+    )
+    powerlimit_sensor: EntityId = Field(
+        default="sensor.qw_powerlimit", title="Commanded power", json_schema_extra=ui(widget="entity", domain="sensor")
+    )
+    soc_sensor: EntityId = Field(
+        default="sensor.sofar_battery_capacity_1",
+        title="Battery SoC",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    pv_sensor: EntityId = Field(
+        default="sensor.sofar_pv_power_total_watt",
+        title="PV power now",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    enable_boolean: EntityId = Field(
+        default="input_boolean.qilowatt_automation",
+        title="Enabled when on",
+        json_schema_extra=ui(widget="entity", domain=["input_boolean", "switch"]),
+    )
+    session_select: EntityId = Field(
+        default="input_select.qilowatt_session_state",
+        title="Session state select",
+        description="Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation "
+        "kept as a fallback; followed in shadow mode.",
+        json_schema_extra=ui(widget="entity", domain="input_select"),
+    )
+    fusebox_sell_helper: EntityId = Field(
+        default="input_number.fusebox_sell_power_helper",
+        title="Fusebox sell power helper",
+        json_schema_extra=ui(widget="entity", domain="input_number"),
+    )
+    ha_automation: EntityId = Field(
+        default="",
+        title="Home Assistant automation (interlock)",
+        description="Live mode refuses to act while this automation is on, so the two never both drive the inverter.",
+        json_schema_extra=ui(widget="entity", domain="automation"),
+    )
+
+
+class MarketThresholds(Section):
+    enter_w: int = Field(
+        default=1000, ge=0, le=50000, title="Start or flip a session at", json_schema_extra=ui(unit="W")
+    )
+    exit_w: int = Field(default=400, ge=0, le=50000, title="Continue a session down to", json_schema_extra=ui(unit="W"))
+    cooldown_s: int = Field(default=180, ge=0, le=3600, title="Cooldown between writes", json_schema_extra=ui(unit="s"))
+    big_change_w: int = Field(
+        default=2500, ge=0, le=50000, title="Bypass the cooldown for changes of", json_schema_extra=ui(unit="W")
+    )
+    deadband_w: int = Field(default=300, ge=0, le=50000, title="Deadband", json_schema_extra=ui(unit="W"))
+    deadband_pct: float = Field(default=0.15, ge=0, le=1, title="Deadband as a share of the target")
+    min_soc: float = Field(default=10, ge=0, le=100, title="No selling below", json_schema_extra=ui(unit="%"))
+    settle_s: float = Field(
+        default=2,
+        ge=0,
+        le=30,
+        title="Settle time",
+        description="How long to wait after a command changes, so a burst of three sensor updates lands first.",
+        json_schema_extra=ui(unit="s"),
+    )
+    unavailable_timeout_s: int = Field(
+        default=300, ge=0, le=3600, title="End a session when the source is lost for", json_schema_extra=ui(unit="s")
+    )
+    low_pv_w: int = Field(
+        default=100, ge=0, le=10000, title="PV counts as none below", json_schema_extra=ui(unit="W", advanced=True)
+    )
+    buy_cap_w: int = Field(default=18200, ge=0, le=100000, title="Buy: grid target cap", json_schema_extra=ui(unit="W"))
+    sell_cap_w: int = Field(
+        default=15500, ge=0, le=100000, title="Sell: grid and feed-in cap", json_schema_extra=ui(unit="W")
+    )
+    buy_modes: list[str] = Field(
+        default_factory=lambda: ["buy", "mfrrdown", "frrdown"],
+        title="Buy commands",
+        json_schema_extra=ui(widget="json", advanced=True),
+    )
+    sell_modes: list[str] = Field(
+        default_factory=lambda: ["sell", "mfrrup", "frrup"],
+        title="Sell commands",
+        json_schema_extra=ui(widget="json", advanced=True),
+    )
+    sources: list[str] = Field(
+        default_factory=lambda: ["fusebox", "kratt"],
+        title="Known sources",
+        json_schema_extra=ui(widget="json", advanced=True),
+    )
+
+
+class Market(Section):
+    mode: Literal["off", "shadow", "live"] = Field(
+        default="off",
+        title="Qilowatt market control",
+        description="Shadow: decides on every command change and every minute and compares with what the Home "
+        "Assistant automation did. Live: EMHASS Lens runs the sessions itself (disable the automation first).",
+        json_schema_extra=ui(labels={"off": "Off", "shadow": "Shadow", "live": "Live"}),
+    )
+    reconcile_offset_s: int = Field(
+        default=15,
+        ge=0,
+        lt=60,
+        title="Reconcile every minute at (seconds)",
+        description="15 s after the automation's own minute tick, so shadow comparisons read what it did.",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+    compare_delay_s: int = Field(
+        default=12,
+        ge=3,
+        le=60,
+        title="Compare with the automation after",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+    soc_low_for_s: int = Field(
+        default=10, ge=0, le=300, title="Low SoC must hold for", json_schema_extra=ui(unit="s", advanced=True)
+    )
+    entities: MarketEntities = Field(
+        default=MarketEntities(), title="Market entities", json_schema_extra=ui(advanced=True)
+    )
+    thresholds: MarketThresholds = Field(default=MarketThresholds(), title="Thresholds")
+
+
 class ExternalControl(Section):
     enabled: bool = Field(
         default=False,
@@ -903,6 +1030,7 @@ class Settings(Section):
     parity: Parity = Field(default=Parity(), title="Parity with the HACS integration")
     inverter: Inverter = Field(default=Inverter(), title="Inverter control (experimental)")
     charger: Charger = Field(default=Charger(), title="EV charger control (experimental)")
+    market: Market = Field(default=Market(), title="Qilowatt market control (experimental)")
     external_control: ExternalControl = Field(default=ExternalControl(), title="Market session hold (mFRR)")
 
 

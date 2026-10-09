@@ -47,6 +47,9 @@ def register(c: Container) -> None:
             snapshots = await c.app_db.run(x["forecasts"].prune, now)
             plans = await c.app_db.run(x["emhass"].prune)
             summary += f"; {slots} old price slots, {snapshots} forecast snapshots, {plans} plans"
+        if "sofar" in x:
+            wear = await c.app_db.run(x["sofar"].prune, now)
+            summary += f"; {wear} inverter write records"
         log.info(summary)
         if ctx.run:
             ctx.run.summary = summary

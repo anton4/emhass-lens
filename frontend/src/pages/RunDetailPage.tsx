@@ -159,6 +159,8 @@ const EXTRA_JOB_TITLES: Record<string, string> = {
   'charger.decide': 'EV charger decision',
   'charger.compare': 'EV charger comparison',
   'external.resume': 'Resume after a market session',
+  'market.reconcile': 'Market reconcile',
+  'market.compare': 'Market comparison',
   'driver.take_over': 'Take over from the HACS integration',
   'driver.hand_back': 'Hand back to the HACS integration',
 }
@@ -187,6 +189,10 @@ const ARTIFACT_NAMES: Record<string, string> = {
   charger_readback: 'Read back',
   charger_comparison: 'Compared with the automation',
   resume: 'Resume steps',
+  market_decision: 'Market decision',
+  market_comparison: 'Compared with the automation',
+  notification: 'Phone message',
+  handback_calls: 'Hand-back calls',
 }
 
 function Artifact({ runId, artifact }: { runId: number; artifact: ArtifactInfo }) {

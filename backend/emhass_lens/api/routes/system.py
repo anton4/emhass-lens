@@ -17,6 +17,9 @@ from emhass_lens.api.schemas import (
     JobInfo,
     LegacyApplyRequest,
     LegacyPreview,
+    MarketReconcileRequest,
+    MarketSession,
+    MarketStatus,
     MlRequest,
     MpcStatus,
     OutputsStatus,
@@ -199,6 +202,26 @@ async def charger_decide(c: ContainerDep) -> RunStarted:
     """Decide for the charger now (applies only in live mode)."""
     run_id = await c.scheduler.start_now("charger.decide", {"trigger": "manual"})
     return RunStarted(job=JobInfo(**c.scheduler.jobs["charger.decide"].info()), run_id=run_id)
+
+
+@router.get("/market")
+async def market_status(c: ContainerDep) -> MarketStatus:
+    """Qilowatt market control (experimental): the session, the last decision and comparison, agreement, wear."""
+    return MarketStatus(**await c.extras["market"].status())
+
+
+@router.post("/market/reconcile", dependencies=[Writable], status_code=202)
+async def market_reconcile(c: ContainerDep, body: MarketReconcileRequest | None = None) -> RunStarted:
+    """Reconcile now (live: acts; force_end ends the open session whatever the command says)."""
+    body = body or MarketReconcileRequest()
+    params = {"trigger_entity": body.trigger_entity or "manual", "force_end": body.force_end}
+    run_id = await c.scheduler.start_now("market.reconcile", params)
+    return RunStarted(job=JobInfo(**c.scheduler.jobs["market.reconcile"].info()), run_id=run_id)
+
+
+@router.get("/market/sessions")
+async def market_sessions(c: ContainerDep, limit: Annotated[int, Query(ge=1, le=500)] = 50) -> list[MarketSession]:
+    return [MarketSession(**row) for row in await c.extras["market"].sessions(limit)]
 
 
 @router.get("/setup")
