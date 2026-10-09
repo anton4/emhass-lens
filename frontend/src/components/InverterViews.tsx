@@ -137,8 +137,19 @@ function TargetRow({
   )
 }
 
-/** Decided vs observed, field by field (comparison with the automation, or the readback after applying). */
-export function CompareTable({ comparison, observedLabel = 'Automation set' }: { comparison: InverterComparison; observedLabel?: string }) {
+/** Decided vs observed, field by field (comparison with the automation, or the readback after applying).
+ * `labels` and `format` default to the inverter's fields; the charger passes its own. */
+export function CompareTable({
+  comparison,
+  observedLabel = 'Automation set',
+  labels = FIELD_LABELS,
+  format = fieldValue,
+}: {
+  comparison: InverterComparison
+  observedLabel?: string
+  labels?: Record<string, string>
+  format?: (field: string, value: string | number | null | undefined) => string
+}) {
   return (
     <div className="table-wrap">
       <table>
@@ -153,9 +164,9 @@ export function CompareTable({ comparison, observedLabel = 'Automation set' }: {
         <tbody>
           {comparison.fields.map((f) => (
             <tr key={f.field}>
-              <td>{FIELD_LABELS[f.field] ?? f.field}</td>
-              <td className={f.field === 'state' ? undefined : 'num'}>{fieldValue(f.field, f.decided)}</td>
-              <td className={f.field === 'state' ? undefined : 'num'}>{fieldValue(f.field, f.observed)}</td>
+              <td>{labels[f.field] ?? f.field}</td>
+              <td className={typeof f.decided === 'string' ? undefined : 'num'}>{format(f.field, f.decided)}</td>
+              <td className={typeof f.decided === 'string' ? undefined : 'num'}>{format(f.field, f.observed)}</td>
               <td>
                 <LabelledLamp color={f.same ? 'green' : 'amber'} text={f.same ? '✓ Same' : '✗ Differs'} />
               </td>
@@ -175,9 +186,9 @@ export function AgreeHeadline({ comparison, what }: { comparison: InverterCompar
   )
 }
 
-/** The Home Assistant service calls a live decision made. */
-export function CallsList({ calls }: { calls: InverterCall[] }) {
-  if (calls.length === 0) return <p className="cell-sub">No calls: the inverter already showed the targets.</p>
+/** The Home Assistant service calls a decision made (or, in dry run, would have made). */
+export function CallsList({ calls, nothing = 'No calls: the inverter already showed the targets.' }: { calls: InverterCall[]; nothing?: string }) {
+  if (calls.length === 0) return <p className="cell-sub">{nothing}</p>
   return (
     <div className="table-wrap">
       <table>
@@ -198,9 +209,15 @@ export function CallsList({ calls }: { calls: InverterCall[] }) {
               <td className="wrap">
                 <code>{c.entity_id ?? '—'}</code>
               </td>
-              <td>{c.option ?? (c.value !== undefined ? String(c.value) : '—')}</td>
+              <td className="wrap">{c.message ? `“${c.message}”` : (c.option ?? (c.value !== undefined ? String(c.value) : '—'))}</td>
               <td>
-                {c.ok ? <LabelledLamp color="green" text="OK" /> : <LabelledLamp color="red" text={c.error ?? 'failed'} />}
+                {c.ok ? (
+                  <LabelledLamp color="green" text="OK" />
+                ) : c.ok === null ? (
+                  <span className="cell-sub">{c.dry_run ? 'not sent (dry run)' : (c.skipped ?? 'not sent')}</span>
+                ) : (
+                  <LabelledLamp color="red" text={c.error ?? 'failed'} />
+                )}
               </td>
             </tr>
           ))}

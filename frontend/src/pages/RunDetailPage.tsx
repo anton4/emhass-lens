@@ -156,6 +156,9 @@ export function RunDetailPage() {
 const EXTRA_JOB_TITLES: Record<string, string> = {
   'inverter.decide': 'Inverter decision',
   'inverter.compare': 'Inverter comparison',
+  'charger.decide': 'EV charger decision',
+  'charger.compare': 'EV charger comparison',
+  'external.resume': 'Resume after a market session',
   'driver.take_over': 'Take over from the HACS integration',
   'driver.hand_back': 'Hand back to the HACS integration',
 }
@@ -175,6 +178,15 @@ const ARTIFACT_NAMES: Record<string, string> = {
   forecast: 'Forecast',
   next: 'Next fetches',
   last_run: 'EMHASS last run',
+  decision: 'Inverter decision',
+  calls: 'Service calls',
+  readback: 'Read back',
+  comparison: 'Compared with the automation',
+  charger_decision: 'Charger decision',
+  charger_calls: 'Service calls',
+  charger_readback: 'Read back',
+  charger_comparison: 'Compared with the automation',
+  resume: 'Resume steps',
 }
 
 function Artifact({ runId, artifact }: { runId: number; artifact: ArtifactInfo }) {

@@ -36,6 +36,7 @@ export function familiesForJob(job: string): string[] {
   if (job.startsWith('driver.')) return ['settings', 'emhass', 'outputs']
   if (job.startsWith('ml.') || job === 'health.evaluate') return ['problems']
   if (job.startsWith('inverter.')) return ['inverter']
+  if (job.startsWith('charger.')) return ['charger']
   return []
 }
 
@@ -74,8 +75,11 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: keys.emhass })
             void queryClient.invalidateQueries({ queryKey: keys.outputs })
             void queryClient.invalidateQueries({ queryKey: keys.inverter })
+            void queryClient.invalidateQueries({ queryKey: keys.charger })
           } else if (name === 'inverter') {
             void queryClient.invalidateQueries({ queryKey: keys.inverter })
+          } else if (name === 'charger') {
+            void queryClient.invalidateQueries({ queryKey: keys.charger })
           } else if (name === 'plan') {
             void queryClient.invalidateQueries({ queryKey: keys.plan })
             void queryClient.invalidateQueries({ queryKey: keys.outputs })

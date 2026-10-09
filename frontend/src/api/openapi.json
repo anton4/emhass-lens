@@ -64,6 +64,432 @@
         "title": "ArtifactInfo",
         "type": "object"
       },
+      "Charger": {
+        "additionalProperties": false,
+        "properties": {
+          "decide_offset_s": {
+            "default": 8,
+            "description": "Normally the decision follows the publish; this is the fallback.",
+            "exclusiveMaximum": 300.0,
+            "minimum": 0.0,
+            "title": "EMHASS mode fallback at (seconds into each quarter)",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s",
+              "widget": "quarter_offset"
+            }
+          },
+          "entities": {
+            "$ref": "#/components/schemas/ChargerEntities",
+            "default": {
+              "automation": "",
+              "car_soc_sensor": "sensor.model_3_usable_battery_level",
+              "charge_mode_select": "input_select.ev_charge_mode",
+              "charging_state_sensor": "sensor.abb_terra_ac_charger_charging_state_raw",
+              "current_limit_number": "number.abb_terra_ac_charger_charging_current_limit",
+              "deferrable_sensor": "sensor.p_deferrable0",
+              "emhass_option": "EMHASS",
+              "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
+              "max_solar_current_number": "input_number.ev_max_solar_current",
+              "pv_potential_sensor": "sensor.potential_pv_power_advanced",
+              "pv_power_sensor": "sensor.sofar_pv_power_total_watt",
+              "solar_option": "Excess Solar",
+              "start_button": "button.abb_terra_ac_charger_start_charging",
+              "stop_button": "button.abb_terra_ac_charger_stop_charging",
+              "target_soc_number": "input_number.ev_target_soc"
+            },
+            "title": "Charger entities",
+            "ui": {
+              "advanced": true
+            }
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ChargerLimits",
+            "default": {
+              "compare_delay_s": 8,
+              "compare_window_s": 20,
+              "max_current_a": 16,
+              "min_current_a": 6,
+              "pv_potential_gap_w": 2000,
+              "pv_stale_s": 600,
+              "soc_compare_window_s": 90,
+              "soc_for_s": 300,
+              "w_per_amp": 690
+            },
+            "title": "Limits and thresholds"
+          },
+          "mode": {
+            "default": "off",
+            "description": "Dry run: decide like the automation and compare with what it did, without touching the charger. Live: EMHASS Lens drives the charger itself (turn the automation off first).",
+            "enum": [
+              "off",
+              "dry_run",
+              "live"
+            ],
+            "title": "EV charger control",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "dry_run": "Dry run",
+                "live": "Live",
+                "off": "Off"
+              }
+            }
+          },
+          "tick_offset_s": {
+            "default": 55,
+            "description": "Excess Solar and the SoC stop are evaluated every minute; 55 s is just before the automation's own minute tick, so dry-run comparisons read what it did.",
+            "exclusiveMaximum": 60.0,
+            "minimum": 0.0,
+            "title": "Check every minute at (seconds)",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          }
+        },
+        "title": "Charger",
+        "type": "object"
+      },
+      "ChargerEntities": {
+        "additionalProperties": false,
+        "properties": {
+          "automation": {
+            "default": "",
+            "description": "Live mode refuses to act while this automation is on, so the two never both drive the charger.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Home Assistant automation (interlock)",
+            "type": "string",
+            "ui": {
+              "domain": "automation",
+              "widget": "entity"
+            }
+          },
+          "car_soc_sensor": {
+            "default": "sensor.model_3_usable_battery_level",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Car battery level",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "charge_mode_select": {
+            "default": "input_select.ev_charge_mode",
+            "description": "Your helper with the options Manual, EMHASS and Excess Solar.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Charge mode select",
+            "type": "string",
+            "ui": {
+              "domain": "input_select",
+              "widget": "entity"
+            }
+          },
+          "charging_state_sensor": {
+            "default": "sensor.abb_terra_ac_charger_charging_state_raw",
+            "description": "0 unplugged, 1/2/5 plugged in or paused, 4 charging.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Charging state (raw)",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "current_limit_number": {
+            "default": "number.abb_terra_ac_charger_charging_current_limit",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Charging current limit",
+            "type": "string",
+            "ui": {
+              "domain": "number",
+              "widget": "entity"
+            }
+          },
+          "deferrable_sensor": {
+            "default": "sensor.p_deferrable0",
+            "description": "What publish-data writes for the EV. The stored plan is used when it isn't updated yet.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "EMHASS's EV power sensor",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "emhass_option": {
+            "default": "EMHASS",
+            "title": "Option for EMHASS mode",
+            "type": "string"
+          },
+          "house_load_sensor": {
+            "default": "sensor.sofar_active_power_load_sys_watt",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "House load",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "max_solar_current_number": {
+            "default": "input_number.ev_max_solar_current",
+            "description": "Caps both modes.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Maximum current",
+            "type": "string",
+            "ui": {
+              "domain": "input_number",
+              "widget": "entity"
+            }
+          },
+          "pv_potential_sensor": {
+            "default": "sensor.potential_pv_power_advanced",
+            "description": "Used instead of the measured PV when it is much higher (the inverter is curtailing).",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Potential PV power",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "pv_power_sensor": {
+            "default": "sensor.sofar_pv_power_total_watt",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "PV power now",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "solar_option": {
+            "default": "Excess Solar",
+            "title": "Option for Excess Solar mode",
+            "type": "string"
+          },
+          "start_button": {
+            "default": "button.abb_terra_ac_charger_start_charging",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Start charging button",
+            "type": "string",
+            "ui": {
+              "domain": "button",
+              "widget": "entity"
+            }
+          },
+          "stop_button": {
+            "default": "button.abb_terra_ac_charger_stop_charging",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Stop charging button",
+            "type": "string",
+            "ui": {
+              "domain": "button",
+              "widget": "entity"
+            }
+          },
+          "target_soc_number": {
+            "default": "input_number.ev_target_soc",
+            "description": "Charging stops when the car has been at or above this for a while; it is then set back to 100.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Target SoC",
+            "type": "string",
+            "ui": {
+              "domain": "input_number",
+              "widget": "entity"
+            }
+          }
+        },
+        "title": "ChargerEntities",
+        "type": "object"
+      },
+      "ChargerLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "compare_delay_s": {
+            "default": 8,
+            "description": "Dry run: how long after a decision to start reading what the automation did.",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Compare with the automation after",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "compare_window_s": {
+            "default": 20,
+            "maximum": 300.0,
+            "minimum": 2.0,
+            "title": "Comparison window",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "max_current_a": {
+            "default": 16,
+            "description": "A safety cap on what EMHASS Lens writes to the charger.",
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Never set more than",
+            "type": "integer",
+            "ui": {
+              "unit": "A"
+            }
+          },
+          "min_current_a": {
+            "default": 6,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Minimum charging current",
+            "type": "integer",
+            "ui": {
+              "unit": "A"
+            }
+          },
+          "pv_potential_gap_w": {
+            "default": 2000,
+            "maximum": 50000.0,
+            "minimum": 0.0,
+            "title": "Use the potential PV above this gap",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "W"
+            }
+          },
+          "pv_stale_s": {
+            "default": 600,
+            "description": "Excess Solar never raises the current on PV data older than this.",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "PV data counts as stale after",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "soc_compare_window_s": {
+            "default": 90,
+            "maximum": 600.0,
+            "minimum": 2.0,
+            "title": "Comparison window for the SoC stop",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
+          "soc_for_s": {
+            "default": 300,
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Target SoC must hold for",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "w_per_amp": {
+            "default": 690,
+            "description": "3 phases × 230 V.",
+            "maximum": 1000.0,
+            "minimum": 100.0,
+            "title": "Watts per amp",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "W/A"
+            }
+          }
+        },
+        "title": "ChargerLimits",
+        "type": "object"
+      },
+      "ChargerStatus": {
+        "properties": {
+          "agreement_24h": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "agreement_7d": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "last_compare": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Compare"
+          },
+          "last_tick": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tick"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "soc": {
+            "$ref": "#/components/schemas/SocTracking"
+          }
+        },
+        "required": [
+          "mode",
+          "last",
+          "last_compare",
+          "last_tick",
+          "soc",
+          "preconditions",
+          "agreement_24h",
+          "agreement_7d"
+        ],
+        "title": "ChargerStatus",
+        "type": "object"
+      },
       "ComponentStatus": {
         "properties": {
           "detail": {
@@ -2987,6 +3413,13 @@
       "Notifications": {
         "additionalProperties": false,
         "properties": {
+          "mobile_service": {
+            "default": "",
+            "description": "e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control.",
+            "pattern": "^$|^notify\\.[a-z0-9_]+$",
+            "title": "Mobile notify service",
+            "type": "string"
+          },
           "persistent": {
             "default": false,
             "description": "Raise a persistent notification for problems that last longer than the grace time.",
@@ -4575,6 +5008,43 @@
       "Settings": {
         "additionalProperties": false,
         "properties": {
+          "charger": {
+            "$ref": "#/components/schemas/Charger",
+            "default": {
+              "decide_offset_s": 8,
+              "entities": {
+                "automation": "",
+                "car_soc_sensor": "sensor.model_3_usable_battery_level",
+                "charge_mode_select": "input_select.ev_charge_mode",
+                "charging_state_sensor": "sensor.abb_terra_ac_charger_charging_state_raw",
+                "current_limit_number": "number.abb_terra_ac_charger_charging_current_limit",
+                "deferrable_sensor": "sensor.p_deferrable0",
+                "emhass_option": "EMHASS",
+                "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
+                "max_solar_current_number": "input_number.ev_max_solar_current",
+                "pv_potential_sensor": "sensor.potential_pv_power_advanced",
+                "pv_power_sensor": "sensor.sofar_pv_power_total_watt",
+                "solar_option": "Excess Solar",
+                "start_button": "button.abb_terra_ac_charger_start_charging",
+                "stop_button": "button.abb_terra_ac_charger_stop_charging",
+                "target_soc_number": "input_number.ev_target_soc"
+              },
+              "limits": {
+                "compare_delay_s": 8,
+                "compare_window_s": 20,
+                "max_current_a": 16,
+                "min_current_a": 6,
+                "pv_potential_gap_w": 2000,
+                "pv_stale_s": 600,
+                "soc_compare_window_s": 90,
+                "soc_for_s": 300,
+                "w_per_amp": 690
+              },
+              "mode": "off",
+              "tick_offset_s": 55
+            },
+            "title": "EV charger control (experimental)"
+          },
           "emhass": {
             "$ref": "#/components/schemas/Emhass",
             "default": {
@@ -4723,6 +5193,7 @@
           "notifications": {
             "$ref": "#/components/schemas/Notifications",
             "default": {
+              "mobile_service": "",
               "persistent": false
             }
           },
@@ -4986,6 +5457,43 @@
           "detail"
         ],
         "title": "SetupStep",
+        "type": "object"
+      },
+      "SocTracking": {
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "fired": {
+            "title": "Fired",
+            "type": "boolean"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "required": [
+          "since",
+          "fired",
+          "due_at"
+        ],
+        "title": "SocTracking",
         "type": "object"
       },
       "StatusInfo": {
@@ -5275,6 +5783,50 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/charger": {
+      "get": {
+        "description": "EV charger control (experimental): the last decision, the last comparison with the automation, agreement.",
+        "operationId": "charger_status_api_charger_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargerStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Charger Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/charger/decide": {
+      "post": {
+        "description": "Decide for the charger now (applies only in live mode).",
+        "operationId": "charger_decide_api_charger_decide_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Charger Decide",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/driver/hand-back": {
       "post": {
         "description": "Put EMHASS Lens in dry run and turn the HACS integration's Auto MPC back on.",

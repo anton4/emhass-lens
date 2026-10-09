@@ -502,6 +502,13 @@ class Notifications(Section):
         title="Home Assistant notifications",
         description="Raise a persistent notification for problems that last longer than the grace time.",
     )
+    mobile_service: str = Field(
+        default="",
+        pattern=r"^$|^notify\.[a-z0-9_]+$",
+        title="Mobile notify service",
+        description="e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. "
+        "Used by the EV charger control.",
+    )
 
 
 class Retention(Section):
@@ -676,6 +683,174 @@ class Inverter(Section):
     limits: InverterLimits = Field(default=InverterLimits(), title="Limits and thresholds")
 
 
+class ChargerEntities(Section):
+    charge_mode_select: EntityId = Field(
+        default="input_select.ev_charge_mode",
+        title="Charge mode select",
+        description="Your helper with the options Manual, EMHASS and Excess Solar.",
+        json_schema_extra=ui(widget="entity", domain="input_select"),
+    )
+    emhass_option: str = Field(default="EMHASS", title="Option for EMHASS mode")
+    solar_option: str = Field(default="Excess Solar", title="Option for Excess Solar mode")
+    target_soc_number: EntityId = Field(
+        default="input_number.ev_target_soc",
+        title="Target SoC",
+        description="Charging stops when the car has been at or above this for a while; it is then set back to 100.",
+        json_schema_extra=ui(widget="entity", domain="input_number"),
+    )
+    max_solar_current_number: EntityId = Field(
+        default="input_number.ev_max_solar_current",
+        title="Maximum current",
+        description="Caps both modes.",
+        json_schema_extra=ui(widget="entity", domain="input_number"),
+    )
+    charging_state_sensor: EntityId = Field(
+        default="sensor.abb_terra_ac_charger_charging_state_raw",
+        title="Charging state (raw)",
+        description="0 unplugged, 1/2/5 plugged in or paused, 4 charging.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    current_limit_number: EntityId = Field(
+        default="number.abb_terra_ac_charger_charging_current_limit",
+        title="Charging current limit",
+        json_schema_extra=ui(widget="entity", domain="number"),
+    )
+    start_button: EntityId = Field(
+        default="button.abb_terra_ac_charger_start_charging",
+        title="Start charging button",
+        json_schema_extra=ui(widget="entity", domain="button"),
+    )
+    stop_button: EntityId = Field(
+        default="button.abb_terra_ac_charger_stop_charging",
+        title="Stop charging button",
+        json_schema_extra=ui(widget="entity", domain="button"),
+    )
+    car_soc_sensor: EntityId = Field(
+        default="sensor.model_3_usable_battery_level",
+        title="Car battery level",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    pv_power_sensor: EntityId = Field(
+        default="sensor.sofar_pv_power_total_watt",
+        title="PV power now",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    pv_potential_sensor: EntityId = Field(
+        default="sensor.potential_pv_power_advanced",
+        title="Potential PV power",
+        description="Used instead of the measured PV when it is much higher (the inverter is curtailing).",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    house_load_sensor: EntityId = Field(
+        default="sensor.sofar_active_power_load_sys_watt",
+        title="House load",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    deferrable_sensor: EntityId = Field(
+        default="sensor.p_deferrable0",
+        title="EMHASS's EV power sensor",
+        description="What publish-data writes for the EV. The stored plan is used when it isn't updated yet.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    automation: EntityId = Field(
+        default="",
+        title="Home Assistant automation (interlock)",
+        description="Live mode refuses to act while this automation is on, so the two never both drive the charger.",
+        json_schema_extra=ui(widget="entity", domain="automation"),
+    )
+
+
+class ChargerLimits(Section):
+    min_current_a: int = Field(default=6, ge=1, le=32, title="Minimum charging current", json_schema_extra=ui(unit="A"))
+    max_current_a: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        title="Never set more than",
+        description="A safety cap on what EMHASS Lens writes to the charger.",
+        json_schema_extra=ui(unit="A"),
+    )
+    w_per_amp: int = Field(
+        default=690,
+        ge=100,
+        le=1000,
+        title="Watts per amp",
+        description="3 phases × 230 V.",
+        json_schema_extra=ui(unit="W/A", advanced=True),
+    )
+    pv_potential_gap_w: int = Field(
+        default=2000,
+        ge=0,
+        le=50000,
+        title="Use the potential PV above this gap",
+        json_schema_extra=ui(unit="W", advanced=True),
+    )
+    pv_stale_s: int = Field(
+        default=600,
+        ge=0,
+        le=3600,
+        title="PV data counts as stale after",
+        description="Excess Solar never raises the current on PV data older than this.",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+    soc_for_s: int = Field(
+        default=300,
+        ge=0,
+        le=3600,
+        title="Target SoC must hold for",
+        json_schema_extra=ui(unit="s"),
+    )
+    compare_delay_s: int = Field(
+        default=8,
+        ge=1,
+        le=60,
+        title="Compare with the automation after",
+        description="Dry run: how long after a decision to start reading what the automation did.",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+    compare_window_s: int = Field(
+        default=20, ge=2, le=300, title="Comparison window", json_schema_extra=ui(unit="s", advanced=True)
+    )
+    soc_compare_window_s: int = Field(
+        default=90,
+        ge=2,
+        le=600,
+        title="Comparison window for the SoC stop",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+
+
+class Charger(Section):
+    mode: Literal["off", "dry_run", "live"] = Field(
+        default="off",
+        title="EV charger control",
+        description="Dry run: decide like the automation and compare with what it did, without touching the "
+        "charger. Live: EMHASS Lens drives the charger itself (turn the automation off first).",
+        json_schema_extra=ui(labels={"off": "Off", "dry_run": "Dry run", "live": "Live"}),
+    )
+    tick_offset_s: int = Field(
+        default=55,
+        ge=0,
+        lt=60,
+        title="Check every minute at (seconds)",
+        description="Excess Solar and the SoC stop are evaluated every minute; 55 s is just before the "
+        "automation's own minute tick, so dry-run comparisons read what it did.",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
+    decide_offset_s: int = Field(
+        default=8,
+        ge=0,
+        lt=300,
+        title="EMHASS mode fallback at (seconds into each quarter)",
+        description="Normally the decision follows the publish; this is the fallback.",
+        json_schema_extra=ui(unit="s", widget="quarter_offset", advanced=True),
+    )
+    entities: ChargerEntities = Field(
+        default=ChargerEntities(), title="Charger entities", json_schema_extra=ui(advanced=True)
+    )
+    limits: ChargerLimits = Field(default=ChargerLimits(), title="Limits and thresholds")
+
+
 class ExternalControl(Section):
     enabled: bool = Field(
         default=False,
@@ -727,6 +902,7 @@ class Settings(Section):
     logging: Logging = Field(default=Logging(), title="Logging")
     parity: Parity = Field(default=Parity(), title="Parity with the HACS integration")
     inverter: Inverter = Field(default=Inverter(), title="Inverter control (experimental)")
+    charger: Charger = Field(default=Charger(), title="EV charger control (experimental)")
     external_control: ExternalControl = Field(default=ExternalControl(), title="Market session hold (mFRR)")
 
 

@@ -68,14 +68,18 @@ export interface DecisionArtifact extends InverterLast {
   observed_before: ObservedValues
 }
 
-/** One entry of the `calls` artifact of a live inverter.decide run. */
+/** One entry of the `calls` artifact of a live inverter.decide run (and of the charger's `charger_calls`, where
+ * notifications carry a message and dry-run entries have ok null). */
 export interface InverterCall {
   service: string
   entity_id?: string
   value?: number
   option?: string
-  ok: boolean
+  message?: string
+  ok: boolean | null
   error?: string
+  skipped?: string
+  dry_run?: boolean
 }
 
 export function inverterModeSpec(mode: string | null | undefined): { color: LampColor; text: string; explain: string } {

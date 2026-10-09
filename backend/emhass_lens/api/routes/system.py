@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
 from emhass_lens.api.schemas import (
+    ChargerStatus,
     DiffEntry,
     DriverRequest,
     DriverResult,
@@ -185,6 +186,19 @@ async def inverter_decide(c: ContainerDep) -> RunStarted:
     """Decide now for the current slot (applies only in live mode)."""
     run_id = await c.scheduler.start_now("inverter.decide")
     return RunStarted(job=JobInfo(**c.scheduler.jobs["inverter.decide"].info()), run_id=run_id)
+
+
+@router.get("/charger")
+async def charger_status(c: ContainerDep) -> ChargerStatus:
+    """EV charger control (experimental): the last decision, the last comparison with the automation, agreement."""
+    return ChargerStatus(**await c.extras["charger"].status())
+
+
+@router.post("/charger/decide", dependencies=[Writable], status_code=202)
+async def charger_decide(c: ContainerDep) -> RunStarted:
+    """Decide for the charger now (applies only in live mode)."""
+    run_id = await c.scheduler.start_now("charger.decide", {"trigger": "manual"})
+    return RunStarted(job=JobInfo(**c.scheduler.jobs["charger.decide"].info()), run_id=run_id)
 
 
 @router.get("/setup")

@@ -230,6 +230,29 @@ def main() -> int:
             )
             patch(http, {"inverter": {"mode": "off"}}, "e2e: inverter off")
 
+            for entity, value in {
+                "input_select.ev_charge_mode": "EMHASS",
+                "sensor.abb_terra_ac_charger_charging_state_raw": "1",
+                "number.abb_terra_ac_charger_charging_current_limit": "0",
+                "sensor.model_3_usable_battery_level": "50",
+                "input_number.ev_target_soc": "80",
+                "input_number.ev_max_solar_current": "16",
+                "sensor.sofar_pv_power_total_watt": "0",
+                "sensor.potential_pv_power_advanced": "0",
+                "sensor.sofar_active_power_load_sys_watt": "500",
+            }.items():
+                ha.post(f"/api/states/{entity}", json={"state": value})
+            patch(http, {"charger": {"mode": "dry_run"}}, "e2e: charger dry run")
+            time.sleep(1)
+            charged = run_job(http, "charger.decide")
+            artifact = http.get(f"/api/runs/{charged.get('id')}/artifacts/charger_decision")
+            check(
+                "decides for the EV charger in dry run from the plan's EV power",
+                charged["outcome"] in ("dry_run", "noop") and artifact.status_code == 200,
+                charged["summary"],
+            )
+            patch(http, {"charger": {"mode": "off"}}, "e2e: charger off")
+
             patch(
                 http, {"outputs": {"mqtt_enabled": True, "broker": {"host": "localhost", "port": 11883}}}, "e2e: MQTT"
             )

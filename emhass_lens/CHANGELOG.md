@@ -6,6 +6,8 @@
 - Settings → Inverter control → Limits: "Block export at or below this price" replaces "Block export below this price" and now defaults to 0.03 €/kWh. An existing install keeps its stored value; set it to the automation's value by hand.
 - DOCS: a section on inverter control and how to move the automation over.
 - Market session hold (Settings → Market session hold, off by default): while a market automation's session entity (e.g. `input_select.qilowatt_session_state` at `buy`/`sell`) says someone else drives the inverter, MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, EMHASS Lens waits for the inverter enable switch to come back, publishes the stored plan once and decides the inverter from it, writing only what differs. Optionally MPC runs again afterwards without a second inverter write. New `binary_sensor.emhass_lens_hold`, a *Market session hold* row on the Driver card, and the run *Resume after a market session*.
+- EV charger control (experimental, Settings → EV charger control, off by default) and an **EV charger** page: EMHASS Lens decides for the charger the way the automation "EV Charging: Combined EMHASS & Excess Solar" does (the target-SoC stop, EMHASS mode following the plan's EV power, Excess Solar mode following the PV surplus). Dry run records each decision with the calls and the phone message it would make and compares with what the automation did; live mode drives the charger and reads it back. Runs: *EV charger decision*, *EV charger comparison*, *EV charger check* (every minute) and *EV target SoC stop*.
+- Settings → Notifications → **Mobile notify service**: where phone messages go (e.g. `notify.mobile_app_my_phone`).
 
 ## 0.2.10
 

@@ -18,6 +18,8 @@ from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.inverter import Decision, Observed, PlanValues, compare, decide
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
+from emhass_lens.services.ha_values import num as _num
+from emhass_lens.services.ha_values import updated as _updated
 
 if TYPE_CHECKING:
     from emhass_lens.container import Container
@@ -31,22 +33,6 @@ PLAN_SENSORS = {
     "p_pv_curtailment": "sensor.p_pv_curtailment",
 }
 ROW_KEYS = {"p_batt": "P_batt", "p_grid": "P_grid", "p_pv": "P_PV", "p_pv_curtailment": "P_PV_curtailment"}
-
-
-def _updated(state: dict[str, Any] | None) -> datetime | None:
-    """When HA last wrote the state (last_reported also moves when the value didn't change)."""
-    if not state:
-        return None
-    stamps = [parse_iso(str(state.get(k))) for k in ("last_reported", "last_updated") if state.get(k)]
-    stamps = [t for t in stamps if t is not None]
-    return max(stamps) if stamps else None
-
-
-def _num(state: dict[str, Any] | None) -> float | None:
-    try:
-        return float((state or {}).get("state"))  # type: ignore[arg-type]
-    except TypeError, ValueError:
-        return None
 
 
 class InverterService:

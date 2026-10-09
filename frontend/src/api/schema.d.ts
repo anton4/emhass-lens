@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/charger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Charger Status
+         * @description EV charger control (experimental): the last decision, the last comparison with the automation, agreement.
+         */
+        get: operations["charger_status_api_charger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/charger/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Charger Decide
+         * @description Decide for the charger now (applies only in live mode).
+         */
+        post: operations["charger_decide_api_charger_decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/driver/hand-back": {
         parameters: {
             query?: never;
@@ -844,6 +884,223 @@ export interface components {
             kind: string;
             /** Size */
             size: number;
+        };
+        /** Charger */
+        Charger: {
+            /**
+             * EMHASS mode fallback at (seconds into each quarter)
+             * @description Normally the decision follows the publish; this is the fallback.
+             * @default 8
+             */
+            decide_offset_s: number;
+            /**
+             * Charger entities
+             * @default {
+             *       "automation": "",
+             *       "car_soc_sensor": "sensor.model_3_usable_battery_level",
+             *       "charge_mode_select": "input_select.ev_charge_mode",
+             *       "charging_state_sensor": "sensor.abb_terra_ac_charger_charging_state_raw",
+             *       "current_limit_number": "number.abb_terra_ac_charger_charging_current_limit",
+             *       "deferrable_sensor": "sensor.p_deferrable0",
+             *       "emhass_option": "EMHASS",
+             *       "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
+             *       "max_solar_current_number": "input_number.ev_max_solar_current",
+             *       "pv_potential_sensor": "sensor.potential_pv_power_advanced",
+             *       "pv_power_sensor": "sensor.sofar_pv_power_total_watt",
+             *       "solar_option": "Excess Solar",
+             *       "start_button": "button.abb_terra_ac_charger_start_charging",
+             *       "stop_button": "button.abb_terra_ac_charger_stop_charging",
+             *       "target_soc_number": "input_number.ev_target_soc"
+             *     }
+             */
+            entities: components["schemas"]["ChargerEntities"];
+            /**
+             * Limits and thresholds
+             * @default {
+             *       "compare_delay_s": 8,
+             *       "compare_window_s": 20,
+             *       "max_current_a": 16,
+             *       "min_current_a": 6,
+             *       "pv_potential_gap_w": 2000,
+             *       "pv_stale_s": 600,
+             *       "soc_compare_window_s": 90,
+             *       "soc_for_s": 300,
+             *       "w_per_amp": 690
+             *     }
+             */
+            limits: components["schemas"]["ChargerLimits"];
+            /**
+             * EV charger control
+             * @description Dry run: decide like the automation and compare with what it did, without touching the charger. Live: EMHASS Lens drives the charger itself (turn the automation off first).
+             * @default off
+             * @enum {string}
+             */
+            mode: "off" | "dry_run" | "live";
+            /**
+             * Check every minute at (seconds)
+             * @description Excess Solar and the SoC stop are evaluated every minute; 55 s is just before the automation's own minute tick, so dry-run comparisons read what it did.
+             * @default 55
+             */
+            tick_offset_s: number;
+        };
+        /** ChargerEntities */
+        ChargerEntities: {
+            /**
+             * Home Assistant automation (interlock)
+             * @description Live mode refuses to act while this automation is on, so the two never both drive the charger.
+             * @default
+             */
+            automation: string;
+            /**
+             * Car battery level
+             * @default sensor.model_3_usable_battery_level
+             */
+            car_soc_sensor: string;
+            /**
+             * Charge mode select
+             * @description Your helper with the options Manual, EMHASS and Excess Solar.
+             * @default input_select.ev_charge_mode
+             */
+            charge_mode_select: string;
+            /**
+             * Charging state (raw)
+             * @description 0 unplugged, 1/2/5 plugged in or paused, 4 charging.
+             * @default sensor.abb_terra_ac_charger_charging_state_raw
+             */
+            charging_state_sensor: string;
+            /**
+             * Charging current limit
+             * @default number.abb_terra_ac_charger_charging_current_limit
+             */
+            current_limit_number: string;
+            /**
+             * EMHASS's EV power sensor
+             * @description What publish-data writes for the EV. The stored plan is used when it isn't updated yet.
+             * @default sensor.p_deferrable0
+             */
+            deferrable_sensor: string;
+            /**
+             * Option for EMHASS mode
+             * @default EMHASS
+             */
+            emhass_option: string;
+            /**
+             * House load
+             * @default sensor.sofar_active_power_load_sys_watt
+             */
+            house_load_sensor: string;
+            /**
+             * Maximum current
+             * @description Caps both modes.
+             * @default input_number.ev_max_solar_current
+             */
+            max_solar_current_number: string;
+            /**
+             * Potential PV power
+             * @description Used instead of the measured PV when it is much higher (the inverter is curtailing).
+             * @default sensor.potential_pv_power_advanced
+             */
+            pv_potential_sensor: string;
+            /**
+             * PV power now
+             * @default sensor.sofar_pv_power_total_watt
+             */
+            pv_power_sensor: string;
+            /**
+             * Option for Excess Solar mode
+             * @default Excess Solar
+             */
+            solar_option: string;
+            /**
+             * Start charging button
+             * @default button.abb_terra_ac_charger_start_charging
+             */
+            start_button: string;
+            /**
+             * Stop charging button
+             * @default button.abb_terra_ac_charger_stop_charging
+             */
+            stop_button: string;
+            /**
+             * Target SoC
+             * @description Charging stops when the car has been at or above this for a while; it is then set back to 100.
+             * @default input_number.ev_target_soc
+             */
+            target_soc_number: string;
+        };
+        /** ChargerLimits */
+        ChargerLimits: {
+            /**
+             * Compare with the automation after
+             * @description Dry run: how long after a decision to start reading what the automation did.
+             * @default 8
+             */
+            compare_delay_s: number;
+            /**
+             * Comparison window
+             * @default 20
+             */
+            compare_window_s: number;
+            /**
+             * Never set more than
+             * @description A safety cap on what EMHASS Lens writes to the charger.
+             * @default 16
+             */
+            max_current_a: number;
+            /**
+             * Minimum charging current
+             * @default 6
+             */
+            min_current_a: number;
+            /**
+             * Use the potential PV above this gap
+             * @default 2000
+             */
+            pv_potential_gap_w: number;
+            /**
+             * PV data counts as stale after
+             * @description Excess Solar never raises the current on PV data older than this.
+             * @default 600
+             */
+            pv_stale_s: number;
+            /**
+             * Comparison window for the SoC stop
+             * @default 90
+             */
+            soc_compare_window_s: number;
+            /**
+             * Target SoC must hold for
+             * @default 300
+             */
+            soc_for_s: number;
+            /**
+             * Watts per amp
+             * @description 3 phases × 230 V.
+             * @default 690
+             */
+            w_per_amp: number;
+        };
+        /** ChargerStatus */
+        ChargerStatus: {
+            agreement_24h: components["schemas"]["Agreement"];
+            agreement_7d: components["schemas"]["Agreement"];
+            /** Last */
+            last: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Compare */
+            last_compare: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Tick */
+            last_tick: {
+                [key: string]: unknown;
+            } | null;
+            /** Mode */
+            mode: string;
+            /** Preconditions */
+            preconditions: string | null;
+            soc: components["schemas"]["SocTracking"];
         };
         /** ComponentStatus */
         ComponentStatus: {
@@ -1982,6 +2239,12 @@ export interface components {
         /** Notifications */
         Notifications: {
             /**
+             * Mobile notify service
+             * @description e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control.
+             * @default
+             */
+            mobile_service: string;
+            /**
              * Home Assistant notifications
              * @description Raise a persistent notification for problems that last longer than the grace time.
              * @default false
@@ -2525,6 +2788,43 @@ export interface components {
         /** Settings */
         Settings: {
             /**
+             * EV charger control (experimental)
+             * @default {
+             *       "decide_offset_s": 8,
+             *       "entities": {
+             *         "automation": "",
+             *         "car_soc_sensor": "sensor.model_3_usable_battery_level",
+             *         "charge_mode_select": "input_select.ev_charge_mode",
+             *         "charging_state_sensor": "sensor.abb_terra_ac_charger_charging_state_raw",
+             *         "current_limit_number": "number.abb_terra_ac_charger_charging_current_limit",
+             *         "deferrable_sensor": "sensor.p_deferrable0",
+             *         "emhass_option": "EMHASS",
+             *         "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
+             *         "max_solar_current_number": "input_number.ev_max_solar_current",
+             *         "pv_potential_sensor": "sensor.potential_pv_power_advanced",
+             *         "pv_power_sensor": "sensor.sofar_pv_power_total_watt",
+             *         "solar_option": "Excess Solar",
+             *         "start_button": "button.abb_terra_ac_charger_start_charging",
+             *         "stop_button": "button.abb_terra_ac_charger_stop_charging",
+             *         "target_soc_number": "input_number.ev_target_soc"
+             *       },
+             *       "limits": {
+             *         "compare_delay_s": 8,
+             *         "compare_window_s": 20,
+             *         "max_current_a": 16,
+             *         "min_current_a": 6,
+             *         "pv_potential_gap_w": 2000,
+             *         "pv_stale_s": 600,
+             *         "soc_compare_window_s": 90,
+             *         "soc_for_s": 300,
+             *         "w_per_amp": 690
+             *       },
+             *       "mode": "off",
+             *       "tick_offset_s": 55
+             *     }
+             */
+            charger: components["schemas"]["Charger"];
+            /**
              * EMHASS
              * @default {
              *       "base_url": "",
@@ -2671,6 +2971,7 @@ export interface components {
             logging: components["schemas"]["Logging"];
             /**
              * @default {
+             *       "mobile_service": "",
              *       "persistent": false
              *     }
              */
@@ -2810,6 +3111,15 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** SocTracking */
+        SocTracking: {
+            /** Due At */
+            due_at: string | null;
+            /** Fired */
+            fired: boolean;
+            /** Since */
+            since: string | null;
+        };
         /** StatusInfo */
         StatusInfo: {
             /** Actor */
@@ -2946,6 +3256,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    charger_status_api_charger_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargerStatus"];
+                };
+            };
+        };
+    };
+    charger_decide_api_charger_decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStarted"];
+                };
+            };
+        };
+    };
     hand_back_api_driver_hand_back_post: {
         parameters: {
             query?: never;

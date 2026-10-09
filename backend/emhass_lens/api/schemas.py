@@ -556,6 +556,23 @@ class InverterStatus(BaseModel):
     agreement_7d: Agreement
 
 
+class SocTracking(BaseModel):
+    since: str | None
+    fired: bool
+    due_at: str | None
+
+
+class ChargerStatus(BaseModel):
+    mode: str
+    last: dict[str, Any] | None
+    last_compare: dict[str, Any] | None
+    last_tick: dict[str, Any] | None
+    soc: SocTracking
+    preconditions: str | None
+    agreement_24h: Agreement
+    agreement_7d: Agreement
+
+
 class SetupStep(BaseModel):
     key: str
     title: str

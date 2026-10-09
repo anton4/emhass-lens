@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, query } from './client'
 import type {
+  ChargerStatus,
   EmhassStatus,
   EntityOption,
   InputsResponse,
@@ -41,6 +42,7 @@ export const keys = {
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
   outputs: ['outputs'] as const,
   inverter: ['inverter'] as const,
+  charger: ['charger'] as const,
   setup: ['setup'] as const,
 }
 
@@ -165,6 +167,11 @@ export function useOutputs() {
 /** Inverter control: mode, preconditions, the last decision and comparison, agreement. */
 export function useInverter() {
   return useQuery({ queryKey: keys.inverter, queryFn: () => api.get<InverterStatus>('/api/inverter'), refetchInterval: 30_000 })
+}
+
+/** EV charger control: mode, preconditions, the last decision, comparison and minute check, agreement. */
+export function useCharger() {
+  return useQuery({ queryKey: keys.charger, queryFn: () => api.get<ChargerStatus>('/api/charger'), refetchInterval: 30_000 })
 }
 
 export function useSetup() {

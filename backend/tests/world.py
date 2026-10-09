@@ -56,6 +56,7 @@ class World:
     ha_states: dict[str, dict[str, Any]] = field(default_factory=dict)
     ha_services: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     ha_events: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    failing_services: set[str] = field(default_factory=set)  # "domain/service" calls that answer 500
     clock_now: Any = None  # callable returning "now" for EMHASS timestamps
     supervisor_lists_addons: bool = False  # the default App role may not list Apps
 
@@ -134,7 +135,9 @@ class World:
             self.ha_services.append((path.removeprefix("/api/services/"), body))
             domain_service = path.removeprefix("/api/services/")
             entity = body.get("entity_id")
-            if domain_service == "number/set_value" and entity:
+            if domain_service in self.failing_services:
+                return httpx.Response(500, text="service failed")
+            if domain_service in ("number/set_value", "input_number/set_value") and entity:
                 self.set_state(entity, float(body["value"]))
             if domain_service == "input_select/select_option" and entity:
                 self.set_state(entity, body["option"])

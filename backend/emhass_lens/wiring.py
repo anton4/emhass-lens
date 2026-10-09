@@ -14,6 +14,7 @@ from emhass_lens.container import Container
 from emhass_lens.scheduler.core import Job, JobContext
 from emhass_lens.scheduler.triggers import Dynamic, Manual, Periodic, QuarterHour
 from emhass_lens.services import health_rules
+from emhass_lens.services.charger import ChargerService
 from emhass_lens.services.emhass import EmhassService
 from emhass_lens.services.external import ExternalControlService
 from emhass_lens.services.forecasts import ForecastService
@@ -53,6 +54,7 @@ def build(c: Container) -> None:
     x["outputs"] = OutputService(c)
     x["external"] = ExternalControlService(c)
     x["inverter"] = InverterService(c)
+    x["charger"] = ChargerService(c)
     x["prices"].load()
     x["problems"].load()
     x["status_providers"] = {
@@ -68,7 +70,13 @@ def build(c: Container) -> None:
 def watched_entities(c: Container) -> set[str]:
     x = c.extras
     settings = c.settings.current
-    ids = x["inputs"].entities() | x["pv"].entities() | x["inverter"].entities() | x["external"].entities()
+    ids = (
+        x["inputs"].entities()
+        | x["pv"].entities()
+        | x["inverter"].entities()
+        | x["external"].entities()
+        | x["charger"].entities()
+    )
     if settings.forecast.source == "fi_ha_entity":
         ids.add(settings.forecast.fi.entity)
     if settings.parity.legacy_auto_mpc_switch:
@@ -227,6 +235,51 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="charger.tick",
+            title="EV charger check",
+            description="Every minute: Excess Solar, the target-SoC clock and the charger's state (dry run: records "
+            "only when something is to be done).",
+            trigger=Periodic(60, settings.charger.tick_offset_s),
+            func=x["charger"].tick_job,
+            record=False,
+            grace=timedelta(minutes=2),
+        )
+    )
+    s.add(
+        Job(
+            id="charger.soc_stop",
+            title="EV target SoC stop",
+            description="Fires when the car's SoC has been at the target for the holding time.",
+            trigger=Dynamic(x["charger"].next_soc_stop, "When the car's SoC has held at the target long enough"),
+            func=x["charger"].soc_stop_job,
+            record=False,
+            grace=timedelta(minutes=2),
+        )
+    )
+    s.add(
+        Job(
+            id="charger.decide",
+            title="EV charger decision",
+            description="Decides what the charger should do, like the HA automation (dry run: records only).",
+            trigger=QuarterHour(settings.charger.decide_offset_s),
+            func=x["charger"].decide_job,
+            record=x["charger"].should_record_decide,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
+            id="charger.compare",
+            title="EV charger comparison",
+            description="Dry run: compares a decision with what the HA automation did to the charger.",
+            trigger=Dynamic(x["charger"].next_compare, "A few seconds after each dry-run decision"),
+            func=x["charger"].compare_job,
+            record=x["charger"].compare_job_active,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
             id="external.resume",
             title="Resume after a market session",
             description="Re-applies the plan right after a market session (e.g. Qilowatt mFRR) hands the inverter "
@@ -317,8 +370,16 @@ def subscribe(c: Container) -> None:
 
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
-    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "external_control"), rewatch)
+    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "charger", "external_control"), rewatch)
     c.settings.subscribe("external_control", x["external"].on_settings)
+
+    def on_charger_times(old: Settings, new: Settings, paths: list[str]) -> None:
+        c.scheduler.retime("charger.tick", Periodic(60, new.charger.tick_offset_s))
+        c.scheduler.retime("charger.decide", QuarterHour(new.charger.decide_offset_s))
+        c.scheduler.retime("charger.soc_stop")
+        c.scheduler.retime("charger.compare")
+
+    c.settings.subscribe(("charger.tick_offset_s", "charger.decide_offset_s", "charger.mode"), on_charger_times)
 
     def on_inverter_times(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.retime("inverter.decide", QuarterHour(new.inverter.decide_offset_s))
@@ -334,6 +395,13 @@ def subscribe(c: Container) -> None:
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
     ha.on_state(lambda entity_id: entity_id == c.settings.current.external_control.entity, x["external"].on_state)
+    charger_entities = lambda: c.settings.current.charger.entities  # noqa: E731
+    ha.on_state(lambda entity_id: entity_id == charger_entities().deferrable_sensor, x["charger"].on_deferrable_state)
+    ha.on_state(
+        lambda entity_id: entity_id in (charger_entities().car_soc_sensor, charger_entities().target_soc_number),
+        x["charger"].on_soc_state,
+    )
+    ha.on_state(lambda entity_id: entity_id == charger_entities().current_limit_number, x["charger"].on_limit_state)
     rewatch()
 
 

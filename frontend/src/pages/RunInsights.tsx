@@ -9,7 +9,15 @@ import { InputsView } from '../components/Readings'
 import { ValidationList } from '../components/Validation'
 import { PublishEventView } from '../components/PublishEventView'
 import { AgreeHeadline, CallsList, CompareTable, DecisionView } from '../components/InverterViews'
+import { ChargerDecisionView } from '../components/ChargerViews'
 import type { DecisionArtifact, InverterCall, InverterComparison } from '../lib/inverter'
+import {
+  CHARGER_FIELD_LABELS,
+  chargerFieldValue,
+  type ChargerCall,
+  type ChargerComparison,
+  type ChargerDecisionArtifact,
+} from '../lib/charger'
 import { formatDuration } from '../lib/format'
 
 function useArtifact<T>(runId: number, kind: string, enabled: boolean) {
@@ -44,6 +52,10 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
   const calls = useArtifact<InverterCall[]>(runId, 'calls', has('calls'))
   const readback = useArtifact<InverterComparison>(runId, 'readback', has('readback'))
   const comparison = useArtifact<InverterComparison>(runId, 'comparison', has('comparison'))
+  const chargerDecision = useArtifact<ChargerDecisionArtifact>(runId, 'charger_decision', has('charger_decision'))
+  const chargerCalls = useArtifact<ChargerCall[]>(runId, 'charger_calls', has('charger_calls'))
+  const chargerReadback = useArtifact<ChargerComparison>(runId, 'charger_readback', has('charger_readback'))
+  const chargerComparison = useArtifact<ChargerComparison>(runId, 'charger_comparison', has('charger_comparison'))
 
   return (
     <>
@@ -152,6 +164,78 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
               <AgreeHeadline comparison={comparison.data} what="Automation vs EMHASS Lens" />
             </p>
             <CompareTable comparison={comparison.data} />
+          </div>
+        </section>
+      )}
+      {chargerDecision.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Charger decision</h2>
+            <span className="muted">
+              {chargerDecision.data.trigger.replace('_', ' ')} · EV power from {chargerDecision.data.source}
+            </span>
+          </div>
+          <div className="panel-body">
+            {chargerDecision.data.blocked && (
+              <div className="notice" data-color="amber" role="note">
+                Not in control: {chargerDecision.data.blocked}. Nothing was done; this is what it would have done.
+              </div>
+            )}
+            <ChargerDecisionView
+              decision={chargerDecision.data.decision}
+              inputs={chargerDecision.data.inputs}
+              observedBefore={chargerDecision.data.observed_before}
+            />
+          </div>
+        </section>
+      )}
+      {chargerCalls.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>{chargerCalls.data.some((c) => c.dry_run) ? 'Would call' : 'Applied to the charger'}</h2>
+            <span className="muted">Home Assistant service calls</span>
+          </div>
+          <CallsList calls={chargerCalls.data} nothing="No calls." />
+        </section>
+      )}
+      {chargerReadback.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Read back</h2>
+            <AgreeHeadline comparison={chargerReadback.data} what="The charger shows the target" />
+          </div>
+          <CompareTable
+            comparison={chargerReadback.data}
+            observedLabel="Charger shows"
+            labels={CHARGER_FIELD_LABELS}
+            format={chargerFieldValue}
+          />
+        </section>
+      )}
+      {chargerComparison.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Compared with the automation</h2>
+            {chargerComparison.data.decision_run_id !== undefined && (
+              <Link to={`/runs/${chargerComparison.data.decision_run_id}`}>
+                decision run {chargerComparison.data.decision_run_id}
+              </Link>
+            )}
+          </div>
+          <div className="panel-body">
+            {chargerComparison.data.unexpected ? (
+              <p style={{ marginTop: 0 }}>
+                The automation set the current limit from {chargerComparison.data.unexpected.from} A to{' '}
+                {chargerComparison.data.unexpected.to} A while EMHASS Lens had decided nothing.
+              </p>
+            ) : (
+              <>
+                <p style={{ marginTop: 0 }}>
+                  <AgreeHeadline comparison={chargerComparison.data} what="Automation vs EMHASS Lens" />
+                </p>
+                <CompareTable comparison={chargerComparison.data} labels={CHARGER_FIELD_LABELS} format={chargerFieldValue} />
+              </>
+            )}
           </div>
         </section>
       )}

@@ -102,6 +102,25 @@ When an aggregator such as Qilowatt takes the inverter for a Kratt or Fusebox ac
 
 Each resume is recorded as a run of *Resume after a market session*.
 
+## EV charger control (experimental)
+
+EMHASS Lens can drive an EV charger the way the automation "EV Charging: Combined EMHASS & Excess Solar" does, branch for branch. Your charge-mode helper stays the control:
+
+- **EMHASS**: follow the plan's EV power (`P_deferrable0`): start charging when the car is plugged in and the plan asks for power, adjust the current while charging, pause when the plan asks for none. The current is the planned power ÷ 690 W/A, at least 6 A and at most your maximum current.
+- **Excess Solar**: every minute, charge with what the PV leaves over after the house load (the potential PV when the inverter is curtailing), rounded down to whole amps; never raise the current on PV data older than 10 minutes.
+- **Manual**: nothing.
+- In any mode: when the car's SoC has been at or above the target SoC for 5 minutes, stop charging, set the limit to 0 A, send a phone message and put the target back to 100 %.
+
+Settings → **EV charger control** holds the entities (charger state, current limit, start/stop buttons, car SoC, target SoC, maximum current, PV, house load) and the limits. Settings → **Notifications → Mobile notify service** (e.g. `notify.mobile_app_my_phone`) is where the phone messages go; leave it empty for none.
+
+| Mode | What happens |
+|---|---|
+| Off | Nothing is scheduled. "Decide now" on the EV charger page still shows what it would do. |
+| Dry run | Every decision is recorded with the calls it would make and the message it would send, and a few seconds later the charger is read to see whether the automation did the same. The EV charger page shows the agreement. The charger is never touched. |
+| Live | EMHASS Lens presses start/stop, sets the current limit and the target SoC, sends the message and reads the charger back. |
+
+**Moving the automation over:** run **Dry run** for about a week with the automation still on and watch the agreement. Then set the automation's entity under Charger entities → *Home Assistant automation (interlock)*, turn the automation off and switch to **Live**: EMHASS Lens refuses to act while that automation is on, so the two never both drive the charger. To go back, set the mode to Off and turn the automation on again.
+
 ## App options (Configuration tab)
 
 | Option | Meaning |

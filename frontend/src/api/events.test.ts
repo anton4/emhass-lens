@@ -15,4 +15,8 @@ describe('familiesForJob', () => {
     expect(familiesForJob('inverter.decide')).toEqual(['inverter'])
     expect(familiesForJob('inverter.compare')).toEqual(['inverter'])
   })
+  it('refreshes the charger status after its runs', () => {
+    expect(familiesForJob('charger.decide')).toEqual(['charger'])
+    expect(familiesForJob('charger.compare')).toEqual(['charger'])
+  })
 })

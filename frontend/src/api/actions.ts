@@ -73,6 +73,18 @@ export function useMlAction() {
   })
 }
 
+/** Decide for the EV charger now (applied only in live mode); answers with the run id. */
+export function useChargerDecide() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<RunStarted>('/api/charger/decide', {}),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.charger })
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  })
+}
+
 /** Decide the inverter settings for the current slot now (applied only in live mode); answers with the run id. */
 export function useInverterDecide() {
   const queryClient = useQueryClient()
