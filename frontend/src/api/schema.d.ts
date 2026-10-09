@@ -127,7 +127,8 @@ export interface paths {
         };
         /**
          * Ha Entities
-         * @description Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s).
+         * @description Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s). Only for
+         *     requests that may change settings: the optional direct port has no login and mustn't expose every state.
          */
         get: operations["ha_entities_api_ha_entities_get"];
         put?: never;

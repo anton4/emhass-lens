@@ -5269,7 +5269,7 @@
     },
     "/api/ha/entities": {
       "get": {
-        "description": "Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s).",
+        "description": "Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s). Only for\nrequests that may change settings: the optional direct port has no login and mustn't expose every state.",
         "operationId": "ha_entities_api_ha_entities_get",
         "parameters": [
           {
