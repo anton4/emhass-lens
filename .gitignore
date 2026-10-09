@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+backend/data/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Local runtime data and builds
+data/
+build/
+*.db
+*.db-wal
+*.db-shm
+.env
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

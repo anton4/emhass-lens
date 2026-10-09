@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.21"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv python install 3.14
+      - run: uv sync --frozen
+      - name: Lint
+        run: |
+          uv run ruff check --output-format github .
+          uv run ruff format --check .
+      - name: Type check
+        run: uv run pyright
+      - name: Tests
+        run: uv run pytest -q
+      - name: OpenAPI schema is up to date
+        run: |
+          uv run python -m emhass_lens.openapi_dump ../frontend/src/api/openapi.json
+          git diff --exit-code ../frontend/src/api/openapi.json || {
+            echo "::error::frontend/src/api/openapi.json is stale: run 'uv run python -m emhass_lens.openapi_dump ../frontend/src/api/openapi.json' and 'npm run gen:api'"
+            exit 1
+          }
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Generated API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.d.ts || {
+            echo "::error::src/api/schema.d.ts is stale: run 'npm run gen:api'"
+            exit 1
+          }
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  addon:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: App configuration lint
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: ./emhass_lens

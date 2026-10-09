@@ -1,0 +1,17 @@
+# Standalone mode: run EMHASS Lens next to (not inside) Home Assistant, e.g. for development.
+# Copy .env.example to .env, fill in HA_URL and a long-lived access token, then: docker compose up --build
+services:
+  emhass-lens:
+    build: .
+    container_name: emhass-lens
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=${TZ:-Europe/Tallinn}
+      - HA_URL=${HA_URL}
+      - HA_TOKEN=${HA_TOKEN}
+      - EMHASS_LENS_LOG_LEVEL=${EMHASS_LENS_LOG_LEVEL:-info}
+      - EMHASS_LENS_READ_ONLY=${EMHASS_LENS_READ_ONLY:-false}
+    restart: unless-stopped

@@ -1,0 +1,7 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Starting log level. Settings → Logging in the App can change it live, also per component.
+  safe_mode:
+    name: Safe mode
+    description: Start with every scheduled job stopped and EMHASS mode forced off. Use it if the App misbehaves after a settings change, then fix the settings in the App and turn this off again.
