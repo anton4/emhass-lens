@@ -4,6 +4,7 @@ import type {
   EmhassStatus,
   EntityOption,
   InputsResponse,
+  InverterStatus,
   JobInfo,
   LegacyPreview,
   OutputsStatus,
@@ -37,6 +38,7 @@ export const keys = {
   legacy: ['legacy-preview'] as const,
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
   outputs: ['outputs'] as const,
+  inverter: ['inverter'] as const,
 }
 
 export function useStatus() {
@@ -139,4 +141,9 @@ export function useLatestRun(job: string) {
 /** MQTT entities and the last plan-published event. */
 export function useOutputs() {
   return useQuery({ queryKey: keys.outputs, queryFn: () => api.get<OutputsStatus>('/api/outputs'), refetchInterval: 30_000 })
+}
+
+/** Inverter control: mode, preconditions, the last decision and comparison, agreement. */
+export function useInverter() {
+  return useQuery({ queryKey: keys.inverter, queryFn: () => api.get<InverterStatus>('/api/inverter'), refetchInterval: 30_000 })
 }

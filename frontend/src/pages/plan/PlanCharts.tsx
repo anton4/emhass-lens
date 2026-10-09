@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { PlanResponse, PlanRow } from '../../api/types'
+import type { PlanPrice, PlanResponse, PlanRow } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { alignTo, deferrableColumns, hasColumn, stepSeries } from '../../lib/plan'
 import { formatPower } from '../../lib/units'
@@ -8,13 +8,6 @@ const SYNC = 'plan'
 
 function kwTick(v: number): string {
   return `${(v / 1000).toFixed(Math.abs(v) < 10_000 ? 1 : 0)} kW`
-}
-
-interface PlanPrice {
-  start: string
-  import_price: number
-  export_price: number
-  origin: string
 }
 
 /** Contiguous forecast ranges of plan prices (unix seconds). */
@@ -99,7 +92,7 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
   }, [rows, previous])
 
   const prices = useMemo(() => {
-    const slots = data.prices as unknown as PlanPrice[]
+    const slots = data.prices
     if (slots.length === 0) return null
     const x = slots.map((p) => Date.parse(p.start) / 1000)
     const imp: (number | null)[] = slots.map((p) => p.import_price * 100)

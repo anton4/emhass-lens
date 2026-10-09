@@ -2,6 +2,7 @@ import { HashRouter, Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { HealthPage } from './pages/HealthPage'
 import { InputsPage } from './pages/InputsPage'
+import { InverterPage } from './pages/InverterPage'
 import { LogsPage } from './pages/LogsPage'
 import { PlanPage } from './pages/PlanPage'
 import { RunDetailPage } from './pages/RunDetailPage'
@@ -15,6 +16,7 @@ export function App() {
         <Route element={<Layout />}>
           <Route index element={<PlanPage />} />
           <Route path="inputs" element={<InputsPage />} />
+          <Route path="inverter" element={<InverterPage />} />
           <Route path="runs" element={<RunsPage />} />
           <Route path="runs/:id" element={<RunDetailPage />} />
           <Route path="logs" element={<LogsPage />} />

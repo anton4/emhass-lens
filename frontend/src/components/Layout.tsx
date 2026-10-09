@@ -9,9 +9,10 @@ import { ModeSwitch } from './ModeSwitch'
 
 const UI_VERSION = import.meta.env.VITE_APP_VERSION || 'dev'
 
-const NAV = [
+const NAV: { to: string; label: string; end?: boolean; tag?: string }[] = [
   { to: '/', label: 'Plan', end: true },
   { to: '/inputs', label: 'Inputs' },
+  { to: '/inverter', label: 'Inverter', tag: 'experimental' },
   { to: '/runs', label: 'Runs' },
   { to: '/logs', label: 'Logs' },
   { to: '/health', label: 'Health' },
@@ -79,6 +80,7 @@ export function Layout() {
           {NAV.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
               {item.label}
+              {item.tag && <span className="nav-tag">{item.tag}</span>}
             </NavLink>
           ))}
         </nav>

@@ -11,4 +11,8 @@ describe('familiesForJob', () => {
     expect(familiesForJob('ml.fit')).toEqual(['problems'])
     expect(familiesForJob('nordpool.poll')).toEqual(['prices'])
   })
+  it('refreshes the inverter status after decide and compare runs', () => {
+    expect(familiesForJob('inverter.decide')).toEqual(['inverter'])
+    expect(familiesForJob('inverter.compare')).toEqual(['inverter'])
+  })
 })

@@ -59,6 +59,12 @@ export type DriverResult = S['DriverResult']
 export type DriverRequest = S['DriverRequest']
 export type MlRequest = S['MlRequest']
 export type OutputsStatus = S['OutputsStatus']
+/** The `emhass_lens_plan_published` event (also the `event` artifact of an emhass.publish run). */
+export type PublishEvent = S['PublishEvent']
+export type PlanPrice = S['PlanPrice']
+export type InverterStatus = S['InverterStatus']
+export type Agreement = S['Agreement']
+export type InverterSettings = S['Inverter']
 export type SklearnModel = S['EmhassMl']['sklearn_model']
 
 // ---- Run artifacts: the API returns these as free-form JSON (see backend services/*.py) ----
@@ -102,19 +108,6 @@ export interface ParityReport {
   checked_at: string | null
   ok: boolean
   sections: ParitySection[]
-}
-
-/** The `emhass_lens_plan_published` event (also the `event` artifact of an emhass.publish run). */
-export interface PublishEvent {
-  slot_start: string | null
-  slot_end: string | null
-  plan_generated_at: string | null
-  run_id: number | null
-  current: Partial<Record<
-    'p_batt_w' | 'p_grid_w' | 'p_pv_w' | 'p_pv_curtailment_w' | 'p_load_w' | 'soc_opt' | 'p_deferrable0_w' | 'p_deferrable1_w',
-    number | null
-  >>
-  price?: { import: number; export: number }
 }
 
 export type PlanRow = Record<string, unknown> & { timestamp?: string }

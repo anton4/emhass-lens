@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { api } from '../api/client'
 import type { EmhassCheck, ExplainArtifact, InputsSnapshot, Issue, ParityReport, PublishEvent } from '../api/types'
 import { ChecksTable } from '../components/ChecksTable'
@@ -7,6 +8,8 @@ import { ParityView } from '../components/ParityView'
 import { InputsView } from '../components/Readings'
 import { ValidationList } from '../components/Validation'
 import { PublishEventView } from '../components/PublishEventView'
+import { AgreeHeadline, CallsList, CompareTable, DecisionView } from '../components/InverterViews'
+import type { DecisionArtifact, InverterCall, InverterComparison } from '../lib/inverter'
 import { formatDuration } from '../lib/format'
 
 function useArtifact<T>(runId: number, kind: string, enabled: boolean) {
@@ -37,6 +40,10 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
   const checks = useArtifact<EmhassCheck[]>(runId, 'checks', has('checks'))
   const event = useArtifact<PublishEvent>(runId, 'event', has('event'))
   const response = useArtifact<ActionResponse>(runId, 'response', has('response'))
+  const decision = useArtifact<DecisionArtifact>(runId, 'decision', has('decision'))
+  const calls = useArtifact<InverterCall[]>(runId, 'calls', has('calls'))
+  const readback = useArtifact<InverterComparison>(runId, 'readback', has('readback'))
+  const comparison = useArtifact<InverterComparison>(runId, 'comparison', has('comparison'))
 
   return (
     <>
@@ -94,6 +101,60 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
         </section>
       )}
       {response.data && <ResponsePanel job={job} response={response.data} />}
+      {decision.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Inverter decision</h2>
+            <span className="muted">from {decision.data.source}</span>
+          </div>
+          <div className="panel-body">
+            {decision.data.blocked && (
+              <div className="notice" data-color="amber" role="note">
+                Not in control: {decision.data.blocked}. Nothing was applied; this is what it would have set.
+              </div>
+            )}
+            <DecisionView
+              decision={decision.data.decision}
+              values={decision.data.values}
+              observedBefore={decision.data.observed_before}
+            />
+          </div>
+        </section>
+      )}
+      {calls.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Applied to the inverter</h2>
+            <span className="muted">Home Assistant service calls</span>
+          </div>
+          <CallsList calls={calls.data} />
+        </section>
+      )}
+      {readback.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Read back</h2>
+            <AgreeHeadline comparison={readback.data} what="The inverter shows the targets" />
+          </div>
+          <CompareTable comparison={readback.data} observedLabel="Inverter shows" />
+        </section>
+      )}
+      {comparison.data && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Compared with the automation</h2>
+            {comparison.data.decision_run_id !== undefined && (
+              <Link to={`/runs/${comparison.data.decision_run_id}`}>decision run {comparison.data.decision_run_id}</Link>
+            )}
+          </div>
+          <div className="panel-body">
+            <p style={{ marginTop: 0 }}>
+              <AgreeHeadline comparison={comparison.data} what="Automation vs EMHASS Lens" />
+            </p>
+            <CompareTable comparison={comparison.data} />
+          </div>
+        </section>
+      )}
       {parity.data && (
         <section className="panel">
           <div className="panel-head">

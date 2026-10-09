@@ -1,6 +1,5 @@
 import { Link } from 'react-router'
 import { useOutputs } from '../../api/queries'
-import type { PublishEvent } from '../../api/types'
 import { JsonViewer } from '../../components/JsonViewer'
 import { LabelledLamp } from '../../components/Lamp'
 import { ErrorNotice } from '../../components/PageHead'
@@ -18,7 +17,7 @@ export function OutputsCard() {
       : o.connected
         ? { color: 'green' as const, text: 'MQTT connected' }
         : { color: 'amber' as const, text: 'MQTT not connected' }
-  const event = (o?.last_event ?? null) as PublishEvent | null
+  const event = o?.last_event ?? null
 
   return (
     <section className="panel">

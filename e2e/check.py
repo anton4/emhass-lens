@@ -190,13 +190,51 @@ def main() -> int:
                 f"{pub['summary']}; sensor.p_batt_forecast={batt}",
             )
 
+            if legacy:
+                switch = "switch.nordpool_ee_prices_emhass_auto_mpc"
+                ha.post("/api/services/switch/turn_on", json={"entity_id": switch})
+                wait_for(lambda: http.get("/api/status").json()["driver"] in ("legacy", "both"), 15)
+                rev = http.get("/api/settings").json()["revision"]
+                took = http.post("/api/driver/take-over", json={"base_revision": rev}).json()
+                check(
+                    "takes over from the HACS integration (its Auto MPC switch turns off)",
+                    bool(took.get("ok")) and ha.get(f"/api/states/{switch}").json()["state"] == "off",
+                    took,
+                )
+                back = http.post("/api/driver/hand-back", json={}).json()
+                check(
+                    "hands back to the HACS integration",
+                    bool(back.get("ok")) and ha.get(f"/api/states/{switch}").json()["state"] == "on",
+                    back,
+                )
+                ha.post("/api/services/switch/turn_off", json={"entity_id": switch})
+                patch(http, {"emhass": {"mode": "live"}}, "e2e: live again")
+
+            for entity, value in {
+                "select.sofar_charger_use_mode": "Passive Mode",
+                "input_boolean.emhass_automation": "on",
+                "input_select.emhass_passive_state": "Self-use battery or PV",
+                "number.sofar_passive_mode_grid_power": "0",
+                "number.sofar_passive_mode_battery_power_max": "20000",
+                "number.sofar_passive_mode_battery_power_min": "-20000",
+                "number.sofar_feedin_max_power": "15500",
+            }.items():
+                ha.post(f"/api/states/{entity}", json={"state": value})
+            patch(http, {"inverter": {"mode": "dry_run"}}, "e2e: inverter dry run")
+            time.sleep(1)
+            decided = run_job(http, "inverter.decide")
+            check(
+                "decides the inverter settings in dry run from EMHASS's published sensors",
+                decided["outcome"] == "dry_run",
+                decided["summary"],
+            )
+            patch(http, {"inverter": {"mode": "off"}}, "e2e: inverter off")
+
             patch(
                 http, {"outputs": {"mqtt_enabled": True, "broker": {"host": "localhost", "port": 11883}}}, "e2e: MQTT"
             )
             entity = wait_for(
-                lambda: (
-                    (r := ha.get("/api/states/sensor.emhass_lens_import_price")).status_code == 200 and r.json()
-                ),
+                lambda: (r := ha.get("/api/states/sensor.emhass_lens_import_price")).status_code == 200 and r.json(),
                 20,
             )
             check(

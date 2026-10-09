@@ -72,3 +72,15 @@ export function useMlAction() {
     },
   })
 }
+
+/** Decide the inverter settings for the current slot now (applied only in live mode); answers with the run id. */
+export function useInverterDecide() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<RunStarted>('/api/inverter/decide', {}),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.inverter })
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  })
+}

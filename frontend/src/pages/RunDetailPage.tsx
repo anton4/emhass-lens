@@ -154,6 +154,8 @@ export function RunDetailPage() {
 
 /** Runs that aren't scheduler jobs (so they aren't in /api/jobs). */
 const EXTRA_JOB_TITLES: Record<string, string> = {
+  'inverter.decide': 'Inverter decision',
+  'inverter.compare': 'Inverter comparison',
   'driver.take_over': 'Take over from the HACS integration',
   'driver.hand_back': 'Hand back to the HACS integration',
 }
