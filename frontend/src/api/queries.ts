@@ -6,6 +6,7 @@ import type {
   InputsResponse,
   JobInfo,
   LegacyPreview,
+  OutputsStatus,
   PlanResponse,
   PricesResponse,
   ProblemsResponse,
@@ -35,6 +36,7 @@ export const keys = {
   entities: (domains: string) => ['ha-entities', domains] as const,
   legacy: ['legacy-preview'] as const,
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
+  outputs: ['outputs'] as const,
 }
 
 export function useStatus() {
@@ -132,4 +134,9 @@ export function useLatestRun(job: string) {
     queryKey: keys.latestRun(job),
     queryFn: async () => (await api.get<RunSummary[]>(`/api/runs${query({ job, limit: 1 })}`))[0] ?? null,
   })
+}
+
+/** MQTT entities and the last plan-published event. */
+export function useOutputs() {
+  return useQuery({ queryKey: keys.outputs, queryFn: () => api.get<OutputsStatus>('/api/outputs'), refetchInterval: 30_000 })
 }

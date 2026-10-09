@@ -129,6 +129,7 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
           syncKey={SYNC}
           yFormat={kwTick}
           now={nowS}
+          timeZone={data.timezone}
           height={240}
         />
       </section>
@@ -143,6 +144,7 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             yRange={[0, 100]}
             yFormat={(v) => `${v.toFixed(0)} %`}
             now={nowS}
+          timeZone={data.timezone}
             height={170}
           />
         </section>
@@ -158,6 +160,7 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             yFormat={(v) => `${v.toFixed(0)} c`}
             bands={prices.bands}
             now={nowS}
+          timeZone={data.timezone}
             height={170}
           />
           {prices.bands.length > 0 && <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>}

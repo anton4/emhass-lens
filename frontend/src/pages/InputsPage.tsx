@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useInputs, usePrices } from '../api/queries'
-import type { ForecastStatus, HaStatus, InputsSnapshot, NordpoolStatus } from '../api/types'
+import type { HaStatus } from '../api/types'
 import { LabelledLamp, Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { InputsView } from '../components/Readings'
@@ -34,8 +34,8 @@ export function InputsPage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const day = chosen && days.includes(chosen) ? chosen : days.includes(today) ? today : (days[0] ?? null)
   const daySlots = useMemo(() => (data && day ? slotsOfDay(data.slots, day, tz) : []), [data, day, tz])
-  const nordpool = data?.nordpool as unknown as NordpoolStatus | undefined
-  const forecast = data?.forecast as unknown as ForecastStatus | undefined
+  const nordpool = data?.nordpool
+  const forecast = data?.forecast
 
   return (
     <>
@@ -164,11 +164,11 @@ export function InputsPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>Values from Home Assistant</h2>
-          {inputs.data && <HaLamp ha={inputs.data.home_assistant as unknown as HaStatus} />}
+          {inputs.data && <HaLamp ha={inputs.data.home_assistant} />}
         </div>
         <div className="panel-body">
           {inputs.data ? (
-            <InputsView snapshot={inputs.data.snapshot as unknown as InputsSnapshot} />
+            <InputsView snapshot={inputs.data.snapshot} />
           ) : (
             <span className="muted">Loading…</span>
           )}

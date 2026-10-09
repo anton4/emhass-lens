@@ -1,15 +1,30 @@
 // Formatting helpers. Timestamps from the API are ISO 8601 UTC; they are shown in the browser's
-// local time (Home Assistant users are in the same timezone as their installation).
+// local time (Home Assistant users are in the same timezone as their installation), or in an explicit
+// timezone (e.g. the bidding zone's, from the API) when one is passed.
 
-const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-})
-const dayFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+type FormatKind = 'time' | 'dateTime' | 'day' | 'slot' | 'slotDay' | 'dayKey'
+
+const OPTIONS: Record<FormatKind, Intl.DateTimeFormatOptions> = {
+  time: { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false },
+  dateTime: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false },
+  day: { month: 'short', day: 'numeric' },
+  slot: { hour: '2-digit', minute: '2-digit', hour12: false },
+  slotDay: { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false },
+  dayKey: { year: 'numeric', month: '2-digit', day: '2-digit' },
+}
+
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+function fmt(kind: FormatKind, timeZone?: string): Intl.DateTimeFormat {
+  const key = `${kind}|${timeZone ?? ''}`
+  let f = formatters.get(key)
+  if (!f) {
+    // en-CA gives the sortable "2026-10-09" for day keys; display formats use the browser's locale
+    f = new Intl.DateTimeFormat(kind === 'dayKey' ? 'en-CA' : undefined, { ...OPTIONS[kind], timeZone })
+    formatters.set(key, f)
+  }
+  return f
+}
 
 export function parseTime(iso: string | null | undefined): Date | null {
   if (!iso) return null
@@ -17,20 +32,31 @@ export function parseTime(iso: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-function sameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+/** Calendar day of a moment in `timeZone` (browser time if omitted), e.g. "2026-10-09". */
+export function dayKey(d: Date, timeZone?: string): string {
+  return fmt('dayKey', timeZone).format(d)
+}
+
+function sameDay(a: Date, b: Date, timeZone?: string): boolean {
+  return dayKey(a, timeZone) === dayKey(b, timeZone)
 }
 
 /** "14:13:00" today, "Oct 8, 14:13:00" otherwise. */
-export function formatTime(iso: string | null | undefined, now: Date = new Date()): string {
+export function formatTime(iso: string | null | undefined, now: Date = new Date(), timeZone?: string): string {
   const d = parseTime(iso)
   if (!d) return '—'
-  return sameDay(d, now) ? timeFmt.format(d) : dateTimeFmt.format(d)
+  return sameDay(d, now, timeZone) ? fmt('time', timeZone).format(d) : fmt('dateTime', timeZone).format(d)
 }
 
-export function formatDay(iso: string | null | undefined): string {
+/** Always "14:13:00". */
+export function formatClock(iso: string | null | undefined, timeZone?: string): string {
   const d = parseTime(iso)
-  return d ? dayFmt.format(d) : '—'
+  return d ? fmt('time', timeZone).format(d) : '—'
+}
+
+export function formatDay(iso: string | null | undefined, timeZone?: string): string {
+  const d = parseTime(iso)
+  return d ? fmt('day', timeZone).format(d) : '—'
 }
 
 /** Milliseconds as "820 ms", "4.2 s", "2 min 05 s", "1 h 03 min". */
@@ -98,12 +124,9 @@ export function formatValue(value: unknown): string {
   return JSON.stringify(value)
 }
 
-const slotFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
-const slotDayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
-
-/** A quarter-hour slot start: "17:45" today, "Sat 17:45" on other days (24-hour, browser time). */
-export function formatSlot(iso: string | null | undefined, now: Date = new Date()): string {
+/** A quarter-hour slot start: "17:45" today, "Sat 17:45" on other days (24-hour). */
+export function formatSlot(iso: string | null | undefined, now: Date = new Date(), timeZone?: string): string {
   const d = parseTime(iso)
   if (!d) return '—'
-  return sameDay(d, now) ? slotFmt.format(d) : slotDayFmt.format(d)
+  return sameDay(d, now, timeZone) ? fmt('slot', timeZone).format(d) : fmt('slotDay', timeZone).format(d)
 }

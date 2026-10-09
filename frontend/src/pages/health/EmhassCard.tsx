@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { keys, useEmhass } from '../../api/queries'
-import type { DiscoveryAttempt, EmhassCheck, EmhassStatus, RunStarted } from '../../api/types'
+import type { EmhassStatus, RunStarted } from '../../api/types'
 import { ChecksTable } from '../../components/ChecksTable'
 import { LabelledLamp } from '../../components/Lamp'
 import { ErrorNotice } from '../../components/PageHead'
@@ -20,8 +20,8 @@ export function EmhassCard({ writable }: { writable: boolean }) {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.emhass }),
   })
   const e = emhass.data
-  const checks = (e?.checks ?? []) as unknown as EmhassCheck[]
-  const discovery = (e?.discovery ?? []) as unknown as DiscoveryAttempt[]
+  const checks = e?.checks ?? []
+  const discovery = e?.discovery ?? []
 
   return (
     <section className="panel">

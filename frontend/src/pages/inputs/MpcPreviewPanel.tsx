@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../../api/client'
-import type { Derived, ExplainSlot, InputsSnapshot, Issue, MpcPreview } from '../../api/types'
+import type { MpcPreview } from '../../api/types'
 import { DerivedFacts, ExplainTable } from '../../components/ExplainTable'
 import { JsonViewer } from '../../components/JsonViewer'
 import { ErrorNotice } from '../../components/PageHead'
@@ -35,13 +35,13 @@ export function MpcPreviewPanel() {
               Built at {formatTime(p.built_at)} in mode {p.mode.replace('_', ' ')}.
             </p>
             <h3 className="sub-head">Checks</h3>
-            <ValidationList issues={p.validation as unknown as Issue[]} />
+            <ValidationList issues={p.validation} />
             <h3 className="sub-head">Derived values</h3>
-            <DerivedFacts derived={p.derived as unknown as Derived} anchor={p.anchor} rounding={p.rounding} />
+            <DerivedFacts derived={p.derived} anchor={p.anchor} rounding={p.rounding} />
             <h3 className="sub-head">Inputs</h3>
-            <InputsView snapshot={p.inputs as unknown as InputsSnapshot} />
+            <InputsView snapshot={p.inputs} />
             <h3 className="sub-head">Explain: each position of the payload</h3>
-            <ExplainTable slots={p.explain as unknown as ExplainSlot[]} />
+            <ExplainTable slots={p.explain} />
             <div style={{ marginTop: 12 }}>
               <button type="button" className="quiet" aria-expanded={raw} onClick={() => setRaw((r) => !r)}>
                 {raw ? '▾' : '▸'} Raw payload

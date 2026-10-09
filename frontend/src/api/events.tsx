@@ -29,10 +29,12 @@ const POLL_MS = 10_000
 /** Which cached data a finished job may have changed. */
 // eslint-disable-next-line react-refresh/only-export-components
 export function familiesForJob(job: string): string[] {
-  if (job === 'emhass.plan_watch' || job === 'emhass.mpc') return ['plan', 'emhass']
+  if (job === 'emhass.plan_watch' || job === 'emhass.mpc') return ['plan', 'emhass', 'outputs']
+  if (job === 'emhass.publish') return ['plan', 'outputs']
   if (job === 'nordpool.poll' || job.startsWith('forecast.')) return ['prices']
   if (job.startsWith('emhass.')) return ['emhass']
-  if (job === 'parity.check') return []
+  if (job.startsWith('driver.')) return ['settings', 'emhass', 'outputs']
+  if (job.startsWith('ml.') || job === 'health.evaluate') return ['problems']
   return []
 }
 
@@ -69,8 +71,13 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: ['prices'] })
             void queryClient.invalidateQueries({ queryKey: keys.inputs })
             void queryClient.invalidateQueries({ queryKey: keys.emhass })
+            void queryClient.invalidateQueries({ queryKey: keys.outputs })
           } else if (name === 'plan') {
             void queryClient.invalidateQueries({ queryKey: keys.plan })
+            void queryClient.invalidateQueries({ queryKey: keys.outputs })
+          } else if (name === 'outputs') {
+            void queryClient.invalidateQueries({ queryKey: keys.outputs })
+            void queryClient.invalidateQueries({ queryKey: keys.status })
           } else if (name === 'prices') {
             void queryClient.invalidateQueries({ queryKey: ['prices'] })
             void queryClient.invalidateQueries({ queryKey: keys.inputs })
@@ -138,6 +145,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
         for (const family of familiesForJob(job)) invalidate(family)
       })
       source.addEventListener('plan.updated', () => invalidate('plan'))
+      source.addEventListener('plan.published', () => invalidate('plan'))
       for (const topic of ['problem.opened', 'problem.updated', 'problem.resolved']) {
         source.addEventListener(topic, () => invalidate('problems'))
       }

@@ -56,7 +56,7 @@ export function Layout() {
             <span className="mark-name">EMHASS Lens</span>
             <span className="mark-version">{s?.version ?? UI_VERSION}</span>
           </div>
-          <ModeSwitch mode={s?.emhass_mode} />
+          <ModeSwitch mode={s?.emhass_mode} writable={s?.writable} driver={s?.driver} safeMode={s?.safe_mode} />
           <div className="lamps" aria-label="Status">
             {s && (
               <span title={driverSpec(s.driver).explain}>

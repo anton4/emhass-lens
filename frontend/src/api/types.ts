@@ -34,77 +34,34 @@ export interface FieldError {
   msg: string
 }
 
-// ---- Shapes the backend returns inside free-form dicts (see backend services/*.py) ----
+// ---- Generated from the API's models ----
 
-/** One value read from Home Assistant (services/inputs.py describe()). */
-export interface Reading {
-  name: string
-  value: number | boolean | null
-  source: string
-  raw: unknown
-  age_s: number | null
-  transform: string | null
-  issue: string | null
-  explain: string
-}
+export type Reading = S['Reading']
+export type DeferrableDescription = S['DeferrableDescription']
+export type Issue = S['IssueOut']
+export type InputsSnapshot = S['InputsSnapshot']
+export type PricesSummary = S['PricesSummary']
+export type PvSummary = S['PvSummary']
+export type NordpoolDay = S['NordpoolDay']
+export type NordpoolNext = S['NordpoolNext']
+export type NordpoolStatus = S['NordpoolStatus']
+export type ForecastProviderStatus = S['ForecastProviderStatus']
+export type ForecastStatus = S['ForecastStatus']
+export type PvStatus = S['PvStatus']
+export type HaStatus = S['HaStatus']
+export type LastBuild = S['LastBuild']
+export type MpcStatus = S['MpcStatus']
+export type EmhassCheck = S['EmhassCheck']
+export type DiscoveryAttempt = S['DiscoveryAttempt']
+export type ExplainSlot = S['ExplainSlot']
+export type Derived = S['Derived']
+export type DriverResult = S['DriverResult']
+export type DriverRequest = S['DriverRequest']
+export type MlRequest = S['MlRequest']
+export type OutputsStatus = S['OutputsStatus']
+export type SklearnModel = S['EmhassMl']['sklearn_model']
 
-export interface DeferrableDescription {
-  name: string
-  nominal_power_w: number
-  enabled: Reading
-  operating_hours: Reading
-  deadline_timesteps: Reading
-  single_constant: Reading
-}
-
-export interface Issue {
-  level: 'error' | 'warning' | 'info'
-  code: string
-  message: string
-  hint: string | null
-}
-
-export interface InputsSnapshot {
-  taken_at: string | null
-  prices: {
-    slots: number
-    actual: number
-    forecast: number
-    first: string | null
-    end: string | null
-    forecast_source: string
-  }
-  pv: {
-    field: string
-    sensors_used: string[]
-    sensors_missing: string[]
-    slots_missing: number
-    first_missing: string | null
-  } | null
-  soc_init: Reading
-  soc_final: Reading
-  deferrable_loads: DeferrableDescription[]
-  issues: Issue[]
-}
-
-export interface ExplainSlot {
-  i: number
-  start: string
-  origin: string
-  period: string
-  spot: number
-  load_cost: number
-  prod_price: number
-  pv_w: number
-}
-
-export interface Derived {
-  extend_days: number
-  num_lags: number
-  num_lags_formula: string
-  historic_days_to_retrieve: number
-  delta_forecast_daily: number
-}
+// ---- Run artifacts: the API returns these as free-form JSON (see backend services/*.py) ----
 
 /** The `explain` artifact of an emhass.mpc run. */
 export interface ExplainArtifact {
@@ -113,15 +70,6 @@ export interface ExplainArtifact {
   submitted_at: string | null
   derived: Derived
   slots: ExplainSlot[]
-}
-
-export interface EmhassCheck {
-  key: string
-  title: string
-  status: string
-  expected: string
-  actual: string
-  explanation: string
 }
 
 export interface ParityExample {
@@ -156,79 +104,17 @@ export interface ParityReport {
   sections: ParitySection[]
 }
 
-export interface NordpoolDay {
-  day: string
-  state: string | null
-  slots: number
-  last_attempt: string | null
-  last_success: string | null
-  consecutive_errors: number
-  not_published: boolean
-  http_status: number | null
-  error: string | null
-  resolution_min: number | null
-  updated_at: string | null
-}
-
-export interface NordpoolStatus {
-  area: string
-  timezone: string
-  days: NordpoolDay[]
-  next: { day: string; due_at: string | null; reason: string }[]
-}
-
-export interface ForecastProviderStatus {
-  last_attempt: string | null
-  last_success: string | null
-  http_status: number | null
-  error: string | null
-  consecutive_errors: number
-  points: number
-  start: string | null
-  end: string | null
-  issued_at: string | null
-}
-
-export interface ForecastStatus {
-  source: string
-  providers: Record<string, ForecastProviderStatus>
-}
-
-export interface PvStatus {
-  source: string
-  field?: string
-  sensors_used?: string[]
-  sensors_missing?: string[]
-  slots?: number
-  start?: string | null
-  end?: string | null
-}
-
-export interface HaStatus {
-  configured: boolean
-  connected: boolean
-  connected_since: string | null
-  disconnected_since: string | null
-  ha_version: string | null
-  time_zone: string | null
-  last_error: string | null
-  watched: number
-}
-
-export interface MpcStatus {
-  mode: string
-  auto: boolean
-  driver: string
-  legacy_driving: boolean
-  last_success_at: string | null
-  last_build: { built_at: string | null; anchor: string | null; horizon: number; run_id: number | null } | null
-}
-
-export interface DiscoveryAttempt {
-  url: string
-  ok: boolean
-  version?: string | null
-  error?: string
+/** The `emhass_lens_plan_published` event (also the `event` artifact of an emhass.publish run). */
+export interface PublishEvent {
+  slot_start: string | null
+  slot_end: string | null
+  plan_generated_at: string | null
+  run_id: number | null
+  current: Partial<Record<
+    'p_batt_w' | 'p_grid_w' | 'p_pv_w' | 'p_pv_curtailment_w' | 'p_load_w' | 'soc_opt' | 'p_deferrable0_w' | 'p_deferrable1_w',
+    number | null
+  >>
+  price?: { import: number; export: number }
 }
 
 export type PlanRow = Record<string, unknown> & { timestamp?: string }

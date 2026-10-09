@@ -14,6 +14,8 @@ import { formatCountdown, formatTime } from '../lib/format'
 import { DriverCard } from './health/DriverCard'
 import { EmhassCard } from './health/EmhassCard'
 import { LegacyImportCard } from './health/LegacyImportCard'
+import { MlCard } from './health/MlCard'
+import { OutputsCard } from './health/OutputsCard'
 import { ParityCard } from './health/ParityCard'
 
 export function HealthPage() {
@@ -32,11 +34,15 @@ export function HealthPage() {
       <ProblemsPanel />
 
       <div className="two-col">
-        <DriverCard />
+        <DriverCard writable={s?.writable ?? false} />
         <ComponentsPanel />
       </div>
 
       <EmhassCard writable={s?.writable ?? false} />
+
+      <OutputsCard />
+
+      <MlCard writable={s?.writable ?? false} />
 
       <section className="panel">
         <div className="panel-head">

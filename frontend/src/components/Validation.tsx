@@ -10,8 +10,9 @@ export function ValidationList({ issues }: { issues: Issue[] }) {
       </p>
     )
   }
-  const order = { error: 0, warning: 1, info: 2 }
-  const sorted = [...issues].sort((a, b) => order[a.level] - order[b.level])
+  const order: Record<string, number> = { error: 0, warning: 1, info: 2 }
+  const rank = (level: string) => order[level] ?? 3
+  const sorted = [...issues].sort((a, b) => rank(a.level) - rank(b.level))
   return (
     <ul className="issues">
       {sorted.map((issue, i) => (

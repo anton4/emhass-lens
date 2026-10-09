@@ -10,6 +10,7 @@ import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { copyText, downloadText } from '../lib/download'
 import { formatBytes, formatDuration, formatTime } from '../lib/format'
 import { RunInsights } from './RunInsights'
+import { LabelledLamp } from '../components/Lamp'
 
 export function RunDetailPage() {
   const id = Number(useParams().id)
@@ -32,7 +33,7 @@ export function RunDetailPage() {
 
   if (!Number.isFinite(id)) return <Empty title="No such run" />
   const r = run.data
-  const jobTitle = jobs.data?.find((j) => j.id === r?.job)?.title ?? r?.job
+  const jobTitle = jobs.data?.find((j) => j.id === r?.job)?.title ?? (r ? (EXTRA_JOB_TITLES[r.job] ?? r.job) : undefined)
   const writable = status.data?.writable ?? false
 
   return (
@@ -92,12 +93,19 @@ export function RunDetailPage() {
                   <dd>{r.settings_rev ?? '—'}</dd>
                 </div>
               </dl>
-              {r.summary && <p style={{ margin: '16px 0 0' }}>{r.summary}</p>}
+              {r.summary &&
+                (r.job.startsWith('driver.') ? (
+                  <p className="run-headline" style={{ margin: '16px 0 0' }}>
+                    <LabelledLamp color={r.outcome === 'ok' ? 'green' : r.outcome === 'running' ? 'neutral' : 'red'} text={r.summary} />
+                  </p>
+                ) : (
+                  <p style={{ margin: '16px 0 0' }}>{r.summary}</p>
+                ))}
               {r.error && <div className="error-box">{r.error}</div>}
             </div>
           </section>
 
-          <RunInsights runId={id} kinds={r.artifacts.map((a) => a.kind)} />
+          <RunInsights runId={id} job={r.job} kinds={r.artifacts.map((a) => a.kind)} />
 
           <section className="panel">
             <div className="panel-head">
@@ -144,7 +152,14 @@ export function RunDetailPage() {
   )
 }
 
+/** Runs that aren't scheduler jobs (so they aren't in /api/jobs). */
+const EXTRA_JOB_TITLES: Record<string, string> = {
+  'driver.take_over': 'Take over from the HACS integration',
+  'driver.hand_back': 'Hand back to the HACS integration',
+}
+
 const ARTIFACT_NAMES: Record<string, string> = {
+  event: 'Event sent to Home Assistant',
   inputs: 'Inputs',
   request: 'Request sent',
   explain: 'Explain',

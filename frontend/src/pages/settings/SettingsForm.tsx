@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ApiError, api } from '../../api/client'
 import { keys } from '../../api/queries'
 import type { SaveResponse, SettingsResponse } from '../../api/types'
@@ -20,7 +21,12 @@ export function SettingsForm({ schema, server }: Props) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<unknown>(server.settings)
   const [base, setBase] = useState<{ revision: number; doc: unknown }>({ revision: server.revision, doc: server.settings })
-  const [section, setSection] = useState<string>(() => Object.keys(schema.properties ?? {})[0] ?? '')
+  const [searchParams] = useSearchParams()
+  const [section, setSection] = useState<string>(() => {
+    const sections = Object.keys(schema.properties ?? {})
+    const wanted = searchParams.get('section')
+    return wanted && sections.includes(wanted) ? wanted : (sections[0] ?? '')
+  })
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [errors, setErrors] = useState<{ loc: string; msg: string }[]>([])
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({})

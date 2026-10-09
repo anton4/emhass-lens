@@ -1634,3 +1634,139 @@ tr[data-current] td:first-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Phase 2: confirmation dialogs, driver / ML / outputs cards ---------- */
+
+dialog.confirm {
+  width: min(560px, calc(100vw - 32px));
+  padding: 20px 22px 18px;
+  border: 1px solid var(--frame-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+dialog.confirm::backdrop {
+  background: rgba(23, 35, 43, 0.35);
+}
+
+dialog.confirm h2 {
+  margin: 0 0 10px;
+  font-size: var(--step-1);
+}
+
+.confirm-body {
+  font-size: var(--step-0);
+  line-height: 1.5;
+}
+
+.confirm-body p {
+  margin: 0 0 10px;
+}
+
+.confirm-body ul {
+  margin: 0 0 10px;
+  padding-left: 1.2em;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mode button.mode-pos {
+  border: 0;
+  cursor: pointer;
+}
+
+.mode button.mode-pos:not([data-active='true']) {
+  background: transparent;
+}
+
+.mode button.mode-pos:hover:not(:disabled):not([data-active='true']) {
+  color: var(--ink-muted);
+  background: var(--surface);
+}
+
+.mode button.mode-pos:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.ml-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 18px;
+  margin: 12px 0 4px;
+}
+
+.ml-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.ml-jobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ml-job {
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+  background: var(--surface-sunk);
+}
+
+.ml-job .cell-title {
+  margin-bottom: 4px;
+}
+
+.event-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  margin: 0 0 12px;
+}
+
+.event-values dt {
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.event-values dd {
+  margin: 2px 0 0;
+  font-family: var(--font-readout);
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-values .cell-sub {
+  font-family: var(--font-body);
+}
+
+.published-note {
+  margin: 12px 0 0;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.run-headline {
+  font-size: var(--step-1);
+  margin: 0 0 12px;
+}

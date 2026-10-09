@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { usePlan } from '../api/queries'
+import { useOutputs, usePlan } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { formatDuration, formatSlot, formatTime } from '../lib/format'
+import { formatClock, formatDuration, formatSlot, formatTime } from '../lib/format'
+import { inCurrentSlot } from '../lib/publish'
 import { planChanges, rowAt } from '../lib/plan'
 import { formatPower } from '../lib/units'
 import { PlanCharts } from './plan/PlanCharts'
@@ -19,7 +20,8 @@ const DRIVERS: Record<string, string> = {
 
 export function PlanPage() {
   const plan = usePlan()
-  const now = useNow(30_000)
+  const outputs = useOutputs()
+  const now = useNow(15_000)
   const nowS = now.getTime() / 1000
   const data = plan.data
   const currentRows = data?.current?.rows
@@ -45,6 +47,8 @@ export function PlanPage() {
   }
 
   const current = data.current
+  const tz = data.timezone
+  const publishedAt = outputs.data?.last_published_at
   const lastRun = (current.last_run ?? {}) as Record<string, unknown>
   const status = typeof lastRun.status === 'string' ? lastRun.status : null
   const duration = typeof lastRun.duration_total_seconds === 'number' ? lastRun.duration_total_seconds * 1000 : null
@@ -67,7 +71,7 @@ export function PlanPage() {
             <div>
               <dt>Planned at</dt>
               <dd>
-                <time dateTime={current.generated_at}>{formatTime(current.generated_at, now)}</time>
+                <time dateTime={current.generated_at}>{formatTime(current.generated_at, now, tz)}</time>
               </dd>
             </div>
             <div>
@@ -85,9 +89,13 @@ export function PlanPage() {
               <dd>
                 {rows.length} slots
                 <div className="cell-sub">
-                  {formatTime(first, now)} → {formatTime(last, now)}
+                  {formatTime(first, now, tz)} → {formatTime(last, now, tz)}
                 </div>
               </dd>
+            </div>
+            <div>
+              <dt>Times in</dt>
+              <dd>{tz}</dd>
             </div>
             {current.run_id && (
               <div>
@@ -104,14 +112,20 @@ export function PlanPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>This slot</h2>
-          {currentRow?.timestamp && <span className="muted">from {formatTime(String(currentRow.timestamp), now)}</span>}
+          {currentRow?.timestamp && <span className="muted">from {formatSlot(String(currentRow.timestamp), now, tz)}</span>}
         </div>
         <div className="panel-body">
           {currentRow ? (
             <ThisSlot row={currentRow} columns={data.columns} />
           ) : (
             <p className="muted" style={{ margin: 0 }}>
-              The plan doesn't cover the current quarter-hour (it starts {formatTime(first, now)}).
+              The plan doesn't cover the current quarter-hour (it starts {formatTime(first, now, tz)}).
+            </p>
+          )}
+          {inCurrentSlot(publishedAt, now) && (
+            <p className="published-note">
+              Published to Home Assistant at {formatClock(publishedAt, tz)} (EMHASS sensors and the{' '}
+              <code>emhass_lens_plan_published</code> event).
             </p>
           )}
         </div>
@@ -124,13 +138,13 @@ export function PlanPage() {
             {table ? 'Show charts' : 'Show as a table'}
           </button>
         </div>
-        <div className="panel-body">{table ? <PlanTable rows={rows} columns={data.columns} nowS={nowS} /> : <PlanCharts data={data} nowS={nowS} />}</div>
+        <div className="panel-body">{table ? <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} /> : <PlanCharts data={data} nowS={nowS} />}</div>
       </section>
 
       <section className="panel">
         <div className="panel-head">
           <h2>Changes vs the previous plan</h2>
-          {data.previous && <span className="muted">previous: {formatTime(data.previous.generated_at, now)}</span>}
+          {data.previous && <span className="muted">previous: {formatTime(data.previous.generated_at, now, tz)}</span>}
         </div>
         {!data.previous ? (
           <Empty title="No earlier plan stored yet" />
@@ -151,7 +165,7 @@ export function PlanPage() {
               <tbody>
                 {changes.slice(0, 96).map((c) => (
                   <tr key={c.time}>
-                    <td className="num">{formatSlot(c.timestamp, now)}</td>
+                    <td className="num">{formatSlot(c.timestamp, now, tz)}</td>
                     <td className="num r">{formatPower(c.battBefore)}</td>
                     <td className="num r">{formatPower(c.battNow)}</td>
                     <td className="num r">{formatPower(c.gridBefore)}</td>
@@ -167,7 +181,17 @@ export function PlanPage() {
   )
 }
 
-function PlanTable({ rows, columns, nowS }: { rows: PlanRow[]; columns: string[]; nowS: number }) {
+function PlanTable({
+  rows,
+  columns,
+  nowS,
+  timeZone,
+}: {
+  rows: PlanRow[]
+  columns: string[]
+  nowS: number
+  timeZone: string
+}) {
   const shown = columns.filter((c) => !c.startsWith('cost_fun_'))
   const current = rowAt(rows, nowS)
   return (
@@ -186,7 +210,7 @@ function PlanTable({ rows, columns, nowS }: { rows: PlanRow[]; columns: string[]
         <tbody>
           {rows.map((row) => (
             <tr key={String(row.timestamp)} data-current={row === current || undefined}>
-              <td className="num">{formatSlot(String(row.timestamp))}</td>
+              <td className="num">{formatSlot(String(row.timestamp), new Date(nowS * 1000), timeZone)}</td>
               {shown.map((c) => {
                 const v = row[c]
                 return (
