@@ -2925,14 +2925,12 @@
           "last_event": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/PublishEvent"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Last Event"
+            ]
           },
           "last_published_at": {
             "anyOf": [
@@ -3000,6 +2998,34 @@
         "title": "Parity",
         "type": "object"
       },
+      "PlanPrice": {
+        "properties": {
+          "export_price": {
+            "title": "Export Price",
+            "type": "number"
+          },
+          "import_price": {
+            "title": "Import Price",
+            "type": "number"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "import_price",
+          "export_price",
+          "origin"
+        ],
+        "title": "PlanPrice",
+        "type": "object"
+      },
       "PlanResponse": {
         "properties": {
           "available": {
@@ -3062,8 +3088,7 @@
           },
           "prices": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/PlanPrice"
             },
             "title": "Prices",
             "type": "array"
@@ -3492,6 +3517,190 @@
           "history"
         ],
         "title": "ProblemsResponse",
+        "type": "object"
+      },
+      "PublishEvent": {
+        "description": "Data of the emhass_lens_plan_published event.",
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/PublishedValues"
+          },
+          "plan_generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Generated At"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublishedPrice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "slot_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot End"
+          },
+          "slot_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Start"
+          }
+        },
+        "required": [
+          "slot_start",
+          "slot_end",
+          "plan_generated_at",
+          "run_id",
+          "current"
+        ],
+        "title": "PublishEvent",
+        "type": "object"
+      },
+      "PublishedPrice": {
+        "properties": {
+          "export": {
+            "title": "Export",
+            "type": "number"
+          },
+          "import": {
+            "title": "Import",
+            "type": "number"
+          }
+        },
+        "required": [
+          "import",
+          "export"
+        ],
+        "title": "PublishedPrice",
+        "type": "object"
+      },
+      "PublishedValues": {
+        "description": "The current slot's plan values, EMHASS signs: battery + discharges / − charges, grid + imports / − exports.",
+        "properties": {
+          "p_batt_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Batt W"
+          },
+          "p_deferrable0_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Deferrable0 W"
+          },
+          "p_deferrable1_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Deferrable1 W"
+          },
+          "p_grid_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Grid W"
+          },
+          "p_load_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Load W"
+          },
+          "p_pv_curtailment_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Pv Curtailment W"
+          },
+          "p_pv_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Pv W"
+          },
+          "soc_opt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Opt"
+          }
+        },
+        "title": "PublishedValues",
         "type": "object"
       },
       "Pv": {

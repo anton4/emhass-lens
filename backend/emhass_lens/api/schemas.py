@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from emhass_lens.settings.model import Settings
 
@@ -351,6 +351,13 @@ class PlanSnapshotOut(BaseModel):
     rows: list[dict[str, Any]]
 
 
+class PlanPrice(BaseModel):
+    start: str
+    import_price: float
+    export_price: float
+    origin: str
+
+
 class PlanResponse(BaseModel):
     available: bool
     timezone: str
@@ -358,7 +365,7 @@ class PlanResponse(BaseModel):
     previous: PlanSnapshotOut | None
     current_row: dict[str, Any] | None
     columns: list[str]
-    prices: list[dict[str, Any]]
+    prices: list[PlanPrice]
     driver: str
     emhass_url: str | None
 
@@ -470,12 +477,43 @@ class MlRequest(BaseModel):
     n_trials: int | None = None
 
 
+class PublishedValues(BaseModel):
+    """The current slot's plan values, EMHASS signs: battery + discharges / − charges, grid + imports / − exports."""
+
+    p_batt_w: float | None = None
+    p_grid_w: float | None = None
+    p_pv_w: float | None = None
+    p_pv_curtailment_w: float | None = None
+    p_load_w: float | None = None
+    soc_opt: float | None = None
+    p_deferrable0_w: float | None = None
+    p_deferrable1_w: float | None = None
+
+
+class PublishedPrice(BaseModel):
+    import_: float = Field(alias="import")
+    export: float
+
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+
+class PublishEvent(BaseModel):
+    """Data of the emhass_lens_plan_published event."""
+
+    slot_start: str | None
+    slot_end: str | None
+    plan_generated_at: str | None
+    run_id: int | None
+    current: PublishedValues
+    price: PublishedPrice | None = None
+
+
 class OutputsStatus(BaseModel):
     enabled: bool
     connected: bool
     broker: str | None
     last_error: str | None
-    last_event: dict[str, Any] | None
+    last_event: PublishEvent | None
     last_published_at: str | None
 
 

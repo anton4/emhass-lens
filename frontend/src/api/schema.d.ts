@@ -1883,10 +1883,7 @@ export interface components {
             enabled: boolean;
             /** Last Error */
             last_error: string | null;
-            /** Last Event */
-            last_event: {
-                [key: string]: unknown;
-            } | null;
+            last_event: components["schemas"]["PublishEvent"] | null;
             /** Last Published At */
             last_published_at: string | null;
         };
@@ -1914,6 +1911,17 @@ export interface components {
              */
             tolerance: number;
         };
+        /** PlanPrice */
+        PlanPrice: {
+            /** Export Price */
+            export_price: number;
+            /** Import Price */
+            import_price: number;
+            /** Origin */
+            origin: string;
+            /** Start */
+            start: string;
+        };
         /** PlanResponse */
         PlanResponse: {
             /** Available */
@@ -1931,9 +1939,7 @@ export interface components {
             emhass_url: string | null;
             previous: components["schemas"]["PlanSnapshotOut"] | null;
             /** Prices */
-            prices: {
-                [key: string]: unknown;
-            }[];
+            prices: components["schemas"]["PlanPrice"][];
             /** Timezone */
             timezone: string;
         };
@@ -2089,6 +2095,51 @@ export interface components {
             history: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * PublishEvent
+         * @description Data of the emhass_lens_plan_published event.
+         */
+        PublishEvent: {
+            current: components["schemas"]["PublishedValues"];
+            /** Plan Generated At */
+            plan_generated_at: string | null;
+            price?: components["schemas"]["PublishedPrice"] | null;
+            /** Run Id */
+            run_id: number | null;
+            /** Slot End */
+            slot_end: string | null;
+            /** Slot Start */
+            slot_start: string | null;
+        };
+        /** PublishedPrice */
+        PublishedPrice: {
+            /** Export */
+            export: number;
+            /** Import */
+            import: number;
+        };
+        /**
+         * PublishedValues
+         * @description The current slot's plan values, EMHASS signs: battery + discharges / − charges, grid + imports / − exports.
+         */
+        PublishedValues: {
+            /** P Batt W */
+            p_batt_w?: number | null;
+            /** P Deferrable0 W */
+            p_deferrable0_w?: number | null;
+            /** P Deferrable1 W */
+            p_deferrable1_w?: number | null;
+            /** P Grid W */
+            p_grid_w?: number | null;
+            /** P Load W */
+            p_load_w?: number | null;
+            /** P Pv Curtailment W */
+            p_pv_curtailment_w?: number | null;
+            /** P Pv W */
+            p_pv_w?: number | null;
+            /** Soc Opt */
+            soc_opt?: number | null;
         };
         /** Pv */
         Pv: {

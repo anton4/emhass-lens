@@ -18,6 +18,7 @@ from emhass_lens.api.schemas import (
     MpcPreview,
     MpcStatus,
     NordpoolStatus,
+    PlanPrice,
     PlanResponse,
     PlanSnapshotOut,
     PriceSlotOut,
@@ -126,7 +127,7 @@ async def plan(c: ContainerDep) -> PlanResponse:
     now = c.clock.now()
     current_row = None
     columns: list[str] = []
-    price_rows: list[dict[str, Any]] = []
+    price_rows: list[PlanPrice] = []
     if current and current["plan"]:
         columns = [k for k in current["plan"][0] if k != "timestamp"]
         slot = slot_floor(now)
@@ -138,12 +139,9 @@ async def plan(c: ContainerDep) -> PlanResponse:
         if first is not None:
             priced = await c.app_db.run(c.extras["prices"].priced, first, c.extras["forecasts"].current())
             price_rows = [
-                {
-                    "start": iso(p.start),
-                    "import_price": p.import_price,
-                    "export_price": p.export_price,
-                    "origin": p.origin,
-                }
+                PlanPrice(
+                    start=iso(p.start) or "", import_price=p.import_price, export_price=p.export_price, origin=p.origin
+                )
                 for p in priced
             ]
     return PlanResponse(

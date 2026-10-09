@@ -111,6 +111,8 @@ class RunRecorder:
             log.exception("Run failed: %s", exc)
         finally:
             await run.flush()
+            if run.summary is None and run.error:
+                run.summary = f"Failed: {run.error}"
             duration_ms = int((time.monotonic() - started_mono) * 1000)
             await self.db.aexecute(
                 "UPDATE run SET finished_at=?, duration_ms=?, outcome=?, summary=?, error=? WHERE id=?",
