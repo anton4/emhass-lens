@@ -104,3 +104,26 @@ def test_safe_mode_keeps_scheduler_stopped(tmp_path: Path) -> None:
 def test_logs_endpoint_returns_recent_lines(client: TestClient) -> None:
     lines = client.get("/api/logs").json()
     assert any("Ready on port" in line["msg"] for line in lines)
+
+
+def test_environment_tokens_are_masked_in_logs(tmp_path: Path) -> None:
+    import logging
+
+    app = create_app(boot(tmp_path, ha_token="long-lived-token-abc123", safe_mode=True))
+    with TestClient(app) as client:
+        logging.getLogger("emhass_lens.test").warning("token is long-lived-token-abc123")
+        lines = client.get("/api/logs", params={"q": "token is"}).json()
+        assert lines[-1]["msg"] == "token is ********"
+
+
+def test_retention_also_prunes_prices_forecasts_and_plans(tmp_path: Path) -> None:
+    with TestClient(create_app(boot(tmp_path, safe_mode=True))) as client:
+        started = client.post("/api/jobs/maintenance.retention/run").json()
+        run: dict = {}
+        for _ in range(100):
+            run = client.get(f"/api/runs/{started['run_id']}").json()
+            if run["outcome"] != "running":
+                break
+        assert run["outcome"] == "ok", run
+        assert "old price slots" in run["summary"]
+        assert "plans" in run["summary"]

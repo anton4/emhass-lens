@@ -41,6 +41,12 @@ def register(c: Container) -> None:
 
         logs, arts, runs = await c.runs_db.run(prune)
         summary = f"Removed {logs} log lines, {arts} run details and {runs} runs"
+        x = c.extras
+        if "prices" in x:
+            slots = await c.app_db.run(x["prices"].prune, now)
+            snapshots = await c.app_db.run(x["forecasts"].prune, now)
+            plans = await c.app_db.run(x["emhass"].prune)
+            summary += f"; {slots} old price slots, {snapshots} forecast snapshots, {plans} plans"
         log.info(summary)
         if ctx.run:
             ctx.run.summary = summary

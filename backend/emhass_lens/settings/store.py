@@ -61,6 +61,7 @@ class SettingsStore:
     current: Settings = field(default_factory=lambda: Settings())
     revision: int = 0
     load_errors: list[dict[str, str]] = field(default_factory=list)
+    extra_secrets: list[str] = field(default_factory=list)  # tokens from the environment (HA, Supervisor)
     _subscriptions: list[_Subscription] = field(default_factory=list)
     _save_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -224,7 +225,7 @@ class SettingsStore:
 
     def _update_secrets(self) -> None:
         doc = self.current.model_dump(mode="json")
-        redactor.set_secrets([_get(doc, path) for path in secret_paths()])
+        redactor.set_secrets([_get(doc, path) for path in secret_paths()], self.extra_secrets)
 
 
 # --- helpers -----------------------------------------------------------------------------------------

@@ -36,6 +36,7 @@ def build_container(boot: Bootstrap, bus: EventBus, handles: LoggingHandles, clo
     handles.attach_sqlite(runs_db)
 
     store = SettingsStore(db=app_db, bus=bus, clock=clock)
+    store.extra_secrets = [t for t in (boot.ha_token, boot.supervisor_token) if t]
     recorder = RunRecorder(runs_db, bus, clock, settings_revision=lambda: store.revision)
     container_ref: dict[str, Container] = {}
 
