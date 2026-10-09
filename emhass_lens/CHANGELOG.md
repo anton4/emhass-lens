@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5
+
+- Saving settings and switching the mode work behind reverse proxies that only allow GET and POST (they failed with "Failed to fetch").
+- After a start or update, Home Assistant shows the App as started within seconds instead of after a minute.
+
 ## 0.2.4
 
 Fixes from a code review:
