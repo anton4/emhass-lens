@@ -6386,6 +6386,44 @@
         ]
       }
     },
+    "/api/settings/change": {
+      "post": {
+        "description": "Change some fields; nested objects merge, lists and values replace.",
+        "operationId": "patch_settings_api_settings_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Patch Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/settings/export": {
       "get": {
         "description": "The current settings as YAML (secrets masked; importing the file keeps the stored secrets).",
@@ -6605,6 +6643,44 @@
           }
         },
         "summary": "Revision",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/save": {
+      "post": {
+        "description": "Replace the whole settings document (the form sends everything it shows).",
+        "operationId": "put_settings_api_settings_save_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Put Settings",
         "tags": [
           "settings"
         ]

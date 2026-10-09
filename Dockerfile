@@ -38,7 +38,8 @@ ENV EMHASS_LENS_VERSION=${BUILD_VERSION} \
     EMHASS_LENS_STATIC_DIR=/app/static
 
 EXPOSE 8099
-# Liveness for the Supervisor: answers as long as the event loop does (no upstream checks)
-HEALTHCHECK --interval=60s --timeout=5s --start-period=60s --retries=3 \
+# Liveness for the Supervisor: answers as long as the event loop does (no upstream checks). The Supervisor
+# shows the App as "starting" until the first result, so probe every 2 s while starting (Docker 25+).
+HEALTHCHECK --interval=60s --timeout=5s --start-period=60s --start-interval=2s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/api/health/live', timeout=4)"]
 CMD ["python", "-m", "emhass_lens"]

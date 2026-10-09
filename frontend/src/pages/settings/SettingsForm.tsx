@@ -96,7 +96,7 @@ export function SettingsForm({ schema, server }: Props) {
     setSaving(true)
     setNotice(null)
     try {
-      const result = await api.put<SaveResponse>('/api/settings', {
+      const result = await api.post<SaveResponse>('/api/settings/save', {
         base_revision: base.revision,
         settings: draft,
         comment: comment.trim() || null,

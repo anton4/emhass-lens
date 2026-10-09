@@ -56,6 +56,9 @@ async def get_schema() -> dict[str, Any]:
     return inlined_schema()
 
 
+# The UI saves with POST: reverse proxies in front of Home Assistant often pass only GET and POST, and
+# a refused PUT/PATCH reaches the browser as a bare network error. PUT and PATCH stay for API clients.
+@router.post("/save", dependencies=[Writable], responses={409: {}, 422: {}})
 @router.put("", dependencies=[Writable], responses={409: {}, 422: {}})
 async def put_settings(c: ContainerDep, request: Request, body: SettingsSaveRequest) -> SaveResponse:
     """Replace the whole settings document (the form sends everything it shows)."""
@@ -74,6 +77,7 @@ async def put_settings(c: ContainerDep, request: Request, body: SettingsSaveRequ
     return SaveResponse(revision=result.revision, diff=[DiffEntry(**d) for d in result.diff])
 
 
+@router.post("/change", dependencies=[Writable], responses={409: {}, 422: {}})
 @router.patch("", dependencies=[Writable], responses={409: {}, 422: {}})
 async def patch_settings(c: ContainerDep, request: Request, body: SettingsPatchRequest) -> SaveResponse:
     """Change some fields; nested objects merge, lists and values replace."""

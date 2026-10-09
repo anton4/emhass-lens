@@ -49,7 +49,7 @@ export function useSetMode() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (mode: EmhassMode) =>
-      api.patch<SaveResponse>('/api/settings', {
+      api.post<SaveResponse>('/api/settings/change', {
         base_revision: await baseRevision(queryClient),
         changes: { emhass: { mode } },
         comment: `EMHASS mode ${mode.replace('_', ' ')} from the header switch`,

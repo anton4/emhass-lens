@@ -77,11 +77,11 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   return payload as T
 }
 
+// Only GET and POST: reverse proxies in front of Home Assistant often refuse PUT, PATCH and DELETE, and the
+// browser then reports a bare network error ("Failed to fetch", ERR_HTTP2_PROTOCOL_ERROR) instead of a status.
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
-  put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
-  patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
 }
 
 export function apiUrl(path: string): string {

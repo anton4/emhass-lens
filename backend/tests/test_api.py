@@ -46,6 +46,19 @@ def test_settings_roundtrip_with_conflict_and_validation(client: TestClient) -> 
     assert [r["id"] for r in revisions] == [2, 1]
 
 
+def test_the_ui_saves_with_post_only(client: TestClient) -> None:
+    """Proxies in front of Home Assistant often refuse PUT and PATCH, so the UI saves through POST twins."""
+    settings = client.get("/api/settings").json()["settings"]
+    settings["prices"]["tariff"]["package"] = "vork4"
+    saved = client.post("/api/settings/save", json={"base_revision": 1, "settings": settings})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["diff"] == [{"path": "prices.tariff.package", "old": "custom", "new": "vork4"}]
+    changed = client.post("/api/settings/change", json={"base_revision": 2, "changes": {"emhass": {"mode": "dry_run"}}})
+    assert changed.status_code == 200, changed.text
+    stale = client.post("/api/settings/change", json={"base_revision": 2, "changes": {"emhass": {"mode": "live"}}})
+    assert stale.status_code == 409
+
+
 def test_full_document_put_and_yaml_import_preview(client: TestClient) -> None:
     settings = client.get("/api/settings").json()["settings"]
     settings["prices"]["tariff"]["package"] = "vork4"
