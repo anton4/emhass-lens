@@ -28,6 +28,16 @@ async def test_log_lines_inside_a_run_carry_its_id_and_secrets_are_masked(
         handles.close()
 
 
+async def test_third_party_debug_stays_out_of_the_log(bus: EventBus) -> None:
+    handles = setup_logging(bus, "debug")
+    try:
+        assert logging.getLogger("emhass_lens.ha").isEnabledFor(logging.DEBUG)
+        assert not logging.getLogger("websockets.client").isEnabledFor(logging.DEBUG)
+        assert not logging.getLogger("some_library").isEnabledFor(logging.DEBUG)
+    finally:
+        handles.close()
+
+
 async def test_refused_and_failed_runs(recorder: RunRecorder) -> None:
     async with recorder.start("mpc") as run:
         raise RunRefused("SOC sensor unavailable")

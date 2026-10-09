@@ -20,7 +20,12 @@ from emhass_lens.logs.handlers import (
 LEVELS = ("debug", "info", "warning", "error")
 
 # Third-party loggers that are noisy at INFO; access logs for polling/SSE add nothing.
-_QUIET = {"uvicorn.access": logging.WARNING, "httpx": logging.WARNING, "httpcore": logging.WARNING}
+_QUIET = {
+    "uvicorn.access": logging.WARNING,
+    "httpx": logging.WARNING,
+    "httpcore": logging.WARNING,
+    "websockets": logging.WARNING,
+}
 
 
 @dataclass
@@ -81,7 +86,9 @@ def setup_logging(bus: EventBus, level: str = "info", tz: str = "UTC") -> Loggin
     root = logging.getLogger()
     for handler in list(root.handlers):
         root.removeHandler(handler)
-    root.setLevel(logging.DEBUG)  # filtering happens on the emhass_lens / third-party loggers
+    # Third-party libraries never log below INFO (their DEBUG output dumps raw traffic, tokens included);
+    # the emhass_lens logger has its own level, so the log_level option and component levels still apply.
+    root.setLevel(logging.INFO)
 
     try:
         zone = ZoneInfo(tz)
