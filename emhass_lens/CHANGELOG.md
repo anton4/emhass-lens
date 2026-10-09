@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10
+
+- Parity: when only the slots filled from the price forecast differ because the two sides fetched the forecast at different times, the check passes and says so, with both fetch times. Differences in Nord Pool prices are still reported.
+- Health → Getting started: the "open" links to cards on the Health page now scroll to that card instead of doing nothing.
+
 ## 0.2.9
 
 - Inputs → Price breakdown: click Spot, Fees, Network or VAT in the legend to show or hide that part; the chart rescales to what is shown and remembers the choice in this browser.
