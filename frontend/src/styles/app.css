@@ -1401,6 +1401,40 @@ button.diff-locate {
   border-radius: 2px;
 }
 
+/* Legend items that switch a chart part on and off */
+.legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.legend-toggle:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+
+.legend-toggle[aria-pressed='false'] {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+/* A hidden part keeps its colour as an outline only */
+.legend-toggle[aria-pressed='false'] .legend-swatch {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.stack-empty {
+  fill: var(--ink-muted);
+  font-size: var(--step--1);
+}
+
 /* ---------- Phase 1: tiles, cards, readings ---------- */
 
 .tiles {

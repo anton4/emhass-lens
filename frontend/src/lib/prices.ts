@@ -66,6 +66,42 @@ export function importComponents(slot: PriceSlot): Components {
   return { spot: slot.spot, fees, network: slot.network, vat: slot.vat, total: slot.import_price }
 }
 
+export type PricePart = 'spot' | 'fees' | 'network' | 'vat'
+
+export const PRICE_PARTS: readonly PricePart[] = ['spot', 'fees', 'network', 'vat']
+
+/**
+ * The bar pieces of one slot for the parts shown: spot from zero (down when negative), the other
+ * shown parts stacked upward from the top of the positive spot (or from zero when spot is hidden).
+ */
+export function stackSegments(c: Components, shown: ReadonlySet<PricePart>): { key: PricePart; from: number; to: number }[] {
+  const out: { key: PricePart; from: number; to: number }[] = []
+  let base = 0
+  if (shown.has('spot')) {
+    out.push({ key: 'spot', from: 0, to: c.spot })
+    base = Math.max(c.spot, 0)
+  }
+  for (const key of ['fees', 'network', 'vat'] as const) {
+    if (!shown.has(key)) continue
+    out.push({ key, from: base, to: base + c[key] })
+    base += c[key]
+  }
+  return out
+}
+
+/** The value range the shown stacks need; zero always stays in view. */
+export function stackExtent(list: Components[], shown: ReadonlySet<PricePart>): { min: number; max: number } {
+  let min = 0
+  let max = 0.0001
+  for (const c of list) {
+    for (const s of stackSegments(c, shown)) {
+      min = Math.min(min, s.from, s.to)
+      max = Math.max(max, s.from, s.to)
+    }
+  }
+  return { min, max }
+}
+
 /** Contiguous [start, end] ranges (unix seconds) where the price is a forecast. */
 export function forecastRanges(slots: PriceSlot[]): [number, number][] {
   const out: [number, number][] = []

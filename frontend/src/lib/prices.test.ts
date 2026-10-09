@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { PriceSlot } from '../api/types'
-import { forecastRanges, importComponents, localDay, localDays, midnights, originLabel, periodLabel } from './prices'
+import {
+  forecastRanges,
+  importComponents,
+  localDay,
+  localDays,
+  midnights,
+  originLabel,
+  periodLabel,
+  stackExtent,
+  stackSegments,
+  type PricePart,
+} from './prices'
 import { batteryDirection, formatAge, formatPower, formatPrice, gridDirection } from './units'
 
 const TZ = 'Europe/Tallinn'
@@ -54,5 +65,38 @@ describe('price helpers', () => {
     expect(gridDirection(-10)).toBe('Exporting')
     expect(formatAge(34)).toBe('34 s')
     expect(formatAge(7800)).toBe('2 h 10 min')
+  })
+})
+
+describe('price breakdown stacking', () => {
+  const c = { spot: 10, fees: 2, network: 3, vat: 4, total: 19 }
+  const all = new Set<PricePart>(['spot', 'fees', 'network', 'vat'])
+
+  it('stacks the shown parts on top of each other without gaps', () => {
+    expect(stackSegments(c, all)).toEqual([
+      { key: 'spot', from: 0, to: 10 },
+      { key: 'fees', from: 10, to: 12 },
+      { key: 'network', from: 12, to: 15 },
+      { key: 'vat', from: 15, to: 19 },
+    ])
+    expect(stackSegments(c, new Set<PricePart>(['fees', 'vat']))).toEqual([
+      { key: 'fees', from: 0, to: 2 },
+      { key: 'vat', from: 2, to: 6 },
+    ])
+    expect(stackSegments(c, new Set<PricePart>())).toEqual([])
+  })
+
+  it('draws a negative spot below zero and stacks the rest from zero', () => {
+    const negative = { ...c, spot: -5 }
+    expect(stackSegments(negative, new Set<PricePart>(['spot', 'network']))).toEqual([
+      { key: 'spot', from: 0, to: -5 },
+      { key: 'network', from: 0, to: 3 },
+    ])
+    expect(stackExtent([negative], all)).toEqual({ min: -5, max: 9 })
+  })
+
+  it('scales to the shown parts only', () => {
+    expect(stackExtent([c, { ...c, vat: 6 }], new Set<PricePart>(['vat']))).toEqual({ min: 0, max: 6 })
+    expect(stackExtent([c], new Set<PricePart>())).toEqual({ min: 0, max: 0.0001 })
   })
 })

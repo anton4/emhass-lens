@@ -1,14 +1,36 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PriceSlot } from '../../api/types'
-import { importComponents, localTime, periodLabel } from '../../lib/prices'
+import { importComponents, localTime, periodLabel, PRICE_PARTS, stackExtent, stackSegments, type PricePart } from '../../lib/prices'
 import { formatPrice, priceFactor, type PriceUnit } from '../../lib/units'
 
-const PARTS = [
+const PARTS: readonly { key: PricePart; label: string; color: string }[] = [
   { key: 'spot', label: 'Spot', color: 'var(--series-1)' },
   { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: 'var(--series-2)' },
   { key: 'network', label: 'Network', color: 'var(--series-3)' },
   { key: 'vat', label: 'VAT', color: 'var(--series-4)' },
-] as const
+]
+const COLORS = Object.fromEntries(PARTS.map((p) => [p.key, p.color])) as Record<PricePart, string>
+
+// The parts shown are remembered in this browser only; blocked storage just means all four.
+const STORAGE_KEY = 'emhass-lens.price-breakdown.parts'
+
+function loadShown(): Set<PricePart> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
+    if (Array.isArray(saved)) return new Set(PRICE_PARTS.filter((p) => saved.includes(p)))
+  } catch {
+    // fall through to the default
+  }
+  return new Set(PRICE_PARTS)
+}
+
+function saveShown(shown: Set<PricePart>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...shown]))
+  } catch {
+    // not remembered, still works for this visit
+  }
+}
 
 const PAD = { top: 10, right: 8, bottom: 22, left: 52 }
 
@@ -32,6 +54,15 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
   const wrap = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(800)
   const [hover, setHover] = useState<number | null>(null)
+  const [shown, setShown] = useState<Set<PricePart>>(loadShown)
+  useEffect(() => saveShown(shown), [shown])
+  const toggle = (key: PricePart) =>
+    setShown((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   useLayoutEffect(() => {
     const el = wrap.current
@@ -44,8 +75,7 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
 
   const f = priceFactor(unit)
   const parts = useMemo(() => slots.map(importComponents), [slots])
-  const rawMax = Math.max(0.0001, ...parts.map((p) => Math.max(p.total, p.fees + p.network + p.vat + Math.max(p.spot, 0))))
-  const rawMin = Math.min(0, ...parts.map((p) => p.spot))
+  const { min: rawMin, max: rawMax } = stackExtent(parts, shown)
   const step = niceStep((rawMax - rawMin) / 4)
   const max = Math.ceil(rawMax / step) * step
   const min = Math.floor(rawMin / step) * step
@@ -64,7 +94,12 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
         {hovered && hoveredParts ? (
           <>
             <strong>{localTime(hovered.start, timeZone)}</strong> {periodLabel(hovered.period)} ·{' '}
-            {PARTS.map((p) => `${p.key === 'fees' ? 'Fees' : p.label} ${formatPrice(hoveredParts[p.key], unit, false)}`).join(' + ')}{' '}
+            {PARTS.map((p, i) => (
+              <span key={p.key} className={shown.has(p.key) ? undefined : 'muted'}>
+                {i > 0 && ' + '}
+                {p.key === 'fees' ? 'Fees' : p.label} {formatPrice(hoveredParts[p.key], unit, false)}
+              </span>
+            ))}{' '}
             = <strong>{formatPrice(hoveredParts.total, unit)}</strong>
           </>
         ) : (
@@ -84,15 +119,7 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
           const p = parts[i]
           if (!p) return null
           const x = PAD.left + i * band + (band - barW) / 2
-          const segments: { key: string; from: number; to: number; color: string }[] = []
-          // Spot from zero (down if negative); the rest stack upward from the top of the positive part.
-          segments.push({ key: 'spot', from: 0, to: p.spot, color: PARTS[0].color })
-          let base = Math.max(p.spot, 0)
-          for (const part of PARTS.slice(1)) {
-            const v = p[part.key]
-            segments.push({ key: part.key, from: base, to: base + v, color: part.color })
-            base += v
-          }
+          const segments = stackSegments(p, shown)
           const current = Date.parse(slot.start) / 1000 <= nowS && nowS < Date.parse(slot.end) / 1000
           return (
             <g
@@ -106,13 +133,18 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
                 const bottom = y(Math.min(s.from, s.to))
                 const h = bottom - top - 2 // 2 px surface gap between segments
                 if (h <= 0.5) return null
-                return <rect key={s.key} x={x} y={top + 1} width={barW} height={h} fill={s.color} rx={barW >= 6 ? 1 : 0} />
+                return <rect key={s.key} x={x} y={top + 1} width={barW} height={h} fill={COLORS[s.key]} rx={barW >= 6 ? 1 : 0} />
               })}
               {current && <line x1={x + barW / 2} x2={x + barW / 2} y1={PAD.top} y2={PAD.top + plotH} className="stack-now" />}
             </g>
           )
         })}
         <line x1={PAD.left} x2={width - PAD.right} y1={y(0)} y2={y(0)} className="stack-axis" />
+        {shown.size === 0 && (
+          <text x={PAD.left + plotW / 2} y={PAD.top + plotH / 2} className="stack-empty" textAnchor="middle" dominantBaseline="middle">
+            Choose at least one part below.
+          </text>
+        )}
         {slots.map((slot, i) =>
           i % 12 === 0 ? (
             <text key={slot.start} x={PAD.left + i * band + band / 2} y={HEIGHT - 6} className="stack-tick" textAnchor="middle">
@@ -121,11 +153,19 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
           ) : null,
         )}
       </svg>
-      <ul className="legend">
+      <ul className="legend" role="group" aria-label="Parts shown in the chart">
         {PARTS.map((p) => (
           <li key={p.key}>
-            <span className="legend-swatch" style={{ background: p.color }} />
-            {p.label}
+            <button
+              type="button"
+              className="legend-toggle"
+              aria-pressed={shown.has(p.key)}
+              title={shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}
+              onClick={() => toggle(p.key)}
+            >
+              <span className="legend-swatch" style={{ background: p.color, color: p.color }} />
+              {p.label}
+            </button>
           </li>
         ))}
       </ul>
