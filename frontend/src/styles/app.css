@@ -1015,6 +1015,25 @@ td.wrap {
   background: transparent;
 }
 
+/* A Health card opened from the Getting started checklist: a short ring around it */
+.card-flash {
+  animation: card-flash 1.8s ease-out;
+}
+
+@keyframes card-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 3px var(--lamp-amber);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-flash {
+    animation: none;
+    outline: 3px solid var(--lamp-amber);
+  }
+}
+
 /* Shown from the review list: a short pulse on the field */
 .field-flash {
   animation: field-flash 1.8s ease-out;

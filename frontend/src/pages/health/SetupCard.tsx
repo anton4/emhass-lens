@@ -12,9 +12,25 @@ const STATE: Record<string, { color: LampColor; text: string }> = {
   skipped: { color: 'neutral', text: 'Not needed' },
 }
 
+/** Scroll to a card on the Health page (this checklist's own page) and flash it briefly. */
+function showCard(card: string) {
+  const el = document.getElementById(`card-${card}`)
+  if (!el) return
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+  el.classList.remove('card-flash')
+  void el.offsetWidth // restart the animation when the same card is shown again
+  el.classList.add('card-flash')
+  window.setTimeout(() => el.classList.remove('card-flash'), 2000)
+}
+
 function StepRow({ step }: { step: SetupStep }) {
   const state = STATE[step.state] ?? TODO
   const target = step.link?.startsWith('#') ? step.link.slice(1) : step.link
+  // Links to a card on this page ("/health?card=parity") scroll there; a router link to the
+  // page we're already on would do nothing.
+  const [path, query] = (target ?? '').split('?')
+  const card = path === '/health' ? new URLSearchParams(query).get('card') : null
   return (
     <li className="setup-step">
       <LabelledLamp color={state.color} text={state.text} />
@@ -26,7 +42,19 @@ function StepRow({ step }: { step: SetupStep }) {
           {target && (
             <>
               {' · '}
-              <Link to={target}>open</Link>
+              {card ? (
+                <a
+                  href={`#${target}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    showCard(card)
+                  }}
+                >
+                  open
+                </a>
+              ) : (
+                <Link to={target}>open</Link>
+              )}
             </>
           )}
         </div>

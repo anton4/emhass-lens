@@ -20,7 +20,7 @@ export function OutputsCard() {
   const event = o?.last_event ?? null
 
   return (
-    <section className="panel">
+    <section id="card-outputs" className="panel">
       <div className="panel-head">
         <h2>Home Assistant outputs</h2>
         <Link to="/settings?section=outputs">Settings → Home Assistant outputs</Link>

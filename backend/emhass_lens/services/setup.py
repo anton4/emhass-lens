@@ -25,11 +25,13 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
             "Connected to Home Assistant",
             "done" if ha.connected else "attention",
             f"Home Assistant {ha.ha_version}" if ha.connected else (ha.last_error or "connecting…"),
-            "#/health",
+            "#/health?card=components",
         )
     )
     if emhass.reachable:
-        steps.append(step("emhass", "EMHASS found", "done", f"EMHASS {emhass.version} at {emhass.url}", "#/health"))
+        steps.append(
+            step("emhass", "EMHASS found", "done", f"EMHASS {emhass.version} at {emhass.url}", "#/health?card=emhass")
+        )
     else:
         steps.append(
             step(
@@ -43,7 +45,9 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
     bad = [ch.title for ch in emhass.checks if ch.status == "error"]
     warn = [ch.title for ch in emhass.checks if ch.status == "warning"]
     if not emhass.checks:
-        steps.append(step("emhass_config", "EMHASS configuration compatible", "todo", "not checked yet", "#/health"))
+        steps.append(
+            step("emhass_config", "EMHASS configuration compatible", "todo", "not checked yet", "#/health?card=emhass")
+        )
     else:
         steps.append(
             step(
@@ -51,7 +55,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "EMHASS configuration compatible",
                 "attention" if bad else "done",
                 ("Fix: " + ", ".join(bad)) if bad else ("OK" + (f" (warnings: {', '.join(warn)})" if warn else "")),
-                "#/health",
+                "#/health?card=emhass",
             )
         )
 
@@ -86,7 +90,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "Settings imported from the HACS integration",
                 "todo",
                 "Health → Import from the HACS integration",
-                "#/health",
+                "#/health?card=import",
             )
         )
 
@@ -127,7 +131,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "Same prices and payloads as the HACS integration",
                 "skipped",
                 "nothing to compare with",
-                "#/health",
+                "#/health?card=parity",
                 optional=True,
             )
         )
@@ -138,7 +142,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "Same prices and payloads as the HACS integration",
                 "todo",
                 "the first comparison runs within 15 minutes",
-                "#/health",
+                "#/health?card=parity",
             )
         )
     else:
@@ -149,7 +153,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "Same prices and payloads as the HACS integration",
                 "done" if ok == len(compared) else "attention",
                 f"{ok} of the last {len(compared)} checks matched",
-                "#/health",
+                "#/health?card=parity",
             )
         )
 
@@ -173,7 +177,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
 
     driver = mpc.driver()
     if driver == "app":
-        steps.append(step("drive", "EMHASS Lens drives EMHASS", "done", "live, Auto MPC on", "#/health"))
+        steps.append(step("drive", "EMHASS Lens drives EMHASS", "done", "live, Auto MPC on", "#/health?card=driver"))
     elif driver == "both":
         steps.append(
             step(
@@ -181,7 +185,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "EMHASS Lens drives EMHASS",
                 "attention",
                 "both EMHASS Lens and the HACS integration are on — use Take over or Hand back",
-                "#/health",
+                "#/health?card=driver",
             )
         )
     else:
@@ -191,7 +195,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
             "dry_run": "use Take over when dry runs look good",
             "live": "turn Auto MPC on",
         }.get(mode, "")
-        steps.append(step("drive", "EMHASS Lens drives EMHASS", "todo", f"mode {mode}; {hint}", "#/health"))
+        steps.append(step("drive", "EMHASS Lens drives EMHASS", "todo", f"mode {mode}; {hint}", "#/health?card=driver"))
 
     outputs = x["outputs"]
     if not outputs.enabled():
@@ -212,7 +216,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
                 "Home Assistant entities (MQTT)",
                 "done" if outputs.connected else "attention",
                 f"broker {outputs.broker}" if outputs.connected else (outputs.last_error or "connecting…"),
-                "#/health",
+                "#/health?card=outputs",
                 optional=True,
             )
         )

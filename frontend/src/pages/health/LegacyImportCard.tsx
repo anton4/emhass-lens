@@ -24,7 +24,7 @@ export function LegacyImportCard({ writable }: { writable: boolean }) {
   const conflict = apply.error instanceof ApiError && apply.error.kind === 'conflict'
 
   return (
-    <section className="panel">
+    <section id="card-import" className="panel">
       <div className="panel-head">
         <h2>Import from the HACS integration</h2>
         <button type="button" disabled={preview.isFetching} onClick={() => (asked ? void preview.refetch() : setAsked(true))}>

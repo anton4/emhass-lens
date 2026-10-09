@@ -20,7 +20,7 @@ export function ParityCard() {
     retry: false,
   })
   return (
-    <section className="panel">
+    <section id="card-parity" className="panel">
       <div className="panel-head">
         <h2>Parity with the HACS integration</h2>
         {run && (

@@ -24,7 +24,7 @@ export function EmhassCard({ writable }: { writable: boolean }) {
   const discovery = e?.discovery ?? []
 
   return (
-    <section className="panel">
+    <section id="card-emhass" className="panel">
       <div className="panel-head">
         <h2>EMHASS</h2>
         <div className="toolbar">

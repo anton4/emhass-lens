@@ -142,7 +142,7 @@ function ComponentsPanel() {
   const status = useStatus()
   const s = status.data
   return (
-    <section className="panel">
+    <section id="card-components" className="panel">
       <div className="panel-head">
         <h2>Components</h2>
       </div>

@@ -24,7 +24,7 @@ export function DriverCard({ writable }: { writable: boolean }) {
   const last = takeOver.data ? { result: takeOver.data, what: 'take over' as const } : handBack.data ? { result: handBack.data, what: 'hand back' as const } : null
 
   return (
-    <section className="panel">
+    <section id="card-driver" className="panel">
       <div className="panel-head">
         <h2>Driving EMHASS</h2>
         <LabelledLamp color={spec.color} text={spec.text} />
