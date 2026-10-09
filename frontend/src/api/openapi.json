@@ -5269,7 +5269,7 @@
     },
     "/api/ha/entities": {
       "get": {
-        "description": "Entities for the settings pickers (cached for 30 s).",
+        "description": "Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s).",
         "operationId": "ha_entities_api_ha_entities_get",
         "parameters": [
           {
@@ -5291,6 +5291,7 @@
             }
           },
           {
+            "description": "Words to find in the entity id or name; best matches first",
             "in": "query",
             "name": "q",
             "required": false,
@@ -5303,6 +5304,7 @@
                   "type": "null"
                 }
               ],
+              "description": "Words to find in the entity id or name; best matches first",
               "title": "Q"
             }
           },

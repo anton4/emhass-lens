@@ -127,7 +127,7 @@ export interface paths {
         };
         /**
          * Ha Entities
-         * @description Entities for the settings pickers (cached for 30 s).
+         * @description Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s).
          */
         get: operations["ha_entities_api_ha_entities_get"];
         put?: never;
@@ -2947,6 +2947,7 @@ export interface operations {
             query?: {
                 /** @description Comma-separated domains, e.g. sensor,input_number */
                 domain?: string | null;
+                /** @description Words to find in the entity id or name; best matches first */
                 q?: string | null;
                 limit?: number;
             };

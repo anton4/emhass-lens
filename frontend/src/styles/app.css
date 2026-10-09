@@ -1575,6 +1575,87 @@ tr[data-current] td:first-child {
   color: var(--ink-muted);
 }
 
+/* Entity picker: the text field with Home Assistant's entities listed under it while typing */
+.entity-input {
+  position: relative;
+  width: min(100%, 42ch);
+}
+
+.field-input .entity-input input {
+  width: 100%;
+}
+
+.entity-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 30;
+  width: max(100%, min(52ch, calc(100vw - 2 * var(--gutter))));
+  max-height: min(340px, 50vh);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--frame-strong);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.entity-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.entity-option[aria-selected='true'] {
+  background: var(--tint-blue);
+}
+
+.entity-option-current .entity-option-name::after {
+  content: ' ✓';
+  color: var(--lamp-green);
+}
+
+.entity-option-name,
+.entity-option-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-option-state {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--ink-muted);
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entity-option-id {
+  font-family: var(--font-code);
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.entity-option mark {
+  background: none;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--lamp-blue);
+  text-underline-offset: 2px;
+}
+
+.entity-list-note {
+  padding: 6px 10px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
 .url-status {
   display: flex;
   flex-wrap: wrap;

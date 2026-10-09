@@ -27,6 +27,7 @@ from emhass_lens.api.schemas import (
     SetupStep,
 )
 from emhass_lens.core.clock import iso
+from emhass_lens.domain.entity_search import search_entities
 from emhass_lens.services import driver, legacy_import, setup
 from emhass_lens.settings.model import Settings
 from emhass_lens.settings.store import SettingsInvalid, StaleRevision, _errors, deep_merge, diff_docs, mask_diff
@@ -63,46 +64,37 @@ async def problems(c: ContainerDep) -> ProblemsResponse:
     return ProblemsResponse(active=[ProblemInfo(**p) for p in svc.active()], history=await svc.history())
 
 
-_ENTITY_CACHE: dict[str, Any] = {"at": 0.0, "states": []}
+ENTITY_CACHE_S = 30
 
 
 @router.get("/ha/entities")
 async def ha_entities(
     c: ContainerDep,
     domain: Annotated[str | None, Query(description="Comma-separated domains, e.g. sensor,input_number")] = None,
-    q: str | None = None,
+    q: Annotated[str | None, Query(description="Words to find in the entity id or name; best matches first")] = None,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
 ) -> list[EntityOption]:
-    """Entities for the settings pickers (cached for 30 s)."""
-    ha = c.extras["ha"]
-    if time.monotonic() - _ENTITY_CACHE["at"] > 30:
+    """Entities for the settings pickers (Home Assistant's states are re-read at most every 30 s)."""
+    cache: dict[str, Any] = c.extras.setdefault("ha_entity_cache", {"at": None, "states": []})
+    if cache["at"] is None or time.monotonic() - cache["at"] > ENTITY_CACHE_S:
         try:
-            _ENTITY_CACHE["states"] = await ha.get_states()
-            _ENTITY_CACHE["at"] = time.monotonic()
+            cache["states"] = await c.extras["ha"].get_states()
+            cache["at"] = time.monotonic()
         except Exception as exc:
             raise HTTPException(503, f"Home Assistant: {exc}") from exc
-    domains = {d.strip() for d in domain.split(",")} if domain else None
-    needle = (q or "").lower()
-    out = []
-    for state in _ENTITY_CACHE["states"]:
-        entity_id = state.get("entity_id", "")
-        if domains and entity_id.split(".", 1)[0] not in domains:
-            continue
-        attrs = state.get("attributes") or {}
-        name = attrs.get("friendly_name")
-        if needle and needle not in entity_id.lower() and needle not in str(name or "").lower():
-            continue
-        out.append(
-            EntityOption(
-                entity_id=entity_id,
-                name=name,
-                state=state.get("state"),
-                unit=attrs.get("unit_of_measurement"),
-                device_class=attrs.get("device_class"),
-            )
-        )
-    out.sort(key=lambda e: e.entity_id)
-    return out[:limit]
+    domains = {d.strip() for d in domain.split(",") if d.strip()} if domain else None
+    return [_entity_option(state) for state in search_entities(cache["states"], domains, q or "", limit)]
+
+
+def _entity_option(state: dict[str, Any]) -> EntityOption:
+    attrs = state.get("attributes") or {}
+    return EntityOption(
+        entity_id=state["entity_id"],
+        name=attrs.get("friendly_name"),
+        state=state.get("state"),
+        unit=attrs.get("unit_of_measurement"),
+        device_class=attrs.get("device_class"),
+    )
 
 
 @router.get("/legacy/preview")

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, query } from './client'
 import type {
   EmhassStatus,
@@ -35,7 +35,8 @@ export const keys = {
   inputs: ['inputs'] as const,
   emhass: ['emhass'] as const,
   problems: ['problems'] as const,
-  entities: (domains: string) => ['ha-entities', domains] as const,
+  entities: (params: Record<string, unknown>) => ['ha-entities', params] as const,
+  entity: (entityId: string) => ['ha-entity', entityId] as const,
   legacy: ['legacy-preview'] as const,
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
   outputs: ['outputs'] as const,
@@ -111,14 +112,30 @@ export function useProblems() {
   return useQuery({ queryKey: keys.problems, queryFn: () => api.get<ProblemsResponse>('/api/problems'), refetchInterval: 60_000 })
 }
 
-/** Entities for a picker; `domains` like "sensor,input_number" (empty = all). */
-export function useEntities(domains: string, enabled = true) {
+/** Home Assistant entities matching `q` in the given domains, best first (for the entity picker). */
+export function useEntitySearch(domains: string[], q: string, limit: number, enabled: boolean) {
+  const params = { domain: domains.join(','), q, limit }
   return useQuery({
-    queryKey: keys.entities(domains),
-    queryFn: () => api.get<EntityOption[]>(`/api/ha/entities${query({ domain: domains, limit: 2000 })}`),
+    queryKey: keys.entities(params),
+    queryFn: () => api.get<EntityOption[]>(`/api/ha/entities${query(params)}`),
+    enabled,
     staleTime: 30_000,
     retry: false,
-    enabled,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** One entity by id, or null when Home Assistant doesn't have it (any domain). */
+export function useEntity(entityId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.entity(entityId),
+    queryFn: async () => {
+      const found = await api.get<EntityOption[]>(`/api/ha/entities${query({ q: entityId, limit: 1 })}`)
+      return found.find((e) => e.entity_id === entityId) ?? null
+    },
+    enabled: enabled && entityId !== '',
+    staleTime: 30_000,
+    retry: false,
   })
 }
 
