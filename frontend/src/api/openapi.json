@@ -150,6 +150,80 @@
         "title": "DiffEntry",
         "type": "object"
       },
+      "DriverRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          }
+        },
+        "title": "DriverRequest",
+        "type": "object"
+      },
+      "DriverResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "legacy_switch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legacy Switch"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "DriverResult",
+        "type": "object"
+      },
       "EeForecast": {
         "additionalProperties": false,
         "properties": {
@@ -1331,6 +1405,45 @@
         "title": "Logging",
         "type": "object"
       },
+      "MlRequest": {
+        "properties": {
+          "historic_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historic Days"
+          },
+          "n_trials": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Trials"
+          },
+          "sklearn_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sklearn Model"
+          }
+        },
+        "title": "MlRequest",
+        "type": "object"
+      },
       "MpcPreview": {
         "properties": {
           "anchor": {
@@ -1393,6 +1506,44 @@
           "derived"
         ],
         "title": "MpcPreview",
+        "type": "object"
+      },
+      "MqttBroker": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "default": "",
+            "description": "Leave empty to use the Mosquitto broker App (credentials come from the Supervisor).",
+            "title": "Broker host",
+            "type": "string"
+          },
+          "password": {
+            "default": "",
+            "title": "Password",
+            "type": "string",
+            "ui": {
+              "widget": "secret"
+            }
+          },
+          "port": {
+            "default": 1883,
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "tls": {
+            "default": false,
+            "title": "TLS",
+            "type": "boolean"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "title": "MqttBroker",
         "type": "object"
       },
       "NetworkRates": {
@@ -1566,6 +1717,20 @@
       "Outputs": {
         "additionalProperties": false,
         "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/MqttBroker",
+            "default": {
+              "host": "",
+              "password": "",
+              "port": 1883,
+              "tls": false,
+              "username": ""
+            },
+            "title": "MQTT broker",
+            "ui": {
+              "advanced": true
+            }
+          },
           "discovery_prefix": {
             "default": "homeassistant",
             "title": "Discovery prefix",
@@ -1585,9 +1750,85 @@
             "description": "Publish the EMHASS Lens device (prices, problem, last MPC, Auto MPC switch, Run MPC button) through MQTT discovery. Needs the Mosquitto broker App.",
             "title": "MQTT entities",
             "type": "boolean"
+          },
+          "topic_prefix": {
+            "default": "emhass_lens",
+            "pattern": "^[A-Za-z0-9_/-]+$",
+            "title": "Topic prefix",
+            "type": "string",
+            "ui": {
+              "advanced": true
+            }
           }
         },
         "title": "Outputs",
+        "type": "object"
+      },
+      "OutputsStatus": {
+        "properties": {
+          "broker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_event": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event"
+          },
+          "last_published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Published At"
+          }
+        },
+        "required": [
+          "enabled",
+          "connected",
+          "broker",
+          "last_error",
+          "last_event",
+          "last_published_at"
+        ],
+        "title": "OutputsStatus",
         "type": "object"
       },
       "Parity": {
@@ -2670,9 +2911,17 @@
           "outputs": {
             "$ref": "#/components/schemas/Outputs",
             "default": {
+              "broker": {
+                "host": "",
+                "password": "",
+                "port": 1883,
+                "tls": false,
+                "username": ""
+              },
               "discovery_prefix": "homeassistant",
               "fire_event": true,
-              "mqtt_enabled": false
+              "mqtt_enabled": false,
+              "topic_prefix": "emhass_lens"
             },
             "title": "Home Assistant outputs"
           },
@@ -3138,6 +3387,90 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/driver/hand-back": {
+      "post": {
+        "description": "Put EMHASS Lens in dry run and turn the HACS integration's Auto MPC back on.",
+        "operationId": "hand_back_api_driver_hand_back_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hand Back",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/driver/take-over": {
+      "post": {
+        "description": "Turn the HACS integration's Auto MPC off and make EMHASS Lens drive EMHASS (live, Auto MPC on).",
+        "operationId": "take_over_api_driver_take_over_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Take Over",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/emhass": {
       "get": {
         "operationId": "emhass_status_api_emhass_get",
@@ -3717,6 +4050,58 @@
         ]
       }
     },
+    "/api/ml/{action}": {
+      "post": {
+        "operationId": "ml_action_api_ml__action__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ml Action",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/mpc/preview": {
       "post": {
         "description": "Build and check the MPC payload as if a run started now. Nothing is sent.",
@@ -3736,6 +4121,27 @@
         "summary": "Mpc Preview",
         "tags": [
           "data"
+        ]
+      }
+    },
+    "/api/outputs": {
+      "get": {
+        "operationId": "outputs_status_api_outputs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputsStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Outputs Status",
+        "tags": [
+          "system"
         ]
       }
     },

@@ -44,7 +44,9 @@ class Job:
     trigger: Trigger
     func: JobFunc
     grace: timedelta = timedelta(seconds=60)
-    record: bool = True  # False for chatty housekeeping jobs that shouldn't fill the Runs list
+    # False for chatty housekeeping jobs that shouldn't fill the Runs list; a callable decides per run
+    # (e.g. publish only records runs while it actually publishes)
+    record: bool | Callable[[], bool] = True
     mode: Callable[[], str | None] | None = None  # e.g. EMHASS mode, stored with each run
     paused: bool = False
     next_fire: datetime | None = None
@@ -155,7 +157,7 @@ class Scheduler:
             late_s, grace_s = int(lateness.total_seconds()), int(job.grace.total_seconds())
             if lateness > job.grace:
                 log.warning("Job %s missed its %s run by %ds", job.id, iso(due), late_s)
-                if job.record:
+                if self._records(job):
                     job.last_outcome = "missed"
                     job.last_run_id = await self.recorder.record(
                         job.id,
@@ -196,7 +198,7 @@ class Scheduler:
 
         if job.lock.locked():
             log.info("Job %s is still running; skipping this %s run", job.id, trigger)
-            if job.record:
+            if self._records(job):
                 job.last_run_id = await self.recorder.record(
                     job.id,
                     trigger,
@@ -210,8 +212,9 @@ class Scheduler:
             job.last_started = self.clock.now()
             self._publish(job)
             mode = job.mode() if job.mode else None
+            record = job.record() if callable(job.record) else job.record
             try:
-                if job.record:
+                if record or trigger == "manual":
                     async with self.recorder.start(job.id, trigger, mode, scheduled_at) as run:
                         job.last_run_id = run.id
                         report(run.id)
@@ -231,6 +234,10 @@ class Scheduler:
                 report(None)
                 job.last_finished = self.clock.now()
                 self._publish(job)
+
+    @staticmethod
+    def _records(job: Job) -> bool:
+        return job.record() if callable(job.record) else job.record
 
     # --- loop ------------------------------------------------------------------------------------------
     def start(self) -> None:

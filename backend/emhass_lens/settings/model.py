@@ -438,6 +438,18 @@ class Pv(Section):
 # --- Outputs, health, logging ------------------------------------------------------------------------
 
 
+class MqttBroker(Section):
+    host: str = Field(
+        default="",
+        title="Broker host",
+        description="Leave empty to use the Mosquitto broker App (credentials come from the Supervisor).",
+    )
+    port: int = Field(default=1883, ge=1, le=65535, title="Port")
+    username: str = Field(default="", title="Username")
+    password: str = Field(default="", title="Password", json_schema_extra=ui(widget="secret"))
+    tls: bool = Field(default=False, title="TLS")
+
+
 class Outputs(Section):
     mqtt_enabled: bool = Field(
         default=False,
@@ -448,6 +460,10 @@ class Outputs(Section):
     discovery_prefix: str = Field(
         default="homeassistant", title="Discovery prefix", json_schema_extra=ui(advanced=True)
     )
+    topic_prefix: str = Field(
+        default="emhass_lens", pattern=r"^[A-Za-z0-9_/-]+$", title="Topic prefix", json_schema_extra=ui(advanced=True)
+    )
+    broker: MqttBroker = Field(default=MqttBroker(), title="MQTT broker", json_schema_extra=ui(advanced=True))
     fire_event: bool = Field(
         default=True,
         title="Fire an event after each publish",

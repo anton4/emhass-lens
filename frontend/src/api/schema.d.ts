@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/driver/hand-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand Back
+         * @description Put EMHASS Lens in dry run and turn the HACS integration's Auto MPC back on.
+         */
+        post: operations["hand_back_api_driver_hand_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/driver/take-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Over
+         * @description Turn the HACS integration's Auto MPC off and make EMHASS Lens drive EMHASS (live, Auto MPC on).
+         */
+        post: operations["take_over_api_driver_take_over_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/emhass": {
         parameters: {
             query?: never;
@@ -266,6 +306,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ml Action */
+        post: operations["ml_action_api_ml__action__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mpc/preview": {
         parameters: {
             query?: never;
@@ -280,6 +337,23 @@ export interface paths {
          * @description Build and check the MPC payload as if a run started now. Nothing is sent.
          */
         post: operations["mpc_preview_api_mpc_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outputs Status */
+        get: operations["outputs_status_api_outputs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -685,6 +759,24 @@ export interface components {
             old?: unknown;
             /** Path */
             path: string;
+        };
+        /** DriverRequest */
+        DriverRequest: {
+            /** Base Revision */
+            base_revision?: number | null;
+        };
+        /** DriverResult */
+        DriverResult: {
+            /** Error */
+            error?: string | null;
+            /** Legacy Switch */
+            legacy_switch?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Revision */
+            revision?: number | null;
+            /** Run Id */
+            run_id?: number | null;
         };
         /** EeForecast */
         EeForecast: {
@@ -1191,6 +1283,15 @@ export interface components {
              */
             retention: components["schemas"]["Retention"];
         };
+        /** MlRequest */
+        MlRequest: {
+            /** Historic Days */
+            historic_days?: number | null;
+            /** N Trials */
+            n_trials?: number | null;
+            /** Sklearn Model */
+            sklearn_model?: string | null;
+        };
         /** MpcPreview */
         MpcPreview: {
             /** Anchor */
@@ -1221,6 +1322,35 @@ export interface components {
             validation: {
                 [key: string]: unknown;
             }[];
+        };
+        /** MqttBroker */
+        MqttBroker: {
+            /**
+             * Broker host
+             * @description Leave empty to use the Mosquitto broker App (credentials come from the Supervisor).
+             * @default
+             */
+            host: string;
+            /**
+             * Password
+             * @default
+             */
+            password: string;
+            /**
+             * Port
+             * @default 1883
+             */
+            port: number;
+            /**
+             * TLS
+             * @default false
+             */
+            tls: boolean;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
         };
         /** NetworkRates */
         NetworkRates: {
@@ -1307,6 +1437,17 @@ export interface components {
         /** Outputs */
         Outputs: {
             /**
+             * MQTT broker
+             * @default {
+             *       "host": "",
+             *       "password": "",
+             *       "port": 1883,
+             *       "tls": false,
+             *       "username": ""
+             *     }
+             */
+            broker: components["schemas"]["MqttBroker"];
+            /**
              * Discovery prefix
              * @default homeassistant
              */
@@ -1323,6 +1464,28 @@ export interface components {
              * @default false
              */
             mqtt_enabled: boolean;
+            /**
+             * Topic prefix
+             * @default emhass_lens
+             */
+            topic_prefix: string;
+        };
+        /** OutputsStatus */
+        OutputsStatus: {
+            /** Broker */
+            broker: string | null;
+            /** Connected */
+            connected: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Event */
+            last_event: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Published At */
+            last_published_at: string | null;
         };
         /** Parity */
         Parity: {
@@ -1779,9 +1942,17 @@ export interface components {
             /**
              * Home Assistant outputs
              * @default {
+             *       "broker": {
+             *         "host": "",
+             *         "password": "",
+             *         "port": 1883,
+             *         "tls": false,
+             *         "username": ""
+             *       },
              *       "discovery_prefix": "homeassistant",
              *       "fire_event": true,
-             *       "mqtt_enabled": false
+             *       "mqtt_enabled": false,
+             *       "topic_prefix": "emhass_lens"
              *     }
              */
             outputs: components["schemas"]["Outputs"];
@@ -2012,6 +2183,72 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    hand_back_api_driver_hand_back_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_over_api_driver_take_over_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     emhass_status_api_emhass_get: {
         parameters: {
             query?: never;
@@ -2386,6 +2623,41 @@ export interface operations {
             };
         };
     };
+    ml_action_api_ml__action__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStarted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     mpc_preview_api_mpc_preview_post: {
         parameters: {
             query?: never;
@@ -2402,6 +2674,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MpcPreview"];
+                };
+            };
+        };
+    };
+    outputs_status_api_outputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutputsStatus"];
                 };
             };
         };

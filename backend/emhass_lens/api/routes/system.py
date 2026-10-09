@@ -8,17 +8,22 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from emhass_lens.api.deps import ContainerDep, Writable, actor
 from emhass_lens.api.schemas import (
     DiffEntry,
+    DriverRequest,
+    DriverResult,
     EmhassStatusOut,
     EntityOption,
     JobInfo,
     LegacyApplyRequest,
     LegacyPreview,
+    MlRequest,
+    OutputsStatus,
     ProblemInfo,
     ProblemsResponse,
     RunStarted,
     SaveResponse,
 )
-from emhass_lens.services import legacy_import
+from emhass_lens.core.clock import iso
+from emhass_lens.services import driver, legacy_import
 from emhass_lens.settings.model import Settings
 from emhass_lens.settings.store import SettingsInvalid, StaleRevision, _errors, deep_merge, diff_docs, mask_diff
 
@@ -133,3 +138,33 @@ async def legacy_apply(c: ContainerDep, request: Request, body: LegacyApplyReque
     except SettingsInvalid as exc:
         raise HTTPException(422, exc.errors) from exc
     return SaveResponse(revision=saved.revision, diff=[DiffEntry(**d) for d in saved.diff])
+
+
+@router.post("/driver/take-over", dependencies=[Writable])
+async def take_over(c: ContainerDep, request: Request, body: DriverRequest) -> DriverResult:
+    """Turn the HACS integration's Auto MPC off and make EMHASS Lens drive EMHASS (live, Auto MPC on)."""
+    return DriverResult(**await driver.take_over(c, actor(request), body.base_revision))
+
+
+@router.post("/driver/hand-back", dependencies=[Writable])
+async def hand_back(c: ContainerDep, request: Request, body: DriverRequest) -> DriverResult:
+    """Put EMHASS Lens in dry run and turn the HACS integration's Auto MPC back on."""
+    return DriverResult(**await driver.hand_back(c, actor(request), body.base_revision))
+
+
+@router.post("/ml/{action}", dependencies=[Writable], status_code=202)
+async def ml_action(c: ContainerDep, action: str, body: MlRequest) -> RunStarted:
+    job_id = {"fit": "ml.fit", "tune": "ml.tune", "predict": "ml.predict"}.get(action)
+    if job_id is None:
+        raise HTTPException(404, f"Unknown ML action {action}")
+    params = {k: v for k, v in body.model_dump().items() if v is not None}
+    run_id = await c.scheduler.start_now(job_id, params)
+    return RunStarted(job=JobInfo(**c.scheduler.jobs[job_id].info()), run_id=run_id)
+
+
+@router.get("/outputs")
+async def outputs_status(c: ContainerDep) -> OutputsStatus:
+    publish = c.extras["publish"]
+    return OutputsStatus(
+        **c.extras["outputs"].status(), last_event=publish.last_event, last_published_at=iso(publish.last_published_at)
+    )

@@ -277,3 +277,30 @@ class LegacyPreview(BaseModel):
 
 class LegacyApplyRequest(BaseModel):
     base_revision: int | None = None
+
+
+class DriverResult(BaseModel):
+    ok: bool
+    run_id: int | None = None
+    revision: int | None = None
+    legacy_switch: str | None = None
+    error: str | None = None
+
+
+class DriverRequest(BaseModel):
+    base_revision: int | None = None
+
+
+class MlRequest(BaseModel):
+    sklearn_model: str | None = None
+    historic_days: int | None = None
+    n_trials: int | None = None
+
+
+class OutputsStatus(BaseModel):
+    enabled: bool
+    connected: bool
+    broker: str | None
+    last_error: str | None
+    last_event: dict[str, Any] | None
+    last_published_at: str | None

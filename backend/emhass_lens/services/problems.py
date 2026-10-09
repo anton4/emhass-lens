@@ -7,7 +7,7 @@ to the UI.
 
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso
@@ -37,10 +37,14 @@ class Problem:
         return data
 
 
+NOTIFICATION_ID = "emhass_lens_problems"
+
+
 class ProblemService:
     def __init__(self, c: Container) -> None:
         self.c = c
         self.problems: dict[str, Problem] = {}
+        self._notified: frozenset[str] = frozenset()
 
     def load(self) -> None:
         """Problems still open from before a restart are closed; the rules re-raise what still applies."""
@@ -93,6 +97,38 @@ class ProblemService:
                 )
                 log.info("Resolved: %s", gone.title)
                 self.c.bus.publish("problem.resolved", gone.as_dict())
+
+        await self._notify(now)
+
+    async def _notify(self, now: datetime) -> None:
+        """Keep one Home Assistant persistent notification listing errors older than the grace time."""
+        if not self.c.settings.current.notifications.persistent:
+            return
+        grace = timedelta(minutes=self.c.settings.current.health.problem_grace_min)
+        due = [p for p in self.problems.values() if p.severity == "error" and p.since and now - p.since >= grace]
+        keys = frozenset(p.key for p in due)
+        if keys == self._notified:
+            return
+        ha = self.c.extras.get("ha")
+        if ha is None or not ha.connected:
+            return
+        try:
+            if due:
+                lines = "\n".join(f"- **{p.title}**" + (f": {p.detail}" if p.detail else "") for p in due)
+                await ha.call_service(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "notification_id": NOTIFICATION_ID,
+                        "title": "EMHASS Lens needs attention",
+                        "message": f"{lines}\n\nOpen EMHASS Lens → Health for details.",
+                    },
+                )
+            else:
+                await ha.call_service("persistent_notification", "dismiss", {"notification_id": NOTIFICATION_ID})
+            self._notified = keys
+        except Exception as exc:
+            log.warning("Updating the Home Assistant notification failed: %s", exc)
 
     async def history(self, limit: int = 100) -> list[dict[str, Any]]:
         return await self.c.app_db.aquery(

@@ -211,6 +211,9 @@ class MpcService:
         ctx.run.outcome = "ok"
         ctx.run.summary = f"Planned {horizon} in {response.duration_ms / 1000:.1f} s{warn_note}"
         self.c.bus.publish("plan.updated", {"run_id": ctx.run.id})
+        outputs = self.c.extras.get("outputs")
+        if outputs is not None:
+            await outputs.refresh()
 
     def status(self) -> dict[str, Any]:
         shadow = self.last_shadow

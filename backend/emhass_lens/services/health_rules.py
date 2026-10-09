@@ -224,6 +224,32 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 )
             )
 
+    # ML model and MQTT
+    mismatch = x["ml"].lags_mismatch()
+    if mismatch:
+        out.append(
+            Problem(
+                "ml.lags_changed",
+                "warning",
+                "The ML load model should be refitted",
+                mismatch,
+                "Run 'ML model fit' on the Health page.",
+                "#/health",
+            )
+        )
+    outputs = x["outputs"]
+    if outputs.enabled() and not outputs.connected:
+        out.append(
+            Problem(
+                "mqtt.disconnected",
+                "warning",
+                "MQTT entities aren't being updated",
+                outputs.last_error,
+                "Check the Mosquitto broker App or Settings → Home Assistant outputs.",
+                "#/health",
+            )
+        )
+
     # Scheduler
     for job in c.scheduler.jobs.values():
         if job.last_outcome == "missed":

@@ -12,15 +12,18 @@ from emhass_lens.clients.http import make_client
 from emhass_lens.clients.supervisor import SupervisorClient
 from emhass_lens.container import Container
 from emhass_lens.scheduler.core import Job, JobContext
-from emhass_lens.scheduler.triggers import Dynamic, Periodic, QuarterHour
+from emhass_lens.scheduler.triggers import Dynamic, Manual, Periodic, QuarterHour
 from emhass_lens.services import health_rules
 from emhass_lens.services.emhass import EmhassService
 from emhass_lens.services.forecasts import ForecastService
 from emhass_lens.services.inputs import InputsService
+from emhass_lens.services.ml import MlService
 from emhass_lens.services.mpc import MpcService
+from emhass_lens.services.outputs import OutputService
 from emhass_lens.services.parity import ParityService
 from emhass_lens.services.prices import PriceService
 from emhass_lens.services.problems import ProblemService
+from emhass_lens.services.publish import PublishService
 from emhass_lens.services.pv import PvService
 from emhass_lens.settings.model import Settings
 
@@ -43,6 +46,9 @@ def build(c: Container) -> None:
     x["mpc"] = MpcService(c)
     x["parity"] = ParityService(c)
     x["problems"] = ProblemService(c)
+    x["publish"] = PublishService(c)
+    x["ml"] = MlService(c)
+    x["outputs"] = OutputService(c)
     x["prices"].load()
     x["problems"].load()
     x["status_providers"] = {
@@ -51,6 +57,7 @@ def build(c: Container) -> None:
         "prices": lambda: _problem_status(c, "prices", "Prices complete"),
         "forecast": lambda: _forecast_status(c),
         "pv": lambda: _pv_status(c),
+        "mqtt": lambda: _mqtt_status(c),
     }
 
 
@@ -144,6 +151,56 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="emhass.publish",
+            title="EMHASS publish",
+            description="Live mode: publish-data at the start of each slot, then the plan-published event and "
+            "MQTT state.",
+            trigger=QuarterHour(settings.emhass.publish.slot_offset_s),
+            func=x["publish"].run,
+            record=x["publish"].active,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
+            id="ml.fit",
+            title="ML model fit",
+            description="Fits EMHASS's load forecast model (forecast-model-fit) with the lags MPC uses.",
+            trigger=Manual(),
+            func=x["ml"].fit,
+        )
+    )
+    s.add(
+        Job(
+            id="ml.tune",
+            title="ML model tune",
+            description="Tunes the load forecast model (forecast-model-tune).",
+            trigger=Manual(),
+            func=x["ml"].tune,
+        )
+    )
+    s.add(
+        Job(
+            id="ml.predict",
+            title="ML model predict",
+            description="Publishes sensor.p_load_forecast_custom_model (forecast-model-predict).",
+            trigger=Manual(),
+            func=x["ml"].predict,
+        )
+    )
+    s.add(
+        Job(
+            id="outputs.refresh",
+            title="MQTT entities",
+            description="Publishes the current prices, problem state and Auto MPC switch state over MQTT.",
+            trigger=Periodic(60, 1),
+            func=_refresh_outputs(c),
+            record=False,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
             id="health.evaluate",
             title="Health",
             description="Evaluates the health rules and updates the problem list.",
@@ -158,6 +215,13 @@ def register_jobs(c: Container) -> None:
 def _plan_watch(c: Container):
     async def run(ctx: JobContext) -> None:
         await c.extras["emhass"].watch_plan(ctx, driver="legacy" if c.extras["mpc"].legacy_driving() else "external")
+
+    return run
+
+
+def _refresh_outputs(c: Container):
+    async def run(ctx: JobContext) -> None:
+        await c.extras["outputs"].refresh()
 
     return run
 
@@ -194,12 +258,30 @@ def subscribe(c: Container) -> None:
     def on_checks(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.run_now("emhass.config_check")
 
+    def on_publish_time(old: Settings, new: Settings, paths: list[str]) -> None:
+        c.scheduler.retime("emhass.publish", QuarterHour(new.emhass.publish.slot_offset_s))
+
+    async def on_outputs(old: Settings, new: Settings, paths: list[str]) -> None:
+        if (
+            old.outputs.mqtt_enabled != new.outputs.mqtt_enabled
+            or old.outputs.broker != new.outputs.broker
+            or old.outputs.topic_prefix != new.outputs.topic_prefix
+            or old.outputs.discovery_prefix != new.outputs.discovery_prefix
+        ):
+            await x["outputs"].restart()
+
+    async def on_state_change(old: Settings, new: Settings, paths: list[str]) -> None:
+        await x["outputs"].refresh()
+
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
     c.settings.subscribe(("inputs", "pv", "parity"), rewatch)
     c.settings.subscribe("emhass.mpc.slot_offset_s", on_mpc_time)
     c.settings.subscribe("emhass.base_url", on_emhass_url)
     c.settings.subscribe(("emhass.mode", "emhass.publish", "emhass.ml", "inputs.deferrable_loads"), on_checks)
+    c.settings.subscribe("emhass.publish.slot_offset_s", on_publish_time)
+    c.settings.subscribe("outputs", on_outputs)
+    c.settings.subscribe(("emhass.mpc.auto", "prices.tariff"), on_state_change)
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
     rewatch()
@@ -220,11 +302,13 @@ def _spawn(c: Container, coro: Any) -> None:
 
 async def start(c: Container) -> None:
     c.extras["ha"].start()
+    c.extras["outputs"].start()
     _spawn(c, _resolve_and_check(c))
 
 
 async def stop(c: Container) -> None:
     x = c.extras
+    await x["outputs"].stop()
     await x["ha"].stop()
     for key in ("http_nordpool", "http_forecast"):
         await x[key].aclose()
@@ -267,6 +351,15 @@ def _forecast_status(c: Container) -> ComponentStatus:
     if c.settings.current.forecast.source == "none":
         return ComponentStatus(status="disabled", detail="No price forecast selected")
     return _problem_status(c, "forecast", "Forecast available")
+
+
+def _mqtt_status(c: Container) -> ComponentStatus:
+    out = c.extras["outputs"]
+    if not out.enabled():
+        return ComponentStatus(status="disabled", detail="MQTT entities are off")
+    if out.connected:
+        return ComponentStatus(status="ok", detail=f"MQTT broker {out.broker}")
+    return ComponentStatus(status="warning", detail=out.last_error or "connecting…")
 
 
 def _pv_status(c: Container) -> ComponentStatus:
