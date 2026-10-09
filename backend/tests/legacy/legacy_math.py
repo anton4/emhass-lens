@@ -6,6 +6,7 @@ sensor.py:269-360 (prices from now, Solcast) and __init__.py:119-178 (MPC payloa
 Used as the reference in golden tests: EMHASS Lens with legacy_compat must reproduce it exactly.
 """
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -49,10 +50,14 @@ def append_forecast(raw_prices: list[dict], hourly: list[tuple[datetime, float]]
             block_start = start_dt + timedelta(minutes=15 * i)
             block_end = block_start + timedelta(minutes=15)
             if block_start >= ee_end_dt and block_start < cutoff_dt:
-                merged.append({
-                    "start": block_start.isoformat(), "end": block_end.isoformat(),
-                    "value": round(value_eur, 5), "is_forecast": True,
-                })
+                merged.append(
+                    {
+                        "start": block_start.isoformat(),
+                        "end": block_end.isoformat(),
+                        "value": round(value_eur, 5),
+                        "is_forecast": True,
+                    }
+                )
     return merged
 
 
@@ -66,13 +71,20 @@ def calculated_prices(raw_prices: list[dict], price_type: str, opts: dict) -> li
             is_night_hour = start_dt.hour < 7 or start_dt.hour >= 22
             is_holiday = start_dt.date() in ee_holidays
             base = opts["margin"] + opts["taastuv"] + opts["aktsiis"] + opts["tasakaal"] + opts["varustus"]
-            tariff = base + (opts["elektrilevi_night"] if (is_weekend or is_night_hour or is_holiday)
-                             else opts["elektrilevi_day"])
+            tariff = base + (
+                opts["elektrilevi_night"] if (is_weekend or is_night_hour or is_holiday) else opts["elektrilevi_day"]
+            )
             final_value = (p["value"] + tariff) * (1.0 + (opts["vat"] / 100.0))
         else:
             final_value = p["value"] - opts["export_margin"] - opts["export_tasakaal"]
-        out.append({"start": p["start"], "end": p["end"], "value": round(final_value, 5),
-                    "is_forecast": p.get("is_forecast", False)})
+        out.append(
+            {
+                "start": p["start"],
+                "end": p["end"],
+                "value": round(final_value, 5),
+                "is_forecast": p.get("is_forecast", False),
+            }
+        )
     return out
 
 
@@ -82,7 +94,7 @@ def prices_from_now(raw_prices: list[dict], opts: dict, now: datetime) -> dict:
     return {"timestamps_left": len(imports), "import_prices": imports, "export_prices": exports}
 
 
-def solcast_values(day_attrs: list[dict | None], field_name: str, np_range: int, now: datetime) -> list[int]:
+def solcast_values(day_attrs: Sequence[dict | None], field_name: str, np_range: int, now: datetime) -> list[int]:
     raw = []
     for attrs in day_attrs:
         if attrs and "detailedForecast" in attrs:
@@ -98,8 +110,15 @@ def solcast_values(day_attrs: list[dict | None], field_name: str, np_range: int,
     return sliced
 
 
-def mpc_payload(from_now: dict, pv: list[int], soc_init: float, soc_final: float, now: datetime,
-                extend_days: int, ev: dict | None = None) -> dict:
+def mpc_payload(
+    from_now: dict,
+    pv: list[int],
+    soc_init: float,
+    soc_final: float,
+    now: datetime,
+    extend_days: int,
+    ev: dict | None = None,
+) -> dict:
     ev = ev or {"enabled": False}
     load_cost = [round(p, 4) for p in from_now["import_prices"]]
     prod_price = [round(p, 4) for p in from_now["export_prices"]]
@@ -130,7 +149,14 @@ def mpc_payload(from_now: dict, pv: list[int], soc_init: float, soc_final: float
 
 
 LEGACY_DEFAULT_OPTS = {
-    "margin": 0.00328, "taastuv": 0.0084, "aktsiis": 0.0021, "tasakaal": 0.00373, "varustus": 0.00758,
-    "elektrilevi_day": 0.0369, "elektrilevi_night": 0.021, "vat": 24.0,
-    "export_margin": 0.01, "export_tasakaal": 0.00373,
+    "margin": 0.00328,
+    "taastuv": 0.0084,
+    "aktsiis": 0.0021,
+    "tasakaal": 0.00373,
+    "varustus": 0.00758,
+    "elektrilevi_day": 0.0369,
+    "elektrilevi_night": 0.021,
+    "vat": 24.0,
+    "export_margin": 0.01,
+    "export_tasakaal": 0.00373,
 }

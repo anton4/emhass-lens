@@ -97,7 +97,12 @@ def decide(now: datetime, tz: ZoneInfo, states: dict[date, DayState], cfg: PollC
             due = now
         else:
             due = st.last_attempt + interval
-        what = "not published yet" if (st.not_published or st.slots == 0) else f"state {st.state}"
+        if st.last_attempt is None:
+            what = "not fetched yet"
+        elif st.not_published or st.slots == 0:
+            what = "not published yet"
+        else:
+            what = f"state {st.state}"
         decisions.append(
             PollDecision(day, due, f"tomorrow {what}; {window} window, every {int(interval.total_seconds() // 60)} min")
         )

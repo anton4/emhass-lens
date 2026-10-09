@@ -160,3 +160,120 @@ class ImportPreview(BaseModel):
     diff: list[DiffEntry]
     errors: list[dict[str, str]]
     revision: int | None = None
+
+
+# --- Phase 1: prices, inputs, plan, EMHASS -------------------------------------------------------------
+
+
+class PriceSlotOut(BaseModel):
+    start: str
+    end: str
+    origin: str  # actual | forecast:<provider>
+    period: str  # day | night | day_peak | holiday_peak
+    reason: str
+    spot: float
+    margin: float
+    renewable: float
+    excise: float
+    balancing: float
+    supply_security: float
+    network: float
+    tariff_ex_vat: float
+    vat: float
+    import_price: float
+    export_fees: float
+    export_price: float
+
+
+class PricesResponse(BaseModel):
+    timezone: str
+    now: str
+    package: str
+    slots: list[PriceSlotOut]
+    actual_end: str | None
+    forecast_until: str | None
+    gaps: list[list[str]]
+    nordpool: dict[str, Any]
+    forecast: dict[str, Any]
+
+
+class InputsResponse(BaseModel):
+    snapshot: dict[str, Any]
+    pv: dict[str, Any]
+    forecast: dict[str, Any]
+    home_assistant: dict[str, Any]
+    mpc: dict[str, Any]
+
+
+class PlanSnapshotOut(BaseModel):
+    generated_at: str
+    fetched_at: str
+    driver: str
+    run_id: int | None = None
+    last_run: dict[str, Any] | None = None
+    rows: list[dict[str, Any]]
+
+
+class PlanResponse(BaseModel):
+    available: bool
+    current: PlanSnapshotOut | None
+    previous: PlanSnapshotOut | None
+    current_row: dict[str, Any] | None
+    columns: list[str]
+    prices: list[dict[str, Any]]
+    driver: str
+    emhass_url: str | None
+
+
+class EmhassStatusOut(BaseModel):
+    url: str | None
+    url_source: str | None
+    reachable: bool | None
+    version: str | None
+    last_error: str | None
+    last_health_at: str | None
+    unreachable_since: str | None
+    method_ts_round: str
+    config_at: str | None
+    checks: list[dict[str, Any]]
+    checks_status: str
+    health: dict[str, Any] | None
+    discovery: list[dict[str, Any]]
+    mpc: dict[str, Any]
+
+
+class ProblemsResponse(BaseModel):
+    active: list[ProblemInfo]
+    history: list[dict[str, Any]]
+
+
+class EntityOption(BaseModel):
+    entity_id: str
+    name: str | None
+    state: str | None
+    unit: str | None
+    device_class: str | None
+
+
+class MpcPreview(BaseModel):
+    built_at: str
+    anchor: str
+    rounding: str
+    mode: str
+    payload: dict[str, Any]
+    explain: list[dict[str, Any]]
+    validation: list[dict[str, Any]]
+    inputs: dict[str, Any]
+    derived: dict[str, Any]
+
+
+class LegacyPreview(BaseModel):
+    found: bool
+    changes: dict[str, Any]
+    notes: list[str]
+    diff: list[DiffEntry]
+    errors: list[dict[str, str]]
+
+
+class LegacyApplyRequest(BaseModel):
+    base_revision: int | None = None

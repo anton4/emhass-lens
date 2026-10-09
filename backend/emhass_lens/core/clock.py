@@ -47,7 +47,8 @@ class FakeClock:
         return self._now
 
     async def wait(self, event: asyncio.Event, seconds: float) -> bool:
-        await asyncio.sleep(0)
+        # Time doesn't pass on its own; yield briefly so a scheduler loop doesn't spin hot in tests.
+        await asyncio.sleep(min(max(seconds, 0.0), 0.01))
         return event.is_set()
 
 

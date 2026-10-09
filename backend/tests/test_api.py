@@ -70,7 +70,10 @@ def test_schema_has_ui_hints(client: TestClient) -> None:
 def test_jobs_listed_and_run_now_records_a_run(client: TestClient) -> None:
     jobs = {j["id"]: j for j in client.get("/api/jobs").json()}
     assert {"system.heartbeat", "maintenance.retention"} <= set(jobs)
-    assert client.post("/api/jobs/system.heartbeat/run").status_code == 202
+    started = client.post("/api/jobs/system.heartbeat/run")
+    assert started.status_code == 202
+    assert started.json()["run_id"] is not None
+    runs: list[dict] = []
     for _ in range(50):
         runs = client.get("/api/runs", params={"job": "system.heartbeat"}).json()
         if runs and runs[0]["outcome"] != "running":

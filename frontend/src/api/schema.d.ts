@@ -4,6 +4,60 @@
  */
 
 export interface paths {
+    "/api/emhass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Emhass Status */
+        get: operations["emhass_status_api_emhass_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emhass/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Emhass Check */
+        post: operations["emhass_check_api_emhass_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emhass/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Emhass Discover
+         * @description Search for EMHASS again (only used when Settings → EMHASS → address is empty).
+         */
+        post: operations["emhass_discover_api_emhass_discover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -24,6 +78,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ha/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ha Entities
+         * @description Entities for the settings pickers (cached for 30 s).
+         */
+        get: operations["ha_entities_api_ha_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health/live": {
         parameters: {
             query?: never;
@@ -36,6 +110,26 @@ export interface paths {
          * @description Liveness for the Supervisor watchdog: answers as long as the event loop does.
          */
         get: operations["live_api_health_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inputs
+         * @description What an MPC run would use right now, with where every value comes from.
+         */
+        get: operations["inputs_api_inputs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -115,6 +209,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/legacy/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Legacy Apply */
+        post: operations["legacy_apply_api_legacy_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/legacy/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Legacy Preview
+         * @description What importing the HACS integration's settings would change.
+         */
+        get: operations["legacy_preview_api_legacy_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/logs": {
         parameters: {
             query?: never;
@@ -127,6 +258,83 @@ export interface paths {
          * @description Log history, newest last. Combines the database with the newest lines not yet flushed.
          */
         get: operations["logs_api_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mpc/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mpc Preview
+         * @description Build and check the MPC payload as if a run started now. Nothing is sent.
+         */
+        post: operations["mpc_preview_api_mpc_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan
+         * @description The newest EMHASS plan (and the one before it), with prices on the same slots.
+         */
+        get: operations["plan_api_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prices
+         * @description Priced 15-minute slots from local midnight `days_back` days ago to the end of the forecast.
+         */
+        get: operations["prices_api_prices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Problems */
+        get: operations["problems_api_problems_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -632,6 +840,45 @@ export interface components {
              */
             slot_offset_s: number;
         };
+        /** EmhassStatusOut */
+        EmhassStatusOut: {
+            /** Checks */
+            checks: {
+                [key: string]: unknown;
+            }[];
+            /** Checks Status */
+            checks_status: string;
+            /** Config At */
+            config_at: string | null;
+            /** Discovery */
+            discovery: {
+                [key: string]: unknown;
+            }[];
+            /** Health */
+            health: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Health At */
+            last_health_at: string | null;
+            /** Method Ts Round */
+            method_ts_round: string;
+            /** Mpc */
+            mpc: {
+                [key: string]: unknown;
+            };
+            /** Reachable */
+            reachable: boolean | null;
+            /** Unreachable Since */
+            unreachable_since: string | null;
+            /** Url */
+            url: string | null;
+            /** Url Source */
+            url_source: string | null;
+            /** Version */
+            version: string | null;
+        };
         /** EmhassTimeouts */
         EmhassTimeouts: {
             /**
@@ -679,6 +926,19 @@ export interface components {
              * @default 0.01
              */
             scale: number;
+        };
+        /** EntityOption */
+        EntityOption: {
+            /** Device Class */
+            device_class: string | null;
+            /** Entity Id */
+            entity_id: string;
+            /** Name */
+            name: string | null;
+            /** State */
+            state: string | null;
+            /** Unit */
+            unit: string | null;
         };
         /** FiForecast */
         FiForecast: {
@@ -815,6 +1075,29 @@ export interface components {
              */
             soc_init: components["schemas"]["EntityInput"];
         };
+        /** InputsResponse */
+        InputsResponse: {
+            /** Forecast */
+            forecast: {
+                [key: string]: unknown;
+            };
+            /** Home Assistant */
+            home_assistant: {
+                [key: string]: unknown;
+            };
+            /** Mpc */
+            mpc: {
+                [key: string]: unknown;
+            };
+            /** Pv */
+            pv: {
+                [key: string]: unknown;
+            };
+            /** Snapshot */
+            snapshot: {
+                [key: string]: unknown;
+            };
+        };
         /** JobInfo */
         JobInfo: {
             /** Description */
@@ -841,6 +1124,28 @@ export interface components {
             title: string;
             /** Trigger */
             trigger: string;
+        };
+        /** LegacyApplyRequest */
+        LegacyApplyRequest: {
+            /** Base Revision */
+            base_revision?: number | null;
+        };
+        /** LegacyPreview */
+        LegacyPreview: {
+            /** Changes */
+            changes: {
+                [key: string]: unknown;
+            };
+            /** Diff */
+            diff: components["schemas"]["DiffEntry"][];
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            }[];
+            /** Found */
+            found: boolean;
+            /** Notes */
+            notes: string[];
         };
         /** LogEntry */
         LogEntry: {
@@ -885,6 +1190,37 @@ export interface components {
              *     }
              */
             retention: components["schemas"]["Retention"];
+        };
+        /** MpcPreview */
+        MpcPreview: {
+            /** Anchor */
+            anchor: string;
+            /** Built At */
+            built_at: string;
+            /** Derived */
+            derived: {
+                [key: string]: unknown;
+            };
+            /** Explain */
+            explain: {
+                [key: string]: unknown;
+            }[];
+            /** Inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** Mode */
+            mode: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rounding */
+            rounding: string;
+            /** Validation */
+            validation: {
+                [key: string]: unknown;
+            }[];
         };
         /** NetworkRates */
         NetworkRates: {
@@ -1012,6 +1348,83 @@ export interface components {
              */
             tolerance: number;
         };
+        /** PlanResponse */
+        PlanResponse: {
+            /** Available */
+            available: boolean;
+            /** Columns */
+            columns: string[];
+            current: components["schemas"]["PlanSnapshotOut"] | null;
+            /** Current Row */
+            current_row: {
+                [key: string]: unknown;
+            } | null;
+            /** Driver */
+            driver: string;
+            /** Emhass Url */
+            emhass_url: string | null;
+            previous: components["schemas"]["PlanSnapshotOut"] | null;
+            /** Prices */
+            prices: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** PlanSnapshotOut */
+        PlanSnapshotOut: {
+            /** Driver */
+            driver: string;
+            /** Fetched At */
+            fetched_at: string;
+            /** Generated At */
+            generated_at: string;
+            /** Last Run */
+            last_run?: {
+                [key: string]: unknown;
+            } | null;
+            /** Rows */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            /** Run Id */
+            run_id?: number | null;
+        };
+        /** PriceSlotOut */
+        PriceSlotOut: {
+            /** Balancing */
+            balancing: number;
+            /** End */
+            end: string;
+            /** Excise */
+            excise: number;
+            /** Export Fees */
+            export_fees: number;
+            /** Export Price */
+            export_price: number;
+            /** Import Price */
+            import_price: number;
+            /** Margin */
+            margin: number;
+            /** Network */
+            network: number;
+            /** Origin */
+            origin: string;
+            /** Period */
+            period: string;
+            /** Reason */
+            reason: string;
+            /** Renewable */
+            renewable: number;
+            /** Spot */
+            spot: number;
+            /** Start */
+            start: string;
+            /** Supply Security */
+            supply_security: number;
+            /** Tariff Ex Vat */
+            tariff_ex_vat: number;
+            /** Vat */
+            vat: number;
+        };
         /** Prices */
         Prices: {
             /**
@@ -1049,6 +1462,31 @@ export interface components {
              */
             tariff: components["schemas"]["Tariff"];
         };
+        /** PricesResponse */
+        PricesResponse: {
+            /** Actual End */
+            actual_end: string | null;
+            /** Forecast */
+            forecast: {
+                [key: string]: unknown;
+            };
+            /** Forecast Until */
+            forecast_until: string | null;
+            /** Gaps */
+            gaps: string[][];
+            /** Nordpool */
+            nordpool: {
+                [key: string]: unknown;
+            };
+            /** Now */
+            now: string;
+            /** Package */
+            package: string;
+            /** Slots */
+            slots: components["schemas"]["PriceSlotOut"][];
+            /** Timezone */
+            timezone: string;
+        };
         /** ProblemInfo */
         ProblemInfo: {
             /** Detail */
@@ -1065,6 +1503,15 @@ export interface components {
             since?: string | null;
             /** Title */
             title: string;
+        };
+        /** ProblemsResponse */
+        ProblemsResponse: {
+            /** Active */
+            active: components["schemas"]["ProblemInfo"][];
+            /** History */
+            history: {
+                [key: string]: unknown;
+            }[];
         };
         /** Pv */
         Pv: {
@@ -1565,6 +2012,66 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    emhass_status_api_emhass_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmhassStatusOut"];
+                };
+            };
+        };
+    };
+    emhass_check_api_emhass_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStarted"];
+                };
+            };
+        };
+    };
+    emhass_discover_api_emhass_discover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmhassStatusOut"];
+                };
+            };
+        };
+    };
     events_api_events_get: {
         parameters: {
             query?: {
@@ -1596,6 +2103,40 @@ export interface operations {
             };
         };
     };
+    ha_entities_api_ha_entities_get: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated domains, e.g. sensor,input_number */
+                domain?: string | null;
+                q?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOption"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     live_api_health_live_get: {
         parameters: {
             query?: never;
@@ -1614,6 +2155,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+        };
+    };
+    inputs_api_inputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputsResponse"];
                 };
             };
         };
@@ -1731,6 +2292,64 @@ export interface operations {
             };
         };
     };
+    legacy_apply_api_legacy_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegacyApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    legacy_preview_api_legacy_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyPreview"];
+                };
+            };
+        };
+    };
     logs_api_logs_get: {
         parameters: {
             query?: {
@@ -1763,6 +2382,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mpc_preview_api_mpc_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MpcPreview"];
+                };
+            };
+        };
+    };
+    plan_api_plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanResponse"];
+                };
+            };
+        };
+    };
+    prices_api_prices_get: {
+        parameters: {
+            query?: {
+                days_back?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    problems_api_problems_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemsResponse"];
                 };
             };
         };

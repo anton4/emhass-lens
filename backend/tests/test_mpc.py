@@ -63,10 +63,14 @@ def pv_for(now_local: datetime):
     days = []
     for d in range(3):
         day_start = start + timedelta(days=d)
-        days.append({"detailedForecast": [
-            {"period_start": (day_start + timedelta(minutes=30 * i)).isoformat(), "pv_estimate": (i % 9) / 2}
-            for i in range(48)
-        ]})
+        days.append(
+            {
+                "detailedForecast": [
+                    {"period_start": (day_start + timedelta(minutes=30 * i)).isoformat(), "pv_estimate": (i % 9) / 2}
+                    for i in range(48)
+                ]
+            }
+        )
     return days
 
 
@@ -80,14 +84,18 @@ def inputs_at(now: datetime, soc: str = "62", ev_on: bool = False, timesteps: st
         pv=pv,
         soc_init=read_number("soc_init", "sensor.ev6_battery_soc", {"state": soc}, now, 0.01),
         soc_final=read_number("soc_final", "input_number.emhass_target_soc", {"state": "80"}, now, 0.01, 0.8),
-        deferrables=(DeferrableReading(
-            name="EV",
-            enabled=read_bool("enabled", "input_boolean.ev_charging_enabled", ev_state, now),
-            nominal_power_w=11000,
-            operating_hours=read_number("hours", "sensor.ev_operating_hours", {"state": "3"}, now),
-            deadline_timesteps=read_number("deadline", "sensor.ev_charging_timesteps", {"state": timesteps}, now),
-            single_constant=read_bool("single", "input_boolean.ev_force_continuous_charging", {"state": "off"}, now),
-        ),),
+        deferrables=(
+            DeferrableReading(
+                name="EV",
+                enabled=read_bool("enabled", "input_boolean.ev_charging_enabled", ev_state, now),
+                nominal_power_w=11000,
+                operating_hours=read_number("hours", "sensor.ev_operating_hours", {"state": "3"}, now),
+                deadline_timesteps=read_number("deadline", "sensor.ev_charging_timesteps", {"state": timesteps}, now),
+                single_constant=read_bool(
+                    "single", "input_boolean.ev_force_continuous_charging", {"state": "off"}, now
+                ),
+            ),
+        ),
         forecast_source="none",
         extend_days=1,
     )
@@ -113,9 +121,18 @@ def test_payload_matches_legacy_at_run_times(minute: int) -> None:
     assert result.payload["prod_price_forecast"] == legacy["prod_price_forecast"]
     assert result.payload["prediction_horizon"] == legacy["prediction_horizon"]
     assert result.payload["pv_power_forecast"] == legacy["pv_power_forecast"]
-    for key in ("num_lags", "historic_days_to_retrieve", "delta_forecast_daily", "soc_init", "soc_final",
-                "nominal_power_of_deferrable_loads", "set_deferrable_load_single_constant", "var_model",
-                "load_forecast_method", "number_of_deferrable_loads"):
+    for key in (
+        "num_lags",
+        "historic_days_to_retrieve",
+        "delta_forecast_daily",
+        "soc_init",
+        "soc_final",
+        "nominal_power_of_deferrable_loads",
+        "set_deferrable_load_single_constant",
+        "var_model",
+        "load_forecast_method",
+        "number_of_deferrable_loads",
+    ):
         assert result.payload[key] == legacy[key], key
     assert result.explain[0]["start"] == anchor_slot(now, "nearest").isoformat()
 
@@ -125,8 +142,13 @@ def test_ev_deadline_is_counted_from_the_anchor_not_one_slot_late() -> None:
     result = build(inputs_at(now, ev_on=True, timesteps="20"), anchor_slot(now, "nearest"), slot_floor(now), Settings())
     assert result.payload["end_timesteps_of_each_deferrable_load"] == [19]
     legacy = legacy_math.mpc_payload(
-        {"import_prices": [0.1] * 50, "export_prices": [0.1] * 50, "timestamps_left": 50}, [0] * 50, 0.6, 0.8,
-        now.astimezone(TZ), 0, {"enabled": True, "hours": 3, "timesteps": 20},
+        {"import_prices": [0.1] * 50, "export_prices": [0.1] * 50, "timestamps_left": 50},
+        [0] * 50,
+        0.6,
+        0.8,
+        now.astimezone(TZ),
+        0,
+        {"enabled": True, "hours": 3, "timesteps": 20},
     )
     assert legacy["end_timesteps_of_each_deferrable_load"] == [20]  # the bug: not shifted with the lists
     assert result.payload["nominal_power_of_deferrable_loads"] == [11000]

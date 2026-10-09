@@ -61,8 +61,11 @@ def test_policy_fast_then_slow_window_and_final_stops() -> None:
     final = DayState(date(2026, 10, 9), "Final", 96)
     prev = DayState(date(2026, 10, 8), "Final", 96)
     tried = datetime(2026, 10, 9, 13, 50, tzinfo=TZ)
-    states = {prev.day: prev, final.day: final,
-              date(2026, 10, 10): DayState(date(2026, 10, 10), None, 0, last_attempt=tried, not_published=True)}
+    states = {
+        prev.day: prev,
+        final.day: final,
+        date(2026, 10, 10): DayState(date(2026, 10, 10), None, 0, last_attempt=tried, not_published=True),
+    }
     [d] = decide(datetime(2026, 10, 9, 13, 52, tzinfo=TZ), TZ, states, CFG)
     assert d.due_at == tried + timedelta(minutes=5)
     assert "fast window" in d.reason

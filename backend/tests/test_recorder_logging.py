@@ -6,8 +6,9 @@ from emhass_lens.logs.setup import setup_logging
 from emhass_lens.runs.recorder import RunRecorder, RunRefused
 
 
-async def test_log_lines_inside_a_run_carry_its_id_and_secrets_are_masked(bus: EventBus, recorder: RunRecorder,
-                                                                          runs_db) -> None:
+async def test_log_lines_inside_a_run_carry_its_id_and_secrets_are_masked(
+    bus: EventBus, recorder: RunRecorder, runs_db
+) -> None:
     handles = setup_logging(bus, "debug")
     handles.attach_sqlite(runs_db)
     redactor.set_secrets(["abcdef123456"])

@@ -63,9 +63,7 @@ async def test_late_fire_beyond_grace_is_recorded_as_missed(clock, recorder, bus
         ran = True
 
     scheduler = make(clock, recorder, bus)
-    scheduler.add(
-        Job(id="j", title="J", description="", trigger=QuarterHour(0), func=job, grace=timedelta(seconds=60))
-    )
+    scheduler.add(Job(id="j", title="J", description="", trigger=QuarterHour(0), func=job, grace=timedelta(seconds=60)))
     clock.advance(minutes=15, seconds=90)  # host was suspended past the 11:15 fire
     await asyncio.gather(*await scheduler.run_pending())
 

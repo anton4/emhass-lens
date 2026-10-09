@@ -15,7 +15,9 @@ async def test_defaults_are_stored_as_first_revision(store: SettingsStore) -> No
 async def test_partial_save_creates_revision_with_diff(store: SettingsStore) -> None:
     result = await store.save(
         {"emhass": {"mode": "dry_run"}, "prices": {"tariff": {"vat_pct": 22}}},
-        base_revision=1, actor="Jorma", comment="try dry run",
+        base_revision=1,
+        actor="Jorma",
+        comment="try dry run",
     )
     assert result.revision == 2
     assert {d["path"] for d in result.diff} == {"emhass.mode", "prices.tariff.vat_pct"}
@@ -48,7 +50,8 @@ async def test_cross_field_rule_needs_api_key(store: SettingsStore) -> None:
 async def test_secrets_are_masked_and_kept_when_sent_back_masked(store: SettingsStore) -> None:
     await store.save(
         {"forecast": {"source": "ee_eupowerprices", "ee": {"api_key": "super-secret-key"}}},
-        base_revision=1, actor="a",
+        base_revision=1,
+        actor="a",
     )
     masked = store.masked()
     assert masked["forecast"]["ee"]["api_key"] == MASK

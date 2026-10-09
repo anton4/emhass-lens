@@ -57,7 +57,10 @@ def test_stitch_matches_legacy_append_forecast() -> None:
 
 
 def test_fi_forecast_units_and_vat_removal() -> None:
-    attr = [{"timestamp": "2026-10-11T00:00:00+03:00", "value": 6.2}, {"timestamp": "2026-10-11T01:00:00+03:00", "value": 5.0}]
+    attr = [
+        {"timestamp": "2026-10-11T00:00:00+03:00", "value": 6.2},
+        {"timestamp": "2026-10-11T01:00:00+03:00", "value": 5.0},
+    ]
     series = fi_ha_entity.parse(attr, "c_per_kwh", 25.5, NOW, "sensor.nordpool_predict_fi_price")
     assert series.points[0].start == datetime(2026, 10, 10, 21, 0, tzinfo=UTC)
     assert series.points[0].eur_mwh == 62.0 / 1.255
@@ -68,8 +71,11 @@ def solcast_day(local_day: date, kw: float = 2.0, periods: int = 48) -> dict:
     start = datetime(local_day.year, local_day.month, local_day.day, tzinfo=TZ)
     return {
         "detailedForecast": [
-            {"period_start": (start + timedelta(minutes=30 * i)).isoformat(),
-             "pv_estimate": round(kw * (i % 7) / 3.3, 4), "pv_estimate10": 0.5}
+            {
+                "period_start": (start + timedelta(minutes=30 * i)).isoformat(),
+                "pv_estimate": round(kw * (i % 7) / 3.3, 4),
+                "pv_estimate10": 0.5,
+            }
             for i in range(periods)
         ]
     }
@@ -108,8 +114,9 @@ def test_pv_dst_day_with_50_periods_stays_aligned() -> None:
     # 2026-10-25 local day is 25 h long: 50 half-hour periods
     day = date(2026, 10, 25)
     start_utc = datetime(2026, 10, 24, 21, 0, tzinfo=UTC)  # local midnight EEST
-    periods = [{"period_start": (start_utc + timedelta(minutes=30 * i)).isoformat(), "pv_estimate": i / 10}
-               for i in range(50)]
+    periods = [
+        {"period_start": (start_utc + timedelta(minutes=30 * i)).isoformat(), "pv_estimate": i / 10} for i in range(50)
+    ]
     pv = parse_pv({"s": {"attributes": {"detailedForecast": periods}}}, "estimate")
     last_local_hour = datetime(2026, 10, 25, 23, 30, tzinfo=TZ).astimezone(UTC)
     assert pv.watts[last_local_hour] == 49 / 10 * 1000

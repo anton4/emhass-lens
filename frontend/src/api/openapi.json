@@ -416,6 +416,157 @@
         "title": "EmhassPublish",
         "type": "object"
       },
+      "EmhassStatusOut": {
+        "properties": {
+          "checks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "checks_status": {
+            "title": "Checks Status",
+            "type": "string"
+          },
+          "config_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config At"
+          },
+          "discovery": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Discovery",
+            "type": "array"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_health_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health At"
+          },
+          "method_ts_round": {
+            "title": "Method Ts Round",
+            "type": "string"
+          },
+          "mpc": {
+            "additionalProperties": true,
+            "title": "Mpc",
+            "type": "object"
+          },
+          "reachable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reachable"
+          },
+          "unreachable_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unreachable Since"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "url_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url Source"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "url",
+          "url_source",
+          "reachable",
+          "version",
+          "last_error",
+          "last_health_at",
+          "unreachable_since",
+          "method_ts_round",
+          "config_at",
+          "checks",
+          "checks_status",
+          "health",
+          "discovery",
+          "mpc"
+        ],
+        "title": "EmhassStatusOut",
+        "type": "object"
+      },
       "EmhassTimeouts": {
         "additionalProperties": false,
         "properties": {
@@ -528,6 +679,67 @@
           "entity"
         ],
         "title": "EntityInput",
+        "type": "object"
+      },
+      "EntityOption": {
+        "properties": {
+          "device_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Class"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "entity_id",
+          "name",
+          "state",
+          "unit",
+          "device_class"
+        ],
+        "title": "EntityOption",
         "type": "object"
       },
       "FiForecast": {
@@ -803,6 +1015,44 @@
         "title": "Inputs",
         "type": "object"
       },
+      "InputsResponse": {
+        "properties": {
+          "forecast": {
+            "additionalProperties": true,
+            "title": "Forecast",
+            "type": "object"
+          },
+          "home_assistant": {
+            "additionalProperties": true,
+            "title": "Home Assistant",
+            "type": "object"
+          },
+          "mpc": {
+            "additionalProperties": true,
+            "title": "Mpc",
+            "type": "object"
+          },
+          "pv": {
+            "additionalProperties": true,
+            "title": "Pv",
+            "type": "object"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          }
+        },
+        "required": [
+          "snapshot",
+          "pv",
+          "forecast",
+          "home_assistant",
+          "mpc"
+        ],
+        "title": "InputsResponse",
+        "type": "object"
+      },
       "JobInfo": {
         "properties": {
           "description": {
@@ -904,6 +1154,69 @@
           "grace_s"
         ],
         "title": "JobInfo",
+        "type": "object"
+      },
+      "LegacyApplyRequest": {
+        "properties": {
+          "base_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision"
+          }
+        },
+        "title": "LegacyApplyRequest",
+        "type": "object"
+      },
+      "LegacyPreview": {
+        "properties": {
+          "changes": {
+            "additionalProperties": true,
+            "title": "Changes",
+            "type": "object"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DiffEntry"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "found",
+          "changes",
+          "notes",
+          "diff",
+          "errors"
+        ],
+        "title": "LegacyPreview",
         "type": "object"
       },
       "LogEntry": {
@@ -1016,6 +1329,70 @@
           }
         },
         "title": "Logging",
+        "type": "object"
+      },
+      "MpcPreview": {
+        "properties": {
+          "anchor": {
+            "title": "Anchor",
+            "type": "string"
+          },
+          "built_at": {
+            "title": "Built At",
+            "type": "string"
+          },
+          "derived": {
+            "additionalProperties": true,
+            "title": "Derived",
+            "type": "object"
+          },
+          "explain": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Explain",
+            "type": "array"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "title": "Inputs",
+            "type": "object"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "rounding": {
+            "title": "Rounding",
+            "type": "string"
+          },
+          "validation": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Validation",
+            "type": "array"
+          }
+        },
+        "required": [
+          "built_at",
+          "anchor",
+          "rounding",
+          "mode",
+          "payload",
+          "explain",
+          "validation",
+          "inputs",
+          "derived"
+        ],
+        "title": "MpcPreview",
         "type": "object"
       },
       "NetworkRates": {
@@ -1256,6 +1633,236 @@
         "title": "Parity",
         "type": "object"
       },
+      "PlanResponse": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanSnapshotOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_row": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Row"
+          },
+          "driver": {
+            "title": "Driver",
+            "type": "string"
+          },
+          "emhass_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emhass Url"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanSnapshotOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prices": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "current",
+          "previous",
+          "current_row",
+          "columns",
+          "prices",
+          "driver",
+          "emhass_url"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
+      "PlanSnapshotOut": {
+        "properties": {
+          "driver": {
+            "title": "Driver",
+            "type": "string"
+          },
+          "fetched_at": {
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "generated_at",
+          "fetched_at",
+          "driver",
+          "rows"
+        ],
+        "title": "PlanSnapshotOut",
+        "type": "object"
+      },
+      "PriceSlotOut": {
+        "properties": {
+          "balancing": {
+            "title": "Balancing",
+            "type": "number"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "excise": {
+            "title": "Excise",
+            "type": "number"
+          },
+          "export_fees": {
+            "title": "Export Fees",
+            "type": "number"
+          },
+          "export_price": {
+            "title": "Export Price",
+            "type": "number"
+          },
+          "import_price": {
+            "title": "Import Price",
+            "type": "number"
+          },
+          "margin": {
+            "title": "Margin",
+            "type": "number"
+          },
+          "network": {
+            "title": "Network",
+            "type": "number"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "renewable": {
+            "title": "Renewable",
+            "type": "number"
+          },
+          "spot": {
+            "title": "Spot",
+            "type": "number"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "supply_security": {
+            "title": "Supply Security",
+            "type": "number"
+          },
+          "tariff_ex_vat": {
+            "title": "Tariff Ex Vat",
+            "type": "number"
+          },
+          "vat": {
+            "title": "Vat",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "origin",
+          "period",
+          "reason",
+          "spot",
+          "margin",
+          "renewable",
+          "excise",
+          "balancing",
+          "supply_security",
+          "network",
+          "tariff_ex_vat",
+          "vat",
+          "import_price",
+          "export_fees",
+          "export_price"
+        ],
+        "title": "PriceSlotOut",
+        "type": "object"
+      },
       "Prices": {
         "additionalProperties": false,
         "properties": {
@@ -1295,6 +1902,84 @@
           }
         },
         "title": "Prices",
+        "type": "object"
+      },
+      "PricesResponse": {
+        "properties": {
+          "actual_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual End"
+          },
+          "forecast": {
+            "additionalProperties": true,
+            "title": "Forecast",
+            "type": "object"
+          },
+          "forecast_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Until"
+          },
+          "gaps": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "nordpool": {
+            "additionalProperties": true,
+            "title": "Nordpool",
+            "type": "object"
+          },
+          "now": {
+            "title": "Now",
+            "type": "string"
+          },
+          "package": {
+            "title": "Package",
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/PriceSlotOut"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "now",
+          "package",
+          "slots",
+          "actual_end",
+          "forecast_until",
+          "gaps",
+          "nordpool",
+          "forecast"
+        ],
+        "title": "PricesResponse",
         "type": "object"
       },
       "ProblemInfo": {
@@ -1362,6 +2047,31 @@
           "title"
         ],
         "title": "ProblemInfo",
+        "type": "object"
+      },
+      "ProblemsResponse": {
+        "properties": {
+          "active": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemInfo"
+            },
+            "title": "Active",
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "History",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active",
+          "history"
+        ],
+        "title": "ProblemsResponse",
         "type": "object"
       },
       "Pv": {
@@ -2428,6 +3138,70 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/emhass": {
+      "get": {
+        "operationId": "emhass_status_api_emhass_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmhassStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Emhass Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/emhass/check": {
+      "post": {
+        "operationId": "emhass_check_api_emhass_check_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Emhass Check",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/emhass/discover": {
+      "post": {
+        "description": "Search for EMHASS again (only used when Settings → EMHASS → address is empty).",
+        "operationId": "emhass_discover_api_emhass_discover_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmhassStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Emhass Discover",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/events": {
       "get": {
         "description": "Server-sent events: log, run.*, job.updated, settings.changed, ... (comma-separated prefixes).",
@@ -2476,6 +3250,90 @@
         ]
       }
     },
+    "/api/ha/entities": {
+      "get": {
+        "description": "Entities for the settings pickers (cached for 30 s).",
+        "operationId": "ha_entities_api_ha_entities_get",
+        "parameters": [
+          {
+            "description": "Comma-separated domains, e.g. sensor,input_number",
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated domains, e.g. sensor,input_number",
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EntityOption"
+                  },
+                  "title": "Response Ha Entities Api Ha Entities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ha Entities",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/health/live": {
       "get": {
         "description": "Liveness for the Supervisor watchdog: answers as long as the event loop does.",
@@ -2499,6 +3357,28 @@
         "summary": "Live",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/inputs": {
+      "get": {
+        "description": "What an MPC run would use right now, with where every value comes from.",
+        "operationId": "inputs_api_inputs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Inputs",
+        "tags": [
+          "data"
         ]
       }
     },
@@ -2654,6 +3534,65 @@
         ]
       }
     },
+    "/api/legacy/import": {
+      "post": {
+        "operationId": "legacy_apply_api_legacy_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegacyApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Legacy Apply",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/legacy/preview": {
+      "get": {
+        "description": "What importing the HACS integration's settings would change.",
+        "operationId": "legacy_preview_api_legacy_preview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Legacy Preview",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/logs": {
       "get": {
         "description": "Log history, newest last. Combines the database with the newest lines not yet flushed.",
@@ -2775,6 +3714,117 @@
         "summary": "Logs",
         "tags": [
           "logs"
+        ]
+      }
+    },
+    "/api/mpc/preview": {
+      "post": {
+        "description": "Build and check the MPC payload as if a run started now. Nothing is sent.",
+        "operationId": "mpc_preview_api_mpc_preview_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MpcPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mpc Preview",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/plan": {
+      "get": {
+        "description": "The newest EMHASS plan (and the one before it), with prices on the same slots.",
+        "operationId": "plan_api_plan_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plan",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/prices": {
+      "get": {
+        "description": "Priced 15-minute slots from local midnight `days_back` days ago to the end of the forecast.",
+        "operationId": "prices_api_prices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days_back",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 60,
+              "minimum": 0,
+              "title": "Days Back",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prices",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/problems": {
+      "get": {
+        "operationId": "problems_api_problems_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Problems",
+        "tags": [
+          "system"
         ]
       }
     },

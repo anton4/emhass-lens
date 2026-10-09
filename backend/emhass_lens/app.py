@@ -4,11 +4,12 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
-from emhass_lens import system_jobs
-from emhass_lens.api.routes import jobs, logs, meta, runs, settings
+from emhass_lens import system_jobs, wiring
+from emhass_lens.api.routes import data, jobs, logs, meta, runs, settings, system
 from emhass_lens.api.static import UIFiles
 from emhass_lens.bootstrap import Bootstrap
 from emhass_lens.container import Container
@@ -68,7 +69,9 @@ def create_app(
     bus: EventBus | None = None,
     logging_handles: LoggingHandles | None = None,
     clock: Clock | None = None,
+    http_transport: Any = None,
 ) -> FastAPI:
+    """http_transport (tests only) replaces the network for every outgoing HTTP client."""
     bus = bus or EventBus()
     clock = clock or SystemClock()
 
@@ -87,6 +90,10 @@ def create_app(
             log.warning("%d run(s) were interrupted by the previous shutdown", interrupted)
 
         system_jobs.register(c)
+        c.extras["http_transport"] = http_transport
+        wiring.build(c)
+        wiring.register_jobs(c)
+        wiring.subscribe(c)
         for job_id in c.kv_get(PAUSED_JOBS_KEY, []):
             if job_id in c.scheduler.jobs:
                 c.scheduler.jobs[job_id].paused = True
@@ -103,12 +110,14 @@ def create_app(
                 c.scheduler.start()
 
         c.settings.subscribe("", start_on_valid_settings)
+        await wiring.start(c)
         log.info("Ready on port %d", boot.port)
         try:
             yield
         finally:
             log.info("Shutting down")
             await c.scheduler.stop()
+            await wiring.stop(c)
             handles.close() if logging_handles is None else (handles.sqlite and handles.sqlite.close())
             c.app_db.close()
             c.runs_db.close()
@@ -121,7 +130,7 @@ def create_app(
         openapi_url="/api/openapi.json",
         redoc_url=None,
     )
-    for module in (meta, logs, settings, jobs, runs):
+    for module in (meta, logs, settings, jobs, runs, data, system):
         app.include_router(module.router)
     if boot.static_dir is not None:
         app.mount("/", UIFiles(directory=boot.static_dir, html=True), name="ui")
