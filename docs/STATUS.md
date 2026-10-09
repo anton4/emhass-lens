@@ -34,6 +34,23 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-09 (late night): 0.2.5–0.2.8 after trying it on the real HA
+- **Saving through the user's nginx.** The proxy refuses PUT/PATCH; the browser only shows "Failed to fetch" / `ERR_HTTP2_PROTOCOL_ERROR`. The UI now writes with POST only (`/api/settings/save`, `/api/settings/change`), and the API client offers only get/post (0.2.5).
+- **Health check while starting.** It now runs every 2 s during start-up, so Home Assistant shows the App as started within seconds (0.2.5).
+- **Settings review (0.2.6):**
+  - Each change is named by its place in the form and jumps to the field.
+  - Changed fields are highlighted.
+  - Each field can be reverted on its own, and "Discard all" is also offered during the review.
+- **Plan charts (0.2.7):**
+  - Each y-axis fits its own data.
+  - Drag zooms all three charts into a time range, snapped to quarter-hours, and the y-axes refit.
+  - Double-click or "Reset zoom" undoes it.
+- **Secret fields (0.2.7 / 0.2.8):**
+  - An eye button shows what was typed.
+  - It can also show the stored value via `POST /api/settings/secret`. That only works through Ingress, and each reveal is logged without the value.
+- **Git history:** rewritten to the noreply identity `anton4 <5539972+anton4@users.noreply.github.com>`, and the old CI runs were deleted. Every machine pushing here must use that identity, then `git fetch && git reset --hard origin/main`.
+- **Known:** `frontend/src/lib/prices.test.ts` fails under an Estonian locale (the formatter uses "−"); CI runs in English.
+
 ### 2026-10-09 (night): code review fixes, 0.2.4
 - **Code review of the backend's critical paths found:**
   - Nord Pool polling could loop every second on unexpected responses.
