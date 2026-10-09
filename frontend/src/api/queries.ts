@@ -15,6 +15,7 @@ import type {
   RunDetail,
   RunSummary,
   SettingsResponse,
+  SetupChecklist,
   StatusInfo,
   VersionInfo,
 } from './types'
@@ -39,6 +40,7 @@ export const keys = {
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
   outputs: ['outputs'] as const,
   inverter: ['inverter'] as const,
+  setup: ['setup'] as const,
 }
 
 export function useStatus() {
@@ -146,4 +148,8 @@ export function useOutputs() {
 /** Inverter control: mode, preconditions, the last decision and comparison, agreement. */
 export function useInverter() {
   return useQuery({ queryKey: keys.inverter, queryFn: () => api.get<InverterStatus>('/api/inverter'), refetchInterval: 30_000 })
+}
+
+export function useSetup() {
+  return useQuery({ queryKey: keys.setup, queryFn: () => api.get<SetupChecklist>('/api/setup'), refetchInterval: 30_000 })
 }

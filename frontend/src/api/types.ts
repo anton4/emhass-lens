@@ -66,6 +66,8 @@ export type InverterStatus = S['InverterStatus']
 export type Agreement = S['Agreement']
 export type InverterSettings = S['Inverter']
 export type SklearnModel = S['EmhassMl']['sklearn_model']
+export type SetupChecklist = S['SetupChecklist']
+export type SetupStep = S['SetupStep']
 
 // ---- Run artifacts: the API returns these as free-form JSON (see backend services/*.py) ----
 

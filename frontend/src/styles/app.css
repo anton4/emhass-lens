@@ -1831,3 +1831,12 @@ dialog.confirm h2 {
 .rules-list li[data-unreachable] {
   color: var(--ink-muted);
 }
+
+/* Getting started checklist */
+.setup-summary { cursor: pointer; list-style: none; }
+.setup-summary::-webkit-details-marker { display: none; }
+.setup-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.setup-step { display: grid; grid-template-columns: 11rem 1fr; gap: 12px; align-items: start; }
+@media (max-width: 560px) {
+  .setup-step { grid-template-columns: 1fr; gap: 2px; }
+}

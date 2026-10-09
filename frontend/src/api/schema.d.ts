@@ -698,6 +698,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Setup Checklist
+         * @description Getting started: each step of moving from the HACS integration to EMHASS Lens, and where it stands.
+         */
+        get: operations["setup_checklist_api_setup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/status": {
         parameters: {
             query?: never;
@@ -2602,6 +2622,33 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SetupChecklist */
+        SetupChecklist: {
+            /** Done */
+            done: number;
+            /** Steps */
+            steps: components["schemas"]["SetupStep"][];
+            /** Total */
+            total: number;
+        };
+        /** SetupStep */
+        SetupStep: {
+            /** Detail */
+            detail: string;
+            /** Key */
+            key: string;
+            /** Link */
+            link?: string | null;
+            /**
+             * Optional
+             * @default false
+             */
+            optional: boolean;
+            /** State */
+            state: string;
+            /** Title */
+            title: string;
+        };
         /** StatusInfo */
         StatusInfo: {
             /** Actor */
@@ -3835,6 +3882,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    setup_checklist_api_setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupChecklist"];
                 };
             };
         };

@@ -23,9 +23,11 @@ from emhass_lens.api.schemas import (
     ProblemsResponse,
     RunStarted,
     SaveResponse,
+    SetupChecklist,
+    SetupStep,
 )
 from emhass_lens.core.clock import iso
-from emhass_lens.services import driver, legacy_import
+from emhass_lens.services import driver, legacy_import, setup
 from emhass_lens.settings.model import Settings
 from emhass_lens.settings.store import SettingsInvalid, StaleRevision, _errors, deep_merge, diff_docs, mask_diff
 
@@ -183,3 +185,11 @@ async def inverter_decide(c: ContainerDep) -> RunStarted:
     """Decide now for the current slot (applies only in live mode)."""
     run_id = await c.scheduler.start_now("inverter.decide")
     return RunStarted(job=JobInfo(**c.scheduler.jobs["inverter.decide"].info()), run_id=run_id)
+
+
+@router.get("/setup")
+async def setup_checklist(c: ContainerDep) -> SetupChecklist:
+    """Getting started: each step of moving from the HACS integration to EMHASS Lens, and where it stands."""
+    steps = [SetupStep(**s) for s in await setup.checklist(c)]
+    required = [s for s in steps if not s.optional and s.state != "skipped"]
+    return SetupChecklist(steps=steps, done=sum(1 for s in required if s.state == "done"), total=len(required))

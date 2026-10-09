@@ -16,6 +16,7 @@ import { EmhassCard } from './health/EmhassCard'
 import { LegacyImportCard } from './health/LegacyImportCard'
 import { MlCard } from './health/MlCard'
 import { OutputsCard } from './health/OutputsCard'
+import { SetupCard } from './health/SetupCard'
 import { ParityCard } from './health/ParityCard'
 
 export function HealthPage() {
@@ -30,6 +31,8 @@ export function HealthPage() {
         intro="Whether every part of EMHASS Lens is working, and when each job runs next."
       />
       <ErrorNotice error={status.error ?? jobs.error} />
+
+      <SetupCard />
 
       <ProblemsPanel />
 

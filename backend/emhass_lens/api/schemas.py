@@ -531,3 +531,18 @@ class InverterStatus(BaseModel):
     preconditions: str | None
     agreement_24h: Agreement
     agreement_7d: Agreement
+
+
+class SetupStep(BaseModel):
+    key: str
+    title: str
+    state: str  # done | todo | attention | skipped
+    detail: str
+    link: str | None = None
+    optional: bool = False
+
+
+class SetupChecklist(BaseModel):
+    steps: list[SetupStep]
+    done: int
+    total: int

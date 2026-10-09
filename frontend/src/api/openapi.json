@@ -4714,6 +4714,76 @@
         "title": "SettingsSaveRequest",
         "type": "object"
       },
+      "SetupChecklist": {
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/SetupStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "steps",
+          "done",
+          "total"
+        ],
+        "title": "SetupChecklist",
+        "type": "object"
+      },
+      "SetupStep": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "optional": {
+            "default": false,
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "state",
+          "detail"
+        ],
+        "title": "SetupStep",
+        "type": "object"
+      },
       "StatusInfo": {
         "properties": {
           "actor": {
@@ -6559,6 +6629,28 @@
         "summary": "Get Schema",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/setup": {
+      "get": {
+        "description": "Getting started: each step of moving from the HACS integration to EMHASS Lens, and where it stands.",
+        "operationId": "setup_checklist_api_setup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupChecklist"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Setup Checklist",
+        "tags": [
+          "system"
         ]
       }
     },

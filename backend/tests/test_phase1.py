@@ -310,3 +310,22 @@ def test_emhass_is_discovered_by_its_known_slug_with_the_default_role(tmp_path: 
         assert url == "http://5b918bf2-emhass:5000"
         log = container.extras["emhass"].discovery_log
         assert log[0]["url"] == "Supervisor /addons" and "known EMHASS slugs" in log[0]["error"]
+
+
+def test_setup_checklist_tracks_the_migration(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    with make_client(tmp_path, world, clock) as client:
+        run_job(client, "nordpool.poll")
+        prime(client, world)
+        configure_emhass(client)
+        run_job(client, "emhass.config_check")
+        checklist = client.get("/api/setup").json()
+        steps = {s["key"]: s for s in checklist["steps"]}
+        assert steps["ha"]["state"] == "done"
+        assert steps["emhass"]["state"] == "done"
+        assert steps["emhass_config"]["state"] == "done"
+        assert steps["import"]["state"] == "skipped"  # no HACS integration switch in this world
+        assert steps["inputs"]["state"] == "done"
+        assert steps["drive"]["state"] == "todo"
+        assert steps["mqtt"]["optional"] is True
+        assert 0 < checklist["done"] < checklist["total"]
