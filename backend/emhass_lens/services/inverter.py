@@ -109,12 +109,16 @@ class InverterService:
     def preconditions(self) -> str | None:
         ha = self.c.extras["ha"]
         e = self.c.settings.current.inverter.entities
-        mode = (ha.state(e.charger_mode_select) or {}).get("state")
-        if mode != e.passive_option:
-            return f"{e.charger_mode_select} is {mode!r}, not {e.passive_option!r}"
-        enabled = (ha.state(e.enable_boolean) or {}).get("state")
-        if enabled != "on":
-            return f"{e.enable_boolean} is {enabled!r} (e.g. an mFRR session holds the inverter)"
+        mode_state = ha.state(e.charger_mode_select)
+        if mode_state is None:
+            return f"{e.charger_mode_select} not found"
+        if mode_state.get("state") != e.passive_option:
+            return f"{e.charger_mode_select} is {mode_state.get('state')!r}, not {e.passive_option!r}"
+        enabled_state = ha.state(e.enable_boolean)
+        if enabled_state is None:
+            return f"{e.enable_boolean} not found"
+        if enabled_state.get("state") != "on":
+            return f"{e.enable_boolean} is {enabled_state.get('state')!r} (e.g. an mFRR session holds the inverter)"
         return None
 
     # --- jobs --------------------------------------------------------------------------------------------------

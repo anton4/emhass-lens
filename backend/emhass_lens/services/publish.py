@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
+from emhass_lens.domain.mpc.anchor import published_row
 from emhass_lens.scheduler.core import JobContext
 
 if TYPE_CHECKING:
@@ -82,25 +83,27 @@ class PublishService:
         if row is None:
             ctx.run.summary = ctx.run.summary or "Published; the stored plan has no row for this slot"
         else:
-            local = slot_floor(now).astimezone(self.c.extras["prices"].tz)
+            local = (parse_iso(str(row.get("timestamp"))) or slot_floor(now)).astimezone(self.c.extras["prices"].tz)
             ctx.run.summary = ctx.run.summary or (
                 f"Published {local:%H:%M}: {battery(row.get('P_batt'))}, {grid(row.get('P_grid'))}"
             )
         self.c.bus.publish("plan.published", event)
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """The row publish-data shows now: chosen exactly the way EMHASS chooses it, so the event matches
+        EMHASS's sensor.p_* values."""
         plans = await self.c.extras["emhass"].plans(1)
         if not plans:
             return None, None
         plan = plans[0]
-        slot = slot_floor(now)
-        for row in plan["plan"]:
-            if parse_iso(str(row.get("timestamp"))) == slot:
-                return row, plan
-        return None, plan
+        rows = [r for r in plan["plan"] if parse_iso(str(r.get("timestamp"))) is not None]
+        stamps = [parse_iso(str(r.get("timestamp"))) or now for r in rows]
+        index = published_row(stamps, now, self.c.extras["emhass"].method_ts_round())
+        return (rows[index] if index is not None else None), plan
 
     def event_data(self, now: Any, row: dict[str, Any] | None, plan: dict[str, Any] | None) -> dict[str, Any]:
-        slot = slot_floor(now)
+        row_start = parse_iso(str(row.get("timestamp"))) if row else None
+        slot = row_start or slot_floor(now)
         data: dict[str, Any] = {
             "slot_start": iso(slot),
             "slot_end": iso(slot + timedelta(minutes=15)),

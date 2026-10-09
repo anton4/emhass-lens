@@ -74,3 +74,29 @@ def parse_version(text: str | None) -> tuple[int, ...] | None:
             break
         parts.append(int(digits))
     return tuple(parts) or None
+
+
+def published_row(timestamps: list[datetime], now: datetime, method_ts_round: str) -> int | None:
+    """The plan row EMHASS's publish-data shows at `now` (mirrors emhass command_line._get_closest_index).
+
+    EMHASS zeroes the seconds of now and then picks, among the plan's rows: the nearest one ('nearest'; a tie goes
+    to the later row, as in pandas), the last one at or before now ('first'), or the first one at or after now
+    ('last').
+    """
+    if not timestamps:
+        return None
+    now = now.astimezone(UTC).replace(second=0, microsecond=0)
+    if method_ts_round == "first":
+        before = [i for i, ts in enumerate(timestamps) if ts <= now]
+        return before[-1] if before else None
+    if method_ts_round == "last":
+        after = [i for i, ts in enumerate(timestamps) if ts >= now]
+        return after[0] if after else None
+    best, best_distance = 0, None
+    for i, ts in enumerate(timestamps):
+        distance = abs((ts - now).total_seconds())
+        if best_distance is None or distance <= best_distance:
+            if best_distance is not None and distance == best_distance and ts < timestamps[best]:
+                continue
+            best, best_distance = i, distance
+    return best

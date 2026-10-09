@@ -182,3 +182,20 @@ def test_reading_explains_itself() -> None:
     assert fallback.value == 0.8
     assert fallback.source == "default"
     assert isinstance(fallback, Reading)
+
+
+def test_published_row_mirrors_emhass() -> None:
+    from emhass_lens.domain.mpc.anchor import published_row
+
+    rows = [utc(2026, 10, 9, 11, 15) + timedelta(minutes=15 * i) for i in range(4)]
+    # a plan made at :13 starts at :15; publish at :13 shows the :15 row (nearest), nothing with 'first'
+    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "nearest") == 0
+    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "first") is None
+    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "last") == 0
+    # at the next slot start (+2 s) every rule shows that slot
+    for rule in ("nearest", "first", "last"):
+        assert published_row(rows, utc(2026, 10, 9, 11, 30, 2), rule) == 1
+    # 8 minutes into a slot 'nearest' already shows the next one (why EMHASS Lens publishes at :00:02)
+    assert published_row(rows, utc(2026, 10, 9, 11, 38, 0), "nearest") == 2
+    # an exact tie (7.5 min can't happen with zeroed seconds, but 7:30 -> 7:00) stays deterministic
+    assert published_row(rows, utc(2026, 10, 9, 11, 22, 30), "nearest") == 0
