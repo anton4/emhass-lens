@@ -57,6 +57,7 @@ class World:
     ha_services: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     ha_events: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     clock_now: Any = None  # callable returning "now" for EMHASS timestamps
+    supervisor_lists_addons: bool = False  # the default App role may not list Apps
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -70,11 +71,21 @@ class World:
             if self.ee_status != 200:
                 return httpx.Response(self.ee_status, json={"detail": "nope"})
             return httpx.Response(200, json=self.ee_forecast or {"series": []})
-        if host == "emhass.test":
+        if host in ("emhass.test", "5b918bf2-emhass"):
             return self._emhass(request, path)
         if host == "supervisor":
             if path == "/addons":
+                if not self.supervisor_lists_addons:
+                    return httpx.Response(403, json={"result": "error", "message": "Access not allowed for this App"})
                 return httpx.Response(200, json={"result": "ok", "data": {"addons": [{"slug": "5b918bf2_emhass"}]}})
+            if path == "/addons/5b918bf2_emhass/info":
+                return httpx.Response(
+                    200,
+                    json={
+                        "result": "ok",
+                        "data": {"slug": "5b918bf2_emhass", "state": "started", "network": {"5000/tcp": 5001}},
+                    },
+                )
             return httpx.Response(404, json={"result": "error", "message": "not found"})
         if host == "ha.test":
             return self._ha(request, path)

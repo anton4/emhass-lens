@@ -298,3 +298,15 @@ def test_health_problems_and_entity_picker(tmp_path: Path, world: World) -> None
         assert [e["entity_id"] for e in entities] == ["sensor.ev6_battery_soc"]
         assert entities[0]["unit"] == "%"
         _ = asyncio
+
+
+def test_emhass_is_discovered_by_its_known_slug_with_the_default_role(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    with make_client(tmp_path, world, clock, supervisor_token="t") as client:
+        container = client.app.state.container  # type: ignore[attr-defined]
+        portal = client.portal
+        assert portal is not None
+        url = portal.call(container.extras["emhass"].discover)
+        assert url == "http://5b918bf2-emhass:5000"
+        log = container.extras["emhass"].discovery_log
+        assert log[0]["url"] == "Supervisor /addons" and "known EMHASS slugs" in log[0]["error"]

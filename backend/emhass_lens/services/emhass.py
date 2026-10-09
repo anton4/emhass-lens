@@ -21,6 +21,9 @@ log = logging.getLogger("emhass_lens.emhass")
 
 DISCOVERED_KEY = "emhass.discovered_url"
 HOST_GATEWAY = "172.30.32.1"
+# The EMHASS App from https://github.com/davidusb-geek/emhass-add-on (Supervisor slug = sha1(repo url)[:8]_emhass),
+# and the same App installed as a local App.
+KNOWN_SLUGS = ("5b918bf2_emhass", "local_emhass")
 
 
 class EmhassService:
@@ -86,25 +89,38 @@ class EmhassService:
         self.client.set_base_url(url)
 
     async def discover(self) -> str | None:
-        """Look for the EMHASS App through the Supervisor and probe its /healthz."""
+        """Look for the EMHASS App through the Supervisor and probe its /healthz.
+
+        Listing all Apps needs a higher Supervisor role than EMHASS Lens asks for, so when that is refused
+        the known slugs of the EMHASS App are looked up directly (/addons/<slug>/info is always allowed).
+        """
         tried: list[dict[str, Any]] = []
         candidates: list[str] = []
         if self.supervisor.available:
+            slugs: list[str] = []
             try:
-                for addon in await self.supervisor.addons():
-                    slug = str(addon.get("slug") or "")
-                    if "emhass" not in slug.lower():
-                        continue
-                    candidates.append(f"http://{addon_hostname(slug)}:5000")
-                    try:
-                        info = await self.supervisor.addon_info(slug)
-                        for host_port in (info.get("network") or {}).values():
-                            if host_port:
-                                candidates.append(f"http://{HOST_GATEWAY}:{host_port}")
-                    except SupervisorError as exc:
-                        tried.append({"url": f"addon {slug}", "ok": False, "error": str(exc)})
+                slugs = [
+                    str(a.get("slug"))
+                    for a in await self.supervisor.addons()
+                    if "emhass" in str(a.get("slug", "")).lower()
+                ]
             except SupervisorError as exc:
-                tried.append({"url": "Supervisor /addons", "ok": False, "error": str(exc)})
+                tried.append(
+                    {"url": "Supervisor /addons", "ok": False, "error": f"{exc} — trying the known EMHASS slugs"}
+                )
+            for slug in slugs or list(KNOWN_SLUGS):
+                try:
+                    info = await self.supervisor.addon_info(slug)
+                except SupervisorError as exc:
+                    tried.append({"url": f"App {slug}", "ok": False, "error": str(exc)})
+                    continue
+                if info.get("state") not in (None, "started"):
+                    tried.append({"url": f"App {slug}", "ok": False, "error": f"App is {info.get('state')}"})
+                candidates.append(f"http://{addon_hostname(slug)}:5000")
+                for host_port in (info.get("network") or {}).values():
+                    if host_port:
+                        candidates.append(f"http://{HOST_GATEWAY}:{host_port}")
+            candidates += [f"http://{HOST_GATEWAY}:5000", f"http://{HOST_GATEWAY}:5001"]
         else:
             candidates += ["http://localhost:5000", "http://localhost:5001"]
         for url in dict.fromkeys(candidates):
