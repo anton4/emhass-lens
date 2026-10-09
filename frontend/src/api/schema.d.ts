@@ -1229,6 +1229,42 @@ export interface components {
             /** Start */
             start: string;
         };
+        /** ExternalControl */
+        ExternalControl: {
+            /**
+             * Busy when the state is one of
+             * @description Compared without regard to case.
+             */
+            busy_values?: string[];
+            /**
+             * Hold while a market session owns the inverter
+             * @description While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, the plan is re-applied right away.
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Session entity
+             * @default input_select.qilowatt_session_state
+             */
+            entity: string;
+            /**
+             * Wait for the inverter hand-back
+             * @description After the session ends, how long to wait for the inverter control's enable switch to come back on before giving up.
+             * @default 60
+             */
+            handback_wait_s: number;
+            /**
+             * Re-run MPC after a session
+             * @description Off: the existing plan is re-applied, with at most one inverter write. On: MPC also runs again with the battery state after the session; the inverter follows that plan from the next slot.
+             * @default false
+             */
+            replan: boolean;
+            /**
+             * Delay before the re-run
+             * @default 15
+             */
+            resume_delay_s: number;
+        };
         /** FiForecast */
         FiForecast: {
             /**
@@ -1363,6 +1399,30 @@ export interface components {
              * @default 15:30
              */
             tomorrow_warn_after: string;
+        };
+        /**
+         * HoldStatus
+         * @description A market session (e.g. Qilowatt mFRR) owning the inverter: MPC sends, publishes and inverter writes wait.
+         */
+        HoldStatus: {
+            /** Busy */
+            busy: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Entity */
+            entity: string;
+            /** Last Hold */
+            last_hold: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Resume */
+            last_resume: {
+                [key: string]: unknown;
+            } | null;
+            /** Since */
+            since: string | null;
+            /** Value */
+            value: string | null;
         };
         /** ImportPreview */
         ImportPreview: {
@@ -1758,6 +1818,12 @@ export interface components {
             auto: boolean;
             /** Driver */
             driver: string;
+            /**
+             * Held
+             * @default false
+             */
+            held: boolean;
+            hold?: components["schemas"]["HoldStatus"] | null;
             last_build: components["schemas"]["LastBuild"] | null;
             /** Last Success At */
             last_success_at: string | null;
@@ -2491,6 +2557,21 @@ export interface components {
              *     }
              */
             emhass: components["schemas"]["Emhass"];
+            /**
+             * Market session hold (mFRR)
+             * @default {
+             *       "busy_values": [
+             *         "buy",
+             *         "sell"
+             *       ],
+             *       "enabled": false,
+             *       "entity": "input_select.qilowatt_session_state",
+             *       "handback_wait_s": 60,
+             *       "replan": false,
+             *       "resume_delay_s": 15
+             *     }
+             */
+            external_control: components["schemas"]["ExternalControl"];
             /**
              * Price forecast
              * @default {

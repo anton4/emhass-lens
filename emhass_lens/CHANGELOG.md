@@ -5,6 +5,7 @@
 - Inverter control: the rules now follow the current, template-based version of the automation "EMHASS: Consolidated Inverter Control": ±100 W bands for grid and battery power, "Charge battery and export some to grid" can match, PV export depends on the export price, and the feed-in limit depends only on the export price. Every combination of grid and battery power now maps to a mode. Rule ids are the automation's mode names (`force_charge`, `self_use`, …).
 - Settings → Inverter control → Limits: "Block export at or below this price" replaces "Block export below this price" and now defaults to 0.03 €/kWh. An existing install keeps its stored value; set it to the automation's value by hand.
 - DOCS: a section on inverter control and how to move the automation over.
+- Market session hold (Settings → Market session hold, off by default): while a market automation's session entity (e.g. `input_select.qilowatt_session_state` at `buy`/`sell`) says someone else drives the inverter, MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, EMHASS Lens waits for the inverter enable switch to come back, publishes the stored plan once and decides the inverter from it, writing only what differs. Optionally MPC runs again afterwards without a second inverter write. New `binary_sensor.emhass_lens_hold`, a *Market session hold* row on the Driver card, and the run *Resume after a market session*.
 
 ## 0.2.10
 

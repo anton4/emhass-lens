@@ -1040,6 +1040,73 @@
         "title": "ExplainSlot",
         "type": "object"
       },
+      "ExternalControl": {
+        "additionalProperties": false,
+        "properties": {
+          "busy_values": {
+            "description": "Compared without regard to case.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Busy when the state is one of",
+            "type": "array",
+            "ui": {
+              "widget": "json"
+            }
+          },
+          "enabled": {
+            "default": false,
+            "description": "While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, the plan is re-applied right away.",
+            "title": "Hold while a market session owns the inverter",
+            "type": "boolean"
+          },
+          "entity": {
+            "default": "input_select.qilowatt_session_state",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Session entity",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "input_select",
+                "sensor",
+                "binary_sensor",
+                "input_boolean"
+              ],
+              "widget": "entity"
+            }
+          },
+          "handback_wait_s": {
+            "default": 60,
+            "description": "After the session ends, how long to wait for the inverter control's enable switch to come back on before giving up.",
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Wait for the inverter hand-back",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "replan": {
+            "default": false,
+            "description": "Off: the existing plan is re-applied, with at most one inverter write. On: MPC also runs again with the battery state after the session; the inverter follows that plan from the next slot.",
+            "title": "Re-run MPC after a session",
+            "type": "boolean"
+          },
+          "resume_delay_s": {
+            "default": 15,
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Delay before the re-run",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          }
+        },
+        "title": "ExternalControl",
+        "type": "object"
+      },
       "FiForecast": {
         "additionalProperties": false,
         "properties": {
@@ -1405,6 +1472,80 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "HoldStatus": {
+        "description": "A market session (e.g. Qilowatt mFRR) owning the inverter: MPC sends, publishes and inverter writes wait.",
+        "properties": {
+          "busy": {
+            "title": "Busy",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "last_hold": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Hold"
+          },
+          "last_resume": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Resume"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "enabled",
+          "busy",
+          "entity",
+          "value",
+          "since",
+          "last_hold",
+          "last_resume"
+        ],
+        "title": "HoldStatus",
         "type": "object"
       },
       "ImportPreview": {
@@ -2417,6 +2558,21 @@
           "driver": {
             "title": "Driver",
             "type": "string"
+          },
+          "held": {
+            "default": false,
+            "title": "Held",
+            "type": "boolean"
+          },
+          "hold": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HoldStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "last_build": {
             "anyOf": [
@@ -4451,6 +4607,21 @@
               }
             },
             "title": "EMHASS"
+          },
+          "external_control": {
+            "$ref": "#/components/schemas/ExternalControl",
+            "default": {
+              "busy_values": [
+                "buy",
+                "sell"
+              ],
+              "enabled": false,
+              "entity": "input_select.qilowatt_session_state",
+              "handback_wait_s": 60,
+              "replan": false,
+              "resume_delay_s": 15
+            },
+            "title": "Market session hold (mFRR)"
           },
           "forecast": {
             "$ref": "#/components/schemas/Forecast",

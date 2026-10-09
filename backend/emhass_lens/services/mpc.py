@@ -83,7 +83,9 @@ class MpcService:
         settings = self.c.settings.current
         emhass = self.c.extras["emhass"]
         mode = self.mode
-        send = mode == "live" and (settings.emhass.mpc.auto or ctx.trigger == "manual")
+        external = self.c.extras.get("external")
+        held = external is not None and external.holding
+        send = mode == "live" and (settings.emhass.mpc.auto or ctx.trigger == "manual") and not held
         rounding = emhass.method_ts_round()
 
         now = self.c.clock.now()
@@ -131,6 +133,8 @@ class MpcService:
 
         if not send:
             why = {"off": "mode Off", "dry_run": "dry run", "live": "Auto MPC is off"}[mode]
+            if held and external is not None:
+                why = f"held: a market session owns the inverter, {external.hold_text()}"
             if blocking:
                 ctx.run.outcome = "refused" if mode == "dry_run" else "shadow"
                 ctx.run.summary = f"Would refuse ({why}): " + "; ".join(i.message for i in blocking)
@@ -241,11 +245,14 @@ class MpcService:
 
     def status(self) -> dict[str, Any]:
         shadow = self.last_shadow
+        external = self.c.extras.get("external")
         return {
             "mode": self.mode,
             "auto": self.c.settings.current.emhass.mpc.auto,
             "driver": self.driver(),
             "legacy_driving": self.legacy_driving(),
+            "held": external is not None and external.holding,
+            "hold": external.status() if external is not None else None,
             "last_success_at": iso(self.last_success_at),
             "last_build": None
             if shadow is None

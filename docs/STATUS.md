@@ -19,6 +19,7 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 | 3. MQTT entities and the plan-published event | done; verified against a real HA and Mosquitto (e2e) |
 | 4. Retire the HACS integration | waiting for your validation; runbook in docs/RETIRING_HACS.md |
 | 5. Inverter control in the App (optional) | done, experimental: off by default; dry run compares with your automation. Rules follow the template version of the automation (2026-10-10) |
+| 5c. Hold and resume around market sessions (mFRR) | done, unreleased: off by default (Settings → Market session hold); the plan is re-applied with at most one inverter write when a session ends |
 
 ## Decisions for the owner (left open on purpose)
 - **License:** the repo has no LICENSE file yet (the old repo didn't either). Pick one (MIT is common for HA Apps).
@@ -37,7 +38,8 @@ These come from docs/PLAN.md §10:
 ### 2026-10-10: inverter rules follow the template automation (unreleased)
 - **Why:** the owner rewrote "EMHASS: Consolidated Inverter Control" as a template automation (±100 W bands for grid and battery, "Charge battery and export some to grid" reachable, PV export gated on the export price, feed-in purely price-based). The App still mirrored the older `choose` version, so dry run would have disagreed.
 - **Done:** `domain/inverter.py` decides exactly like the template version; rule ids are the automation's mode names (`force_charge`, `self_use`, …); every grid/battery combination maps to a mode. `low_export_price` now means "at or below" and defaults to 0.03 (the live value; the stored 0.02 of an existing install is kept, set it by hand). DOCS.md gained an "Inverter control" section.
-- **Plan for the other automations:** `~/.claude/plans/if-i-want-to-async-pixel.md` (hold and resume around market sessions, EV charger control, the Qilowatt market controller).
+- **Hold and resume around market sessions** (`services/external.py`, Settings → Market session hold, off by default): while the Qilowatt automation's session select is `buy`/`sell`, MPC runs are built but not sent, publishes are skipped and the inverter isn't touched (`binary_sensor.emhass_lens_hold`, the Driver card). When it ends, the `external.resume` job waits for the enable switch, publishes the stored plan once and chains the inverter decision, which writes only what differs. "Re-run MPC after a session" (off by default) re-plans afterwards without a second inverter write in the slot (`chain_inverter=False`). Tests in `tests/test_external_control.py`.
+- **Plan for the other automations:** `~/.claude/plans/if-i-want-to-async-pixel.md` (EV charger control, then the Qilowatt market controller inside the App).
 
 ### 2026-10-09 (late night): 0.2.5–0.2.8 after trying it on the real HA
 - **Saving through the user's nginx.** The proxy refuses PUT/PATCH; the browser only shows "Failed to fetch" / `ERR_HTTP2_PROTOCOL_ERROR`. The UI now writes with POST only (`/api/settings/save`, `/api/settings/change`), and the API client offers only get/post (0.2.5).

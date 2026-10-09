@@ -55,6 +55,21 @@ export function DriverCard({ writable }: { writable: boolean }) {
               <dt>Last successful live run</dt>
               <dd>{formatTime(mpc.last_success_at)}</dd>
             </div>
+            {mpc.hold?.enabled && (
+              <div>
+                <dt>Market session hold</dt>
+                <dd>
+                  {mpc.held
+                    ? `Held since ${formatTime(mpc.hold.since)}: ${mpc.hold.entity} is '${mpc.hold.value ?? '?'}'`
+                    : 'none'}
+                </dd>
+                {mpc.hold.last_resume && (
+                  <div className="cell-sub">
+                    Last resume {formatTime(String(mpc.hold.last_resume['at'] ?? ''))}: {String(mpc.hold.last_resume['summary'] ?? '')}
+                  </div>
+                )}
+              </div>
+            )}
           </dl>
         )}
         <div className="action-row">

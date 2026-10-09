@@ -676,6 +676,45 @@ class Inverter(Section):
     limits: InverterLimits = Field(default=InverterLimits(), title="Limits and thresholds")
 
 
+class ExternalControl(Section):
+    enabled: bool = Field(
+        default=False,
+        title="Hold while a market session owns the inverter",
+        description="While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs "
+        "are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, "
+        "the plan is re-applied right away.",
+    )
+    entity: EntityId = Field(
+        default="input_select.qilowatt_session_state",
+        title="Session entity",
+        json_schema_extra=ui(widget="entity", domain=["input_select", "sensor", "binary_sensor", "input_boolean"]),
+    )
+    busy_values: list[str] = Field(
+        default_factory=lambda: ["buy", "sell"],
+        title="Busy when the state is one of",
+        description="Compared without regard to case.",
+        json_schema_extra=ui(widget="json"),
+    )
+    handback_wait_s: int = Field(
+        default=60,
+        ge=0,
+        le=300,
+        title="Wait for the inverter hand-back",
+        description="After the session ends, how long to wait for the inverter control's enable switch to come "
+        "back on before giving up.",
+        json_schema_extra=ui(unit="s"),
+    )
+    replan: bool = Field(
+        default=False,
+        title="Re-run MPC after a session",
+        description="Off: the existing plan is re-applied, with at most one inverter write. On: MPC also runs "
+        "again with the battery state after the session; the inverter follows that plan from the next slot.",
+    )
+    resume_delay_s: int = Field(
+        default=15, ge=0, le=300, title="Delay before the re-run", json_schema_extra=ui(unit="s", advanced=True)
+    )
+
+
 class Settings(Section):
     emhass: Emhass = Field(default=Emhass(), title="EMHASS")
     inputs: Inputs = Field(default=Inputs(), title="Inputs")
@@ -688,6 +727,7 @@ class Settings(Section):
     logging: Logging = Field(default=Logging(), title="Logging")
     parity: Parity = Field(default=Parity(), title="Parity with the HACS integration")
     inverter: Inverter = Field(default=Inverter(), title="Inverter control (experimental)")
+    external_control: ExternalControl = Field(default=ExternalControl(), title="Market session hold (mFRR)")
 
 
 @cache

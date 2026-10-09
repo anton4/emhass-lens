@@ -128,6 +128,9 @@ class InverterService:
     def preconditions(self) -> str | None:
         ha = self.c.extras["ha"]
         e = self.c.settings.current.inverter.entities
+        external = self.c.extras.get("external")
+        if external is not None and external.holding:
+            return f"an mFRR market session holds the inverter ({external.hold_text()})"
         mode_state = ha.state(e.charger_mode_select)
         if mode_state is None:
             return f"{e.charger_mode_select} not found"

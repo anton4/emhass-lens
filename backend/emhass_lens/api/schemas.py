@@ -334,6 +334,18 @@ class LastBuild(BaseModel):
     run_id: int | None
 
 
+class HoldStatus(BaseModel):
+    """A market session (e.g. Qilowatt mFRR) owning the inverter: MPC sends, publishes and inverter writes wait."""
+
+    enabled: bool
+    busy: bool
+    entity: str
+    value: str | None
+    since: str | None
+    last_hold: dict[str, Any] | None
+    last_resume: dict[str, Any] | None
+
+
 class MpcStatus(BaseModel):
     mode: str
     auto: bool
@@ -341,6 +353,8 @@ class MpcStatus(BaseModel):
     legacy_driving: bool
     last_success_at: str | None
     last_build: LastBuild | None
+    held: bool = False
+    hold: HoldStatus | None = None
 
 
 class InputsResponse(BaseModel):

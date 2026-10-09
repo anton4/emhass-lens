@@ -105,6 +105,21 @@ def discovery(settings: Settings, version: str) -> list[Message]:
             },
         ),
         (
+            "binary_sensor",
+            "hold",
+            {
+                "name": "Market session hold",
+                "state_topic": t["state"],
+                "value_template": "{{ value_json.hold }}",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "device_class": "running",
+                "icon": "mdi:hand-back-left",
+                "json_attributes_topic": t["attributes"],
+                "json_attributes_template": "{{ value_json.hold | tojson }}",
+            },
+        ),
+        (
             "sensor",
             "last_mpc",
             {
@@ -162,10 +177,12 @@ def state_messages(c: Container) -> list[Message]:
     following = prices[1] if current and len(prices) > 1 else None
     problems = c.extras["problems"].active()
     last = c.extras["mpc"].last_success_at
+    external = c.extras.get("external")
     state = {
         "import_price": round(current.import_price, 5) if current else None,
         "export_price": round(current.export_price, 5) if current else None,
         "problem": "ON" if problems else "OFF",
+        "hold": "ON" if external is not None and external.holding else "OFF",
         "last_mpc": iso(last) if last else None,
         "auto_mpc": "ON" if settings.emhass.mpc.auto else "OFF",
     }
@@ -188,6 +205,7 @@ def state_messages(c: Container) -> list[Message]:
         "import": price_attrs("import"),
         "export": price_attrs("export"),
         "problems": {"active": [p["title"] for p in problems], "keys": [p["key"] for p in problems]},
+        "hold": external.status() if external is not None else {},
     }
     return [Message(t["state"], json.dumps(state)), Message(t["attributes"], json.dumps(attributes))]
 

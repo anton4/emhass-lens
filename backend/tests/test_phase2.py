@@ -168,7 +168,8 @@ def test_mqtt_discovery_messages() -> None:
     switch = messages["homeassistant/switch/emhass_lens/auto_mpc/config"]
     assert switch["command_topic"] == topics(Settings())["auto_mpc_set"]
     assert "homeassistant/button/emhass_lens/run_mpc/config" in messages
-    assert len(messages) == 6
+    assert "homeassistant/binary_sensor/emhass_lens/hold/config" in messages
+    assert len(messages) == 7
 
 
 class FakeLink:

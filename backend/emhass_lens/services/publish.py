@@ -38,10 +38,21 @@ class PublishService:
         self.last_published_at = None
         self.last_event: dict[str, Any] | None = None
 
+    def _held(self) -> str | None:
+        """Why publishing must wait: a market session owns the inverter (see services/external.py)."""
+        external = self.c.extras.get("external")
+        return external.hold_text() if external is not None and external.holding else None
+
     def active(self) -> bool:
         settings = self.c.settings.current.emhass
         mpc = self.c.extras["mpc"]
-        return mpc.mode == "live" and settings.publish.enabled and settings.mpc.auto and not mpc.legacy_driving()
+        return (
+            mpc.mode == "live"
+            and settings.publish.enabled
+            and settings.mpc.auto
+            and not mpc.legacy_driving()
+            and self._held() is None
+        )
 
     async def run(self, ctx: JobContext) -> None:
         if not self.active() and ctx.trigger != "manual":
@@ -49,6 +60,10 @@ class PublishService:
         assert ctx.run is not None
         emhass = self.c.extras["emhass"]
         settings = self.c.settings.current
+        held = self._held()
+        if held is not None:
+            ctx.run.outcome, ctx.run.summary = "noop", f"Held: {held}"
+            return
         if self.c.extras["mpc"].mode != "live":
             ctx.run.outcome, ctx.run.summary = "noop", "Only publishes in live mode"
             return
@@ -92,8 +107,9 @@ class PublishService:
             )
         self.c.bus.publish("plan.published", event)
         inverter = self.c.extras.get("inverter")
-        if inverter is not None and inverter.active():
-            # decide on the values just published, not on a fixed second
+        if inverter is not None and inverter.active() and ctx.params.get("chain_inverter", True):
+            # decide on the values just published, not on a fixed second (a re-plan after a market session
+            # passes chain_inverter=False: the inverter keeps the targets it just got, one write per session end)
             self.c.scheduler.run_now("inverter.decide", {"after_publish": True})
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:

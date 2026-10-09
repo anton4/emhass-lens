@@ -15,6 +15,7 @@ from emhass_lens.scheduler.core import Job, JobContext
 from emhass_lens.scheduler.triggers import Dynamic, Manual, Periodic, QuarterHour
 from emhass_lens.services import health_rules
 from emhass_lens.services.emhass import EmhassService
+from emhass_lens.services.external import ExternalControlService
 from emhass_lens.services.forecasts import ForecastService
 from emhass_lens.services.inputs import InputsService
 from emhass_lens.services.inverter import InverterService
@@ -50,6 +51,7 @@ def build(c: Container) -> None:
     x["publish"] = PublishService(c)
     x["ml"] = MlService(c)
     x["outputs"] = OutputService(c)
+    x["external"] = ExternalControlService(c)
     x["inverter"] = InverterService(c)
     x["prices"].load()
     x["problems"].load()
@@ -66,7 +68,7 @@ def build(c: Container) -> None:
 def watched_entities(c: Container) -> set[str]:
     x = c.extras
     settings = c.settings.current
-    ids = x["inputs"].entities() | x["pv"].entities() | x["inverter"].entities()
+    ids = x["inputs"].entities() | x["pv"].entities() | x["inverter"].entities() | x["external"].entities()
     if settings.forecast.source == "fi_ha_entity":
         ids.add(settings.forecast.fi.entity)
     if settings.parity.legacy_auto_mpc_switch:
@@ -225,6 +227,17 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="external.resume",
+            title="Resume after a market session",
+            description="Re-applies the plan right after a market session (e.g. Qilowatt mFRR) hands the inverter "
+            "back: one publish, one inverter decision.",
+            trigger=Manual(),
+            func=x["external"].resume,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
             id="health.evaluate",
             title="Health",
             description="Evaluates the health rules and updates the problem list.",
@@ -304,7 +317,8 @@ def subscribe(c: Container) -> None:
 
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
-    c.settings.subscribe(("inputs", "pv", "parity", "inverter"), rewatch)
+    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "external_control"), rewatch)
+    c.settings.subscribe("external_control", x["external"].on_settings)
 
     def on_inverter_times(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.retime("inverter.decide", QuarterHour(new.inverter.decide_offset_s))
@@ -319,6 +333,7 @@ def subscribe(c: Container) -> None:
     c.settings.subscribe(("emhass.mpc.auto", "prices.tariff"), on_state_change)
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
+    ha.on_state(lambda entity_id: entity_id == c.settings.current.external_control.entity, x["external"].on_state)
     rewatch()
 
 

@@ -224,6 +224,22 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 )
             )
 
+    # Market session hold
+    external = x.get("external")
+    if external is not None and external.enabled() and ha.connected:
+        entity = settings.external_control.entity
+        if entity and ha.state(entity) is None:
+            out.append(
+                Problem(
+                    "external.entity_missing",
+                    "warning",
+                    "The market session entity isn't found",
+                    f"{entity} has no state in Home Assistant, so sessions can't hold the inverter",
+                    "Check Settings → Market session hold.",
+                    "#/settings?section=external_control",
+                )
+            )
+
     # ML model and MQTT
     mismatch = x["ml"].lags_mismatch()
     if mismatch:

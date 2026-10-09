@@ -46,6 +46,7 @@ With **Settings → Home Assistant outputs → MQTT entities** on, EMHASS Lens p
 | `sensor.emhass_lens_import_price` | Import price now, €/kWh for the current 15-minute slot. Attributes: next slot price, period (day/night/peak), spot. |
 | `sensor.emhass_lens_export_price` | Export price now, €/kWh |
 | `binary_sensor.emhass_lens_problem` | On while something needs attention. The attributes list what. |
+| `binary_sensor.emhass_lens_hold` | On while a market session holds the inverter (see *During a market session*). Attributes: the entity, its value, since when, the last resume. |
 | `sensor.emhass_lens_last_mpc` | When the last live run produced a plan |
 | `switch.emhass_lens_auto_mpc` | Pause or resume the scheduled MPC runs, e.g. from an automation during an mFRR session |
 | `button.emhass_lens_run_mpc` | Run MPC now |
@@ -89,6 +90,17 @@ EMHASS Lens can set a Sofar inverter's passive mode from the plan itself, instea
 Nothing is written while the inverter isn't in passive mode, while the automation switch (`input_boolean.emhass_automation`) is off, for example during an mFRR session, or when the plan is stale.
 
 **Moving the automation over:** set the thresholds under Limits to the automation's values, run **Dry run** for about a week and watch the agreement. When it stays at 99 % or more, turn the Home Assistant automation off (keep it) and switch to **Live**. To go back, set the mode to Off and turn the automation on again.
+
+## During a market session (mFRR)
+
+When an aggregator such as Qilowatt takes the inverter for a Kratt or Fusebox activation, EMHASS Lens can stand back and take over again the moment the session ends. Turn it on under **Settings → Market session hold**:
+
+- **Session entity** and **busy values**: the entity your market automation maintains, for example `input_select.qilowatt_session_state` with the values `buy` and `sell`.
+- While the entity shows a busy value, MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. The Health page's *Driving EMHASS* card and `binary_sensor.emhass_lens_hold` show the hold.
+- When the session ends, EMHASS Lens waits for the inverter control's enable switch to come back on (your automation hands it back), then publishes the stored plan once and decides the inverter from it. Only the registers that differ are written, so a session end costs at most one write to the inverter.
+- **Re-run MPC after a session** (off by default) also runs MPC again with the battery state after the session and publishes that plan. The inverter keeps this slot's targets and follows the new plan from the next slot, so there is still only one inverter write.
+
+Each resume is recorded as a run of *Resume after a market session*.
 
 ## App options (Configuration tab)
 

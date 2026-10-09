@@ -138,7 +138,8 @@ class World:
                 self.set_state(entity, float(body["value"]))
             if domain_service == "input_select/select_option" and entity:
                 self.set_state(entity, body["option"])
-            if domain_service in ("switch/turn_off", "switch/turn_on"):
+            toggles = ("switch/turn_off", "switch/turn_on", "input_boolean/turn_off", "input_boolean/turn_on")
+            if domain_service in toggles:
                 entity = body.get("entity_id")
                 if entity in self.ha_states:
                     self.ha_states[entity]["state"] = "off" if domain_service.endswith("off") else "on"
