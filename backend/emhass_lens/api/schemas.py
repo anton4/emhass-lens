@@ -193,16 +193,153 @@ class PricesResponse(BaseModel):
     actual_end: str | None
     forecast_until: str | None
     gaps: list[list[str]]
-    nordpool: dict[str, Any]
-    forecast: dict[str, Any]
+    nordpool: NordpoolStatus
+    forecast: ForecastStatus
+
+
+class Reading(BaseModel):
+    """One value read from Home Assistant (or a fallback) with where it came from."""
+
+    name: str
+    value: float | bool | None
+    source: str
+    raw: Any = None
+    age_s: float | None = None
+    transform: str | None = None
+    issue: str | None = None
+    explain: str
+
+
+class DeferrableDescription(BaseModel):
+    name: str
+    nominal_power_w: int
+    enabled: Reading
+    operating_hours: Reading
+    deadline_timesteps: Reading
+    single_constant: Reading
+
+
+class IssueOut(BaseModel):
+    level: str  # error | warning | info
+    code: str
+    message: str
+    hint: str | None = None
+
+
+class PricesSummary(BaseModel):
+    slots: int
+    actual: int
+    forecast: int
+    first: str | None
+    end: str | None
+    forecast_source: str
+
+
+class PvSummary(BaseModel):
+    field: str
+    sensors_used: list[str]
+    sensors_missing: list[str]
+    slots_missing: int
+    first_missing: str | None
+
+
+class InputsSnapshot(BaseModel):
+    taken_at: str | None
+    prices: PricesSummary
+    pv: PvSummary | None
+    soc_init: Reading
+    soc_final: Reading
+    deferrable_loads: list[DeferrableDescription]
+    issues: list[IssueOut]
+
+
+class NordpoolDay(BaseModel):
+    day: str
+    state: str | None
+    slots: int
+    last_attempt: str | None
+    last_success: str | None
+    consecutive_errors: int
+    not_published: bool
+    http_status: int | None
+    error: str | None
+    resolution_min: int | None
+    updated_at: str | None
+
+
+class NordpoolNext(BaseModel):
+    day: str
+    due_at: str | None
+    reason: str
+
+
+class NordpoolStatus(BaseModel):
+    area: str
+    timezone: str
+    days: list[NordpoolDay]
+    next: list[NordpoolNext]
+
+
+class ForecastProviderStatus(BaseModel):
+    last_attempt: str | None
+    last_success: str | None
+    http_status: int | None
+    error: str | None
+    consecutive_errors: int
+    points: int
+    start: str | None
+    end: str | None
+    issued_at: str | None
+
+
+class ForecastStatus(BaseModel):
+    source: str
+    providers: dict[str, ForecastProviderStatus]
+
+
+class PvStatus(BaseModel):
+    source: str
+    field: str | None = None
+    sensors_used: list[str] = []
+    sensors_missing: list[str] = []
+    slots: int | None = None
+    start: str | None = None
+    end: str | None = None
+
+
+class HaStatus(BaseModel):
+    configured: bool
+    connected: bool
+    connected_since: str | None
+    disconnected_since: str | None
+    ha_version: str | None
+    time_zone: str | None
+    last_error: str | None
+    watched: int
+
+
+class LastBuild(BaseModel):
+    built_at: str | None
+    anchor: str | None
+    horizon: int
+    run_id: int | None
+
+
+class MpcStatus(BaseModel):
+    mode: str
+    auto: bool
+    driver: str  # app | legacy | both | none
+    legacy_driving: bool
+    last_success_at: str | None
+    last_build: LastBuild | None
 
 
 class InputsResponse(BaseModel):
-    snapshot: dict[str, Any]
-    pv: dict[str, Any]
-    forecast: dict[str, Any]
-    home_assistant: dict[str, Any]
-    mpc: dict[str, Any]
+    snapshot: InputsSnapshot
+    pv: PvStatus
+    forecast: ForecastStatus
+    home_assistant: HaStatus
+    mpc: MpcStatus
 
 
 class PlanSnapshotOut(BaseModel):
@@ -216,6 +353,7 @@ class PlanSnapshotOut(BaseModel):
 
 class PlanResponse(BaseModel):
     available: bool
+    timezone: str
     current: PlanSnapshotOut | None
     previous: PlanSnapshotOut | None
     current_row: dict[str, Any] | None
@@ -223,6 +361,22 @@ class PlanResponse(BaseModel):
     prices: list[dict[str, Any]]
     driver: str
     emhass_url: str | None
+
+
+class EmhassCheck(BaseModel):
+    key: str
+    title: str
+    status: str  # ok | info | warning | error
+    expected: str
+    actual: str
+    explanation: str
+
+
+class DiscoveryAttempt(BaseModel):
+    url: str
+    ok: bool
+    version: str | None = None
+    error: str | None = None
 
 
 class EmhassStatusOut(BaseModel):
@@ -235,11 +389,11 @@ class EmhassStatusOut(BaseModel):
     unreachable_since: str | None
     method_ts_round: str
     config_at: str | None
-    checks: list[dict[str, Any]]
+    checks: list[EmhassCheck]
     checks_status: str
     health: dict[str, Any] | None
-    discovery: list[dict[str, Any]]
-    mpc: dict[str, Any]
+    discovery: list[DiscoveryAttempt]
+    mpc: MpcStatus
 
 
 class ProblemsResponse(BaseModel):
@@ -255,16 +409,35 @@ class EntityOption(BaseModel):
     device_class: str | None
 
 
+class ExplainSlot(BaseModel):
+    i: int
+    start: str
+    origin: str
+    period: str
+    spot: float
+    load_cost: float
+    prod_price: float
+    pv_w: float
+
+
+class Derived(BaseModel):
+    extend_days: int
+    num_lags: int
+    num_lags_formula: str
+    historic_days_to_retrieve: int
+    delta_forecast_daily: int
+
+
 class MpcPreview(BaseModel):
     built_at: str
     anchor: str
     rounding: str
     mode: str
     payload: dict[str, Any]
-    explain: list[dict[str, Any]]
-    validation: list[dict[str, Any]]
-    inputs: dict[str, Any]
-    derived: dict[str, Any]
+    explain: list[ExplainSlot]
+    validation: list[IssueOut]
+    inputs: InputsSnapshot
+    derived: Derived
 
 
 class LegacyPreview(BaseModel):

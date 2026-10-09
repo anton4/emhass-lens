@@ -10,6 +10,7 @@ import httpx
 from emhass_lens.clients.nordpool import NordpoolFetch, fetch_day
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.domain import nordpool
+from emhass_lens.domain.areas import area_zone
 from emhass_lens.domain.forecast.base import ForecastSeries
 from emhass_lens.domain.forecast.stitch import Stitched, stitch
 from emhass_lens.domain.poll_policy import DayState, PollConfig, PollDecision, decide, needed_days
@@ -22,12 +23,11 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("emhass_lens.prices")
 
-AREA_TZ = {"EE": "Europe/Tallinn", "FI": "Europe/Helsinki", "LV": "Europe/Riga", "LT": "Europe/Vilnius"}
 KEEP_DAYS = 120
 
 
 def area_tz(settings: Settings) -> ZoneInfo:
-    return ZoneInfo(AREA_TZ.get(settings.prices.nordpool.area, "Europe/Tallinn"))
+    return area_zone(settings.prices.nordpool.area)
 
 
 def _hhmm(value: str) -> time:

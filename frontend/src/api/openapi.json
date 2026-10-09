@@ -53,6 +53,40 @@
         "title": "ComponentStatus",
         "type": "object"
       },
+      "DeferrableDescription": {
+        "properties": {
+          "deadline_timesteps": {
+            "$ref": "#/components/schemas/Reading"
+          },
+          "enabled": {
+            "$ref": "#/components/schemas/Reading"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal_power_w": {
+            "title": "Nominal Power W",
+            "type": "integer"
+          },
+          "operating_hours": {
+            "$ref": "#/components/schemas/Reading"
+          },
+          "single_constant": {
+            "$ref": "#/components/schemas/Reading"
+          }
+        },
+        "required": [
+          "name",
+          "nominal_power_w",
+          "enabled",
+          "operating_hours",
+          "deadline_timesteps",
+          "single_constant"
+        ],
+        "title": "DeferrableDescription",
+        "type": "object"
+      },
       "DeferrableLoad": {
         "additionalProperties": false,
         "properties": {
@@ -131,6 +165,39 @@
         "title": "DeferrableLoad",
         "type": "object"
       },
+      "Derived": {
+        "properties": {
+          "delta_forecast_daily": {
+            "title": "Delta Forecast Daily",
+            "type": "integer"
+          },
+          "extend_days": {
+            "title": "Extend Days",
+            "type": "integer"
+          },
+          "historic_days_to_retrieve": {
+            "title": "Historic Days To Retrieve",
+            "type": "integer"
+          },
+          "num_lags": {
+            "title": "Num Lags",
+            "type": "integer"
+          },
+          "num_lags_formula": {
+            "title": "Num Lags Formula",
+            "type": "string"
+          }
+        },
+        "required": [
+          "extend_days",
+          "num_lags",
+          "num_lags_formula",
+          "historic_days_to_retrieve",
+          "delta_forecast_daily"
+        ],
+        "title": "Derived",
+        "type": "object"
+      },
       "DiffEntry": {
         "properties": {
           "new": {
@@ -148,6 +215,46 @@
           "path"
         ],
         "title": "DiffEntry",
+        "type": "object"
+      },
+      "DiscoveryAttempt": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "url",
+          "ok"
+        ],
+        "title": "DiscoveryAttempt",
         "type": "object"
       },
       "DriverRequest": {
@@ -337,6 +444,44 @@
         "title": "Emhass",
         "type": "object"
       },
+      "EmhassCheck": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "expected": {
+            "title": "Expected",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "status",
+          "expected",
+          "actual",
+          "explanation"
+        ],
+        "title": "EmhassCheck",
+        "type": "object"
+      },
       "EmhassMl": {
         "additionalProperties": false,
         "properties": {
@@ -494,8 +639,7 @@
         "properties": {
           "checks": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/EmhassCheck"
             },
             "title": "Checks",
             "type": "array"
@@ -517,8 +661,7 @@
           },
           "discovery": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/DiscoveryAttempt"
             },
             "title": "Discovery",
             "type": "array"
@@ -562,9 +705,7 @@
             "type": "string"
           },
           "mpc": {
-            "additionalProperties": true,
-            "title": "Mpc",
-            "type": "object"
+            "$ref": "#/components/schemas/MpcStatus"
           },
           "reachable": {
             "anyOf": [
@@ -816,6 +957,54 @@
         "title": "EntityOption",
         "type": "object"
       },
+      "ExplainSlot": {
+        "properties": {
+          "i": {
+            "title": "I",
+            "type": "integer"
+          },
+          "load_cost": {
+            "title": "Load Cost",
+            "type": "number"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "prod_price": {
+            "title": "Prod Price",
+            "type": "number"
+          },
+          "pv_w": {
+            "title": "Pv W",
+            "type": "number"
+          },
+          "spot": {
+            "title": "Spot",
+            "type": "number"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "i",
+          "start",
+          "origin",
+          "period",
+          "spot",
+          "load_cost",
+          "prod_price",
+          "pv_w"
+        ],
+        "title": "ExplainSlot",
+        "type": "object"
+      },
       "FiForecast": {
         "additionalProperties": false,
         "properties": {
@@ -919,6 +1108,129 @@
         "title": "Forecast",
         "type": "object"
       },
+      "ForecastProviderStatus": {
+        "properties": {
+          "consecutive_errors": {
+            "title": "Consecutive Errors",
+            "type": "integer"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Status"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          },
+          "last_attempt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt"
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "required": [
+          "last_attempt",
+          "last_success",
+          "http_status",
+          "error",
+          "consecutive_errors",
+          "points",
+          "start",
+          "end",
+          "issued_at"
+        ],
+        "title": "ForecastProviderStatus",
+        "type": "object"
+      },
+      "ForecastStatus": {
+        "properties": {
+          "providers": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ForecastProviderStatus"
+            },
+            "title": "Providers",
+            "type": "object"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "providers"
+        ],
+        "title": "ForecastStatus",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -930,6 +1242,89 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HaStatus": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "connected_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected Since"
+          },
+          "disconnected_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disconnected Since"
+          },
+          "ha_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ha Version"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          },
+          "watched": {
+            "title": "Watched",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "configured",
+          "connected",
+          "connected_since",
+          "disconnected_since",
+          "ha_version",
+          "time_zone",
+          "last_error",
+          "watched"
+        ],
+        "title": "HaStatus",
         "type": "object"
       },
       "Health": {
@@ -1092,29 +1487,19 @@
       "InputsResponse": {
         "properties": {
           "forecast": {
-            "additionalProperties": true,
-            "title": "Forecast",
-            "type": "object"
+            "$ref": "#/components/schemas/ForecastStatus"
           },
           "home_assistant": {
-            "additionalProperties": true,
-            "title": "Home Assistant",
-            "type": "object"
+            "$ref": "#/components/schemas/HaStatus"
           },
           "mpc": {
-            "additionalProperties": true,
-            "title": "Mpc",
-            "type": "object"
+            "$ref": "#/components/schemas/MpcStatus"
           },
           "pv": {
-            "additionalProperties": true,
-            "title": "Pv",
-            "type": "object"
+            "$ref": "#/components/schemas/PvStatus"
           },
           "snapshot": {
-            "additionalProperties": true,
-            "title": "Snapshot",
-            "type": "object"
+            "$ref": "#/components/schemas/InputsSnapshot"
           }
         },
         "required": [
@@ -1125,6 +1510,99 @@
           "mpc"
         ],
         "title": "InputsResponse",
+        "type": "object"
+      },
+      "InputsSnapshot": {
+        "properties": {
+          "deferrable_loads": {
+            "items": {
+              "$ref": "#/components/schemas/DeferrableDescription"
+            },
+            "title": "Deferrable Loads",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueOut"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/PricesSummary"
+          },
+          "pv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PvSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "soc_final": {
+            "$ref": "#/components/schemas/Reading"
+          },
+          "soc_init": {
+            "$ref": "#/components/schemas/Reading"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken At"
+          }
+        },
+        "required": [
+          "taken_at",
+          "prices",
+          "pv",
+          "soc_init",
+          "soc_final",
+          "deferrable_loads",
+          "issues"
+        ],
+        "title": "InputsSnapshot",
+        "type": "object"
+      },
+      "IssueOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "code",
+          "message"
+        ],
+        "title": "IssueOut",
         "type": "object"
       },
       "JobInfo": {
@@ -1228,6 +1706,55 @@
           "grace_s"
         ],
         "title": "JobInfo",
+        "type": "object"
+      },
+      "LastBuild": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
+          },
+          "horizon": {
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "built_at",
+          "anchor",
+          "horizon",
+          "run_id"
+        ],
+        "title": "LastBuild",
         "type": "object"
       },
       "LegacyApplyRequest": {
@@ -1455,22 +1982,17 @@
             "type": "string"
           },
           "derived": {
-            "additionalProperties": true,
-            "title": "Derived",
-            "type": "object"
+            "$ref": "#/components/schemas/Derived"
           },
           "explain": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ExplainSlot"
             },
             "title": "Explain",
             "type": "array"
           },
           "inputs": {
-            "additionalProperties": true,
-            "title": "Inputs",
-            "type": "object"
+            "$ref": "#/components/schemas/InputsSnapshot"
           },
           "mode": {
             "title": "Mode",
@@ -1487,8 +2009,7 @@
           },
           "validation": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/IssueOut"
             },
             "title": "Validation",
             "type": "array"
@@ -1506,6 +2027,57 @@
           "derived"
         ],
         "title": "MpcPreview",
+        "type": "object"
+      },
+      "MpcStatus": {
+        "properties": {
+          "auto": {
+            "title": "Auto",
+            "type": "boolean"
+          },
+          "driver": {
+            "title": "Driver",
+            "type": "string"
+          },
+          "last_build": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastBuild"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "legacy_driving": {
+            "title": "Legacy Driving",
+            "type": "boolean"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "auto",
+          "driver",
+          "legacy_driving",
+          "last_success_at",
+          "last_build"
+        ],
+        "title": "MpcStatus",
         "type": "object"
       },
       "MqttBroker": {
@@ -1644,6 +2216,148 @@
         "title": "NightWindow",
         "type": "object"
       },
+      "NordpoolDay": {
+        "properties": {
+          "consecutive_errors": {
+            "title": "Consecutive Errors",
+            "type": "integer"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Status"
+          },
+          "last_attempt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt"
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success"
+          },
+          "not_published": {
+            "title": "Not Published",
+            "type": "boolean"
+          },
+          "resolution_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Min"
+          },
+          "slots": {
+            "title": "Slots",
+            "type": "integer"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "day",
+          "state",
+          "slots",
+          "last_attempt",
+          "last_success",
+          "consecutive_errors",
+          "not_published",
+          "http_status",
+          "error",
+          "resolution_min",
+          "updated_at"
+        ],
+        "title": "NordpoolDay",
+        "type": "object"
+      },
+      "NordpoolNext": {
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "due_at",
+          "reason"
+        ],
+        "title": "NordpoolNext",
+        "type": "object"
+      },
       "NordpoolPolling": {
         "additionalProperties": false,
         "properties": {
@@ -1699,6 +2413,40 @@
           }
         },
         "title": "NordpoolPolling",
+        "type": "object"
+      },
+      "NordpoolStatus": {
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/NordpoolDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "next": {
+            "items": {
+              "$ref": "#/components/schemas/NordpoolNext"
+            },
+            "title": "Next",
+            "type": "array"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "area",
+          "timezone",
+          "days",
+          "next"
+        ],
+        "title": "NordpoolStatus",
         "type": "object"
       },
       "Notifications": {
@@ -1941,10 +2689,15 @@
             },
             "title": "Prices",
             "type": "array"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
           }
         },
         "required": [
           "available",
+          "timezone",
           "current",
           "previous",
           "current_row",
@@ -2159,9 +2912,7 @@
             "title": "Actual End"
           },
           "forecast": {
-            "additionalProperties": true,
-            "title": "Forecast",
-            "type": "object"
+            "$ref": "#/components/schemas/ForecastStatus"
           },
           "forecast_until": {
             "anyOf": [
@@ -2185,9 +2936,7 @@
             "type": "array"
           },
           "nordpool": {
-            "additionalProperties": true,
-            "title": "Nordpool",
-            "type": "object"
+            "$ref": "#/components/schemas/NordpoolStatus"
           },
           "now": {
             "title": "Now",
@@ -2221,6 +2970,58 @@
           "forecast"
         ],
         "title": "PricesResponse",
+        "type": "object"
+      },
+      "PricesSummary": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "integer"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "forecast": {
+            "title": "Forecast",
+            "type": "integer"
+          },
+          "forecast_source": {
+            "title": "Forecast Source",
+            "type": "string"
+          },
+          "slots": {
+            "title": "Slots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slots",
+          "actual",
+          "forecast",
+          "first",
+          "end",
+          "forecast_source"
+        ],
+        "title": "PricesSummary",
         "type": "object"
       },
       "ProblemInfo": {
@@ -2391,6 +3192,200 @@
           }
         },
         "title": "Pv",
+        "type": "object"
+      },
+      "PvStatus": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "sensors_missing": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensors Missing",
+            "type": "array"
+          },
+          "sensors_used": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensors Used",
+            "type": "array"
+          },
+          "slots": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slots"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "PvStatus",
+        "type": "object"
+      },
+      "PvSummary": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "first_missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Missing"
+          },
+          "sensors_missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensors Missing",
+            "type": "array"
+          },
+          "sensors_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensors Used",
+            "type": "array"
+          },
+          "slots_missing": {
+            "title": "Slots Missing",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field",
+          "sensors_used",
+          "sensors_missing",
+          "slots_missing",
+          "first_missing"
+        ],
+        "title": "PvSummary",
+        "type": "object"
+      },
+      "Reading": {
+        "description": "One value read from Home Assistant (or a fallback) with where it came from.",
+        "properties": {
+          "age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age S"
+          },
+          "explain": {
+            "title": "Explain",
+            "type": "string"
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "raw": {
+            "title": "Raw"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "transform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transform"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "source",
+          "explain"
+        ],
+        "title": "Reading",
         "type": "object"
       },
       "Retention": {

@@ -16,6 +16,7 @@ from emhass_lens.api.schemas import (
     LegacyApplyRequest,
     LegacyPreview,
     MlRequest,
+    MpcStatus,
     OutputsStatus,
     ProblemInfo,
     ProblemsResponse,
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/api", tags=["system"])
 async def emhass_status(c: ContainerDep) -> EmhassStatusOut:
     status = c.extras["emhass"].status()
     status.pop("boot_ts", None)
-    return EmhassStatusOut(**status, mpc=c.extras["mpc"].status())
+    return EmhassStatusOut(**status, mpc=MpcStatus(**c.extras["mpc"].status()))
 
 
 @router.post("/emhass/discover", dependencies=[Writable])
@@ -44,7 +45,7 @@ async def emhass_discover(c: ContainerDep) -> EmhassStatusOut:
     c.scheduler.run_now("emhass.health")
     status = c.extras["emhass"].status()
     status.pop("boot_ts", None)
-    return EmhassStatusOut(**status, mpc=c.extras["mpc"].status())
+    return EmhassStatusOut(**status, mpc=MpcStatus(**c.extras["mpc"].status()))
 
 
 @router.post("/emhass/check", dependencies=[Writable], status_code=202)

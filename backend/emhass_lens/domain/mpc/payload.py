@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from emhass_lens.domain.areas import area_zone
 from emhass_lens.domain.issues import Issue
 from emhass_lens.domain.mpc.anchor import slot_offset
 from emhass_lens.domain.mpc.inputs import MpcInputs
@@ -55,6 +56,11 @@ def derive(settings: Settings) -> Derived:
     )
 
 
+def local(dt: datetime, settings: Settings) -> str:
+    """A slot time as people read it, e.g. "Fri 18:45" (local time of the bidding zone)."""
+    return dt.astimezone(area_zone(settings.prices.nordpool.area)).strftime("%a %H:%M")
+
+
 def build(inputs: MpcInputs, anchor: datetime, current_slot: datetime, settings: Settings) -> BuildResult:
     issues: list[Issue] = []
     derived = derive(settings)
@@ -66,7 +72,7 @@ def build(inputs: MpcInputs, anchor: datetime, current_slot: datetime, settings:
             Issue(
                 "error",
                 "anchor_not_covered",
-                f"Prices start at {slots[0].start.isoformat()}, after the anchor slot {anchor.isoformat()}",
+                f"Prices start at {local(slots[0].start, settings)}, after the anchor slot {local(anchor, settings)}",
             )
         )
     contiguous = []
@@ -81,7 +87,7 @@ def build(inputs: MpcInputs, anchor: datetime, current_slot: datetime, settings:
             Issue(
                 "warning",
                 "price_gap",
-                f"Prices have a gap at {expected.isoformat()}; the horizon stops there",
+                f"Prices have a gap at {local(expected, settings)}; the horizon stops there",
             )
         )
     slots = contiguous[: mpc.max_horizon]
@@ -97,7 +103,7 @@ def build(inputs: MpcInputs, anchor: datetime, current_slot: datetime, settings:
                     level,
                     "pv_coverage",
                     f"PV forecast missing for {len(pv_missing)} of {len(starts)} slots (sent as 0 W), "
-                    f"first at {pv_missing[0].isoformat()}",
+                    f"first at {local(pv_missing[0], settings)}",
                     hint="Check the Solcast day sensors on the Inputs page.",
                 )
             )

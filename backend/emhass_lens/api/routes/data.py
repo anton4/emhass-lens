@@ -8,12 +8,21 @@ from fastapi import APIRouter, Query
 
 from emhass_lens.api.deps import ContainerDep
 from emhass_lens.api.schemas import (
+    Derived,
+    ExplainSlot,
+    ForecastStatus,
+    HaStatus,
     InputsResponse,
+    InputsSnapshot,
+    IssueOut,
     MpcPreview,
+    MpcStatus,
+    NordpoolStatus,
     PlanResponse,
     PlanSnapshotOut,
     PriceSlotOut,
     PricesResponse,
+    PvStatus,
 )
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
@@ -51,8 +60,8 @@ async def prices(c: ContainerDep, days_back: Annotated[int, Query(ge=0, le=60)] 
         actual_end=iso(stitched.actual_end),
         forecast_until=iso(stitched.forecast_until),
         gaps=[[iso(a) or "", iso(b) or ""] for a, b in stitched.gaps],
-        nordpool=svc.status(),
-        forecast=c.extras["forecasts"].status(),
+        nordpool=NordpoolStatus(**svc.status()),
+        forecast=ForecastStatus(**c.extras["forecasts"].status()),
     )
 
 
@@ -62,11 +71,11 @@ async def inputs(c: ContainerDep) -> InputsResponse:
     now = c.clock.now()
     snapshot = await c.app_db.run(c.extras["inputs"].snapshot, now)
     return InputsResponse(
-        snapshot=describe(snapshot),
-        pv=c.extras["pv"].status(),
-        forecast=c.extras["forecasts"].status(),
-        home_assistant=c.extras["ha"].status(),
-        mpc=c.extras["mpc"].status(),
+        snapshot=InputsSnapshot(**describe(snapshot)),
+        pv=PvStatus(**c.extras["pv"].status()),
+        forecast=ForecastStatus(**c.extras["forecasts"].status()),
+        home_assistant=HaStatus(**c.extras["ha"].status()),
+        mpc=MpcStatus(**c.extras["mpc"].status()),
     )
 
 
@@ -87,10 +96,10 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
         rounding=rounding,
         mode=c.extras["mpc"].mode,
         payload=result.payload,
-        explain=result.explain,
-        validation=[i.as_dict() for i in issues],
-        inputs=describe(snapshot),
-        derived=result.derived.__dict__,
+        explain=[ExplainSlot(**row) for row in result.explain],
+        validation=[IssueOut(**i.as_dict()) for i in issues],
+        inputs=InputsSnapshot(**describe(snapshot)),
+        derived=Derived(**result.derived.__dict__),
     )
 
 
@@ -139,6 +148,7 @@ async def plan(c: ContainerDep) -> PlanResponse:
             ]
     return PlanResponse(
         available=current is not None,
+        timezone=str(area_tz(c.settings.current)),
         current=_snapshot_out(current),
         previous=_snapshot_out(previous),
         current_row=current_row,

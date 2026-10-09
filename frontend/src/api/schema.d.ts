@@ -717,6 +717,17 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** DeferrableDescription */
+        DeferrableDescription: {
+            deadline_timesteps: components["schemas"]["Reading"];
+            enabled: components["schemas"]["Reading"];
+            /** Name */
+            name: string;
+            /** Nominal Power W */
+            nominal_power_w: number;
+            operating_hours: components["schemas"]["Reading"];
+            single_constant: components["schemas"]["Reading"];
+        };
         /** DeferrableLoad */
         DeferrableLoad: {
             /**
@@ -751,6 +762,19 @@ export interface components {
              */
             single_constant_entity: string;
         };
+        /** Derived */
+        Derived: {
+            /** Delta Forecast Daily */
+            delta_forecast_daily: number;
+            /** Extend Days */
+            extend_days: number;
+            /** Historic Days To Retrieve */
+            historic_days_to_retrieve: number;
+            /** Num Lags */
+            num_lags: number;
+            /** Num Lags Formula */
+            num_lags_formula: string;
+        };
         /** DiffEntry */
         DiffEntry: {
             /** New */
@@ -759,6 +783,17 @@ export interface components {
             old?: unknown;
             /** Path */
             path: string;
+        };
+        /** DiscoveryAttempt */
+        DiscoveryAttempt: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Url */
+            url: string;
+            /** Version */
+            version?: string | null;
         };
         /** DriverRequest */
         DriverRequest: {
@@ -855,6 +890,21 @@ export interface components {
              */
             timeouts: components["schemas"]["EmhassTimeouts"];
         };
+        /** EmhassCheck */
+        EmhassCheck: {
+            /** Actual */
+            actual: string;
+            /** Expected */
+            expected: string;
+            /** Explanation */
+            explanation: string;
+            /** Key */
+            key: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
         /** EmhassMl */
         EmhassMl: {
             /**
@@ -935,17 +985,13 @@ export interface components {
         /** EmhassStatusOut */
         EmhassStatusOut: {
             /** Checks */
-            checks: {
-                [key: string]: unknown;
-            }[];
+            checks: components["schemas"]["EmhassCheck"][];
             /** Checks Status */
             checks_status: string;
             /** Config At */
             config_at: string | null;
             /** Discovery */
-            discovery: {
-                [key: string]: unknown;
-            }[];
+            discovery: components["schemas"]["DiscoveryAttempt"][];
             /** Health */
             health: {
                 [key: string]: unknown;
@@ -956,10 +1002,7 @@ export interface components {
             last_health_at: string | null;
             /** Method Ts Round */
             method_ts_round: string;
-            /** Mpc */
-            mpc: {
-                [key: string]: unknown;
-            };
+            mpc: components["schemas"]["MpcStatus"];
             /** Reachable */
             reachable: boolean | null;
             /** Unreachable Since */
@@ -1032,6 +1075,25 @@ export interface components {
             /** Unit */
             unit: string | null;
         };
+        /** ExplainSlot */
+        ExplainSlot: {
+            /** I */
+            i: number;
+            /** Load Cost */
+            load_cost: number;
+            /** Origin */
+            origin: string;
+            /** Period */
+            period: string;
+            /** Prod Price */
+            prod_price: number;
+            /** Pv W */
+            pv_w: number;
+            /** Spot */
+            spot: number;
+            /** Start */
+            start: string;
+        };
         /** FiForecast */
         FiForecast: {
             /**
@@ -1090,10 +1152,59 @@ export interface components {
              */
             source: "none" | "ee_eupowerprices" | "fi_ha_entity";
         };
+        /** ForecastProviderStatus */
+        ForecastProviderStatus: {
+            /** Consecutive Errors */
+            consecutive_errors: number;
+            /** End */
+            end: string | null;
+            /** Error */
+            error: string | null;
+            /** Http Status */
+            http_status: number | null;
+            /** Issued At */
+            issued_at: string | null;
+            /** Last Attempt */
+            last_attempt: string | null;
+            /** Last Success */
+            last_success: string | null;
+            /** Points */
+            points: number;
+            /** Start */
+            start: string | null;
+        };
+        /** ForecastStatus */
+        ForecastStatus: {
+            /** Providers */
+            providers: {
+                [key: string]: components["schemas"]["ForecastProviderStatus"];
+            };
+            /** Source */
+            source: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HaStatus */
+        HaStatus: {
+            /** Configured */
+            configured: boolean;
+            /** Connected */
+            connected: boolean;
+            /** Connected Since */
+            connected_since: string | null;
+            /** Disconnected Since */
+            disconnected_since: string | null;
+            /** Ha Version */
+            ha_version: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Time Zone */
+            time_zone: string | null;
+            /** Watched */
+            watched: number;
         };
         /** Health */
         Health: {
@@ -1169,26 +1280,35 @@ export interface components {
         };
         /** InputsResponse */
         InputsResponse: {
-            /** Forecast */
-            forecast: {
-                [key: string]: unknown;
-            };
-            /** Home Assistant */
-            home_assistant: {
-                [key: string]: unknown;
-            };
-            /** Mpc */
-            mpc: {
-                [key: string]: unknown;
-            };
-            /** Pv */
-            pv: {
-                [key: string]: unknown;
-            };
-            /** Snapshot */
-            snapshot: {
-                [key: string]: unknown;
-            };
+            forecast: components["schemas"]["ForecastStatus"];
+            home_assistant: components["schemas"]["HaStatus"];
+            mpc: components["schemas"]["MpcStatus"];
+            pv: components["schemas"]["PvStatus"];
+            snapshot: components["schemas"]["InputsSnapshot"];
+        };
+        /** InputsSnapshot */
+        InputsSnapshot: {
+            /** Deferrable Loads */
+            deferrable_loads: components["schemas"]["DeferrableDescription"][];
+            /** Issues */
+            issues: components["schemas"]["IssueOut"][];
+            prices: components["schemas"]["PricesSummary"];
+            pv: components["schemas"]["PvSummary"] | null;
+            soc_final: components["schemas"]["Reading"];
+            soc_init: components["schemas"]["Reading"];
+            /** Taken At */
+            taken_at: string | null;
+        };
+        /** IssueOut */
+        IssueOut: {
+            /** Code */
+            code: string;
+            /** Hint */
+            hint?: string | null;
+            /** Level */
+            level: string;
+            /** Message */
+            message: string;
         };
         /** JobInfo */
         JobInfo: {
@@ -1216,6 +1336,17 @@ export interface components {
             title: string;
             /** Trigger */
             trigger: string;
+        };
+        /** LastBuild */
+        LastBuild: {
+            /** Anchor */
+            anchor: string | null;
+            /** Built At */
+            built_at: string | null;
+            /** Horizon */
+            horizon: number;
+            /** Run Id */
+            run_id: number | null;
         };
         /** LegacyApplyRequest */
         LegacyApplyRequest: {
@@ -1298,18 +1429,10 @@ export interface components {
             anchor: string;
             /** Built At */
             built_at: string;
-            /** Derived */
-            derived: {
-                [key: string]: unknown;
-            };
+            derived: components["schemas"]["Derived"];
             /** Explain */
-            explain: {
-                [key: string]: unknown;
-            }[];
-            /** Inputs */
-            inputs: {
-                [key: string]: unknown;
-            };
+            explain: components["schemas"]["ExplainSlot"][];
+            inputs: components["schemas"]["InputsSnapshot"];
             /** Mode */
             mode: string;
             /** Payload */
@@ -1319,9 +1442,21 @@ export interface components {
             /** Rounding */
             rounding: string;
             /** Validation */
-            validation: {
-                [key: string]: unknown;
-            }[];
+            validation: components["schemas"]["IssueOut"][];
+        };
+        /** MpcStatus */
+        MpcStatus: {
+            /** Auto */
+            auto: boolean;
+            /** Driver */
+            driver: string;
+            last_build: components["schemas"]["LastBuild"] | null;
+            /** Last Success At */
+            last_success_at: string | null;
+            /** Legacy Driving */
+            legacy_driving: boolean;
+            /** Mode */
+            mode: string;
         };
         /** MqttBroker */
         MqttBroker: {
@@ -1395,6 +1530,40 @@ export interface components {
              */
             start: string;
         };
+        /** NordpoolDay */
+        NordpoolDay: {
+            /** Consecutive Errors */
+            consecutive_errors: number;
+            /** Day */
+            day: string;
+            /** Error */
+            error: string | null;
+            /** Http Status */
+            http_status: number | null;
+            /** Last Attempt */
+            last_attempt: string | null;
+            /** Last Success */
+            last_success: string | null;
+            /** Not Published */
+            not_published: boolean;
+            /** Resolution Min */
+            resolution_min: number | null;
+            /** Slots */
+            slots: number;
+            /** State */
+            state: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** NordpoolNext */
+        NordpoolNext: {
+            /** Day */
+            day: string;
+            /** Due At */
+            due_at: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** NordpoolPolling */
         NordpoolPolling: {
             /**
@@ -1424,6 +1593,17 @@ export interface components {
              * @default 60
              */
             slow_interval_min: number;
+        };
+        /** NordpoolStatus */
+        NordpoolStatus: {
+            /** Area */
+            area: string;
+            /** Days */
+            days: components["schemas"]["NordpoolDay"][];
+            /** Next */
+            next: components["schemas"]["NordpoolNext"][];
+            /** Timezone */
+            timezone: string;
         };
         /** Notifications */
         Notifications: {
@@ -1531,6 +1711,8 @@ export interface components {
             prices: {
                 [key: string]: unknown;
             }[];
+            /** Timezone */
+            timezone: string;
         };
         /** PlanSnapshotOut */
         PlanSnapshotOut: {
@@ -1629,18 +1811,12 @@ export interface components {
         PricesResponse: {
             /** Actual End */
             actual_end: string | null;
-            /** Forecast */
-            forecast: {
-                [key: string]: unknown;
-            };
+            forecast: components["schemas"]["ForecastStatus"];
             /** Forecast Until */
             forecast_until: string | null;
             /** Gaps */
             gaps: string[][];
-            /** Nordpool */
-            nordpool: {
-                [key: string]: unknown;
-            };
+            nordpool: components["schemas"]["NordpoolStatus"];
             /** Now */
             now: string;
             /** Package */
@@ -1649,6 +1825,21 @@ export interface components {
             slots: components["schemas"]["PriceSlotOut"][];
             /** Timezone */
             timezone: string;
+        };
+        /** PricesSummary */
+        PricesSummary: {
+            /** Actual */
+            actual: number;
+            /** End */
+            end: string | null;
+            /** First */
+            first: string | null;
+            /** Forecast */
+            forecast: number;
+            /** Forecast Source */
+            forecast_source: string;
+            /** Slots */
+            slots: number;
         };
         /** ProblemInfo */
         ProblemInfo: {
@@ -1711,6 +1902,64 @@ export interface components {
              * @enum {string}
              */
             source: "solcast" | "none";
+        };
+        /** PvStatus */
+        PvStatus: {
+            /** End */
+            end?: string | null;
+            /** Field */
+            field?: string | null;
+            /**
+             * Sensors Missing
+             * @default []
+             */
+            sensors_missing: string[];
+            /**
+             * Sensors Used
+             * @default []
+             */
+            sensors_used: string[];
+            /** Slots */
+            slots?: number | null;
+            /** Source */
+            source: string;
+            /** Start */
+            start?: string | null;
+        };
+        /** PvSummary */
+        PvSummary: {
+            /** Field */
+            field: string;
+            /** First Missing */
+            first_missing: string | null;
+            /** Sensors Missing */
+            sensors_missing: string[];
+            /** Sensors Used */
+            sensors_used: string[];
+            /** Slots Missing */
+            slots_missing: number;
+        };
+        /**
+         * Reading
+         * @description One value read from Home Assistant (or a fallback) with where it came from.
+         */
+        Reading: {
+            /** Age S */
+            age_s?: number | null;
+            /** Explain */
+            explain: string;
+            /** Issue */
+            issue?: string | null;
+            /** Name */
+            name: string;
+            /** Raw */
+            raw?: unknown;
+            /** Source */
+            source: string;
+            /** Transform */
+            transform?: string | null;
+            /** Value */
+            value: number | boolean | null;
         };
         /** Retention */
         Retention: {
