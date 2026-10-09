@@ -195,7 +195,7 @@ def main() -> int:
             )
             entity = wait_for(
                 lambda: (
-                    (r := ha.get("/api/states/sensor.emhass_lens_import_price_now")).status_code == 200 and r.json()
+                    (r := ha.get("/api/states/sensor.emhass_lens_import_price")).status_code == 200 and r.json()
                 ),
                 20,
             )

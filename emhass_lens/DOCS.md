@@ -43,11 +43,12 @@ With **Settings → Home Assistant outputs → MQTT entities** on, EMHASS Lens p
 
 | Entity | What |
 |---|---|
-| Import price now / Export price now | €/kWh for the current 15-minute slot, with the next slot and the price period as attributes |
-| Problem | On while something needs attention (the attributes list what) |
-| Last successful MPC | Timestamp of the last live run that produced a plan |
-| Auto MPC | Switch: pause or resume the scheduled MPC runs, e.g. from an automation during an mFRR session |
-| Run MPC now | Button |
+| `sensor.emhass_lens_import_price` | Import price now, €/kWh for the current 15-minute slot. Attributes: next slot price, period (day/night/peak), spot. |
+| `sensor.emhass_lens_export_price` | Export price now, €/kWh |
+| `binary_sensor.emhass_lens_problem` | On while something needs attention. The attributes list what. |
+| `sensor.emhass_lens_last_mpc` | When the last live run produced a plan |
+| `switch.emhass_lens_auto_mpc` | Pause or resume the scheduled MPC runs, e.g. from an automation during an mFRR session |
+| `button.emhass_lens_run_mpc` | Run MPC now |
 
 The entities are retained on the broker, so they survive Home Assistant restarts.
 

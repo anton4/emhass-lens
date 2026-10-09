@@ -140,7 +140,13 @@ def discovery(settings: Settings, version: str) -> list[Message]:
     ]
     out = []
     for component, key, config in entities:
-        payload = {**common, **config, "unique_id": f"{DEVICE_ID}_{key}", "object_id": f"{DEVICE_ID}_{key}"}
+        # default_entity_id (HA 2025.10+) fixes the entity id; object_id is ignored by current HA versions
+        payload = {
+            **common,
+            **config,
+            "unique_id": f"{DEVICE_ID}_{key}",
+            "default_entity_id": f"{component}.{DEVICE_ID}_{key}",
+        }
         out.append(Message(f"{prefix}/{component}/{DEVICE_ID}/{key}/config", json.dumps(payload)))
     return out
 

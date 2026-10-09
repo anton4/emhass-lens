@@ -161,6 +161,7 @@ def test_mqtt_discovery_messages() -> None:
     messages = {m.topic: json.loads(m.payload) for m in discovery(Settings(), "1.2.3")}
     sensor = messages["homeassistant/sensor/emhass_lens/import_price/config"]
     assert sensor["unique_id"] == "emhass_lens_import_price"
+    assert sensor["default_entity_id"] == "sensor.emhass_lens_import_price"
     assert sensor["state_topic"] == "emhass_lens/state"
     assert sensor["availability_topic"] == "emhass_lens/status"
     assert sensor["device"]["sw_version"] == "1.2.3"
