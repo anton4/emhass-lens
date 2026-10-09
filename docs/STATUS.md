@@ -13,12 +13,12 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 ## Phase overview
 | Phase | State |
 |---|---|
-| 0. Scaffolding (packaging, settings with history, scheduler, runs, live logs, UI shell, CI) | code done; needs the on-HA checks below |
-| 1. Prices, forecasts and PV in shadow mode, plus parity with the HACS integration | backend done; UI in progress |
-| 2. EMHASS orchestration (dry run → live, take over / hand back) | backend done (tested against a fake EMHASS); UI pending |
-| 3. MQTT entities and the plan-published event | backend done (discovery/commands unit-tested; not yet tried against a real broker) |
-| 4. Retire the HACS integration | not started |
-| 5. Inverter control in the App (optional) | not started |
+| 0. Scaffolding (packaging, settings with history, scheduler, runs, live logs, UI shell, CI) | done; the App image builds for amd64 and aarch64 |
+| 1. Prices, forecasts and PV in shadow mode, plus parity with the HACS integration | done; verified against the real integration (e2e) |
+| 2. EMHASS orchestration (dry run → live, take over / hand back) | backend done and verified against real EMHASS 0.18.3 (e2e); UI being finished |
+| 3. MQTT entities and the plan-published event | done; verified against a real HA and Mosquitto (e2e) |
+| 4. Retire the HACS integration | waiting for your validation; runbook in docs/RETIRING_HACS.md |
+| 5. Inverter control in the App (optional) | backend done (off by default, dry run compares with your automation); UI pending |
 
 ## Decisions for the owner (left open on purpose)
 - **License:** the repo has no LICENSE file yet (the old repo didn't either). Pick one (MIT is common for HA Apps).
@@ -33,6 +33,23 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-09 (late evening): verified end to end, inverter control started
+- **New e2e harness** (`e2e/`). It runs a real HA 2026.10, the real HACS integration, Mosquitto and the real EMHASS 0.18.3 in Docker, and `./check.sh` passes 13/13 checks:
+  - **Home Assistant:** the WebSocket and entity readings with provenance work.
+  - **Parity:** the match with the running HACS integration is exact: 192/192 prices, 125/125 "from now" prices and PV.
+  - **Settings import:** works, and recognises the Võrk 4 rates.
+  - **EMHASS:** the config checks pass. Dry run works. A live run produced a plan whose first row is exactly the computed anchor slot.
+  - **Publish:** publish-data plus `emhass_lens_plan_published`, with values equal to `sensor.p_batt_forecast`.
+  - **MQTT:** the entities are created, the Auto MPC switch works both ways, and they recover after an HA restart.
+  - **Notifications:** a persistent notification is created and dismissed again.
+- **Fixed after e2e:**
+  - EMHASS discovery works with the default Supervisor role (via the known slug `5b918bf2_emhass`).
+  - MQTT entity ids are predictable (`sensor.emhass_lens_import_price` and so on).
+  - Health is re-checked right after entity changes.
+  - Tokens are masked.
+  - Retention now prunes prices, forecasts and plans.
+- **Experimental inverter control:** it decides each slot exactly like your automation, rule by rule, and in dry run compares with what the automation set. Live mode needs explicit opt-in.
 
 ### 2026-10-09 (evening): Phases 0–3 backend, Phase 0 UI
 - **Repo:** created at https://github.com/anton4/emhass-lens (public). CI is green, and the first App image (0.1.0, amd64 + aarch64) is on ghcr.io.
@@ -49,10 +66,11 @@ These come from docs/PLAN.md §10:
 - **Found along the way:** Nord Pool returns 401 for days older than a few days. Only recent days can be fetched, so history accumulates from the first run.
 
 ### Next steps
-1. Finish and commit the Phase 1 UI, then add UI for take over / hand back, ML actions and the MQTT status.
-2. **On the real HA (needs you):**
-   - Add the repo under Settings → Apps → Repositories and install.
-   - Check that logs stream through Ingress, settings save, and safe mode works.
-   - Set the EMHASS address or let it be discovered, and run "Import from the HACS integration".
-   - Watch parity for a week, including the DST change on 2026-10-25.
-3. Phase 4: the HACS deprecation release in the old repo. Phase 5 (optional): inverter control.
+1. Finish the UI for take over / hand back, ML, MQTT/outputs and the inverter page, then release 0.2.0.
+2. **On your real HA (needs you):**
+   1. Add the repository and install. Check that logs stream through Ingress and that settings save.
+   2. EMHASS should be found automatically; otherwise set the address in Settings → EMHASS.
+   3. Run "Import from the HACS integration" (Health). Keep the mode **Off** and watch parity for a week, including the DST change on 2026-10-25.
+   4. Switch to **Dry run** for a few days, then **Take over**.
+   5. Optionally turn inverter control to **Dry run** and watch the agreement rate.
+3. Phase 4 when happy: follow docs/RETIRING_HACS.md.
