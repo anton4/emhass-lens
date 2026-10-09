@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import secrets
 import ssl
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -268,6 +269,14 @@ class OutputService:
             self.c.scheduler.run_now("emhass.mpc")
 
     # --- connection --------------------------------------------------------------------------------------------
+    async def _client_id(self) -> str:
+        """A stable, per-installation MQTT client id (two installs must not kick each other off the broker)."""
+        client_id = self.c.kv_get("mqtt.client_id")
+        if not client_id:
+            client_id = f"emhass-lens-{secrets.token_hex(3)}"
+            await self.c.app_db.run(self.c.kv_set, "mqtt.client_id", client_id)
+        return str(client_id)
+
     async def _credentials(self) -> dict[str, Any]:
         broker = self.c.settings.current.outputs.broker
         if broker.host:
@@ -306,7 +315,7 @@ class OutputService:
                     creds["port"],
                     username=creds["username"],
                     password=creds["password"],
-                    identifier=f"emhass-lens-{self.c.boot.version}",
+                    identifier=await self._client_id(),
                     tls_context=tls,
                     will=aiomqtt.Will(t["availability"], "offline", qos=1, retain=True),
                 ) as client:
