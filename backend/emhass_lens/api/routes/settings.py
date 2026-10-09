@@ -1,7 +1,8 @@
+import logging
 from typing import Annotated, Any
 
 import yaml
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import ValidationError
 
@@ -13,21 +14,25 @@ from emhass_lens.api.schemas import (
     RevertRequest,
     Revision,
     SaveResponse,
+    SecretRequest,
+    SecretValue,
     SettingsPatchRequest,
     SettingsResponse,
     SettingsSaveRequest,
 )
-from emhass_lens.settings.model import Settings, inlined_schema
+from emhass_lens.settings.model import Settings, inlined_schema, secret_paths
 from emhass_lens.settings.store import (
     SettingsInvalid,
     StaleRevision,
     _errors,
+    _get,
     diff_docs,
     mask_diff,
     unmask_secrets,
 )
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+log = logging.getLogger("emhass_lens.settings")
 
 
 def _conflict(exc: StaleRevision) -> JSONResponse:
@@ -93,6 +98,22 @@ async def patch_settings(c: ContainerDep, request: Request, body: SettingsPatchR
     except SettingsInvalid as exc:
         return _invalid(exc)  # type: ignore[return-value]
     return SaveResponse(revision=result.revision, diff=[DiffEntry(**d) for d in result.diff])
+
+
+@router.post("/secret", dependencies=[Writable], responses={404: {}})
+async def reveal_secret(c: ContainerDep, request: Request, response: Response, body: SecretRequest) -> SecretValue:
+    """The stored value of one secret setting, for the eye button next to it.
+
+    Only for requests that may change settings (through Home Assistant's sidebar, never the direct port),
+    never cached, and every reveal is logged without the value.
+    """
+    path = tuple(body.path.split("."))
+    if path not in secret_paths():
+        raise HTTPException(404, f"{body.path} is not a secret setting")
+    value = _get(c.settings.current.model_dump(mode="json"), path)
+    log.info("Stored %s shown to %s", body.path, actor(request))
+    response.headers["Cache-Control"] = "no-store"
+    return SecretValue(path=body.path, value=str(value or ""))
 
 
 @router.get("/revisions")

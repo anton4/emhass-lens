@@ -140,3 +140,25 @@ def test_retention_also_prunes_prices_forecasts_and_plans(tmp_path: Path) -> Non
         assert run["outcome"] == "ok", run
         assert "old price slots" in run["summary"]
         assert "plans" in run["summary"]
+
+
+def test_a_stored_secret_is_shown_only_on_request_through_ingress(tmp_path: Path) -> None:
+    with TestClient(create_app(boot(tmp_path / "a", supervisor_token="t", ingress_ip="testclient"))) as client:
+        rev = client.get("/api/settings").json()["revision"]
+        changes = {"forecast": {"ee": {"api_key": "abc123secret"}}}
+        assert client.post("/api/settings/change", json={"base_revision": rev, "changes": changes}).status_code == 200
+        assert client.get("/api/settings").json()["settings"]["forecast"]["ee"]["api_key"] == "********"
+
+        shown = client.post("/api/settings/secret", json={"path": "forecast.ee.api_key"})
+        assert shown.status_code == 200, shown.text
+        assert shown.json() == {"path": "forecast.ee.api_key", "value": "abc123secret"}
+        assert shown.headers["cache-control"] == "no-store"
+        assert client.post("/api/settings/secret", json={"path": "emhass.base_url"}).status_code == 404
+
+        lines = [e["msg"] for e in client.app.state.container.logging.ring.tail()]  # type: ignore[attr-defined]
+        assert "Stored forecast.ee.api_key shown to unknown" in lines
+        assert not any("abc123secret" in line for line in lines)
+
+    # the direct port (not through Ingress) may not see it
+    with TestClient(create_app(boot(tmp_path / "b", supervisor_token="t", ingress_ip="10.9.9.9"))) as client:
+        assert client.post("/api/settings/secret", json={"path": "forecast.ee.api_key"}).status_code == 403

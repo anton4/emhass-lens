@@ -4383,6 +4383,38 @@
         "title": "SaveResponse",
         "type": "object"
       },
+      "SecretRequest": {
+        "properties": {
+          "path": {
+            "description": "Dotted path of a secret setting, e.g. forecast.ee.api_key",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "SecretRequest",
+        "type": "object"
+      },
+      "SecretValue": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "value"
+        ],
+        "title": "SecretValue",
+        "type": "object"
+      },
       "Settings": {
         "additionalProperties": false,
         "properties": {
@@ -6705,6 +6737,51 @@
           }
         },
         "summary": "Get Schema",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/secret": {
+      "post": {
+        "description": "The stored value of one secret setting, for the eye button next to it.\n\nOnly for requests that may change settings (through Home Assistant's sidebar, never the direct port),\nnever cached, and every reveal is logged without the value.",
+        "operationId": "reveal_secret_api_settings_secret_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretValue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reveal Secret",
         "tags": [
           "settings"
         ]

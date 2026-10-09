@@ -144,6 +144,15 @@ class SettingsPatchRequest(BaseModel):
     comment: str | None = None
 
 
+class SecretRequest(BaseModel):
+    path: str = Field(description="Dotted path of a secret setting, e.g. forecast.ee.api_key")
+
+
+class SecretValue(BaseModel):
+    path: str
+    value: str
+
+
 class RevertRequest(BaseModel):
     base_revision: int | None = None
     comment: str | None = None

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { api } from '../../api/client'
 import { deepEqual } from '../../lib/diff'
 import { formatQuarterOffset } from '../../lib/format'
 import { defaultFor, fieldInfo, getPath, hasErrorsUnder, idFor, type FieldInfo, type SchemaNode } from '../../lib/schema'
@@ -214,62 +215,96 @@ function ListField({
 }
 
 /**
- * A password-style input with an eye button that shows what was typed. A stored secret reaches the
- * browser only as the mask, so there is nothing to reveal until a new value is typed.
+ * A password-style input with an eye button. It shows what was typed, or, when nothing was typed,
+ * fetches the stored value on request (only allowed through Home Assistant's sidebar; each reveal is
+ * logged). The fetched value is forgotten again when hidden.
  */
 function SecretInput({
   id,
+  path,
   disabled,
   invalid,
   value,
   onValue,
 }: {
   id: string
+  path: string
   disabled: boolean
   invalid: boolean
   value: unknown
   onValue: (v: unknown) => void
 }) {
   const [shown, setShown] = useState(false)
+  const [revealed, setRevealed] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const stored = value === MASK
   const typed = stored ? '' : String(value ?? '')
-  const hint = typed
-    ? shown
-      ? 'Hide'
-      : 'Show'
-    : stored
-      ? 'The stored key is never sent to the browser. Type a new one to see it here.'
-      : 'Nothing typed yet'
+  const showingStored = stored && shown && revealed !== null
+  const visible = showingStored || (!stored && shown)
+
+  const hide = () => {
+    setShown(false)
+    setRevealed(null)
+  }
+  const toggle = async () => {
+    setError(null)
+    if (visible) return hide()
+    if (stored && typed === '') {
+      setLoading(true)
+      try {
+        const result = await api.post<{ value: string }>('/api/settings/secret', { path })
+        setRevealed(result.value)
+        setShown(true)
+      } catch (err) {
+        setError(`Can't show the stored value: ${(err as Error).message}`)
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+    setShown(true)
+  }
+
+  const label = visible ? 'Hide' : stored && typed === '' ? 'Show the stored value' : 'Show what was typed'
   return (
     <>
       <span className="secret-input">
         <input
           id={id}
-          type={shown ? 'text' : 'password'}
+          type={visible ? 'text' : 'password'}
           autoComplete="off"
           spellCheck={false}
           disabled={disabled}
           aria-invalid={invalid || undefined}
           placeholder={stored ? 'Stored; type to replace' : 'Not set'}
-          value={typed}
-          onChange={(e) => onValue(e.target.value === '' && stored ? MASK : e.target.value)}
+          value={showingStored ? (revealed ?? '') : typed}
+          onChange={(e) => {
+            setRevealed(null) // editing turns the shown stored value into a new value
+            onValue(e.target.value === '' && stored ? MASK : e.target.value)
+          }}
         />
         <button
           type="button"
           className="secret-eye"
-          aria-label={shown ? 'Hide what was typed' : 'Show what was typed'}
-          aria-pressed={shown}
-          title={hint}
-          disabled={disabled || typed === ''}
-          onClick={() => setShown((v) => !v)}
+          aria-label={label}
+          aria-pressed={visible}
+          title={label}
+          disabled={disabled || loading || (!stored && typed === '')}
+          onClick={() => void toggle()}
         >
-          <EyeIcon crossed={shown} />
+          <EyeIcon crossed={visible} />
         </button>
       </span>
       {stored && (
         <button type="button" className="quiet" disabled={disabled} onClick={() => onValue('')}>
           Remove
         </button>
+      )}
+      {error && (
+        <span className="field-error" role="alert">
+          {error}
+        </span>
       )}
     </>
   )
@@ -349,7 +384,9 @@ function Input({ id, info, path, value, ctx, invalid }: InputProps) {
     case 'string': {
       const widget = info.ui.widget
       if (widget === 'secret') {
-        return <SecretInput id={id} disabled={ctx.disabled} invalid={invalid} value={value} onValue={set} />
+        return (
+          <SecretInput id={id} path={pathKey(path)} disabled={ctx.disabled} invalid={invalid} value={value} onValue={set} />
+        )
       }
       if (widget === 'entity') {
         return (

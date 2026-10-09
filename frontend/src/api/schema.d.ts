@@ -739,6 +739,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal Secret
+         * @description The stored value of one secret setting, for the eye button next to it.
+         *
+         *     Only for requests that may change settings (through Home Assistant's sidebar, never the direct port),
+         *     never cached, and every reveal is logged without the value.
+         */
+        post: operations["reveal_secret_api_settings_secret_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup": {
         parameters: {
             query?: never;
@@ -2417,6 +2440,21 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** SecretRequest */
+        SecretRequest: {
+            /**
+             * Path
+             * @description Dotted path of a secret setting, e.g. forecast.ee.api_key
+             */
+            path: string;
+        };
+        /** SecretValue */
+        SecretValue: {
+            /** Path */
+            path: string;
+            /** Value */
+            value: string;
+        };
         /** Settings */
         Settings: {
             /**
@@ -4000,6 +4038,46 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    reveal_secret_api_settings_secret_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretValue"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
