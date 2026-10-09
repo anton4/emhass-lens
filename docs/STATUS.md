@@ -15,10 +15,10 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 |---|---|
 | 0. Scaffolding (packaging, settings with history, scheduler, runs, live logs, UI shell, CI) | done; the App image builds for amd64 and aarch64 |
 | 1. Prices, forecasts and PV in shadow mode, plus parity with the HACS integration | done; verified against the real integration (e2e) |
-| 2. EMHASS orchestration (dry run → live, take over / hand back) | backend done and verified against real EMHASS 0.18.3 (e2e); UI being finished |
+| 2. EMHASS orchestration (dry run → live, take over / hand back) | done; verified against real EMHASS 0.18.3 (e2e) |
 | 3. MQTT entities and the plan-published event | done; verified against a real HA and Mosquitto (e2e) |
 | 4. Retire the HACS integration | waiting for your validation; runbook in docs/RETIRING_HACS.md |
-| 5. Inverter control in the App (optional) | backend done (off by default, dry run compares with your automation); UI pending |
+| 5. Inverter control in the App (optional) | done, experimental: off by default; dry run compares with your automation |
 
 ## Decisions for the owner (left open on purpose)
 - **License:** the repo has no LICENSE file yet (the old repo didn't either). Pick one (MIT is common for HA Apps).
@@ -33,6 +33,18 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-09 (night): code review fixes, 0.2.4
+- **Code review of the backend's critical paths found:**
+  - Nord Pool polling could loop every second on unexpected responses.
+  - The inverter decision could read EMHASS's sensors from the previous slot.
+  - Live inverter writes relied on a possibly stale WebSocket cache for the mFRR interlock.
+  - Some MPC outcomes could be wrong.
+  - MQTT entities stayed "available" after a stop.
+  - Take over could leave nobody driving EMHASS.
+- **All fixed, each with a regression test** (`backend/tests/test_review_fixes.py`). Released as **0.2.4**.
+- **Merge note:** 0.2.3 was released from another session (entity search as you type, plus a logging fix). My review fixes were rebased on top of it, with no lost work.
+- **Git identity:** the other machine commits as `Jorma <you@example.com>`. Set `git config --global user.email` there if that isn't intended.
 
 ### 2026-10-09 (night): 0.2.0 / 0.2.1 released
 - **0.2.0** contains all phases so far: Plan, Inputs, Inverter, Runs, Logs, Health and Settings. **0.2.1** adds one Plan page fix.
@@ -72,11 +84,10 @@ These come from docs/PLAN.md §10:
 - **Found along the way:** Nord Pool returns 401 for days older than a few days. Only recent days can be fetched, so history accumulates from the first run.
 
 ### Next steps
-1. Finish the UI for take over / hand back, ML, MQTT/outputs and the inverter page, then release 0.2.0.
-2. **On your real HA (needs you):**
+1. **On your real HA (needs you):**
    1. Add the repository and install. Check that logs stream through Ingress and that settings save.
    2. EMHASS should be found automatically; otherwise set the address in Settings → EMHASS.
    3. Run "Import from the HACS integration" (Health). Keep the mode **Off** and watch parity for a week, including the DST change on 2026-10-25.
    4. Switch to **Dry run** for a few days, then **Take over**.
    5. Optionally turn inverter control to **Dry run** and watch the agreement rate.
-3. Phase 4 when happy: follow docs/RETIRING_HACS.md.
+2. Phase 4 when happy: follow docs/RETIRING_HACS.md.
