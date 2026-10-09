@@ -178,6 +178,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inverter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inverter Status
+         * @description Inverter control (experimental): the last decision, the last comparison with the automation, agreement.
+         */
+        get: operations["inverter_status_api_inverter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inverter/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inverter Decide
+         * @description Decide now for the current slot (applies only in live mode).
+         */
+        post: operations["inverter_decide_api_inverter_decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -699,6 +739,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Agreement */
+        Agreement: {
+            /** Agreed */
+            agreed: number;
+            /** Compared */
+            compared: number;
+            /** Hours */
+            hours: number;
+            /** Rate */
+            rate: number | null;
+        };
         /** ArtifactInfo */
         ArtifactInfo: {
             /** Created At */
@@ -1298,6 +1349,178 @@ export interface components {
             soc_init: components["schemas"]["Reading"];
             /** Taken At */
             taken_at: string | null;
+        };
+        /** Inverter */
+        Inverter: {
+            /**
+             * Compare with the automation at
+             * @default 45
+             */
+            compare_offset_s: number;
+            /**
+             * Decide at (seconds into each quarter)
+             * @description Right after the plan is published (:02).
+             * @default 5
+             */
+            decide_offset_s: number;
+            /**
+             * Inverter entities
+             * @default {
+             *       "apply_button": "button.sofar_passive_mode_battery_charge_discharge",
+             *       "battery_max_number": "number.sofar_passive_mode_battery_power_max",
+             *       "battery_min_number": "number.sofar_passive_mode_battery_power_min",
+             *       "charger_mode_select": "select.sofar_charger_use_mode",
+             *       "enable_boolean": "input_boolean.emhass_automation",
+             *       "feedin_button": "button.sofar_feedin_limitation_mode",
+             *       "feedin_number": "number.sofar_feedin_max_power",
+             *       "grid_power_number": "number.sofar_passive_mode_grid_power",
+             *       "passive_option": "Passive Mode",
+             *       "state_select": "input_select.emhass_passive_state"
+             *     }
+             */
+            entities: components["schemas"]["InverterEntities"];
+            /**
+             * Limits and thresholds
+             * @default {
+             *       "battery_max_w": 20000,
+             *       "battery_min_w": -20000,
+             *       "export_max_w": 15500,
+             *       "export_only_battery_min_w": -16000,
+             *       "force_charge_battery_min_w": -3000,
+             *       "force_charge_grid_cap_above_w": 9000,
+             *       "force_charge_grid_margin_w": 1000,
+             *       "grid_import_max_w": 18800,
+             *       "low_export_price": 0.02
+             *     }
+             */
+            limits: components["schemas"]["InverterLimits"];
+            /**
+             * Inverter control
+             * @description Dry run: decide each slot and compare with what the automation did, without touching the inverter. Live: EMHASS Lens sets the inverter itself (turn the automation off first).
+             * @default off
+             * @enum {string}
+             */
+            mode: "off" | "dry_run" | "live";
+        };
+        /** InverterEntities */
+        InverterEntities: {
+            /**
+             * Apply passive settings button
+             * @default button.sofar_passive_mode_battery_charge_discharge
+             */
+            apply_button: string;
+            /**
+             * Passive battery power max
+             * @default number.sofar_passive_mode_battery_power_max
+             */
+            battery_max_number: string;
+            /**
+             * Passive battery power min
+             * @default number.sofar_passive_mode_battery_power_min
+             */
+            battery_min_number: string;
+            /**
+             * Charger mode select
+             * @description Control only acts while this is in passive mode.
+             * @default select.sofar_charger_use_mode
+             */
+            charger_mode_select: string;
+            /**
+             * Enabled when on
+             * @description The same switch the automation uses (mFRR sessions turn it off).
+             * @default input_boolean.emhass_automation
+             */
+            enable_boolean: string;
+            /**
+             * Apply feed-in limit button
+             * @default button.sofar_feedin_limitation_mode
+             */
+            feedin_button: string;
+            /**
+             * Feed-in max power
+             * @default number.sofar_feedin_max_power
+             */
+            feedin_number: string;
+            /**
+             * Passive grid power
+             * @default number.sofar_passive_mode_grid_power
+             */
+            grid_power_number: string;
+            /**
+             * Passive mode option
+             * @default Passive Mode
+             */
+            passive_option: string;
+            /**
+             * State select (for dashboards)
+             * @default input_select.emhass_passive_state
+             */
+            state_select: string;
+        };
+        /** InverterLimits */
+        InverterLimits: {
+            /**
+             * Battery discharge max
+             * @default 20000
+             */
+            battery_max_w: number;
+            /**
+             * Battery charge max (negative)
+             * @default -20000
+             */
+            battery_min_w: number;
+            /**
+             * Export max (feed-in)
+             * @default 15500
+             */
+            export_max_w: number;
+            /**
+             * Battery min while exporting PV
+             * @default -16000
+             */
+            export_only_battery_min_w: number;
+            /**
+             * Battery min while force charging
+             * @default -3000
+             */
+            force_charge_battery_min_w: number;
+            /**
+             * Force charge: use the import max above
+             * @default 9000
+             */
+            force_charge_grid_cap_above_w: number;
+            /**
+             * Force charge: grid target margin
+             * @default 1000
+             */
+            force_charge_grid_margin_w: number;
+            /**
+             * Grid import max
+             * @default 18800
+             */
+            grid_import_max_w: number;
+            /**
+             * Block export below this price
+             * @default 0.02
+             */
+            low_export_price: number;
+        };
+        /** InverterStatus */
+        InverterStatus: {
+            agreement_24h: components["schemas"]["Agreement"];
+            agreement_7d: components["schemas"]["Agreement"];
+            /** Last */
+            last: {
+                [key: string]: unknown;
+            } | null;
+            /** Last Compare */
+            last_compare: {
+                [key: string]: unknown;
+            } | null;
+            /** Mode */
+            mode: string;
+            /** Preconditions */
+            preconditions: string | null;
         };
         /** IssueOut */
         IssueOut: {
@@ -2171,6 +2394,38 @@ export interface components {
              */
             inputs: components["schemas"]["Inputs"];
             /**
+             * Inverter control (experimental)
+             * @default {
+             *       "compare_offset_s": 45,
+             *       "decide_offset_s": 5,
+             *       "entities": {
+             *         "apply_button": "button.sofar_passive_mode_battery_charge_discharge",
+             *         "battery_max_number": "number.sofar_passive_mode_battery_power_max",
+             *         "battery_min_number": "number.sofar_passive_mode_battery_power_min",
+             *         "charger_mode_select": "select.sofar_charger_use_mode",
+             *         "enable_boolean": "input_boolean.emhass_automation",
+             *         "feedin_button": "button.sofar_feedin_limitation_mode",
+             *         "feedin_number": "number.sofar_feedin_max_power",
+             *         "grid_power_number": "number.sofar_passive_mode_grid_power",
+             *         "passive_option": "Passive Mode",
+             *         "state_select": "input_select.emhass_passive_state"
+             *       },
+             *       "limits": {
+             *         "battery_max_w": 20000,
+             *         "battery_min_w": -20000,
+             *         "export_max_w": 15500,
+             *         "export_only_battery_min_w": -16000,
+             *         "force_charge_battery_min_w": -3000,
+             *         "force_charge_grid_cap_above_w": 9000,
+             *         "force_charge_grid_margin_w": 1000,
+             *         "grid_import_max_w": 18800,
+             *         "low_export_price": 0.02
+             *       },
+             *       "mode": "off"
+             *     }
+             */
+            inverter: components["schemas"]["Inverter"];
+            /**
              * @default {
              *       "component_levels": {},
              *       "level": "default",
@@ -2661,6 +2916,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InputsResponse"];
+                };
+            };
+        };
+    };
+    inverter_status_api_inverter_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InverterStatus"];
+                };
+            };
+        };
+    };
+    inverter_decide_api_inverter_decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStarted"];
                 };
             };
         };

@@ -546,6 +546,134 @@ class Parity(Section):
     )
 
 
+class InverterEntities(Section):
+    charger_mode_select: EntityId = Field(
+        default="select.sofar_charger_use_mode",
+        title="Charger mode select",
+        description="Control only acts while this is in passive mode.",
+        json_schema_extra=ui(widget="entity", domain="select"),
+    )
+    passive_option: str = Field(default="Passive Mode", title="Passive mode option")
+    enable_boolean: EntityId = Field(
+        default="input_boolean.emhass_automation",
+        title="Enabled when on",
+        description="The same switch the automation uses (mFRR sessions turn it off).",
+        json_schema_extra=ui(widget="entity", domain=["input_boolean", "switch"]),
+    )
+    state_select: EntityId = Field(
+        default="input_select.emhass_passive_state",
+        title="State select (for dashboards)",
+        json_schema_extra=ui(widget="entity", domain="input_select"),
+    )
+    grid_power_number: EntityId = Field(
+        default="number.sofar_passive_mode_grid_power",
+        title="Passive grid power",
+        json_schema_extra=ui(widget="entity", domain="number"),
+    )
+    battery_max_number: EntityId = Field(
+        default="number.sofar_passive_mode_battery_power_max",
+        title="Passive battery power max",
+        json_schema_extra=ui(widget="entity", domain="number"),
+    )
+    battery_min_number: EntityId = Field(
+        default="number.sofar_passive_mode_battery_power_min",
+        title="Passive battery power min",
+        json_schema_extra=ui(widget="entity", domain="number"),
+    )
+    apply_button: EntityId = Field(
+        default="button.sofar_passive_mode_battery_charge_discharge",
+        title="Apply passive settings button",
+        json_schema_extra=ui(widget="entity", domain="button"),
+    )
+    feedin_number: EntityId = Field(
+        default="number.sofar_feedin_max_power",
+        title="Feed-in max power",
+        json_schema_extra=ui(widget="entity", domain="number"),
+    )
+    feedin_button: EntityId = Field(
+        default="button.sofar_feedin_limitation_mode",
+        title="Apply feed-in limit button",
+        json_schema_extra=ui(widget="entity", domain="button"),
+    )
+
+
+class InverterLimits(Section):
+    battery_max_w: int = Field(
+        default=20000, ge=0, le=100000, title="Battery discharge max", json_schema_extra=ui(unit="W")
+    )
+    battery_min_w: int = Field(
+        default=-20000, ge=-100000, le=0, title="Battery charge max (negative)", json_schema_extra=ui(unit="W")
+    )
+    grid_import_max_w: int = Field(
+        default=18800, ge=0, le=100000, title="Grid import max", json_schema_extra=ui(unit="W")
+    )
+    export_max_w: int = Field(
+        default=15500, ge=0, le=100000, title="Export max (feed-in)", json_schema_extra=ui(unit="W")
+    )
+    export_only_battery_min_w: int = Field(
+        default=-16000,
+        ge=-100000,
+        le=0,
+        title="Battery min while exporting PV",
+        json_schema_extra=ui(unit="W"),
+    )
+    force_charge_battery_min_w: int = Field(
+        default=-3000,
+        ge=-100000,
+        le=0,
+        title="Battery min while force charging",
+        json_schema_extra=ui(unit="W"),
+    )
+    force_charge_grid_cap_above_w: int = Field(
+        default=9000,
+        ge=0,
+        le=100000,
+        title="Force charge: use the import max above",
+        json_schema_extra=ui(unit="W"),
+    )
+    force_charge_grid_margin_w: int = Field(
+        default=1000,
+        ge=0,
+        le=10000,
+        title="Force charge: grid target margin",
+        json_schema_extra=ui(unit="W"),
+    )
+    low_export_price: float = Field(
+        default=0.02,
+        title="Block export below this price",
+        json_schema_extra=ui(unit="€/kWh"),
+    )
+
+
+class Inverter(Section):
+    mode: Literal["off", "dry_run", "live"] = Field(
+        default="off",
+        title="Inverter control",
+        description="Dry run: decide each slot and compare with what the automation did, without touching the "
+        "inverter. Live: EMHASS Lens sets the inverter itself (turn the automation off first).",
+        json_schema_extra=ui(labels={"off": "Off", "dry_run": "Dry run", "live": "Live"}),
+    )
+    decide_offset_s: int = Field(
+        default=5,
+        ge=0,
+        lt=300,
+        title="Decide at (seconds into each quarter)",
+        description="Right after the plan is published (:02).",
+        json_schema_extra=ui(unit="s", widget="quarter_offset"),
+    )
+    compare_offset_s: int = Field(
+        default=45,
+        ge=10,
+        lt=600,
+        title="Compare with the automation at",
+        json_schema_extra=ui(unit="s", widget="quarter_offset"),
+    )
+    entities: InverterEntities = Field(
+        default=InverterEntities(), title="Inverter entities", json_schema_extra=ui(advanced=True)
+    )
+    limits: InverterLimits = Field(default=InverterLimits(), title="Limits and thresholds")
+
+
 class Settings(Section):
     emhass: Emhass = Field(default=Emhass(), title="EMHASS")
     inputs: Inputs = Field(default=Inputs(), title="Inputs")
@@ -557,6 +685,7 @@ class Settings(Section):
     notifications: Notifications = Field(default=Notifications(), title="Notifications")
     logging: Logging = Field(default=Logging(), title="Logging")
     parity: Parity = Field(default=Parity(), title="Parity with the HACS integration")
+    inverter: Inverter = Field(default=Inverter(), title="Inverter control (experimental)")
 
 
 @cache

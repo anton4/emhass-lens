@@ -477,3 +477,19 @@ class OutputsStatus(BaseModel):
     last_error: str | None
     last_event: dict[str, Any] | None
     last_published_at: str | None
+
+
+class Agreement(BaseModel):
+    hours: int
+    compared: int
+    agreed: int
+    rate: float | None
+
+
+class InverterStatus(BaseModel):
+    mode: str
+    last: dict[str, Any] | None
+    last_compare: dict[str, Any] | None
+    preconditions: str | None
+    agreement_24h: Agreement
+    agreement_7d: Agreement

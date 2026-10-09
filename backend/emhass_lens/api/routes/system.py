@@ -12,6 +12,7 @@ from emhass_lens.api.schemas import (
     DriverResult,
     EmhassStatusOut,
     EntityOption,
+    InverterStatus,
     JobInfo,
     LegacyApplyRequest,
     LegacyPreview,
@@ -169,3 +170,16 @@ async def outputs_status(c: ContainerDep) -> OutputsStatus:
     return OutputsStatus(
         **c.extras["outputs"].status(), last_event=publish.last_event, last_published_at=iso(publish.last_published_at)
     )
+
+
+@router.get("/inverter")
+async def inverter_status(c: ContainerDep) -> InverterStatus:
+    """Inverter control (experimental): the last decision, the last comparison with the automation, agreement."""
+    return InverterStatus(**await c.extras["inverter"].status())
+
+
+@router.post("/inverter/decide", dependencies=[Writable], status_code=202)
+async def inverter_decide(c: ContainerDep) -> RunStarted:
+    """Decide now for the current slot (applies only in live mode)."""
+    run_id = await c.scheduler.start_now("inverter.decide")
+    return RunStarted(job=JobInfo(**c.scheduler.jobs["inverter.decide"].info()), run_id=run_id)

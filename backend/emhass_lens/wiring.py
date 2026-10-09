@@ -17,6 +17,7 @@ from emhass_lens.services import health_rules
 from emhass_lens.services.emhass import EmhassService
 from emhass_lens.services.forecasts import ForecastService
 from emhass_lens.services.inputs import InputsService
+from emhass_lens.services.inverter import InverterService
 from emhass_lens.services.ml import MlService
 from emhass_lens.services.mpc import MpcService
 from emhass_lens.services.outputs import OutputService
@@ -49,6 +50,7 @@ def build(c: Container) -> None:
     x["publish"] = PublishService(c)
     x["ml"] = MlService(c)
     x["outputs"] = OutputService(c)
+    x["inverter"] = InverterService(c)
     x["prices"].load()
     x["problems"].load()
     x["status_providers"] = {
@@ -64,7 +66,7 @@ def build(c: Container) -> None:
 def watched_entities(c: Container) -> set[str]:
     x = c.extras
     settings = c.settings.current
-    ids = x["inputs"].entities() | x["pv"].entities()
+    ids = x["inputs"].entities() | x["pv"].entities() | x["inverter"].entities()
     if settings.forecast.source == "fi_ha_entity":
         ids.add(settings.forecast.fi.entity)
     if settings.parity.legacy_auto_mpc_switch:
@@ -201,6 +203,28 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="inverter.decide",
+            title="Inverter decision",
+            description="Decides the Sofar passive-mode settings for the slot from the plan (dry run: records only).",
+            trigger=QuarterHour(settings.inverter.decide_offset_s),
+            func=x["inverter"].decide_job,
+            record=x["inverter"].active,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
+            id="inverter.compare",
+            title="Inverter comparison",
+            description="Dry run: compares the decision with what the HA automation set on the inverter.",
+            trigger=QuarterHour(settings.inverter.compare_offset_s),
+            func=x["inverter"].compare_job,
+            record=x["inverter"].compare_job_active,
+            grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
             id="health.evaluate",
             title="Health",
             description="Evaluates the health rules and updates the problem list.",
@@ -277,7 +301,13 @@ def subscribe(c: Container) -> None:
 
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
-    c.settings.subscribe(("inputs", "pv", "parity"), rewatch)
+    c.settings.subscribe(("inputs", "pv", "parity", "inverter"), rewatch)
+
+    def on_inverter_times(old: Settings, new: Settings, paths: list[str]) -> None:
+        c.scheduler.retime("inverter.decide", QuarterHour(new.inverter.decide_offset_s))
+        c.scheduler.retime("inverter.compare", QuarterHour(new.inverter.compare_offset_s))
+
+    c.settings.subscribe(("inverter.decide_offset_s", "inverter.compare_offset_s"), on_inverter_times)
     c.settings.subscribe("emhass.mpc.slot_offset_s", on_mpc_time)
     c.settings.subscribe("emhass.base_url", on_emhass_url)
     c.settings.subscribe(("emhass.mode", "emhass.publish", "emhass.ml", "inputs.deferrable_loads"), on_checks)
