@@ -27,7 +27,7 @@ from emhass_lens.api.schemas import (
 )
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.mpc.anchor import anchor_slot
+from emhass_lens.domain.mpc.anchor import anchor_slot, published_row
 from emhass_lens.domain.mpc.payload import build
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.services.inputs import describe
@@ -130,11 +130,12 @@ async def plan(c: ContainerDep) -> PlanResponse:
     price_rows: list[PlanPrice] = []
     if current and current["plan"]:
         columns = [k for k in current["plan"][0] if k != "timestamp"]
-        slot = slot_floor(now)
-        for row in current["plan"]:
-            ts = parse_iso(str(row.get("timestamp")))
-            if ts == slot:
-                current_row = row
+        # the row EMHASS's publish-data shows right now (the next slot between a :13 run and the slot start)
+        rows = [r for r in current["plan"] if parse_iso(str(r.get("timestamp"))) is not None]
+        index = published_row(
+            [parse_iso(str(r.get("timestamp"))) or now for r in rows], now, c.extras["emhass"].method_ts_round()
+        )
+        current_row = rows[index] if index is not None else None
         first = parse_iso(str(current["plan"][0].get("timestamp")))
         if first is not None:
             priced = await c.app_db.run(c.extras["prices"].priced, first, c.extras["forecasts"].current())
