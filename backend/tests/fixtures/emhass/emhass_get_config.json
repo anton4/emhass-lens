@@ -1,0 +1,160 @@
+{
+  "optimization_time_step": 15,
+  "historic_days_to_retrieve": 2,
+  "sensor_power_photovoltaics": "sensor.sofar_pv_power_total_watt",
+  "sensor_power_photovoltaics_forecast": "sensor.p_pv_forecast",
+  "sensor_power_load_no_var_loads": "sensor.house_power_without_deferrable",
+  "load_negative": false,
+  "set_zero_min": true,
+  "sensor_replace_zero": [
+    "sensor.sofar_pv_power_total_watt",
+    "sensor.house_power_without_deferrable"
+  ],
+  "sensor_linear_interp": [
+    "sensor.sofar_pv_power_total_watt",
+    "sensor.house_power_without_deferrable"
+  ],
+  "use_influxdb": false,
+  "influxdb_host": "localhost",
+  "influxdb_port": 8086,
+  "influxdb_database": "homeassistant",
+  "influxdb_measurement": "W",
+  "influxdb_retention_policy": "autogen",
+  "influxdb_use_ssl": false,
+  "influxdb_verify_ssl": false,
+  "method_ts_round": "nearest",
+  "continual_publish": false,
+  "use_websocket": false,
+  "ssl_no_verify": false,
+  "costfun": "profit",
+  "logging_level": "DEBUG",
+  "set_use_pv": true,
+  "set_use_adjusted_pv": false,
+  "adjusted_pv_regression_model": "LassoRegression",
+  "adjusted_pv_solar_elevation_threshold": 10,
+  "adjusted_pv_model_max_age": 24,
+  "set_use_battery": true,
+  "number_of_deferrable_loads": 1,
+  "nominal_power_of_deferrable_loads": [
+    0
+  ],
+  "minimum_power_of_deferrable_loads": [
+    0,
+    0
+  ],
+  "cost_forecast_per_deferrable_load": [
+    null,
+    null
+  ],
+  "is_electric_load": [
+    true,
+    true
+  ],
+  "operating_hours_of_each_deferrable_load": [
+    0
+  ],
+  "treat_deferrable_load_as_semi_cont": [
+    false
+  ],
+  "set_deferrable_load_single_constant": [
+    false
+  ],
+  "set_deferrable_startup_penalty": [
+    0
+  ],
+  "delta_forecast_daily": 2,
+  "load_forecast_method": "naive",
+  "load_cost_forecast_method": "hp_hc_periods",
+  "load_peak_hours_cost": 0.1907,
+  "load_offpeak_hours_cost": 0.1419,
+  "production_price_forecast_method": "constant",
+  "photovoltaic_production_sell_price": 0.1419,
+  "set_total_pv_sell": false,
+  "lp_solver_timeout": 45,
+  "lp_solver_mip_rel_gap": 0,
+  "num_threads": 0,
+  "set_nocharge_from_grid": false,
+  "set_nodischarge_to_grid": false,
+  "set_battery_dynamic": false,
+  "battery_dynamic_max": 0.9,
+  "battery_dynamic_min": -0.9,
+  "weight_battery_discharge": 0.03,
+  "weight_battery_charge": 0.01,
+  "weather_forecast_method": "solar.forecast",
+  "open_meteo_cache_max_age": 30,
+  "start_timesteps_of_each_deferrable_load": [
+    0
+  ],
+  "end_timesteps_of_each_deferrable_load": [
+    0
+  ],
+  "set_deferrable_max_startups": [
+    0,
+    0
+  ],
+  "deferrable_load_groups": [],
+  "load_peak_hour_periods": {
+    "period_hp_1": [
+      {
+        "start": "02:54"
+      },
+      {
+        "end": "15:24"
+      }
+    ],
+    "period_hp_2": [
+      {
+        "start": "17:24"
+      },
+      {
+        "end": "20:24"
+      }
+    ]
+  },
+  "model_type": "load_forecast",
+  "var_model": "sensor.power_load_no_var_loads",
+  "sklearn_model": "KNeighborsRegressor",
+  "num_lags": 48,
+  "split_date_delta": "48h",
+  "perform_backtest": false,
+  "battery_soc_deficit_cost": 0,
+  "battery_soc_deficit_threshold": 0.4,
+  "maximum_power_from_grid": 18800,
+  "maximum_power_to_grid": 15500,
+  "pv_module_model": [
+    "CSUN_Eurasia_Energy_Systems_Industry_and_Trade_CSUN295_60M"
+  ],
+  "pv_inverter_model": [
+    "Sungrow_Power_Supply_Co___Ltd___SC1000KU__540V_"
+  ],
+  "surface_tilt": [
+    20
+  ],
+  "surface_azimuth": [
+    205
+  ],
+  "modules_per_string": [
+    16
+  ],
+  "strings_per_inverter": [
+    1
+  ],
+  "inverter_is_hybrid": true,
+  "inverter_ac_output_max": 20000,
+  "inverter_ac_input_max": 18800,
+  "inverter_efficiency_dc_ac": 0.97,
+  "inverter_efficiency_ac_dc": 0.97,
+  "inverter_stress_cost": 0,
+  "inverter_stress_segments": 10,
+  "compute_curtailment": true,
+  "battery_discharge_power_max": 20000,
+  "battery_charge_power_max": 20000,
+  "battery_discharge_efficiency": 0.94,
+  "battery_charge_efficiency": 0.94,
+  "battery_nominal_energy_capacity": 74000,
+  "battery_minimum_state_of_charge": 0.05,
+  "battery_maximum_state_of_charge": 1,
+  "battery_target_state_of_charge": 0.1,
+  "battery_stress_cost": 0,
+  "battery_stress_segments": 10
+}

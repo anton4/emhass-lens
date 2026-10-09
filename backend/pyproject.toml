@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2.12",
     "httpx>=0.28",
     "pyyaml>=6.0",
+    "holidays>=0.80",
+    "websockets>=15",
 ]
 
 [dependency-groups]
@@ -38,7 +40,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]
+ignore = ["RUF001", "RUF002", "RUF003", "SIM108", "ASYNC109"]
 
 [tool.pyright]
 include = ["emhass_lens", "tests"]
