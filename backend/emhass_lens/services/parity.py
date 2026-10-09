@@ -5,12 +5,15 @@ integration's entities and compares, slot by slot:
 - import/export prices (timestamped, from import_cost / export_cost), with legacy-compatible math;
 - the "prices from now" lists and the 15-minute Solcast list (positional, as the integration sent them);
 - the last MPC payload the integration sent, against our build of the same quarter.
-Known, intended differences are labelled so only unexplained ones need attention.
+Known, intended differences are labelled so only unexplained ones need attention. One of them: both
+sides fetch the price forecast on their own schedule, so slots filled from the forecast differ
+whenever the provider revised it between the two fetches.
 """
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
@@ -22,15 +25,27 @@ if TYPE_CHECKING:
 log = logging.getLogger("emhass_lens.parity")
 
 MAX_LISTED = 12
+# Fetches closer together than this got the same forecast, so their slots must match.
+SAME_FETCH = timedelta(minutes=2)
 
 
 def compare_lists(
-    name: str, ours: list[float], theirs: list[float], tolerance: float, labels: list[str] | None = None
+    name: str,
+    ours: list[float],
+    theirs: list[float],
+    tolerance: float,
+    labels: list[str] | None = None,
+    forecast: list[bool] | None = None,
 ) -> dict[str, Any]:
+    """Positional comparison. With `forecast` (per slot: filled from a price forecast) the result
+    also counts how many differences are in forecast slots."""
     n = min(len(ours), len(theirs))
     diffs = []
+    in_forecast = 0
     for i in range(n):
         if abs(float(ours[i]) - float(theirs[i])) > tolerance:
+            if forecast is not None and i < len(forecast) and forecast[i]:
+                in_forecast += 1
             diffs.append(
                 {
                     "i": i,
@@ -40,7 +55,7 @@ def compare_lists(
                     "delta": round(float(ours[i]) - float(theirs[i]), 6),
                 }
             )
-    return {
+    out = {
         "name": name,
         "ours_len": len(ours),
         "legacy_len": len(theirs),
@@ -50,6 +65,17 @@ def compare_lists(
         "examples": diffs[:MAX_LISTED],
         "ok": not diffs and len(ours) == len(theirs),
     }
+    if forecast is not None:
+        out["different_in_forecast"] = in_forecast
+    return out
+
+
+def _timestamp(value: Any) -> datetime | None:
+    """A timestamp sensor's state, or None for unknown / unavailable / missing."""
+    try:
+        return parse_iso(str(value)) if value else None
+    except ValueError:
+        return None
 
 
 class ParityService:
@@ -70,7 +96,14 @@ class ParityService:
         if not ha.connected:
             ctx.run.outcome, ctx.run.summary = "noop", "Not connected to Home Assistant"
             return
-        names = ("import_cost", "export_cost", "prices_from_now", "solcast_forecast_15min", "emhass_last_mpc")
+        names = (
+            "import_cost",
+            "export_cost",
+            "prices_from_now",
+            "solcast_forecast_15min",
+            "emhass_last_mpc",
+            "forecast_api_last_poll",
+        )
         states: dict[str, dict[str, Any] | None] = {}
         for name in names:
             try:
@@ -84,12 +117,18 @@ class ParityService:
             return
 
         tol = settings.parity.tolerance
+        legacy_poll = _timestamp((states.get("forecast_api_last_poll") or {}).get("state"))
         sections: list[dict[str, Any]] = []
         sections += self._timestamped(states, tol)
         sections += self._from_now(states, tol)
-        payload = self._payload(states)
+        payload = self._payload(states, legacy_poll)
         if payload:
             sections.append(payload)
+        for section in sections:
+            if not section.get("ok") and not section.get("explained"):
+                note = self._forecast_only(section, legacy_poll)
+                if note:
+                    section["explained"] = note
 
         unexplained = [s for s in sections if not s.get("ok") and not s.get("explained")]
         report = {"checked_at": iso(self.c.clock.now()), "sections": sections, "ok": not unexplained}
@@ -105,6 +144,32 @@ class ParityService:
         ctx.run.outcome = "ok" if report["ok"] else "mismatch"
         if not report["ok"]:
             log.warning("Parity differences: %s", "; ".join(s["name"] for s in unexplained))
+
+    def _forecast_only(self, section: dict[str, Any], legacy_poll: datetime | None) -> str | None:
+        """Why a list differs, when every difference is in slots filled from the price forecast and the
+        two sides fetched that forecast at different times; None when that doesn't explain it."""
+        different = section.get("different") or 0
+        if not different or section.get("different_in_forecast") != different:
+            return None
+        if section.get("ours_len") != section.get("legacy_len"):
+            return None
+        fetch = self.c.extras["forecasts"].current()
+        ours_at = fetch.fetched_at if fetch else None
+        if ours_at and legacy_poll and abs(ours_at - legacy_poll) <= SAME_FETCH:
+            return None  # same forecast: these slots should have matched
+        if ours_at and legacy_poll:
+            when = f"EMHASS Lens at {self._local_time(ours_at)}, the integration at {self._local_time(legacy_poll)}"
+        else:
+            when = "each fetches it on its own schedule"
+        return f"only forecast slots differ: the price forecast was fetched at different times ({when})"
+
+    def _local_time(self, at: datetime) -> str:
+        """HH:MM in Home Assistant's timezone (the App's own when HA hasn't said yet)."""
+        try:
+            zone = ZoneInfo(self.c.extras["ha"].time_zone or self.c.boot.tz)
+        except Exception:
+            zone = ZoneInfo("UTC")
+        return at.astimezone(zone).strftime("%H:%M")
 
     # --- sections -------------------------------------------------------------------------------------
     def _timestamped(self, states: dict[str, dict[str, Any] | None], tol: float) -> list[dict[str, Any]]:
@@ -123,7 +188,7 @@ class ParityService:
         for name, attr in (("import_cost", "import_price"), ("export_cost", "export_price")):
             state = states.get(name)
             legacy = ((state or {}).get("attributes") or {}).get("prices") or []
-            pairs_ours, pairs_theirs, labels = [], [], []
+            pairs_ours, pairs_theirs, labels, forecast = [], [], [], []
             missing = 0
             for item in legacy:
                 start = parse_iso(item.get("start"))
@@ -136,9 +201,10 @@ class ParityService:
                 pairs_ours.append(getattr(mine, attr))
                 pairs_theirs.append(float(item.get("value")))
                 labels.append(iso(start) or "")
+                forecast.append(mine.is_forecast)
             if not legacy:
                 continue
-            section = compare_lists(f"{name} (timestamped)", pairs_ours, pairs_theirs, tol, labels)
+            section = compare_lists(f"{name} (timestamped)", pairs_ours, pairs_theirs, tol, labels, forecast)
             section["legacy_slots_without_ours"] = missing
             section["ok"] = section["different"] == 0 and missing == 0
             out.append(section)
@@ -158,6 +224,7 @@ class ParityService:
                 if p.end > at
             ]
             labels = [iso(p.start) or "" for p in ours]
+            forecast = [p.is_forecast for p in ours]
             out.append(
                 compare_lists(
                     "prices_from_now import",
@@ -165,6 +232,7 @@ class ParityService:
                     attrs.get("import_prices") or [],
                     tol,
                     labels,
+                    forecast,
                 )
             )
             out.append(
@@ -174,6 +242,7 @@ class ParityService:
                     attrs.get("export_prices") or [],
                     tol,
                     labels,
+                    forecast,
                 )
             )
         sol = states.get("solcast_forecast_15min")
@@ -191,7 +260,7 @@ class ParityService:
             out.append(section)
         return out
 
-    def _payload(self, states: dict[str, dict[str, Any] | None]) -> dict[str, Any] | None:
+    def _payload(self, states: dict[str, dict[str, Any] | None], legacy_poll: datetime | None) -> dict[str, Any] | None:
         state = states.get("emhass_last_mpc")
         shadow = self.c.extras["mpc"].last_shadow
         if not state or shadow is None or shadow.compat is None:
@@ -210,6 +279,7 @@ class ParityService:
                 "our_build": iso(shadow.built_at),
             }
         ours = shadow.compat.payload
+        forecast_slots = [str(row.get("origin", "actual")) != "actual" for row in shadow.compat.explain]
         keys = sorted(set(ours) | set(theirs))
         diffs = []
         explained = []
@@ -249,7 +319,11 @@ class ParityService:
                 and isinstance(a, list)
                 and isinstance(b, list)
             ):
-                section = compare_lists(key, a, b, 1e-9)
+                section = compare_lists(key, a, b, 1e-9, forecast=forecast_slots)
+                note = self._forecast_only(section, legacy_poll) if key != "pv_power_forecast" else None
+                if note:
+                    explained.append(f"{key}: {note}")
+                    continue
                 diffs.append(
                     {
                         "key": key,

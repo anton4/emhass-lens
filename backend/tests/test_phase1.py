@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from emhass_lens.app import create_app
 from emhass_lens.bootstrap import Bootstrap
 from emhass_lens.core.clock import FakeClock
+from emhass_lens.core.slots import slot_floor
 from tests.legacy import legacy_math
 from tests.world import EMHASS_URL, HA_URL, TZ, World
 
@@ -282,6 +283,62 @@ def test_parity_with_legacy_entities(tmp_path: Path, world: World) -> None:
         assert drift["outcome"] == "mismatch"
 
 
+def test_parity_explains_a_forecast_fetched_at_different_times(tmp_path: Path, world: World) -> None:
+    start = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
+    world.ee_forecast = {
+        "series": [
+            {"ts_utc": (start + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ"), "price_eur_mwh": 60.0 + h}
+            for h in range(72)
+        ]
+    }
+    clock = FakeClock(START)
+    with make_client(tmp_path, world, clock) as client:
+        rev = client.get("/api/settings").json()["revision"]
+        forecast = {"source": "ee_eupowerprices", "extend_days": 1, "ee": {"api_key": "secret-key-123"}}
+        client.patch("/api/settings", json={"base_revision": rev, "changes": {"forecast": forecast}})
+        run_job(client, "nordpool.poll")
+        assert run_job(client, "forecast.ee.poll")["outcome"] == "ok"
+        prime(client, world)
+        c = client.app.state.container  # type: ignore[attr-defined]
+        ours = [
+            p
+            for p in c.extras["prices"].priced(slot_floor(START), c.extras["forecasts"].current(), legacy_compat=True)
+            if p.end > START
+        ]
+        assert any(p.is_forecast for p in ours) and any(not p.is_forecast for p in ours)
+
+        def legacy(polled: datetime, bump_actual: bool = False) -> None:
+            """The integration's lists: the same prices, but its own (older) forecast for the forecast slots."""
+            bumped = {i for i, p in enumerate(ours) if p.is_forecast or (bump_actual and i == 0)}
+            attrs = {
+                "import_prices": [p.import_price + (0.003 if i in bumped else 0) for i, p in enumerate(ours)],
+                "export_prices": [p.export_price + (0.0024 if i in bumped else 0) for i, p in enumerate(ours)],
+            }
+            world.set_state("sensor.nordpool_ee_prices_prices_from_now", "x", attrs, START)
+            world.set_state("sensor.nordpool_ee_prices_forecast_api_last_poll", polled.isoformat(), {}, START)
+
+        def section(run: dict) -> dict:
+            report = client.get(f"/api/runs/{run['id']}/artifacts/parity").json()
+            return {s["name"]: s for s in report["sections"]}["prices_from_now import"]
+
+        # only forecast slots differ and the integration fetched 50 min earlier: explained
+        legacy(START - timedelta(minutes=50))
+        run = run_job(client, "parity.check")
+        assert run["outcome"] == "ok", run
+        why = section(run)["explained"]
+        assert "only forecast slots differ" in why and "EMHASS Lens at 14:13, the integration at 13:23" in why
+
+        # the same fetch should give the same forecast: not explained
+        legacy(START)
+        assert run_job(client, "parity.check")["outcome"] == "mismatch"
+
+        # a Nord Pool slot differing as well is never explained away
+        legacy(START - timedelta(minutes=50), bump_actual=True)
+        run = run_job(client, "parity.check")
+        assert run["outcome"] == "mismatch"
+        assert "explained" not in section(run)
+
+
 def test_health_problems_and_entity_picker(tmp_path: Path, world: World) -> None:
     clock = FakeClock(datetime(2026, 10, 9, 15, 0, tzinfo=UTC))  # 18:00 local
     del world.nordpool_days["2026-10-10"]
@@ -330,3 +387,7 @@ def test_setup_checklist_tracks_the_migration(tmp_path: Path, world: World) -> N
         assert steps["drive"]["state"] == "todo"
         assert steps["mqtt"]["optional"] is True
         assert 0 < checklist["done"] < checklist["total"]
+        # links into the Health page (the checklist's own page) name the card to scroll to
+        assert steps["ha"]["link"] == "#/health?card=components"
+        assert steps["drive"]["link"] == "#/health?card=driver"
+        assert not [s for s in checklist["steps"] if s["link"] == "#/health"]
