@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8
+
+- The eye button on secret fields (the eupowerprices.com API key, the MQTT broker password) can also show the stored value. It works only when EMHASS Lens is opened from the Home Assistant sidebar, and each reveal is logged without the value.
+
 ## 0.2.7
 
 - Plan charts: each y-axis fits its own data (Battery SOC is no longer always 0–100 %). Drag across a chart to zoom all three into that time range; double-click or "Reset zoom" shows the whole plan again.
