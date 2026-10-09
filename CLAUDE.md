@@ -22,6 +22,9 @@ an Ingress web UI. It replaces the HACS integration in anton4/homeassistant-ee-n
 - `frontend/`: React 19 + Vite + TypeScript, TanStack Query, HashRouter.
 - `Dockerfile` (repo root, multi-stage), `.github/workflows/{ci,addon-image}.yml`, `scripts/make-local-addon.sh`.
 
+## End-to-end tests
+`e2e/` starts a real Home Assistant (optionally with the old HACS integration), Mosquitto and EMHASS in Docker, and checks the whole chain: `cd e2e && ./up.sh && ./check.sh && ./down.sh`. See e2e/README.md.
+
 ## Commands
 ```sh
 cd backend && uv sync && uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright
@@ -50,5 +53,6 @@ cd backend && uv run python -m emhass_lens.openapi_dump ../frontend/src/api/open
 - **Frontend**
   - All URLs are relative (`./api/...`) because the UI is served under the Ingress path.
   - Types come from the generated `src/api/schema.d.ts`.
+  - `package-lock.json` must keep `https://registry.npmjs.org/` URLs, because CI installs from the public registry. If your npm is configured for a private registry, rewrite the URLs back after `npm install`.
 - **Commits** use Conventional Commits: `feat|fix|docs|refactor|chore|perf: <imperative summary>` (CI and test-only changes are `chore`), with a bullet-point body and no Co-Authored-By trailer. CI must stay green.
 - **Releases:** bump `version` in `emhass_lens/config.yaml` and add a `CHANGELOG.md` entry. That triggers the image build.
