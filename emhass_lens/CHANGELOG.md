@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.20
 
 - The Logs page keeps showing new lines when the live connection isn't getting through (the amber "Polling" lamp in the header). It asks for them every 5 seconds.
 - An open run that is still running shows its log lines as they arrive, and its outcome as soon as it finishes.
