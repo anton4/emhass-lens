@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Inputs: the price breakdown table (96 rows a day) is folded away under its chart; open it with "Every quarter-hour as a table".
+- Runs on a phone: each run is a compact card (run, job, outcome, when, how long, summary) instead of a six-column row.
+
 ## 0.4.1
 
 - Plan: the plan in one line at the top ("Discharging the battery until 21:30, then idle · SOC 94 % → 38 %"), the facts in one row, **Chart / Table** for the whole plan, This slot / Next slot as a switch, and each tile marked with its chart colour.

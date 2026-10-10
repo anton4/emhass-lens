@@ -156,7 +156,10 @@ export function InputsPage() {
           </div>
           <div className="panel-body">
             <PriceStack slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
-            <Breakdown slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
+            <details className="more breakdown-more">
+              <summary>Every quarter-hour as a table ({daySlots.length} rows)</summary>
+              <Breakdown slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
+            </details>
           </div>
         </section>
       )}

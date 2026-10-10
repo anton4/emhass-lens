@@ -201,7 +201,7 @@ export function RunsPage() {
             onPick={(run) => pick(run.id)}
           />
           <div className="table-wrap">
-            <table>
+            <table className="runs-table">
               <thead>
                 <tr>
                   <SortableTh label="Run" sortKey="id" sort={sort} onSort={onSort} />
