@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- PV reserved for Excess Solar charging (Settings → EV charger control, off by default): while the car charges from excess solar, the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, until the car's charge to its target is covered, so EMHASS does not plan the home battery or exports with energy the car will use. The Explain table shows the reserved watts per slot; the EV charger page shows the current state.
+
 ## 0.3.6
 
 - EV charger page: the charge mode (Manual / EMHASS / Excess Solar) can be switched from the page. The buttons set your Home Assistant helper, the same one the automation reads, and a decision follows at once while the controller is in dry run or live.

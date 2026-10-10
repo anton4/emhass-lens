@@ -1164,6 +1164,14 @@ export interface components {
              */
             mode: "off" | "dry_run" | "live";
             /**
+             * PV reserved for Excess Solar
+             * @default {
+             *       "car_battery_kwh": 75,
+             *       "enabled": false
+             *     }
+             */
+            pv_reserve: components["schemas"]["PvReserve"];
+            /**
              * Check every minute at (seconds)
              * @description Excess Solar and the SoC stop are evaluated every minute; 55 s is just before the automation's own minute tick, so dry-run comparisons read what it did.
              * @default 55
@@ -1328,6 +1336,7 @@ export interface components {
             mode: string;
             /** Preconditions */
             preconditions: string | null;
+            pv_reserve?: components["schemas"]["EvReserveOut"] | null;
             soc: components["schemas"]["SocTracking"];
         };
         /** CleanupResult */
@@ -1891,8 +1900,46 @@ export interface components {
             /** Unit */
             unit: string | null;
         };
+        /**
+         * EvReserveOut
+         * @description PV kept out of the forecast sent to EMHASS because the EV takes it from excess solar.
+         */
+        EvReserveOut: {
+            /** Active */
+            active: boolean;
+            /** Energy Needed Wh */
+            energy_needed_wh?: number | null;
+            /**
+             * Energy Reserved Wh
+             * @default 0
+             */
+            energy_reserved_wh: number;
+            /**
+             * Max W
+             * @default 0
+             */
+            max_w: number;
+            /**
+             * Slots
+             * @default 0
+             */
+            slots: number;
+            /** Soc */
+            soc?: number | null;
+            /** Target Soc */
+            target_soc?: number | null;
+            /** Until */
+            until?: string | null;
+            /** Why */
+            why: string;
+        };
         /** ExplainSlot */
         ExplainSlot: {
+            /**
+             * Ev Reserved W
+             * @default 0
+             */
+            ev_reserved_w: number;
             /** I */
             i: number;
             /** Load Cost */
@@ -2177,6 +2224,7 @@ export interface components {
         InputsSnapshot: {
             /** Deferrable Loads */
             deferrable_loads: components["schemas"]["DeferrableDescription"][];
+            ev_reserve?: components["schemas"]["EvReserveOut"] | null;
             /** Issues */
             issues: components["schemas"]["IssueOut"][];
             prices: components["schemas"]["PricesSummary"];
@@ -2834,6 +2882,7 @@ export interface components {
             /** Built At */
             built_at: string;
             derived: components["schemas"]["Derived"];
+            ev_reserve?: components["schemas"]["EvReserveOut"] | null;
             /** Explain */
             explain: components["schemas"]["ExplainSlot"][];
             inputs: components["schemas"]["InputsSnapshot"];
@@ -3458,6 +3507,21 @@ export interface components {
              */
             source: "solcast" | "none";
         };
+        /** PvReserve */
+        PvReserve: {
+            /**
+             * Car battery capacity
+             * @description Reserving stops once the energy from the car's level to its target is covered; the rest of the horizon gets the full PV forecast again.
+             * @default 75
+             */
+            car_battery_kwh: number;
+            /**
+             * Reserve PV for Excess Solar charging
+             * @description While the car charges from excess solar (charge mode Excess Solar, plugged in, below the target SoC), the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, so EMHASS does not plan the home battery or exports with energy the car will use. The expected draw follows the Excess Solar rule: the PV forecast minus the house load EMHASS forecasts, in whole amps, capped by the maximum current. Nothing changes in EMHASS or Manual mode.
+             * @default false
+             */
+            enabled: boolean;
+        };
         /** PvStatus */
         PvStatus: {
             /** End */
@@ -3741,6 +3805,10 @@ export interface components {
              *         "w_per_amp": 690
              *       },
              *       "mode": "off",
+             *       "pv_reserve": {
+             *         "car_battery_kwh": 75,
+             *         "enabled": false
+             *       },
              *       "tick_offset_s": 55
              *     }
              */

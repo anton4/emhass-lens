@@ -88,16 +88,19 @@ class InputsService:
                     ),
                 )
             )
+        pv = self.c.extras["pv"].current()
         return MpcInputs(
             taken_at=now,
             prices=prices,
-            pv=self.c.extras["pv"].current(),
+            pv=pv,
             soc_init=self._reading("soc_init", settings.inputs.soc_init, now),
             soc_final=self._reading("soc_final", settings.inputs.soc_final, now),
             deferrables=tuple(deferrables),
             forecast_source=settings.forecast.source,
             extend_days=settings.forecast.extend_days,
             issues=tuple(issues),
+            # the parity build must match the HACS integration's payload, which never reserved anything
+            ev_reserve=None if legacy_compat else self.c.extras["charger"].pv_reserve(now, pv),
         )
 
 
@@ -155,4 +158,5 @@ def describe(inputs: MpcInputs) -> dict[str, Any]:
             for d in inputs.deferrables
         ],
         "issues": [i.as_dict() for i in inputs.issues],
+        "ev_reserve": inputs.ev_reserve.summary() if inputs.ev_reserve is not None else None,
     }

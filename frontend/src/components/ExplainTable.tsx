@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Derived, ExplainSlot } from '../api/types'
+import type { Derived, EvReserve, ExplainSlot } from '../api/types'
+import { evReserveText } from '../lib/evReserve'
 import { formatSlot, formatTime } from '../lib/format'
 import { originLabel, periodLabel } from '../lib/prices'
 import { formatPower } from '../lib/units'
@@ -42,12 +43,24 @@ export function DerivedFacts({ derived, anchor, rounding }: { derived: Derived; 
   )
 }
 
+/** What the PV reservation for the EV did to this payload, when the feature is on. */
+export function EvReserveNote({ reserve, tz }: { reserve: EvReserve | null | undefined; tz?: string }) {
+  const text = evReserveText(reserve, tz)
+  if (!text) return null
+  return (
+    <p className="chart-note" data-testid="ev-reserve-note">
+      <strong>PV reserved for the EV.</strong> {text}
+    </p>
+  )
+}
+
 const PAGE = 96
 
 /** The positional payload next to the slot each position stands for. */
 export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
   const [shown, setShown] = useState(PAGE)
   const withP10 = slots.some((s) => s.pv_p10_w !== null && s.pv_p10_w !== undefined)
+  const withReserve = slots.some((s) => (s.ev_reserved_w ?? 0) > 0)
   return (
     <>
       <div className="table-wrap sticky-table">
@@ -63,6 +76,11 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
               <th className="r">prod_price</th>
               <th className="r">PV</th>
               {withP10 && <th className="r">PV P10</th>}
+              {withReserve && (
+                <th className="r" title="Taken out of the PV forecast because the car charges it from excess solar">
+                  EV reserve
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -79,6 +97,7 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
                 <td className="num r">{s.prod_price.toFixed(4)}</td>
                 <td className="num r">{formatPower(s.pv_w)}</td>
                 {withP10 && <td className="num r">{s.pv_p10_w === null || s.pv_p10_w === undefined ? '—' : formatPower(s.pv_p10_w)}</td>}
+                {withReserve && <td className="num r">{(s.ev_reserved_w ?? 0) > 0 ? formatPower(s.ev_reserved_w) : '—'}</td>}
               </tr>
             ))}
           </tbody>

@@ -131,6 +131,14 @@ def build(
     else:
         pv_values = [0.0] * len(starts)
 
+    reserve = inputs.ev_reserve if not compat and inputs.ev_reserve is not None and inputs.ev_reserve.active else None
+    reserved = [reserve.at(start) if reserve is not None else 0.0 for start in starts]
+    if reserve is not None:
+        # the car takes this from the PV outside the plan: EMHASS must not plan the battery or exports with it
+        pv_values = [max(0.0, v - r) for v, r in zip(pv_values, reserved, strict=True)]
+        if p10_values is not None:
+            p10_values = [max(0.0, v - r) for v, r in zip(p10_values, reserved, strict=True)]
+
     offset = slot_offset(anchor, current_slot)
     nominal, hours, ends, single, running = [], [], [], [], []
     running_known = any(load.running is not None for load in inputs.deferrables)
@@ -202,6 +210,7 @@ def build(
             "prod_price": payload["prod_price_forecast"][i],
             "pv_w": payload["pv_power_forecast"][i],
             "pv_p10_w": payload["pv_power_forecast_p10"][i] if p10_values is not None else None,
+            "ev_reserved_w": round(reserved[i]),
         }
         for i, s in enumerate(slots)
     ]

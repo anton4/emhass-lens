@@ -12,6 +12,7 @@ from emhass_lens.api.schemas import (
     CostfunHistoryPoint,
     CostfunResult,
     Derived,
+    EvReserveOut,
     ExplainSlot,
     ForecastStatus,
     HaStatus,
@@ -74,6 +75,7 @@ async def prices(c: ContainerDep, days_back: Annotated[int, Query(ge=0, le=60)] 
 async def inputs(c: ContainerDep) -> InputsResponse:
     """What an MPC run would use right now, with where every value comes from."""
     now = c.clock.now()
+    await c.extras["charger"].refresh_load_profile()
     snapshot = await c.app_db.run(c.extras["inputs"].snapshot, now)
     return InputsResponse(
         snapshot=InputsSnapshot(**describe(snapshot)),
@@ -105,6 +107,7 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
         validation=[IssueOut(**i.as_dict()) for i in issues],
         inputs=InputsSnapshot(**describe(snapshot)),
         derived=Derived(**result.derived.__dict__),
+        ev_reserve=EvReserveOut(**snapshot.ev_reserve.summary()) if snapshot.ev_reserve is not None else None,
     )
 
 

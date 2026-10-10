@@ -154,6 +154,7 @@ class MpcService:
                 await asyncio.sleep(wait)
                 now = self.c.clock.now()
 
+        await self.c.extras["charger"].refresh_load_profile()
         inputs = self.c.extras["inputs"].snapshot(now)
         anchor = anchor_slot(now, rounding)
         result = build(inputs, anchor, slot_floor(now), settings, emhass_version=emhass.version_tuple)
@@ -176,6 +177,7 @@ class MpcService:
                 "rounding": rounding,
                 "submitted_at": iso(now),
                 "derived": result.derived.__dict__,
+                "ev_reserve": inputs.ev_reserve.summary() if inputs.ev_reserve is not None else None,
                 "slots": result.explain,
             },
         )

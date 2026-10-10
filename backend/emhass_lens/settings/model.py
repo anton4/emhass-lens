@@ -1016,6 +1016,27 @@ class ChargerLimits(Section):
     )
 
 
+class PvReserve(Section):
+    enabled: bool = Field(
+        default=False,
+        title="Reserve PV for Excess Solar charging",
+        description="While the car charges from excess solar (charge mode Excess Solar, plugged in, below the target "
+        "SoC), the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, so "
+        "EMHASS does not plan the home battery or exports with energy the car will use. The expected draw follows "
+        "the Excess Solar rule: the PV forecast minus the house load EMHASS forecasts, in whole amps, capped by the "
+        "maximum current. Nothing changes in EMHASS or Manual mode.",
+    )
+    car_battery_kwh: float = Field(
+        default=75.0,
+        gt=0,
+        le=300,
+        title="Car battery capacity",
+        description="Reserving stops once the energy from the car's level to its target is covered; the rest of "
+        "the horizon gets the full PV forecast again.",
+        json_schema_extra=ui(unit="kWh"),
+    )
+
+
 class Charger(Section):
     mode: Literal["off", "dry_run", "live"] = Field(
         default="off",
@@ -1045,6 +1066,7 @@ class Charger(Section):
         default=ChargerEntities(), title="Charger entities", json_schema_extra=ui(advanced=True)
     )
     limits: ChargerLimits = Field(default=ChargerLimits(), title="Limits and thresholds")
+    pv_reserve: PvReserve = Field(default=PvReserve(), title="PV reserved for Excess Solar")
 
 
 class MarketEntities(Section):

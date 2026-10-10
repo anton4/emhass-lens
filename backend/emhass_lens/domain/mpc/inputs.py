@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from emhass_lens.domain.ev_reserve import EvReserve
 from emhass_lens.domain.issues import Issue
 from emhass_lens.domain.pv_solcast import PvForecast
 from emhass_lens.domain.tariffs.engine import SlotPrice
@@ -59,6 +60,7 @@ class MpcInputs:
     forecast_source: str
     extend_days: int
     issues: tuple[Issue, ...] = field(default_factory=tuple)
+    ev_reserve: EvReserve | None = None  # PV the EV takes from excess solar, kept out of what EMHASS plans with
 
 
 def read_number(

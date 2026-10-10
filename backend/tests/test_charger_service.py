@@ -1,6 +1,6 @@
 """EV charger control: dry-run decisions compared with the automation, the minute tick, the SoC stop, live apply."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -273,5 +273,85 @@ def test_the_charge_mode_can_be_switched_from_the_app_through_the_helper(tmp_pat
         bad = client.post("/api/charger/mode", json={"option": "Turbo"})
         assert bad.status_code == 400 and "not one of the helper's options" in bad.json()["detail"]
         assert len([s for s in world.ha_services if s[0] == "input_select/select_option"]) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+# --- PV reserved for Excess Solar -----------------------------------------------------------------------------
+
+
+def test_excess_solar_charging_takes_its_share_out_of_the_pv_forecast_sent_to_emhass(
+    tmp_path: Path, world: World
+) -> None:
+    from tests.world import solcast_day
+
+    day = datetime(2026, 10, 9, tzinfo=TZ)
+    for i, suffix in enumerate(("today", "tomorrow")):  # a sunny forecast: ~10 kW this afternoon
+        world.set_state(f"sensor.solcast_pv_forecast_forecast_{suffix}", 10, solcast_day(day + timedelta(days=i), 12))
+    client = client_for(tmp_path, world, FakeClock(START), pv_reserve={"enabled": True, "car_battery_kwh": 75})
+    try:
+        first = run_job(client, "emhass.mpc")  # EMHASS mode: nothing reserved, and this stores the plan
+        assert first["outcome"] == "ok", first
+        explain = client.get(f"/api/runs/{first['id']}/artifacts/explain").json()
+        assert explain["ev_reserve"] == {
+            "active": False,
+            "why": "the charge mode is EMHASS, not Excess Solar",
+            "energy_needed_wh": None,
+            "energy_reserved_wh": 0,
+            "until": None,
+            "max_w": 0.0,
+            "slots": 0,
+            "soc": 50.0,
+            "target_soc": 80.0,
+        }
+
+        world.set_state(MODE, "Excess Solar")
+        prime(client, world)
+        second = run_job(client, "emhass.mpc")
+        assert second["outcome"] == "ok", second
+        payloads = [p for name, p in world.emhass_actions if name == "naive-mpc-optim"]
+        before, after = payloads[-2]["pv_power_forecast"], payloads[-1]["pv_power_forecast"]
+        explain = client.get(f"/api/runs/{second['id']}/artifacts/explain").json()
+        reserve = explain["ev_reserve"]
+        assert reserve["active"] and reserve["why"].startswith("Excess Solar, car 50 % → 80 %, 22.5 kWh to go")
+        assert reserve["energy_reserved_wh"] == 22500 and reserve["slots"] > 1
+        # the plan says the house takes 1500 W; 10 kW of PV leaves 8.5 kW: 12 A = 8280 W for the car
+        assert explain["slots"][0]["ev_reserved_w"] == 8280
+        assert after[0] == before[0] - 8280
+        assert after[0] == explain["slots"][0]["pv_w"]
+        assert sum(before) - sum(after) == round(sum(r["ev_reserved_w"] for r in explain["slots"]))
+        inputs = client.get(f"/api/runs/{second['id']}/artifacts/inputs").json()
+        assert inputs["ev_reserve"]["active"] is True
+
+        status = client.get("/api/charger").json()
+        assert status["pv_reserve"]["active"] is True
+        preview = client.post("/api/mpc/preview").json()
+        assert preview["ev_reserve"]["active"] is True
+        assert preview["explain"][0]["ev_reserved_w"] == 8280
+
+        world.set_state(CAR_SOC, 80)
+        prime(client, world)
+        assert client.get("/api/charger").json()["pv_reserve"]["why"] == "the car is at 80 %, target 80 %"
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_the_reserve_watches_the_car_even_while_the_controller_is_off(tmp_path: Path, world: World) -> None:
+    client = client_for(tmp_path, world, FakeClock(START), mode="off", pv_reserve={"enabled": True})
+    try:
+        watched = container(client).extras["ha"].watched
+        assert {MODE, STATE, CAR_SOC, TARGET_SOC, "input_number.ev_max_solar_current"} <= set(watched)
+        assert LIMIT not in watched  # the controller's own entities stay unwatched while Off
+        status = client.get("/api/charger").json()
+        assert status["pv_reserve"]["why"] == "the charge mode is EMHASS, not Excess Solar"
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_without_the_setting_nothing_is_reserved_or_reported(tmp_path: Path, world: World) -> None:
+    client = client_for(tmp_path, world, FakeClock(START))
+    try:
+        assert client.get("/api/charger").json()["pv_reserve"] is None
+        assert client.post("/api/mpc/preview").json()["ev_reserve"] is None
     finally:
         client.__exit__(None, None, None)

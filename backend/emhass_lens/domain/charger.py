@@ -84,6 +84,15 @@ def emhass_charger_current(p_def_w: float, solar_limit_a: int, limits: ChargerLi
     return round(min(value, float(solar_limit_a)))
 
 
+def solar_amps(surplus_w: float, solar_limit_a: int, limits: ChargerLimits) -> int:
+    """The Excess Solar current for a PV surplus: whole amps rounded down, 0 below the minimum, capped by the
+    maximum-current helper. Shared by the controller and the PV reservation sent to EMHASS."""
+    target = int(surplus_w // limits.w_per_amp)
+    if target < limits.min_current_a:
+        return 0
+    return min(target, solar_limit_a)
+
+
 def derive(i: ChargerInputs, now: datetime, limits: ChargerLimits) -> Derived:
     if i.pv_potential_w - i.pv_actual_w > limits.pv_potential_gap_w:
         pv, source, stamp = i.pv_potential_w, "potential", i.pv_potential_updated
@@ -95,10 +104,7 @@ def derive(i: ChargerInputs, now: datetime, limits: ChargerLimits) -> Derived:
     target = int((pv - other) // limits.w_per_amp)
     if target > i.current_limit_a and age >= limits.pv_stale_s:
         target = int(i.current_limit_a)  # don't raise the current on PV data that stopped updating
-    if target < limits.min_current_a:
-        target = 0
-    elif target > i.solar_limit_a:
-        target = i.solar_limit_a
+    target = solar_amps(target * limits.w_per_amp, i.solar_limit_a, limits)
     emhass = (
         emhass_charger_current(i.p_deferrable0_w, i.solar_limit_a, limits) if i.p_deferrable0_w is not None else None
     )

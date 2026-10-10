@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { api } from '../api/client'
 import type { EmhassCheck, ExplainArtifact, InputsSnapshot, Issue, ParityReport, PublishEvent } from '../api/types'
 import { ChecksTable } from '../components/ChecksTable'
-import { DerivedFacts, ExplainTable } from '../components/ExplainTable'
+import { DerivedFacts, EvReserveNote, ExplainTable } from '../components/ExplainTable'
 import { ParityView } from '../components/ParityView'
 import { InputsView } from '../components/Readings'
 import { ValidationList } from '../components/Validation'
@@ -103,6 +103,7 @@ export function RunInsights({ runId, job, kinds }: { runId: number; job: string;
                     Explain: {explain.data.slots.length} positions
                   </h3>
                 </summary>
+                <EvReserveNote reserve={explain.data.ev_reserve} />
                 <ExplainTable slots={explain.data.slots} />
               </details>
             )}

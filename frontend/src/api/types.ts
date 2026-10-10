@@ -54,6 +54,7 @@ export type MpcStatus = S['MpcStatus']
 export type EmhassCheck = S['EmhassCheck']
 export type DiscoveryAttempt = S['DiscoveryAttempt']
 export type ExplainSlot = S['ExplainSlot']
+export type EvReserve = S['EvReserveOut']
 export type Derived = S['Derived']
 export type DriverResult = S['DriverResult']
 export type DriverRequest = S['DriverRequest']
@@ -99,6 +100,7 @@ export interface ExplainArtifact {
   rounding: string
   submitted_at: string | null
   derived: Derived
+  ev_reserve?: EvReserve | null
   slots: ExplainSlot[]
 }
 

@@ -30,6 +30,15 @@ from emhass_lens.domain.charger import (
     soc_stop_due,
     track_soc,
 )
+from emhass_lens.domain.ev_reserve import (
+    EvReserve,
+    blocker,
+    house_load_profile,
+    inactive,
+    load_by_slot,
+    plan_reserve,
+)
+from emhass_lens.domain.pv_solcast import PvForecast
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.ha_values import integer, last_updated, num, number, text, updated
@@ -56,6 +65,8 @@ class ChargerService:
         self.soc = SocTracker()
         self.expect: dict[str, Any] | None = None  # a dry-run decision waiting to be compared
         self._last_limit: float | None = None  # the current limit as last seen (dry run: spotting the automation)
+        self._load_profile: dict[datetime, float] = {}  # EMHASS's house load forecast, from the newest plan
+        self._profile_plan: str | None = None  # generated_at of the plan the profile came from
 
     @property
     def mode(self) -> str:
@@ -69,10 +80,19 @@ class ChargerService:
         return self.c.settings.current.charger.limits
 
     def entities(self) -> set[str]:
-        if not self.active():
-            return set()
         e = self.c.settings.current.charger.entities
-        return {
+        reserve: set[str] = set()
+        if self.c.settings.current.charger.pv_reserve.enabled:  # the reservation reads these even when Off
+            reserve = {
+                e.charge_mode_select,
+                e.target_soc_number,
+                e.max_solar_current_number,
+                e.charging_state_sensor,
+                e.car_soc_sensor,
+            } - {""}
+        if not self.active():
+            return reserve
+        return reserve | {
             e.charge_mode_select,
             e.target_soc_number,
             e.max_solar_current_number,
@@ -475,10 +495,62 @@ class ChargerService:
         if self.mode != "off":  # let the new mode take effect at once (dry run records, live acts)
             self.c.scheduler.run_now("charger.decide", {"trigger": "manual"})
 
+    # --- PV reserved for Excess Solar (what the MPC payload leaves out of the PV forecast) ------------------
+    async def refresh_load_profile(self) -> None:
+        """Cache EMHASS's house load forecast (P_Load of the newest stored plan) for the reservation."""
+        if not self.c.settings.current.charger.pv_reserve.enabled:
+            return
+        plans = await self.c.extras["emhass"].plans(1)
+        if not plans:
+            self._load_profile, self._profile_plan = {}, None
+            return
+        plan = plans[0]
+        if plan["generated_at"] == self._profile_plan:
+            return
+        self._load_profile = load_by_slot(plan["plan"])
+        self._profile_plan = plan["generated_at"]
+
+    def pv_reserve(self, now: datetime, pv: PvForecast | None) -> EvReserve | None:
+        """The PV the car takes from excess solar per slot, from the watched states and the cached load profile.
+        None when the feature is off; an inactive reserve says why nothing is reserved."""
+        cfg = self.c.settings.current.charger.pv_reserve
+        if not cfg.enabled:
+            return None
+        e = self.c.settings.current.charger.entities
+        soc = number(self._state(e.car_soc_sensor), 0.0)
+        target = num(self._state(e.target_soc_number))
+        why = blocker(
+            text(self._state(e.charge_mode_select)),
+            e.solar_option,
+            integer(self._state(e.charging_state_sensor), -1),
+            soc,
+            target,
+        )
+        if why:
+            return inactive(why, soc, target)
+        if pv is None:
+            return inactive("no PV forecast", soc, target)
+        if not self._load_profile:
+            return inactive("no stored plan yet to tell the house load from", soc, target)
+        starts = sorted(start for start in pv.watts if start >= slot_floor(now))
+        return plan_reserve(
+            starts=starts,
+            pv_w=[pv.watts[start] for start in starts],
+            load_w=house_load_profile(self._load_profile, starts),
+            soc=soc,
+            target_soc=target,
+            solar_limit_a=integer(self._state(e.max_solar_current_number), 16),
+            limits=self.limits,
+            capacity_kwh=cfg.car_battery_kwh,
+        )
+
     async def status(self) -> dict[str, Any]:
+        await self.refresh_load_profile()
+        reserve = self.pv_reserve(self.c.clock.now(), self.c.extras["pv"].current())
         return {
             "mode": self.mode,
             "charge_mode": self.charge_mode_info(),
+            "pv_reserve": reserve.summary() if reserve is not None else None,
             "last": self.last,
             "last_compare": self.last_compare,
             "last_tick": self.last_tick,

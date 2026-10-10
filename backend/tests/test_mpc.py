@@ -259,3 +259,35 @@ def test_def_current_state_is_sent_only_when_a_running_entity_is_configured() ->
     missing = read_match("running", "sensor.charger_state", None, now, ["4"])
     assert missing.value is False
     assert "not found" in (missing.issue or "")
+
+
+def test_the_ev_reserve_comes_out_of_the_pv_forecast_but_not_of_the_compat_build() -> None:
+    from emhass_lens.domain.ev_reserve import EvReserve
+
+    now = utc(2026, 10, 9, 11, 13, 0)
+    inputs = inputs_at(now)
+    anchor = anchor_slot(now, "nearest")
+    plain = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    pv = plain.payload["pv_power_forecast"]
+    first = next(i for i, v in enumerate(pv) if v >= 400)
+    starts = [datetime.fromisoformat(r["start"]) for r in plain.explain]
+    reserve = EvReserve(True, "Excess Solar", watts={starts[first]: 300.0, starts[first + 1]: 1_000_000.0})
+
+    out = build(replace(inputs, ev_reserve=reserve), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    sent = out.payload["pv_power_forecast"]
+    assert sent[first] == pv[first] - 300
+    assert sent[first + 1] == 0  # never below zero
+    assert sent[:first] == pv[:first] and sent[first + 2 :] == pv[first + 2 :]
+    p10, p10_plain = out.payload["pv_power_forecast_p10"], plain.payload["pv_power_forecast_p10"]
+    assert p10[first] == max(0, p10_plain[first] - 300) and p10[first + 1] == 0
+    assert out.explain[first]["ev_reserved_w"] == 300
+    assert out.explain[first + 1]["ev_reserved_w"] == 1_000_000
+    assert all(r["ev_reserved_w"] == 0 for r in out.explain if r["i"] not in (first, first + 1))
+    assert not [i for i in validate(out, inputs, Settings()) if i.level == "error"]
+
+    compat = build(replace(inputs, ev_reserve=reserve), anchor, slot_floor(now), Settings(), compat=True)
+    assert compat.payload["pv_power_forecast"] == pv  # the parity build mirrors the HACS integration
+
+    off = replace(reserve, active=False)
+    same = build(replace(inputs, ev_reserve=off), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert same.payload["pv_power_forecast"] == pv

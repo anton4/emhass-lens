@@ -18,6 +18,7 @@ import {
   type ChargerTick,
   type SocClock,
 } from '../lib/charger'
+import { evReserveText } from '../lib/evReserve'
 import { formatTime } from '../lib/format'
 import { formatAgreement } from '../lib/inverter'
 import type { Agreement, RunSummary } from '../api/types'
@@ -126,6 +127,21 @@ export function ChargerPage() {
             <div>
               <dt>Target SoC clock</dt>
               <dd>{socClockText(soc, tz)}</dd>
+            </div>
+            <div>
+              <dt>PV reserved for the car</dt>
+              <dd>
+                {data?.pv_reserve ? (
+                  evReserveText(data.pv_reserve, tz)
+                ) : (
+                  <span className="faint">off</span>
+                )}
+                <div className="cell-sub">
+                  {data?.pv_reserve
+                    ? 'While the car charges from excess solar, its share is taken out of the PV forecast EMHASS plans with.'
+                    : 'Settings → EV charger control → PV reserved for Excess Solar keeps the car’s share out of the PV forecast EMHASS plans with.'}
+                </div>
+              </dd>
             </div>
             <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} />
             <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} />

@@ -1,8 +1,9 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../../api/client'
+import { useStatus } from '../../api/queries'
 import type { MpcPreview } from '../../api/types'
-import { DerivedFacts, ExplainTable } from '../../components/ExplainTable'
+import { DerivedFacts, EvReserveNote, ExplainTable } from '../../components/ExplainTable'
 import { JsonViewer } from '../../components/JsonViewer'
 import { ErrorNotice } from '../../components/PageHead'
 import { InputsView } from '../../components/Readings'
@@ -12,6 +13,7 @@ import { formatTime } from '../../lib/format'
 /** Build the MPC payload as if a run started now, and show what would be sent and why. */
 export function MpcPreviewPanel() {
   const preview = useMutation({ mutationFn: () => api.post<MpcPreview>('/api/mpc/preview') })
+  const status = useStatus()
   const [raw, setRaw] = useState(false)
   const p = preview.data
   return (
@@ -41,6 +43,7 @@ export function MpcPreviewPanel() {
             <h3 className="sub-head">Inputs</h3>
             <InputsView snapshot={p.inputs} />
             <h3 className="sub-head">Explain: each position of the payload</h3>
+            <EvReserveNote reserve={p.ev_reserve} tz={status.data?.timezone} />
             <ExplainTable slots={p.explain} />
             <div style={{ marginTop: 12 }}>
               <button type="button" className="quiet" aria-expanded={raw} onClick={() => setRaw((r) => !r)}>

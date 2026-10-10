@@ -253,6 +253,20 @@ class PvSummary(BaseModel):
     first_missing: str | None
 
 
+class EvReserveOut(BaseModel):
+    """PV kept out of the forecast sent to EMHASS because the EV takes it from excess solar."""
+
+    active: bool
+    why: str
+    energy_needed_wh: float | None = None
+    energy_reserved_wh: float = 0
+    until: str | None = None
+    max_w: float = 0
+    slots: int = 0
+    soc: float | None = None
+    target_soc: float | None = None
+
+
 class InputsSnapshot(BaseModel):
     taken_at: str | None
     prices: PricesSummary
@@ -261,6 +275,7 @@ class InputsSnapshot(BaseModel):
     soc_final: Reading
     deferrable_loads: list[DeferrableDescription]
     issues: list[IssueOut]
+    ev_reserve: EvReserveOut | None = None
 
 
 class NordpoolDay(BaseModel):
@@ -665,6 +680,7 @@ class ExplainSlot(BaseModel):
     prod_price: float
     pv_w: float
     pv_p10_w: float | None = None
+    ev_reserved_w: float = 0
 
 
 class Derived(BaseModel):
@@ -685,6 +701,7 @@ class MpcPreview(BaseModel):
     validation: list[IssueOut]
     inputs: InputsSnapshot
     derived: Derived
+    ev_reserve: EvReserveOut | None = None
 
 
 class LegacyPreview(BaseModel):
@@ -837,6 +854,7 @@ class ChargeModeRequest(BaseModel):
 class ChargerStatus(BaseModel):
     mode: str
     charge_mode: ChargeModeInfo | None = None
+    pv_reserve: EvReserveOut | None = None
     last: dict[str, Any] | None
     last_compare: dict[str, Any] | None
     last_tick: dict[str, Any] | None

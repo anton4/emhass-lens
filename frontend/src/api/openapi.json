@@ -358,6 +358,14 @@
               }
             }
           },
+          "pv_reserve": {
+            "$ref": "#/components/schemas/PvReserve",
+            "default": {
+              "car_battery_kwh": 75.0,
+              "enabled": false
+            },
+            "title": "PV reserved for Excess Solar"
+          },
           "tick_offset_s": {
             "default": 55,
             "description": "Excess Solar and the SoC stop are evaluated every minute; 55 s is just before the automation's own minute tick, so dry-run comparisons read what it did.",
@@ -703,6 +711,16 @@
               }
             ],
             "title": "Preconditions"
+          },
+          "pv_reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvReserveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "soc": {
             "$ref": "#/components/schemas/SocTracking"
@@ -2237,8 +2255,91 @@
         "title": "EntityOption",
         "type": "object"
       },
+      "EvReserveOut": {
+        "description": "PV kept out of the forecast sent to EMHASS because the EV takes it from excess solar.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "energy_needed_wh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Needed Wh"
+          },
+          "energy_reserved_wh": {
+            "default": 0,
+            "title": "Energy Reserved Wh",
+            "type": "number"
+          },
+          "max_w": {
+            "default": 0,
+            "title": "Max W",
+            "type": "number"
+          },
+          "slots": {
+            "default": 0,
+            "title": "Slots",
+            "type": "integer"
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc"
+          },
+          "target_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Soc"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "active",
+          "why"
+        ],
+        "title": "EvReserveOut",
+        "type": "object"
+      },
       "ExplainSlot": {
         "properties": {
+          "ev_reserved_w": {
+            "default": 0,
+            "title": "Ev Reserved W",
+            "type": "number"
+          },
           "i": {
             "title": "I",
             "type": "integer"
@@ -2984,6 +3085,16 @@
             },
             "title": "Deferrable Loads",
             "type": "array"
+          },
+          "ev_reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvReserveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "issues": {
             "items": {
@@ -4540,6 +4651,16 @@
           },
           "derived": {
             "$ref": "#/components/schemas/Derived"
+          },
+          "ev_reserve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvReserveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "explain": {
             "items": {
@@ -6232,6 +6353,30 @@
         "title": "Pv",
         "type": "object"
       },
+      "PvReserve": {
+        "additionalProperties": false,
+        "properties": {
+          "car_battery_kwh": {
+            "default": 75.0,
+            "description": "Reserving stops once the energy from the car's level to its target is covered; the rest of the horizon gets the full PV forecast again.",
+            "exclusiveMinimum": 0.0,
+            "maximum": 300.0,
+            "title": "Car battery capacity",
+            "type": "number",
+            "ui": {
+              "unit": "kWh"
+            }
+          },
+          "enabled": {
+            "default": false,
+            "description": "While the car charges from excess solar (charge mode Excess Solar, plugged in, below the target SoC), the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, so EMHASS does not plan the home battery or exports with energy the car will use. The expected draw follows the Excess Solar rule: the PV forecast minus the house load EMHASS forecasts, in whole amps, capped by the maximum current. Nothing changes in EMHASS or Manual mode.",
+            "title": "Reserve PV for Excess Solar charging",
+            "type": "boolean"
+          }
+        },
+        "title": "PvReserve",
+        "type": "object"
+      },
       "PvStatus": {
         "properties": {
           "end": {
@@ -7041,6 +7186,10 @@
                 "w_per_amp": 690
               },
               "mode": "off",
+              "pv_reserve": {
+                "car_battery_kwh": 75.0,
+                "enabled": false
+              },
               "tick_offset_s": 55
             },
             "title": "EV charger control (experimental)"
