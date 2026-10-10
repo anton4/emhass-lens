@@ -222,7 +222,7 @@ emhass_lens/
   - Every reconnect re-reads the watched states and re-publishes MQTT. This is also how an HA restart is detected.
   - `EntityCache.read()` returns either the value with its age, or the reason it's unusable: `missing`, `unavailable`, `non_numeric` or `stale`.
 - **EMHASS:** `healthz()`, `last_run()`, `plan()`, `get_config()` and `action(name, payload, timeout)`.
-  - Features are gated on the version reported by `healthz`: `/api/v1/plan` needs ≥0.17.9, and the start-grid race fix arrived in 0.18.2.
+  - Features are gated on the version reported by `healthz`: `/api/v1/plan` needs ≥0.17.9, the start-grid race fix arrived in 0.18.2, the P10 companion (`pv_power_forecast_p10`) is only sent to ≥0.18.4, and 0.18.5 is the recommended version (DST-safe MPC horizon, `Optimal_Inaccurate` reported as ok).
   - One global lock ensures only one action runs at a time.
   - A 200 from an action proves little, so every action is followed by `GET /api/v1/last-run`.
 - **Supervisor:** an async port of MFFR `backend/addon_config.py` (`_call`, `/addons/self/*`), plus `/addons` and `/services/mqtt`.
@@ -446,7 +446,7 @@ Phase 1 should be running before **2026-10-25**, the end of DST (a 25-hour day),
 | MFFR `backend/fees.py`, `price_settings.py` | Elektrilevi packages, peak windows, holidays (cents → €/kWh) |
 | MFFR `frontend/src/ConfigPanel.jsx`, `App.jsx` | Ideas for the version banner, restart polling and the entity datalist picker |
 | Legacy `coordinator.py:285-468`, `sensor.py:52-174, 317-360`, `__init__.py:27-185` | The behaviour reference and golden-test source |
-| `emhass/` clone (v0.18.3): `web_server.py`, `docs/api/v1/*.schema.json`, `forecast.py:283-305`, `utils.py:115-153` | The EMHASS contract (plan/last-run schemas, anchoring rules) |
+| `emhass/` clone (v0.18.3, re-read at v0.18.5 for the P10 pair, `def_current_state`, multi-battery columns and `publish_horizon_attributes`): `web_server.py`, `docs/api/v1/*.schema.json`, `forecast.py`, `utils.py`, `last_run.py` | The EMHASS contract (plan/last-run schemas, anchoring rules, runtime parameters) |
 
 ## 9. Known bugs in the current code that the rewrite fixes by design
 1. **EV deadline one slot late.** The anchor trim doesn't decrement `end_timesteps` (`__init__.py:142-159`).
@@ -464,7 +464,7 @@ Phase 1 should be running before **2026-10-25**, the end of DST (a 25-hour day),
 13. **The night window is hard-coded** to local 22–07, with no package choice or peaks.
 
 ## 10. Open questions to verify (most during Phase 0–1, none blocking the start)
-1. **EMHASS deployment:** which version is deployed (need ≥0.17.9, ideally ≥0.18.2)? And which address the App container can reach: `<hash>-emhass:5000` or host `172.30.32.1:5001`?
+1. **EMHASS deployment:** which version is deployed (need ≥0.17.9, ≥0.18.2 avoids the grid-boundary waits, 0.18.5 recommended)? And which address the App container can reach: `<hash>-emhass:5000` or host `172.30.32.1:5001`?
 2. **`/get-config` key names:** check them against a live response.
 3. **Elektrilevi night window in summer:** is it 22–07 or 23–08? The `clock_basis` setting covers either answer.
 4. **Your live tariff values and package:** the defaults match Võrk 4. Is aktsiis still 0.21 c, or the 0.307 c that applies from 1 May 2026? The legacy import wizard captures the live values.

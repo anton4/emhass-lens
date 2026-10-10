@@ -1,6 +1,6 @@
 # End-to-end tests
 
-These scripts start a throwaway **Home Assistant**, **Mosquitto** and **EMHASS** (0.18.3) in Docker. They run EMHASS Lens against them and check the whole chain:
+These scripts start a throwaway **Home Assistant**, **Mosquitto** and **EMHASS** (0.18.5 by default; `EMHASS_IMAGE=ghcr.io/davidusb-geek/emhass:v0.18.3 ./up.sh` for another version) in Docker. They run EMHASS Lens against them and check the whole chain:
 - the Home Assistant WebSocket and entity readings
 - Nord Pool prices
 - parity with the old HACS integration, if it is installed

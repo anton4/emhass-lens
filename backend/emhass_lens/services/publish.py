@@ -137,6 +137,8 @@ class PublishService:
             "run_id": plan.get("run_id") if plan else None,
             "current": {new: row.get(old) for old, new in ROW_FIELDS.items() if row and old in row},
         }
+        if row and "SOC_opt" not in row and "SOC_opt_0" in row:  # EMHASS with number_of_batteries > 1
+            data["current"]["soc_opt"] = row["SOC_opt_0"]
         prices = self.c.extras["prices"].priced(slot, self.c.extras["forecasts"].current())
         if prices and prices[0].start == slot:
             data["price"] = {"import": round(prices[0].import_price, 5), "export": round(prices[0].export_price, 5)}

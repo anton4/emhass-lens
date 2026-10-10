@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from emhass_lens.core.clock import iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.issues import Issue
-from emhass_lens.domain.mpc.inputs import DeferrableReading, MpcInputs, Reading, read_bool, read_number
+from emhass_lens.domain.mpc.inputs import DeferrableReading, MpcInputs, Reading, read_bool, read_match, read_number
 from emhass_lens.settings.model import EntityInput
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ class InputsService:
                 load.operating_hours_entity,
                 load.deadline_timesteps_entity,
                 load.single_constant_entity,
+                load.running_entity,
             }
         return {i for i in ids if i}
 
@@ -77,6 +78,13 @@ class InputsService:
                     ),
                     single_constant=read_bool(
                         "single_constant", load.single_constant_entity, ha.state(load.single_constant_entity), now
+                    ),
+                    running=(
+                        read_match(
+                            "running", load.running_entity, ha.state(load.running_entity), now, load.running_states
+                        )
+                        if load.running_entity
+                        else None
                     ),
                 )
             )
@@ -142,6 +150,7 @@ def describe(inputs: MpcInputs) -> dict[str, Any]:
                 "operating_hours": reading(d.operating_hours),
                 "deadline_timesteps": reading(d.deadline_timesteps),
                 "single_constant": reading(d.single_constant),
+                "running": reading(d.running) if d.running is not None else None,
             }
             for d in inputs.deferrables
         ],

@@ -39,6 +39,20 @@ export function hasColumn(rows: PlanRow[], column: string): boolean {
   return rows.some((r) => isNumber(r[column]))
 }
 
+/** The planned-SOC columns: `SOC_opt` for one battery, `SOC_opt_0`, `SOC_opt_1`, … with EMHASS 0.18's
+ *  number_of_batteries > 1 (which has no bare SOC_opt). */
+export function socColumns(columns: string[]): string[] {
+  if (columns.includes('SOC_opt')) return ['SOC_opt']
+  return columns.filter((c) => /^SOC_opt_\d+$/.test(c)).sort((a, b) => Number(a.slice(8)) - Number(b.slice(8)))
+}
+
+/** The planned SOC of a row: the single battery's, or the first battery's. */
+export function socOf(row: PlanRow | null | undefined): number | null {
+  if (!row) return null
+  const column = socColumns(Object.keys(row))[0]
+  return column ? num(row, column) : null
+}
+
 export interface PlanChange {
   time: number
   timestamp: string

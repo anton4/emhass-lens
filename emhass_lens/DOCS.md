@@ -137,6 +137,19 @@ Settings → **Qilowatt market control** holds the entities and thresholds (the 
 
 What stays as it was: the automation wrote feed-in only while selling, and a command under the gate during a session ends the session rather than flipping it. What is different on purpose: a session end goes straight to the plan's targets instead of the automation's "self-use, grid 0" defaults, and a burst of three sensor updates becomes one decision.
 
+## EMHASS versions
+
+EMHASS Lens needs EMHASS **0.17.9** or later (the plan API). With **0.18.2** or later it no longer has to wait out the seconds around a slot boundary. **0.18.5** is recommended: the MPC horizon and the forecasts stay right across the DST changes, and a solution EMHASS calls `Optimal_Inaccurate` counts as a plan instead of an error. The Health page's EMHASS card shows the version and the configuration checks.
+
+What EMHASS Lens uses from the 0.18 releases:
+
+- **P10 PV estimate (0.18.4).** Solcast's pessimistic P10 series goes along with the forecast on every run. EMHASS blends the two by its `weather_forecast_pv_quantile_bias` setting: 0 (its default) ignores P10, 0.3 moves the forecast 30 % of the way toward P10, 1 plans on P10 alone. Settings → **PV forecast → Send the P10 estimate too** turns it off; it is never sent while the estimate itself is P10. The EMHASS card says whether the two sides agree, and each run's Explain table shows the P10 column.
+- **Running now (0.18.2).** Settings → **Inputs → Deferrable loads → Running now when** names an entity that says the load is running right now, with **Running states** listing the states that mean running, for example the ABB charger's `sensor.abb_terra_ac_charger_charging_state_raw` with `4`. EMHASS then plans a load that is on as on, instead of scheduling a fresh start with its startup penalty. Nothing is sent while the field is empty.
+- **More than one battery (0.18.0).** EMHASS with `number_of_batteries` above 1 publishes `SOC_opt_0`, `SOC_opt_1`, … instead of `SOC_opt`; the Plan page, the slot tile and the plan-published event read them. EMHASS Lens still sends one battery SOC pair, which EMHASS applies to every battery, so the configuration check warns.
+- **Horizon attributes (0.18.2).** EMHASS attaches the whole horizon to every sensor it publishes. EMHASS Lens reads the plan from the API and doesn't need that; the configuration check hints that `publish_horizon_attributes` can be turned off in EMHASS to keep Home Assistant's recorder small, unless a dashboard uses the attributes.
+
+EMHASS-side features that work without any change here: capacity charges, thermal loads and the heat topology, VictoriaMetrics and InfluxDB history, the hybrid-inverter efficiency curves, the tariff schedule time zone and `battery_soc_final_reward_factor`. Set them in EMHASS; EMHASS Lens's runtime parameters don't touch them.
+
 ## App options (Configuration tab)
 
 | Option | Meaning |

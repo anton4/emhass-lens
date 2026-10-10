@@ -45,6 +45,7 @@ class DeferrableReading:
     operating_hours: Reading
     deadline_timesteps: Reading
     single_constant: Reading
+    running: Reading | None = None  # None when no "running now" entity is configured
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,15 @@ def read_bool(name: str, entity_id: str, state: dict[str, Any] | None, now: date
         return Reading(name, False, entity_id, issue="entity not found, treated as off")
     raw = state.get("state")
     return Reading(name, raw == "on", entity_id, raw=raw, age_s=_age(state, now))
+
+
+def read_match(name: str, entity_id: str, state: dict[str, Any] | None, now: datetime, values: list[str]) -> Reading:
+    """True when the entity's state is one of `values` (case-insensitive); a missing entity is no match."""
+    if state is None:
+        return Reading(name, False, entity_id, issue="entity not found, treated as not running")
+    raw = state.get("state")
+    wanted = {v.strip().lower() for v in values}
+    return Reading(name, str(raw).strip().lower() in wanted, entity_id, raw=raw, age_s=_age(state, now))
 
 
 def _fallback(name: str, entity_id: str, raw: Any, age: float | None, why: str, default: float | None) -> Reading:

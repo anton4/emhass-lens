@@ -98,12 +98,12 @@ class MpcService:
 
         inputs = self.c.extras["inputs"].snapshot(now)
         anchor = anchor_slot(now, rounding)
-        result = build(inputs, anchor, slot_floor(now), settings)
+        result = build(inputs, anchor, slot_floor(now), settings, emhass_version=emhass.version_tuple)
         issues = validate(result, inputs, settings)
         compat = None
         if settings.parity.enabled:
             compat_inputs = self.c.extras["inputs"].snapshot(now, legacy_compat=True)
-            compat = build(compat_inputs, anchor, slot_floor(now), settings)
+            compat = build(compat_inputs, anchor, slot_floor(now), settings, compat=True)
         self.last_shadow = Shadow(now, anchor, result, compat, ctx.run.id)
 
         if mode != "off":

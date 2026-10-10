@@ -43,9 +43,9 @@ export function ReadingCard({ title, reading, kind = 'fraction' }: { title: stri
 
 function DeferrableCard({ load }: { load: DeferrableDescription }) {
   const on = load.enabled.value === true
-  const issues = [load.enabled, load.operating_hours, load.deadline_timesteps, load.single_constant].filter(
-    (r) => r.issue,
-  )
+  const issues = [load.enabled, load.operating_hours, load.deadline_timesteps, load.single_constant, load.running]
+    .filter((r): r is NonNullable<typeof r> => r !== null && r !== undefined)
+    .filter((r) => r.issue)
   return (
     <div className="card">
       <div className="card-title">
@@ -73,6 +73,12 @@ function DeferrableCard({ load }: { load: DeferrableDescription }) {
           <dt>One block</dt>
           <dd>{load.single_constant.value ? 'yes' : 'no'}</dd>
         </div>
+        {load.running && (
+          <div>
+            <dt>Running now</dt>
+            <dd>{load.running.value ? 'yes' : 'no'}</dd>
+          </div>
+        )}
       </dl>
       {issues.map((r) => (
         <div key={r.name} className="card-issue" data-color="amber">

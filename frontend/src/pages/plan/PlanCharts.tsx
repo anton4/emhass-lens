@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { PlanPrice, PlanResponse, PlanRow } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { snapWindow } from '../../lib/chartRange'
-import { alignTo, deferrableColumns, hasColumn, stepSeries } from '../../lib/plan'
+import { alignTo, deferrableColumns, hasColumn, socColumns, stepSeries } from '../../lib/plan'
 import { formatPower } from '../../lib/units'
 
 const SYNC = 'plan'
@@ -90,26 +90,31 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
   }, [rows, data.columns])
 
   const soc = useMemo(() => {
-    if (!hasColumn(rows, 'SOC_opt')) return null
-    const { x, ys } = stepSeries(rows, ['SOC_opt'])
+    const columns = socColumns(data.columns).filter((c) => hasColumn(rows, c))
+    if (columns.length === 0) return null
+    const { x, ys } = stepSeries(rows, columns)
     const pct = (v: number | null) => (v === null ? null : v * 100)
     const fmt = (v: number) => `${v.toFixed(1)} %`
-    const series: ChartSeries[] = [
-      { label: 'Planned SOC', color: '--series-1', values: (ys[0] ?? []).map(pct), step: false, format: fmt },
-    ]
-    if (previous.length > 0) {
+    const series: ChartSeries[] = columns.map((_column, i) => ({
+      label: columns.length === 1 ? 'Planned SOC' : `Battery ${i + 1} SOC`,
+      color: `--series-${i + 1}`,
+      values: (ys[i] ?? []).map(pct),
+      step: false,
+      format: fmt,
+    }))
+    if (previous.length > 0 && columns[0] !== undefined) {
       series.push({
-        label: 'Previous plan',
+        label: columns.length === 1 ? 'Previous plan' : 'Battery 1, previous plan',
         color: '--ink-faint',
         width: 1.5,
         dash: [4, 4],
         step: false,
-        values: alignTo(x, previous, 'SOC_opt').map(pct),
+        values: alignTo(x, previous, columns[0]).map(pct),
         format: fmt,
       })
     }
     return { x, series }
-  }, [rows, previous])
+  }, [rows, previous, data.columns])
 
   const prices = useMemo(() => {
     const slots = data.prices

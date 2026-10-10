@@ -20,7 +20,10 @@ def validate(result: BuildResult, inputs: MpcInputs, settings: Settings) -> list
                 hint="Check the Nord Pool fetch on the Inputs page.",
             )
         )
-    for key in ("load_cost_forecast", "prod_price_forecast", "pv_power_forecast"):
+    lists = ["load_cost_forecast", "prod_price_forecast", "pv_power_forecast"]
+    if "pv_power_forecast_p10" in p:  # EMHASS rejects the run when the pair doesn't line up
+        lists.append("pv_power_forecast_p10")
+    for key in lists:
         values = p.get(key) or []
         if len(values) != result.horizon:
             issues.append(

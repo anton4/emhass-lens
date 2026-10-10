@@ -1,4 +1,6 @@
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -6,7 +8,7 @@ import pytest
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain import nordpool
 from emhass_lens.domain.mpc.anchor import anchor_slot, hazard_wait, parse_version
-from emhass_lens.domain.mpc.inputs import DeferrableReading, MpcInputs, Reading, read_bool, read_number
+from emhass_lens.domain.mpc.inputs import DeferrableReading, MpcInputs, Reading, read_bool, read_match, read_number
 from emhass_lens.domain.mpc.payload import build
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.domain.pv_solcast import parse as parse_pv
@@ -66,7 +68,11 @@ def pv_for(now_local: datetime):
         days.append(
             {
                 "detailedForecast": [
-                    {"period_start": (day_start + timedelta(minutes=30 * i)).isoformat(), "pv_estimate": (i % 9) / 2}
+                    {
+                        "period_start": (day_start + timedelta(minutes=30 * i)).isoformat(),
+                        "pv_estimate": (i % 9) / 2,
+                        "pv_estimate10": (i % 9) / 4,
+                    }
                     for i in range(48)
                 ]
             }
@@ -199,3 +205,57 @@ def test_published_row_mirrors_emhass() -> None:
     assert published_row(rows, utc(2026, 10, 9, 11, 38, 0), "nearest") == 2
     # an exact tie (7.5 min can't happen with zeroed seconds, but 7:30 -> 7:00) stays deterministic
     assert published_row(rows, utc(2026, 10, 9, 11, 22, 30), "nearest") == 0
+
+
+def test_p10_companion_is_sent_only_to_emhass_0_18_4_and_later() -> None:
+    now = utc(2026, 10, 9, 11, 13, 0)
+    inputs = inputs_at(now)
+    anchor = anchor_slot(now, "nearest")
+    new = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    p50, p10 = new.payload["pv_power_forecast"], new.payload["pv_power_forecast_p10"]
+    assert len(p10) == len(p50) == new.horizon
+    assert all(b == round(a / 2) for a, b in zip(p50, p10, strict=True))  # the fixture's P10 is half of P50
+    assert new.explain[0]["pv_p10_w"] == p10[0]
+    assert not [i for i in validate(new, inputs, Settings()) if i.level == "error"]
+
+    old = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 3))
+    unknown = build(inputs, anchor, slot_floor(now), Settings())
+    compat = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5), compat=True)
+    quiet = Settings.model_validate({"pv": {"send_p10": False}})
+    off = build(inputs, anchor, slot_floor(now), quiet, emhass_version=(0, 18, 5))
+    for result in (old, unknown, compat, off):
+        assert "pv_power_forecast_p10" not in result.payload
+        assert result.explain[0]["pv_p10_w"] is None
+
+    states: dict[str, dict[str, Any] | None] = {
+        f"s{i}": {"attributes": a} for i, a in enumerate(pv_for(now.astimezone(TZ)))
+    }
+    p10_inputs = replace(inputs, pv=parse_pv(states, "estimate10"))
+    p10_only = build(p10_inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert "pv_power_forecast_p10" not in p10_only.payload  # nothing to blend when P10 is the estimate
+
+
+def test_def_current_state_is_sent_only_when_a_running_entity_is_configured() -> None:
+    now = utc(2026, 10, 9, 11, 13, 0)
+    anchor = anchor_slot(now, "nearest")
+    plain = build(inputs_at(now, ev_on=True), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert "def_current_state" not in plain.payload
+
+    def with_running(state: str, ev_on: bool = True) -> MpcInputs:
+        base = inputs_at(now, ev_on=ev_on)
+        reading = read_match("running", "sensor.charger_state", {"state": state}, now, ["4", "Charging"])
+        return replace(base, deferrables=(replace(base.deferrables[0], running=reading),))
+
+    charging = build(with_running("4"), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert charging.payload["def_current_state"] == [True]
+    assert build(with_running("charging"), anchor, slot_floor(now), Settings()).payload["def_current_state"] == [True]
+    idle = build(with_running("1"), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert idle.payload["def_current_state"] == [False]
+    disabled = build(with_running("4", ev_on=False), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert disabled.payload["def_current_state"] == [False]  # a disabled load is never running
+    compat = build(with_running("4"), anchor, slot_floor(now), Settings(), compat=True)
+    assert "def_current_state" not in compat.payload  # the HACS integration never sent it
+
+    missing = read_match("running", "sensor.charger_state", None, now, ["4"])
+    assert missing.value is False
+    assert "not found" in (missing.issue or "")

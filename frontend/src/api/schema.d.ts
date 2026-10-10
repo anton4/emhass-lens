@@ -1175,6 +1175,7 @@ export interface components {
             /** Nominal Power W */
             nominal_power_w: number;
             operating_hours: components["schemas"]["Reading"];
+            running?: components["schemas"]["Reading"] | null;
             single_constant: components["schemas"]["Reading"];
         };
         /** DeferrableLoad */
@@ -1205,6 +1206,17 @@ export interface components {
              * @default sensor.ev_operating_hours
              */
             operating_hours_entity: string;
+            /**
+             * Running now when
+             * @description Optional: an entity that says the load runs right now, e.g. the charger's state sensor. EMHASS (0.18.2+) then plans a load that is already on as on, instead of scheduling a fresh start. Leave empty to send nothing.
+             * @default
+             */
+            running_entity: string;
+            /**
+             * Running states
+             * @description The states of that entity that mean running, e.g. on, charging or 4.
+             */
+            running_states?: string[];
             /**
              * Run in one block when on
              * @default input_boolean.ev_force_continuous_charging
@@ -1536,6 +1548,8 @@ export interface components {
             period: string;
             /** Prod Price */
             prod_price: number;
+            /** Pv P10 W */
+            pv_p10_w?: number | null;
             /** Pv W */
             pv_w: number;
             /** Spot */
@@ -2893,6 +2907,12 @@ export interface components {
              */
             scale: number;
             /**
+             * Send the P10 estimate too
+             * @description EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate above is P10 itself.
+             * @default true
+             */
+            send_p10: boolean;
+            /**
              * PV forecast
              * @default solcast
              * @enum {string}
@@ -3216,6 +3236,10 @@ export interface components {
              *           "name": "EV",
              *           "nominal_power_w": 11000,
              *           "operating_hours_entity": "sensor.ev_operating_hours",
+             *           "running_entity": "",
+             *           "running_states": [
+             *             "on"
+             *           ],
              *           "single_constant_entity": "input_boolean.ev_force_continuous_charging"
              *         }
              *       ],
@@ -3400,6 +3424,7 @@ export interface components {
              *       "field": "from_select",
              *       "field_select_entity": "select.solcast_pv_forecast_use_forecast_field",
              *       "scale": 1,
+             *       "send_p10": true,
              *       "source": "solcast"
              *     }
              */

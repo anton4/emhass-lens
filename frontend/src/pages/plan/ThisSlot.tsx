@@ -1,5 +1,5 @@
 import type { PlanRow } from '../../api/types'
-import { deferrableColumns, num } from '../../lib/plan'
+import { deferrableColumns, num, socOf } from '../../lib/plan'
 import { batteryDirection, formatFraction, formatPower, gridDirection } from '../../lib/units'
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -40,7 +40,7 @@ export function ThisSlot({ row, columns }: { row: PlanRow; columns: string[] }) 
           sub={(num(row, c) ?? 0) > 0 ? 'Running' : 'Off'}
         />
       ))}
-      {num(row, 'SOC_opt') !== null && <Tile label="SOC at slot end" value={formatFraction(num(row, 'SOC_opt'))} sub="planned" />}
+      {socOf(row) !== null && <Tile label="SOC at slot end" value={formatFraction(socOf(row))} sub="planned" />}
       {loadCost !== null && (
         <Tile
           label="Import price"

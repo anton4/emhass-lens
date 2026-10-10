@@ -180,6 +180,17 @@ def main() -> int:
                 live["outcome"] == "ok" and anchored,
                 f"{live['summary']}; first row {first}, anchor {explain['anchor']}",
             )
+            request = http.get(f"/api/runs/{live['id']}/artifacts/request").json()
+            p10 = request.get("pv_power_forecast_p10")
+            version = tuple(int(x) for x in str(emhass["version"] or "0").lstrip("v").split(".")[:3])
+            takes_p10 = version >= (0, 18, 4)
+            p10_ok = (isinstance(p10, list) and len(p10) == request["prediction_horizon"]) if takes_p10 else p10 is None
+            check(
+                "sends Solcast's P10 estimate next to the PV forecast only to EMHASS 0.18.4 and later",
+                p10_ok and live["outcome"] == "ok",
+                f"EMHASS {emhass['version']}: {len(p10) if isinstance(p10, list) else 'no'} P10 values "
+                f"for {request['prediction_horizon']} slots",
+            )
 
             event, pub = asyncio.run(publish_and_catch_event(token, http))
             batt = ha.get("/api/states/sensor.p_batt_forecast").json().get("state")

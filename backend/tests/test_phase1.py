@@ -174,7 +174,7 @@ def test_emhass_checks_and_plan_watch(tmp_path: Path, world: World) -> None:
         by_key = {c["key"]: c["status"] for c in status["checks"]}
         assert by_key["optimization_time_step"] == "ok"
         assert by_key["method_ts_round"] == "ok"
-        assert by_key["version"] == "ok"
+        assert by_key["version"] == "info"  # 0.18.3 works; 0.18.5 is recommended
 
         # a plan made by someone else (the HACS integration) is picked up and served with prices
         run_job(client, "nordpool.poll")

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alignTo, deferrableColumns, planChanges, rowAt, stepSeries } from './plan'
+import { alignTo, deferrableColumns, planChanges, rowAt, socColumns, socOf, stepSeries } from './plan'
 
 const t0 = Date.parse('2026-10-09T11:15:00Z') / 1000
 const row = (i: number, batt: number, grid: number, soc = 0.5) => ({
@@ -39,5 +39,14 @@ describe('plan helpers', () => {
     expect(ys[0]).toEqual([1, 3, 3])
     expect(ys[1]).toEqual([null, null, null])
     expect(alignTo(x, [row(1, 0, 0, 0.7)], 'SOC_opt')).toEqual([null, 0.7, null])
+  })
+
+  it('reads the planned SOC per battery with EMHASS 0.18 multi-battery columns', () => {
+    expect(socColumns(['P_batt', 'SOC_opt'])).toEqual(['SOC_opt'])
+    expect(socColumns(['SOC_opt_1', 'P_batt_0', 'SOC_opt_0', 'P_batt'])).toEqual(['SOC_opt_0', 'SOC_opt_1'])
+    expect(socColumns(['P_batt'])).toEqual([])
+    expect(socOf(row(0, 0, 0, 0.42))).toBe(0.42)
+    expect(socOf({ timestamp: 'x', SOC_opt_0: 0.3, SOC_opt_1: 0.9 })).toBe(0.3)
+    expect(socOf({ timestamp: 'x', P_batt: 1 })).toBeNull()
   })
 })

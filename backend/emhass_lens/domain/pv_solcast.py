@@ -4,6 +4,7 @@ Each day sensor (…_today, …_tomorrow, …_day_3 … …_day_7) has a `detail
 30-minute periods: {"period_start": "...+03:00", "pv_estimate": kW, "pv_estimate10": kW, ...}.
 Periods are keyed by their timestamp, so a missing day sensor or a 23/25-hour DST day can't
 shift the rest of the series; slots without data are reported, not silently zero-filled.
+The conservative P10 estimate is kept next to the chosen one: EMHASS 0.18.4+ can blend the two.
 """
 
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ class PvForecast:
     sensors_used: tuple[str, ...]
     sensors_missing: tuple[str, ...]
     meta: dict[str, Any] = field(default_factory=dict)
+    p10_watts: dict[datetime, float] = field(default_factory=dict)  # the P10 companion, empty when unknown
 
     def series(self, starts: list[datetime]) -> tuple[list[float], list[datetime]]:
         """Values for the given slot starts (0 W where missing) and the starts that were missing."""
@@ -33,6 +35,14 @@ class PvForecast:
             values.append(value)
         return values, missing
 
+    @property
+    def has_p10(self) -> bool:
+        return bool(self.p10_watts)
+
+    def p10_series(self, starts: list[datetime]) -> list[float]:
+        """The P10 values for the given slot starts, 0 W where missing (like series())."""
+        return [self.p10_watts.get(start, 0.0) for start in starts]
+
 
 def day_sensors(prefix: str, days: int) -> list[str]:
     return [f"{prefix}{suffix}" for suffix in DAY_SUFFIXES[:days]]
@@ -41,7 +51,9 @@ def day_sensors(prefix: str, days: int) -> list[str]:
 def parse(states: dict[str, dict[str, Any] | None], field_name: str, scale: float = 1.0) -> PvForecast:
     """states: entity_id -> HA state dict ({"state":..., "attributes": {...}}) or None if missing."""
     key = f"pv_{field_name}"
+    companion = "pv_estimate10" if field_name != "estimate10" else None
     watts: dict[datetime, float] = {}
+    p10: dict[datetime, float] = {}
     used, missing = [], []
     for entity_id, state in states.items():
         attrs = (state or {}).get("attributes") or {}
@@ -58,11 +70,17 @@ def parse(states: dict[str, dict[str, Any] | None], field_name: str, scale: floa
             start = _ts(start_raw)
             length = timedelta(minutes=30)
             w = float(value) * 1000.0 * scale
+            low = period.get(companion) if companion else None
+            w10 = float(low) * 1000.0 * scale if low is not None else None
             slot = start
             while slot < start + length:
                 watts[slot] = w
+                if w10 is not None:
+                    p10[slot] = w10
                 slot += QUARTER
-    return PvForecast(watts=watts, field_name=field_name, sensors_used=tuple(used), sensors_missing=tuple(missing))
+    return PvForecast(
+        watts=watts, field_name=field_name, sensors_used=tuple(used), sensors_missing=tuple(missing), p10_watts=p10
+    )
 
 
 def _ts(value: Any) -> datetime:

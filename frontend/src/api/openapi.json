@@ -533,6 +533,16 @@
           "operating_hours": {
             "$ref": "#/components/schemas/Reading"
           },
+          "running": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "single_constant": {
             "$ref": "#/components/schemas/Reading"
           }
@@ -607,6 +617,34 @@
                 "input_number"
               ],
               "widget": "entity"
+            }
+          },
+          "running_entity": {
+            "default": "",
+            "description": "Optional: an entity that says the load runs right now, e.g. the charger's state sensor. EMHASS (0.18.2+) then plans a load that is already on as on, instead of scheduling a fresh start. Leave empty to send nothing.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Running now when",
+            "type": "string",
+            "ui": {
+              "domain": [
+                "sensor",
+                "binary_sensor",
+                "switch",
+                "input_boolean"
+              ],
+              "widget": "entity"
+            }
+          },
+          "running_states": {
+            "description": "The states of that entity that mean running, e.g. on, charging or 4.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Running states",
+            "type": "array",
+            "ui": {
+              "advanced": true,
+              "widget": "json"
             }
           },
           "single_constant_entity": {
@@ -1439,6 +1477,17 @@
           "prod_price": {
             "title": "Prod Price",
             "type": "number"
+          },
+          "pv_p10_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv P10 W"
           },
           "pv_w": {
             "title": "Pv W",
@@ -4927,6 +4976,12 @@
               "advanced": true
             }
           },
+          "send_p10": {
+            "default": true,
+            "description": "EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate above is P10 itself.",
+            "title": "Send the P10 estimate too",
+            "type": "boolean"
+          },
           "source": {
             "default": "solcast",
             "enum": [
@@ -5705,6 +5760,10 @@
                   "name": "EV",
                   "nominal_power_w": 11000,
                   "operating_hours_entity": "sensor.ev_operating_hours",
+                  "running_entity": "",
+                  "running_states": [
+                    "on"
+                  ],
                   "single_constant_entity": "input_boolean.ev_force_continuous_charging"
                 }
               ],
@@ -5888,6 +5947,7 @@
               "field": "from_select",
               "field_select_entity": "select.solcast_pv_forecast_use_forecast_field",
               "scale": 1.0,
+              "send_p10": true,
               "source": "solcast"
             },
             "title": "PV forecast"

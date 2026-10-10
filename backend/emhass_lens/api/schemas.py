@@ -226,6 +226,7 @@ class DeferrableDescription(BaseModel):
     operating_hours: Reading
     deadline_timesteps: Reading
     single_constant: Reading
+    running: Reading | None = None
 
 
 class IssueOut(BaseModel):
@@ -448,6 +449,7 @@ class ExplainSlot(BaseModel):
     load_cost: float
     prod_price: float
     pv_w: float
+    pv_p10_w: float | None = None
 
 
 class Derived(BaseModel):

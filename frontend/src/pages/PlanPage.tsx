@@ -215,7 +215,7 @@ function PlanTable({
                 const v = row[c]
                 return (
                   <td key={c} className="num r">
-                    {typeof v === 'number' ? (c === 'SOC_opt' ? `${(v * 100).toFixed(1)} %` : Math.abs(v) >= 10 ? Math.round(v) : v.toFixed(4)) : String(v ?? '—')}
+                    {typeof v === 'number' ? (c.startsWith('SOC_opt') ? `${(v * 100).toFixed(1)} %` : Math.abs(v) >= 10 ? Math.round(v) : v.toFixed(4)) : String(v ?? '—')}
                   </td>
                 )
               })}

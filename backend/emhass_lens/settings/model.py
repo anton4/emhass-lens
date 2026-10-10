@@ -229,6 +229,20 @@ class DeferrableLoad(Section):
         title="Run in one block when on",
         json_schema_extra=ui(widget="entity", domain=["input_boolean", "switch"]),
     )
+    running_entity: EntityId = Field(
+        default="",
+        title="Running now when",
+        description="Optional: an entity that says the load runs right now, e.g. the charger's state sensor. "
+        "EMHASS (0.18.2+) then plans a load that is already on as on, instead of scheduling a fresh start. "
+        "Leave empty to send nothing.",
+        json_schema_extra=ui(widget="entity", domain=["sensor", "binary_sensor", "switch", "input_boolean"]),
+    )
+    running_states: list[str] = Field(
+        default_factory=lambda: ["on"],
+        title="Running states",
+        description="The states of that entity that mean running, e.g. on, charging or 4.",
+        json_schema_extra=ui(widget="json", advanced=True),
+    )
 
 
 class Inputs(Section):
@@ -431,6 +445,13 @@ class Pv(Section):
         default="select.solcast_pv_forecast_use_forecast_field",
         title="Solcast select entity",
         json_schema_extra=ui(widget="entity", domain="select", advanced=True),
+    )
+    send_p10: bool = Field(
+        default=True,
+        title="Send the P10 estimate too",
+        description="EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the "
+        "two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate "
+        "above is P10 itself.",
     )
     scale: float = Field(default=1.0, ge=0, le=10, title="Multiply by", json_schema_extra=ui(advanced=True))
 

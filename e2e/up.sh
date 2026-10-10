@@ -6,7 +6,7 @@ set -eu
 cd "$(dirname "$0")"
 RUNTIME="$PWD/.runtime"
 HA_IMAGE="${HA_IMAGE:-ghcr.io/home-assistant/home-assistant:stable}"
-EMHASS_IMAGE="${EMHASS_IMAGE:-ghcr.io/davidusb-geek/emhass:v0.18.3}"
+EMHASS_IMAGE="${EMHASS_IMAGE:-ghcr.io/davidusb-geek/emhass:v0.18.5}"
 
 rm -rf "$RUNTIME" && mkdir -p "$RUNTIME/ha/custom_components" "$RUNTIME/emhass/data"
 cp ha/configuration.yaml "$RUNTIME/ha/"

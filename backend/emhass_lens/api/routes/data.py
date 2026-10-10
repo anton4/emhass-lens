@@ -89,7 +89,7 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
     snapshot = await c.app_db.run(c.extras["inputs"].snapshot, now)
     rounding = emhass.method_ts_round()
     anchor = anchor_slot(now, rounding)
-    result = build(snapshot, anchor, slot_floor(now), settings)
+    result = build(snapshot, anchor, slot_floor(now), settings, emhass_version=emhass.version_tuple)
     issues = validate(result, snapshot, settings)
     return MpcPreview(
         built_at=iso(now) or "",
