@@ -70,6 +70,10 @@ class World:
     emhass_model_steps: int | None = None  # a tuned load model: runs with a longer horizon fail (fit resets it)
     emhass_health_timeout: bool = False  # /healthz doesn't answer in time (EMHASS busy computing)
     emhass_fail_live: bool = False  # optimisations without a costfun parameter (the live one) end in an error
+    # a slow solver: seconds a cost function needs at EMHASS's usual 1 % gap; a payload limit below that times out
+    # (EMHASS records an error with no message after the limit and its relaxed retry), a 5 % gap always finishes
+    emhass_solve_s: dict[str, float] = field(default_factory=dict)
+    emhass_solver_stuck: bool = False  # even the looser gap times out
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -140,6 +144,18 @@ class World:
             if name == "naive-mpc-optim":
                 now = self.clock_now() if self.clock_now else datetime.now(UTC)
                 stamp = now.astimezone(UTC).isoformat()
+                method = payload.get("costfun") or self.emhass_config.get("costfun", "profit")
+                limit = payload.get("lp_solver_timeout")
+                loose = float(payload.get("lp_solver_mip_rel_gap") or 0.01) >= 0.05 and not self.emhass_solver_stuck
+                if limit and self.emhass_solve_s.get(method, 0) > limit and not loose:
+                    self.emhass_last_run = {
+                        "status": "error",
+                        "timestamp": stamp,
+                        "action": "naive-mpc-optim",
+                        "stage_times": {"optim_solve.solve": 2 * limit},
+                        "error_message": None,
+                    }
+                    return httpx.Response(200, text="EMHASS >> Action naive-mpc-optim executed... \n")
                 if self.emhass_fail_live and not payload.get("costfun"):
                     # EMHASS records the failed run in last-run; /api/v1/plan keeps the last good plan
                     self.emhass_last_run = {"status": "error", "timestamp": stamp, "error_message": "solver timed out"}

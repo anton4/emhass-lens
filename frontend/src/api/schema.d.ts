@@ -1707,7 +1707,9 @@ export interface components {
              *       "hazard_guard_s": 30,
              *       "max_horizon": 672,
              *       "min_horizon": 8,
-             *       "slot_offset_s": 780
+             *       "retry_mip_gap": 0.05,
+             *       "slot_offset_s": 660,
+             *       "solver_budget": "auto"
              *     }
              */
             mpc: components["schemas"]["EmhassMpc"];
@@ -1835,11 +1837,24 @@ export interface components {
              */
             min_horizon: number;
             /**
+             * MIP gap for the retry
+             * @description The retry stops when the plan is within this share of the best possible one (EMHASS's usual gap is 0.01); a looser gap finishes much faster on long horizons.
+             * @default 0.05
+             */
+            retry_mip_gap: number;
+            /**
              * Run at (seconds into each quarter)
-             * @description 780 = mm:13:00, two minutes before the next quarter starts, so the plan for the next slot is ready before it is published.
-             * @default 780
+             * @description 660 = mm:11:00, four minutes before the next quarter's publish, so EMHASS's solver has time for a long horizon (and one retry) before the plan for the next slot is published.
+             * @default 660
              */
             slot_offset_s: number;
+            /**
+             * Solver time limit
+             * @description Auto: every optimisation gets lp_solver_timeout from the time left before the slot's publish (the live plan most of it, cost-function comparisons up to 30 s each), and a live solve that stops at its limit is retried once with a looser MIP gap, so EMHASS ends with a live plan. EMHASS's own setting: send neither and leave EMHASS's configured lp_solver_timeout in charge. lp_solver_timeout under Extra runtime parameters overrides both.
+             * @default auto
+             * @enum {string}
+             */
+            solver_budget: "auto" | "emhass";
         };
         /** EmhassPublish */
         EmhassPublish: {
@@ -3902,7 +3917,9 @@ export interface components {
              *         "hazard_guard_s": 30,
              *         "max_horizon": 672,
              *         "min_horizon": 8,
-             *         "slot_offset_s": 780
+             *         "retry_mip_gap": 0.05,
+             *         "slot_offset_s": 660,
+             *         "solver_budget": "auto"
              *       },
              *       "publish": {
              *         "enabled": true,

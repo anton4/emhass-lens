@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- EMHASS's solver gets a time limit per optimisation from the time left before the next publish (the live plan most of it, cost-function comparison steps at most 30 s), and a live solve that stops at its limit is retried once with a 5 % MIP gap, so EMHASS ends with a live plan instead of a comparison plan. A solver error without a message is explained ("stopped at its time limit"). Settings → EMHASS → MPC optimization → *Solver time limit*.
+- MPC now runs at 11:00 into each quarter instead of 13:00, for about four minutes of solver time; a changed time is kept.
+- "Kept in sync" no longer runs into the next column on the Inverter and EV charger pages.
+
 ## 0.3.11
 
 - The Plan page shows prices in €/kWh instead of cents: the price chart, the import and export price of this slot, and the price forecast's error on the accuracy card.

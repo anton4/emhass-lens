@@ -64,6 +64,11 @@ describe('lastRunNote', () => {
       'EMHASS\'s last run (naive-mpc-optim, 15:58:00) ended with "error": solver timed out. ' +
         'EMHASS keeps serving its last good plan, from 15:43:00, which is shown here.',
     )
+    const slow = { status: 'error', action: 'naive-mpc-optim', stage_times: { 'optim_solve.solve': 91.02 } }
+    expect(lastRunNote(slow, null, now, 'Europe/Tallinn')).toBe(
+      'EMHASS\'s last run (naive-mpc-optim) ended with "error": EMHASS gave no reason; its solver ran 91 s, most ' +
+        'likely into its time limit (lp_solver_timeout).',
+    )
     expect(lastRunNote({ status: 'infeasible' }, null, now, 'Europe/Tallinn')).toBe(
       'EMHASS\'s last run (optimisation) ended with "infeasible": EMHASS gave no reason.',
     )

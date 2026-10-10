@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.issues import Issue, errors
+from emhass_lens.domain.mpc import solver_budget as budget
 from emhass_lens.domain.mpc.anchor import anchor_slot, hazard_wait
 from emhass_lens.domain.mpc.compare import costfun_of
 from emhass_lens.domain.mpc.model_steps import short_model
@@ -231,38 +232,79 @@ class MpcService:
             issues.append(Issue("error", "ml_fit_running", "An ML model fit is running in EMHASS"))
         return issues
 
-    async def send(
-        self, ctx: JobContext, result: BuildResult, horizon: str, warn_note: str, *, locked: bool = False
-    ) -> None:
-        """Send the payload, read the plan back and store it. `locked` when the caller already holds the EMHASS
-        action lock (a cost-function comparison keeps it for its whole sequence)."""
+    def solver_deadline(self) -> datetime | None:
+        """When the plan must be ready (the next publish), or None when EMHASS keeps its own time limit."""
+        settings = self.c.settings.current
+        if settings.emhass.mpc.solver_budget != "auto" or "lp_solver_timeout" in settings.emhass.extra_runtime_params:
+            return None
+        return budget.deadline(self.c.clock.now(), settings.emhass.publish.slot_offset_s)
+
+    async def _attempt(
+        self, ctx: JobContext, payload: dict[str, Any], suffix: str = ""
+    ) -> tuple[Any, dict[str, Any] | None, datetime]:
+        """One naive-mpc-optim: EMHASS's answer, its last-run record (None when the request itself failed), and when
+        it was sent. Recorded as response / emhass_last_run artifacts (with `suffix` for a retry)."""
         assert ctx.run is not None
         emhass = self.c.extras["emhass"]
-        settings = self.c.settings.current
+        limit = payload.get("lp_solver_timeout")
         sent_at = self.c.clock.now()
-        async with contextlib.nullcontext() if locked else emhass.action_lock:
-            response = await emhass.act("naive-mpc-optim", result.payload, settings.emhass.timeouts.mpc)
+        timeout = budget.http_timeout(limit, self.c.settings.current.emhass.timeouts.mpc)
+        response = await emhass.act("naive-mpc-optim", payload, timeout)
         ctx.run.artifact(
-            "response",
+            f"response{suffix}",
             {
                 "http_status": response.http_status,
                 "duration_ms": response.duration_ms,
                 "error": response.error,
                 "error_lines": response.error_lines[-50:],
                 "body": response.body[:20000],
+                "lp_solver_timeout": limit,
+                "lp_solver_mip_rel_gap": payload.get("lp_solver_mip_rel_gap"),
             },
         )
         if response.error and response.http_status is None:
-            ctx.run.outcome, ctx.run.error = ("timeout" if "timed out" in response.error else "error"), response.error
-            return
+            return response, None, sent_at
         try:
             last_run = await emhass.client.last_run()
         except Exception as exc:
             last_run = {"status": "unknown", "error_message": str(exc)}
-        ctx.run.artifact("emhass_last_run", last_run)
+        ctx.run.artifact(f"emhass_last_run{suffix}", last_run)
+        return response, last_run, sent_at
+
+    async def send(
+        self, ctx: JobContext, result: BuildResult, horizon: str, warn_note: str, *, locked: bool = False
+    ) -> None:
+        """Send the payload, read the plan back and store it. `locked` when the caller already holds the EMHASS
+        action lock (a cost-function comparison keeps it for its whole sequence). With the solver budget on, the
+        solve gets a time limit from the time left before the publish, and a solve that stopped at it is retried
+        once with a looser MIP gap (domain/mpc/solver_budget.py)."""
+        assert ctx.run is not None
+        emhass = self.c.extras["emhass"]
+        mpc = self.c.settings.current.emhass.mpc
+        until = self.solver_deadline()
+        limit = budget.limit_for(self.c.clock.now(), until, budget.LIVE_SHARE) if until else None
+        payload = {**result.payload, "lp_solver_timeout": limit} if limit else result.payload
+        retried: tuple[int, str] | None = None  # (first limit, why) when the first solve stopped at its limit
+        async with contextlib.nullcontext() if locked else emhass.action_lock:
+            response, last_run, sent_at = await self._attempt(ctx, payload)
+            fresh_first = _fresh(last_run, sent_at)
+            if until and limit and not response.error and fresh_first and budget.timed_out(last_run, limit):
+                why = budget.explain_error(last_run, limit)
+                retry_limit = budget.limit_for(self.c.clock.now(), until, 1.0)
+                if retry_limit:
+                    log.warning("%s; retrying with a %g %% MIP gap and %d s", why, mpc.retry_mip_gap * 100, retry_limit)
+                    retry = {**payload, "lp_solver_timeout": retry_limit, "lp_solver_mip_rel_gap": mpc.retry_mip_gap}
+                    ctx.run.artifact("request_retry", retry)
+                    retried = (limit, why)
+                    payload = retry
+                    response, last_run, sent_at = await self._attempt(ctx, retry, "_retry")
+                else:
+                    log.warning("%s; no time left for a retry before the publish", why)
+        if last_run is None:
+            ctx.run.outcome, ctx.run.error = ("timeout" if "timed out" in response.error else "error"), response.error
+            return
         status = last_run.get("status")
-        stamp = parse_iso(str(last_run.get("timestamp"))) if last_run.get("timestamp") else None
-        fresh = stamp is not None and stamp >= sent_at.replace(microsecond=0)
+        fresh = _fresh(last_run, sent_at)
         if response.error:
             ctx.run.outcome = "error"
             ctx.run.error = response.error
@@ -276,7 +318,10 @@ class MpcService:
             return
         if status == "error":
             ctx.run.outcome = "error"
-            ctx.run.error = last_run.get("error_message") or "EMHASS reported an error"
+            error = budget.explain_error(last_run, payload.get("lp_solver_timeout"))
+            if retried is not None:
+                error = f"{retried[1]}; the retry with a {mpc.retry_mip_gap * 100:g} % MIP gap failed too: {error}"
+            ctx.run.error = error
             return
         if status == "infeasible":
             ctx.run.outcome = "infeasible"
@@ -297,6 +342,11 @@ class MpcService:
         ctx.run.outcome = "ok"
         ctx.run.error = None
         ctx.run.summary = f"Planned {horizon} in {response.duration_ms / 1000:.1f} s{warn_note}"
+        if retried is not None:
+            ctx.run.summary += (
+                f" after a retry with a {mpc.retry_mip_gap * 100:g} % MIP gap (the first solve hit its {retried[0]} s "
+                "limit)"
+            )
         ctx.run.summary += await self._costfun_note(result)
         self.c.bus.publish("plan.updated", {"run_id": ctx.run.id})
         outputs = self.c.extras.get("outputs")
@@ -371,3 +421,9 @@ class MpcService:
                 "run_id": shadow.run_id,
             },
         }
+
+
+def _fresh(last_run: dict[str, Any] | None, sent_at: datetime) -> bool:
+    """EMHASS's last-run record is about this request, not an older one."""
+    stamp = parse_iso(str(last_run.get("timestamp"))) if last_run and last_run.get("timestamp") else None
+    return stamp is not None and stamp >= sent_at.replace(microsecond=0)

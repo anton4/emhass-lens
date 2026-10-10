@@ -1747,7 +1747,9 @@
               "hazard_guard_s": 30,
               "max_horizon": 672,
               "min_horizon": 8,
-              "slot_offset_s": 780
+              "retry_mip_gap": 0.05,
+              "slot_offset_s": 660,
+              "solver_budget": "auto"
             },
             "title": "MPC optimization"
           },
@@ -1989,9 +1991,20 @@
               "unit": "slots"
             }
           },
+          "retry_mip_gap": {
+            "default": 0.05,
+            "description": "The retry stops when the plan is within this share of the best possible one (EMHASS's usual gap is 0.01); a looser gap finishes much faster on long horizons.",
+            "maximum": 0.2,
+            "minimum": 0.001,
+            "title": "MIP gap for the retry",
+            "type": "number",
+            "ui": {
+              "advanced": true
+            }
+          },
           "slot_offset_s": {
-            "default": 780,
-            "description": "780 = mm:13:00, two minutes before the next quarter starts, so the plan for the next slot is ready before it is published.",
+            "default": 660,
+            "description": "660 = mm:11:00, four minutes before the next quarter's publish, so EMHASS's solver has time for a long horizon (and one retry) before the plan for the next slot is published.",
             "exclusiveMaximum": 900.0,
             "minimum": 0.0,
             "title": "Run at (seconds into each quarter)",
@@ -1999,6 +2012,22 @@
             "ui": {
               "unit": "s",
               "widget": "quarter_offset"
+            }
+          },
+          "solver_budget": {
+            "default": "auto",
+            "description": "Auto: every optimisation gets lp_solver_timeout from the time left before the slot's publish (the live plan most of it, cost-function comparisons up to 30 s each), and a live solve that stops at its limit is retried once with a looser MIP gap, so EMHASS ends with a live plan. EMHASS's own setting: send neither and leave EMHASS's configured lp_solver_timeout in charge. lp_solver_timeout under Extra runtime parameters overrides both.",
+            "enum": [
+              "auto",
+              "emhass"
+            ],
+            "title": "Solver time limit",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "auto": "Auto (from the time left)",
+                "emhass": "EMHASS's own setting"
+              }
             }
           }
         },
@@ -7370,7 +7399,9 @@
                 "hazard_guard_s": 30,
                 "max_horizon": 672,
                 "min_horizon": 8,
-                "slot_offset_s": 780
+                "retry_mip_gap": 0.05,
+                "slot_offset_s": 660,
+                "solver_budget": "auto"
               },
               "publish": {
                 "enabled": true,

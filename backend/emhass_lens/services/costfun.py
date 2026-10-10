@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
+from emhass_lens.domain.mpc import solver_budget as budget
 from emhass_lens.domain.mpc.compare import COSTFUNS, LABEL, costfun_of, plan_totals
 from emhass_lens.domain.mpc.model_steps import short_model
 from emhass_lens.runs.recorder import RunRefused
@@ -151,10 +152,14 @@ class CostfunCompareService:
         emhass = self.c.extras["emhass"]
         timeout = self.c.settings.current.emhass.timeouts.mpc
         out: list[dict[str, Any]] = []
+        until = self.c.extras["mpc"].solver_deadline()
         for method in COSTFUNS:
             if method == live:
                 continue
             payload = {**built.result.payload, "costfun": method}
+            limit = budget.alternative_limit(self.c.clock.now(), until) if until else None
+            if limit:
+                payload["lp_solver_timeout"] = limit  # short: the live plan keeps most of the time
             sent_at = self.c.clock.now()
             entry: dict[str, Any] = {
                 "costfun": method,
@@ -166,8 +171,9 @@ class CostfunCompareService:
                 "rows": [],
                 "totals": None,
             }
-            response = await emhass.act("naive-mpc-optim", payload, timeout)
+            response = await emhass.act("naive-mpc-optim", payload, budget.http_timeout(limit, timeout))
             entry["duration_ms"] = response.duration_ms
+            entry["lp_solver_timeout"] = limit
             if response.error:
                 entry["problem"] = response.error
                 out.append(entry)
@@ -186,6 +192,8 @@ class CostfunCompareService:
                 entry["problem"] = (
                     f"EMHASS answered, but its last run ({last_run.get('timestamp')}) is older than this request"
                 )
+            elif status == "error":
+                entry["problem"] = budget.explain_error(last_run, limit)
             elif status != "ok":
                 entry["problem"] = last_run.get("error_message") or f"EMHASS reported {status}"
             else:

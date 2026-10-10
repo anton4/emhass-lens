@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -57,12 +57,12 @@ class EmhassMpc(Section):
         description="Run naive-mpc-optim every quarter-hour. Only acts when the mode is dry run or live.",
     )
     slot_offset_s: int = Field(
-        default=780,
+        default=660,
         ge=0,
         lt=900,
         title="Run at (seconds into each quarter)",
-        description="780 = mm:13:00, two minutes before the next quarter starts, so the plan for the "
-        "next slot is ready before it is published.",
+        description="660 = mm:11:00, four minutes before the next quarter's publish, so EMHASS's solver has time for "
+        "a long horizon (and one retry) before the plan for the next slot is published.",
         json_schema_extra=ui(unit="s", widget="quarter_offset"),
     )
     min_horizon: int = Field(
@@ -104,6 +104,25 @@ class EmhassMpc(Section):
         "page can show what each would do and cost. Two extra optimisations per quarter-hour (each a few seconds to "
         "a minute, EMHASS's latest plan is only final once all three are done), so move the MPC time earlier if "
         "publishing gets tight. 'Compare now' on the Plan page does the same once.",
+    )
+    solver_budget: Literal["auto", "emhass"] = Field(
+        default="auto",
+        title="Solver time limit",
+        description="Auto: every optimisation gets lp_solver_timeout from the time left before the slot's publish "
+        "(the live plan most of it, cost-function comparisons up to 30 s each), and a live solve that stops at its "
+        "limit is retried once with a looser MIP gap, so EMHASS ends with a live plan. EMHASS's own setting: send "
+        "neither and leave EMHASS's configured lp_solver_timeout in charge. lp_solver_timeout under Extra runtime "
+        "parameters overrides both.",
+        json_schema_extra=ui(labels={"auto": "Auto (from the time left)", "emhass": "EMHASS's own setting"}),
+    )
+    retry_mip_gap: float = Field(
+        default=0.05,
+        ge=0.001,
+        le=0.2,
+        title="MIP gap for the retry",
+        description="The retry stops when the plan is within this share of the best possible one (EMHASS's usual "
+        "gap is 0.01); a looser gap finishes much faster on long horizons.",
+        json_schema_extra=ui(advanced=True),
     )
     hazard_guard_s: int = Field(
         default=30,

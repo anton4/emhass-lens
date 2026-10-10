@@ -35,8 +35,16 @@ def _v2_to_v3(doc: Doc) -> Doc:
     return doc
 
 
+def _v3_to_v4(doc: Doc) -> Doc:
+    """0.3.12: MPC runs at 11:00 into the quarter instead of 13:00, for more solver time; a changed time is kept."""
+    mpc = (doc.get("emhass") or {}).get("mpc") if isinstance(doc.get("emhass"), dict) else None
+    if isinstance(mpc, dict) and mpc.get("slot_offset_s") == 780:
+        mpc["slot_offset_s"] = 660
+    return doc
+
+
 # MIGRATIONS[n] upgrades a version-n document to version n+1.
-MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3}
+MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
 
 
 def migrate(doc: Doc, from_version: int) -> tuple[Doc, int]:

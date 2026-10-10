@@ -124,3 +124,19 @@ def test_schema_1_settings_with_the_fusebox_helper_migrate_to_schema_2(app_db, b
     assert "fusebox_sell_helper" not in store.current.market.entities.model_dump()
     newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
     assert newest == {"schema_version": SCHEMA_VERSION, "source": "migration"}
+
+
+def test_schema_3_settings_move_the_default_mpc_time_to_11_00(app_db, bus, clock) -> None:
+    for stored, expected in ((780, 660), (600, 600)):
+        doc = Settings().model_dump(mode="json")
+        doc["emhass"]["mpc"]["slot_offset_s"] = stored
+        app_db.execute("DELETE FROM settings_revision")
+        app_db.execute(
+            "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
+            "VALUES ('x', 'ui', 3, ?, '[]')",
+            (json.dumps(doc),),
+        )
+        store = SettingsStore(db=app_db, bus=bus, clock=clock)
+        store.load()
+        assert store.load_errors == []
+        assert store.current.emhass.mpc.slot_offset_s == expected

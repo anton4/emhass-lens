@@ -126,7 +126,14 @@ export function lastRunNote(
   if (!lastRun || !status || status === 'ok') return null
   const action = text(lastRun.action) ?? 'optimisation'
   const at = text(lastRun.timestamp)
-  const why = text(lastRun.error_message) ?? text(lastRun.optim_status) ?? 'EMHASS gave no reason'
+  const stages = (lastRun.stage_times ?? {}) as Record<string, unknown>
+  const solved = typeof stages['optim_solve.solve'] === 'number' ? (stages['optim_solve.solve'] as number) : null
+  const why =
+    text(lastRun.error_message) ??
+    text(lastRun.optim_status) ??
+    (solved !== null
+      ? `EMHASS gave no reason; its solver ran ${Math.round(solved)} s, most likely into its time limit (lp_solver_timeout)`
+      : 'EMHASS gave no reason')
   let note = `EMHASS's last run (${action}${at ? `, ${formatTime(at, now, tz)}` : ''}) ended with "${status}": ${why}.`
   if (at && generatedAt && Date.parse(at) - Date.parse(generatedAt) > 1000) {
     note += ` EMHASS keeps serving its last good plan, from ${formatTime(generatedAt, now, tz)}, which is shown here.`
