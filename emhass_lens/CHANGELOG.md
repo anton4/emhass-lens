@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.11
 
 - The Plan page shows prices in €/kWh instead of cents: the price chart, the import and export price of this slot, and the price forecast's error on the accuracy card.
 
