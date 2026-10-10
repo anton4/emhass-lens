@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api } from '../api/client'
@@ -11,7 +11,9 @@ import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { ProblemList } from '../components/Problems'
 import { useNow } from '../components/useNow'
 import { COMPONENT_NAMES } from '../lib/components'
-import { formatCountdown, formatTime } from '../lib/format'
+import { SortableTh } from '../components/SortableTh'
+import { formatCountdown, formatDateTime, formatTime } from '../lib/format'
+import { nextSort, sortRows, type SortState } from '../lib/sort'
 import { DriverCard } from './health/DriverCard'
 import { EmhassCard } from './health/EmhassCard'
 import { LegacyImportCard } from './health/LegacyImportCard'
@@ -87,6 +89,9 @@ export function HealthPage() {
 
 function ProblemsPanel() {
   const problems = useProblems()
+  const tz = useStatus().data?.timezone
+  const [sort, setSort] = useState<SortState>({ key: 'started', dir: 'desc' })
+  const onSort = (key: string) => setSort(nextSort(sort, key, key === 'problem' ? 'asc' : 'desc'))
   const [params] = useSearchParams()
   const focus = params.get('focus') === 'problems'
   const ref = useRef<HTMLElement>(null)
@@ -124,20 +129,33 @@ function ProblemsPanel() {
             <table>
               <thead>
                 <tr>
-                  <th>Problem</th>
-                  <th>Started</th>
-                  <th>Ended</th>
+                  <SortableTh label="Problem" sortKey="problem" sort={sort} onSort={onSort} />
+                  <SortableTh label="Started" sortKey="started" sort={sort} onSort={onSort} />
+                  <SortableTh label="Ended" sortKey="ended" sort={sort} onSort={onSort} />
                 </tr>
               </thead>
               <tbody>
-                {history.map((h) => (
+                {sortRows(
+                  history,
+                  (h) =>
+                    sort.key === 'problem'
+                      ? h.title
+                      : sort.key === 'ended'
+                        ? h.ended_at
+                          ? Date.parse(h.ended_at)
+                          : null
+                        : Date.parse(h.started_at),
+                  sort.dir,
+                ).map((h) => (
                   <tr key={h.id}>
                     <td>
                       <LabelledLamp color={h.severity === 'error' ? 'red' : 'amber'} text={h.title} />
                       {h.detail && <div className="cell-sub">{h.detail}</div>}
                     </td>
-                    <td className="num">{formatTime(h.started_at)}</td>
-                    <td className="num">{h.ended_at ? formatTime(h.ended_at) : <span className="chip">open</span>}</td>
+                    <td className="num">{formatDateTime(h.started_at, tz)}</td>
+                    <td className="num">
+                      {h.ended_at ? formatDateTime(h.ended_at, tz) : <span className="chip">open</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

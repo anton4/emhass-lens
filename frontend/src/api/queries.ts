@@ -75,7 +75,18 @@ export function useJobs() {
   return useQuery({ queryKey: keys.jobs, queryFn: () => api.get<JobInfo[]>('/api/jobs'), refetchInterval: 60_000 })
 }
 
-export function useRuns(filters: { job?: string; outcome?: string; limit?: number; before?: number }) {
+export type RunFilters = {
+  job?: string
+  outcome?: string
+  limit?: number
+  before?: number
+  after?: number
+  since?: string
+  until?: string
+  order?: 'asc' | 'desc'
+}
+
+export function useRuns(filters: RunFilters) {
   return useQuery({
     queryKey: keys.runs(filters),
     queryFn: () => api.get<RunSummary[]>(`/api/runs${query(filters)}`),
@@ -220,10 +231,12 @@ export function useMarket() {
   return useQuery({ queryKey: keys.market, queryFn: () => api.get<MarketStatus>('/api/market'), refetchInterval: 10_000 })
 }
 
-export function useMarketSessions() {
+/** Market sessions newest first: the latest 50, or those started within [since, until). */
+export function useMarketSessions(range: { since?: string; until?: string } = {}) {
+  const filters = range.since ? { ...range, limit: 500 } : { limit: 50 }
   return useQuery({
-    queryKey: keys.marketSessions,
-    queryFn: () => api.get<MarketSession[]>('/api/market/sessions?limit=50'),
+    queryKey: [...keys.marketSessions, filters],
+    queryFn: () => api.get<MarketSession[]>(`/api/market/sessions${query(filters)}`),
     refetchInterval: 30_000,
   })
 }

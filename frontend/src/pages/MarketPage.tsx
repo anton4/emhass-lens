@@ -8,7 +8,12 @@ import { Lamp, LabelledLamp } from '../components/Lamp'
 import { ActionChip, CommandFacts, MarketDecisionView, MarketExplainer, WearFacts } from '../components/MarketViews'
 import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
-import { formatTime } from '../lib/format'
+import { dayBounds } from '../lib/days'
+import { formatDateTime, formatTime } from '../lib/format'
+import { runFilters, useListParams } from '../lib/listParams'
+import { matchesSearch, nextSort, sortRows } from '../lib/sort'
+import { ListControls } from '../components/ListControls'
+import { SortableTh } from '../components/SortableTh'
 import { formatAgreement } from '../lib/inverter'
 import {
   MARKET_FIELD_LABELS,
@@ -21,13 +26,12 @@ import {
   type MarketLast,
   type MarketSensors,
 } from '../lib/market'
-import type { Agreement, MarketSession, RunSummary } from '../api/types'
+import type { Agreement, RunSummary } from '../api/types'
 
 /** Qilowatt market control (experimental): the current command and session, what EMHASS Lens decides, whether the
  * Home Assistant automation did the same, and how often the inverter gets written. */
 export function MarketPage() {
   const market = useMarket()
-  const sessions = useMarketSessions()
   const status = useStatus()
   const settings = useSettings()
   const reconcile = useMarketReconcile()
@@ -194,7 +198,7 @@ export function MarketPage() {
         </div>
       </section>
 
-      <SessionsTable sessions={sessions.data ?? []} tz={tz} />
+      <SessionsTable tz={tz} />
       <MarketHistory timeZone={tz} />
 
       <ConfirmDialog
@@ -238,41 +242,76 @@ function AgreementFact({ title, agreement }: { title: string; agreement: Agreeme
   )
 }
 
-function SessionsTable({ sessions, tz }: { sessions: MarketSession[]; tz?: string }) {
-  const now = new Date()
+function SessionsTable({ tz }: { tz?: string }) {
+  const [list, setList] = useListParams('ms.', { key: 'started', dir: 'desc' })
+  const sessions = useMarketSessions(list.day ? dayBounds(list.day, tz) : {})
+  const all = sessions.data ?? []
+  const shown = sortRows(
+    all.filter(
+      (s) =>
+        (!list.filter || s.direction === list.filter) &&
+        matchesSearch([s.direction, s.source, s.mode, s.end_reason], list.q),
+    ),
+    (s) =>
+      list.sort.key === 'ended'
+        ? s.ended_at
+          ? Date.parse(s.ended_at)
+          : null
+        : list.sort.key === 'power'
+          ? s.power_w
+          : list.sort.key === 'direction'
+            ? s.direction
+            : Date.parse(s.started_at),
+    list.sort.dir,
+  )
+  const onSort = (key: string) => setList({ sort: nextSort(list.sort, key, key === 'direction' ? 'asc' : 'desc') })
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Sessions</h2>
-        <span className="muted">Run by EMHASS Lens in live mode, newest first</span>
+        <span className="muted">Run by EMHASS Lens in live mode{list.day ? `, started on ${list.day}` : ''}</span>
       </div>
-      {sessions.length === 0 ? (
+      <div className="panel-body">
+        <ListControls
+          value={list}
+          onChange={setList}
+          timeZone={tz}
+          filterLabel="Directions"
+          filterOptions={[
+            { value: 'buy', label: 'buy' },
+            { value: 'sell', label: 'sell' },
+          ]}
+          shown={`${shown.length} of ${all.length}`}
+        />
+        <ErrorNotice error={sessions.error} />
+      </div>
+      {shown.length === 0 ? (
         <div className="panel-body">
-          <Empty title="No sessions yet" />
+          <Empty title={all.length === 0 ? 'No sessions for this choice' : 'Nothing matches the filters'} />
         </div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Started</th>
-                <th>Direction</th>
+                <SortableTh label="Started" sortKey="started" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Direction" sortKey="direction" sort={list.sort} onSort={onSort} />
                 <th>Source</th>
-                <th>Power</th>
-                <th>Ended</th>
+                <SortableTh label="Power" sortKey="power" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Ended" sortKey="ended" sort={list.sort} onSort={onSort} />
                 <th>Why</th>
               </tr>
             </thead>
             <tbody>
-              {sessions.map((s) => (
+              {shown.map((s) => (
                 <tr key={s.id}>
-                  <td className="num">{formatTime(s.started_at, now, tz)}</td>
+                  <td className="num">{formatDateTime(s.started_at, tz)}</td>
                   <td>
                     <ActionChip action={s.direction} />
                   </td>
                   <td>{s.source ?? '—'}</td>
                   <td className="num">{s.power_w !== null ? `${s.power_w} W` : '—'}</td>
-                  <td className="num">{s.ended_at ? formatTime(s.ended_at, now, tz) : 'open'}</td>
+                  <td className="num">{s.ended_at ? formatDateTime(s.ended_at, tz) : 'open'}</td>
                   <td>{s.end_reason?.replace('_', ' ') ?? '—'}</td>
                 </tr>
               ))}
@@ -286,64 +325,94 @@ function SessionsTable({ sessions, tz }: { sessions: MarketSession[]; tz?: strin
 
 /** Recent reconciles: what was decided and whether the automation did the same. */
 function MarketHistory({ timeZone }: { timeZone?: string }) {
-  const reconciles = useRuns({ job: 'market.reconcile', limit: 60 })
-  const compares = useRuns({ job: 'market.compare', limit: 60 })
-  const rows = pairMarketCompares(reconciles.data ?? [], compares.data ?? [])
-  const now = new Date()
+  const [list, setList] = useListParams('d.', { key: 'at', dir: 'desc' })
+  const reconciles = useRuns(runFilters('market.reconcile', list.day, timeZone, 60))
+  const compares = useRuns(runFilters('market.compare', list.day, timeZone, 60))
+  const all = pairMarketCompares(reconciles.data ?? [], compares.data ?? []).map((row) => ({
+    row,
+    parsed: parseReconcileSummary(row.reconcile?.summary),
+  }))
+  const kinds = [
+    ...new Set(all.map((r) => r.parsed?.kind as string | undefined).filter((k): k is string => Boolean(k))),
+  ].sort()
+  const shown = sortRows(
+    all.filter(
+      ({ row, parsed }) =>
+        (!list.filter || parsed?.kind === list.filter) &&
+        (!list.mismatch || row.compare?.outcome === 'mismatch') &&
+        matchesSearch([row.reconcile?.summary, row.compare?.summary, row.reconcile?.trigger], list.q),
+    ),
+    ({ row, parsed }) =>
+      list.sort.key === 'decision'
+        ? parsed?.text
+        : list.sort.key === 'automation'
+          ? row.compare?.outcome
+          : Date.parse(row.at),
+    list.sort.dir,
+  )
+  const onSort = (key: string) => setList({ sort: nextSort(list.sort, key, key === 'at' ? 'desc' : 'asc') })
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Recent decisions</h2>
-        <span className="muted">Reconciles and comparisons, newest first</span>
+        <span className="muted">{list.day ? `All of ${list.day}` : 'The latest reconciles and comparisons'}</span>
       </div>
-      <ErrorNotice error={reconciles.error ?? compares.error} />
-      {rows.length === 0 ? (
+      <div className="panel-body">
+        <ListControls
+          value={list}
+          onChange={setList}
+          timeZone={timeZone}
+          filterLabel="Kinds"
+          filterOptions={kinds.map((k) => ({ value: k, label: k }))}
+          mismatchLabel="Only where the automation differed"
+          shown={`${shown.length} of ${all.length}`}
+        />
+        <ErrorNotice error={reconciles.error ?? compares.error} />
+      </div>
+      {shown.length === 0 ? (
         <div className="panel-body">
-          <Empty title="No decisions recorded yet" />
+          <Empty title={all.length === 0 ? 'No decisions recorded for this choice' : 'Nothing matches the filters'} />
         </div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>When</th>
+                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} />
                 <th>Run</th>
-                <th>Decision</th>
-                <th>Automation</th>
+                <SortableTh label="Decision" sortKey="decision" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const parsed = parseReconcileSummary(row.reconcile?.summary)
-                return (
-                  <tr key={`${row.reconcile?.id ?? 'c'}-${row.compare?.id ?? 'd'}`}>
-                    <td className="num">{formatTime(row.at, now, timeZone)}</td>
-                    <td>
-                      {row.reconcile ? (
-                        <Link to={`/runs/${row.reconcile.id}`}>
-                          <ReconcileChip run={row.reconcile} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.reconcile && <div className="cell-sub">{row.reconcile.trigger}</div>}
-                    </td>
-                    <td className="wrap">{parsed ? parsed.text : <span className="faint">—</span>}</td>
-                    <td>
-                      {row.compare ? (
-                        <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
-                          <CompareChip outcome={row.compare.outcome} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.compare?.outcome === 'mismatch' && row.compare.summary && (
-                        <div className="cell-sub">{row.compare.summary.replace(/^Decision #\d+: differs — /, '')}</div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {shown.map(({ row, parsed }) => (
+                <tr key={`${row.reconcile?.id ?? 'c'}-${row.compare?.id ?? 'd'}`}>
+                  <td className="num">{formatDateTime(row.at, timeZone)}</td>
+                  <td>
+                    {row.reconcile ? (
+                      <Link to={`/runs/${row.reconcile.id}`}>
+                        <ReconcileChip run={row.reconcile} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.reconcile && <div className="cell-sub">{row.reconcile.trigger}</div>}
+                  </td>
+                  <td className="wrap">{parsed ? parsed.text : <span className="faint">—</span>}</td>
+                  <td>
+                    {row.compare ? (
+                      <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
+                        <CompareChip outcome={row.compare.outcome} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.compare?.outcome === 'mismatch' && row.compare.summary && (
+                      <div className="cell-sub">{row.compare.summary.replace(/^Decision #\d+: differs — /, '')}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

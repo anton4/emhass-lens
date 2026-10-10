@@ -6,7 +6,9 @@ import { keys, useCostfun, useJobs, useStatus } from '../../api/queries'
 import type { CostfunResult, RunStarted } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { Empty, ErrorNotice } from '../../components/PageHead'
-import { formatTime } from '../../lib/format'
+import { SortableTh } from '../../components/SortableTh'
+import { formatDateTime, formatTime } from '../../lib/format'
+import { nextSort, sortRows, type SortState } from '../../lib/sort'
 import {
   cheapest,
   compareGrid,
@@ -55,6 +57,8 @@ export function CostfunPanel({ nowS, now }: { nowS: number; now: Date }) {
   })
   const [shown, setShown] = useState<Set<Method>>(loadShown)
   const [quantity, setQuantity] = useState<QuantityKey>(loadQuantity)
+  const [historySort, setHistorySort] = useState<SortState>({ key: 'compared', dir: 'desc' })
+  const [allHistory, setAllHistory] = useState(false)
   useEffect(() => saveShown(shown), [shown])
   useEffect(() => saveQuantity(quantity), [quantity])
   const toggle = (m: Method) =>
@@ -245,18 +249,34 @@ export function CostfunPanel({ nowS, now }: { nowS: number; now: Date }) {
             <table className="num-table costfun-table">
               <thead>
                 <tr>
-                  <th>Compared</th>
+                  <SortableTh
+                    label="Compared"
+                    sortKey="compared"
+                    sort={historySort}
+                    onSort={(key) => setHistorySort(nextSort(historySort, key, 'desc'))}
+                  />
                   {METHODS.map((m) => (
-                    <th key={m} className="r">
-                      {METHOD_LABEL[m]}
-                    </th>
+                    <SortableTh
+                      key={m}
+                      label={METHOD_LABEL[m]}
+                      sortKey={m}
+                      sort={historySort}
+                      onSort={(key) => setHistorySort(nextSort(historySort, key, 'asc'))}
+                      className="r"
+                    />
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {[...body.history]
-                  .reverse()
-                  .slice(0, 16)
+                {sortRows(
+                  body.history,
+                  (p) =>
+                    historySort.key === 'compared'
+                      ? Date.parse(p.compared_at)
+                      : (p.net_cost_eur[historySort.key as Method] ?? null),
+                  historySort.dir,
+                )
+                  .slice(0, allHistory ? undefined : 16)
                   .map((p) => {
                     const values = METHODS.map((m) => p.net_cost_eur[m] ?? null)
                     const known = values.filter((v): v is number => v !== null)
@@ -264,7 +284,11 @@ export function CostfunPanel({ nowS, now }: { nowS: number; now: Date }) {
                     return (
                       <tr key={`${p.compared_at}-${p.anchor}`}>
                         <td className="num">
-                          {p.run_id ? <Link to={`/runs/${p.run_id}`}>{formatTime(p.compared_at, now, body.timezone)}</Link> : formatTime(p.compared_at, now, body.timezone)}
+                          {p.run_id ? (
+                            <Link to={`/runs/${p.run_id}`}>{formatDateTime(p.compared_at, body.timezone, now)}</Link>
+                          ) : (
+                            formatDateTime(p.compared_at, body.timezone, now)
+                          )}
                         </td>
                         {values.map((v, i) => (
                           <td key={METHODS[i]} className={`num r${min !== null && v === min ? ' best' : ''}`}>
@@ -277,6 +301,14 @@ export function CostfunPanel({ nowS, now }: { nowS: number; now: Date }) {
               </tbody>
             </table>
           </div>
+          {body.history.length > 16 && (
+            <p className="chart-note">
+              <button type="button" className="quiet" onClick={() => setAllHistory(!allHistory)}>
+                {allHistory ? 'Show 16' : `Show all ${body.history.length}`}
+              </button>{' '}
+              Sorting covers every comparison from the last 7 days.
+            </p>
+          )}
         </>
       )}
     </>

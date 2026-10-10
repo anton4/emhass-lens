@@ -553,8 +553,14 @@ class MarketService:
             "rate": (counts.get("ok", 0) / total) if total else None,
         }
 
-    async def sessions(self, limit: int = 50) -> list[dict[str, Any]]:
-        rows = await self.c.app_db.aquery("SELECT * FROM market_session ORDER BY id DESC LIMIT ?", (limit,))
+    async def sessions(
+        self, limit: int = 50, since: str | None = None, until: str | None = None
+    ) -> list[dict[str, Any]]:
+        rows = await self.c.app_db.aquery(
+            "SELECT * FROM market_session WHERE (? IS NULL OR started_at >= ?) AND (? IS NULL OR started_at < ?) "
+            "ORDER BY id DESC LIMIT ?",
+            (since, since, until, until, limit),
+        )
         return [
             {
                 "id": r["id"],

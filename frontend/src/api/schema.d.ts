@@ -454,7 +454,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Market Sessions */
+        /**
+         * Market Sessions
+         * @description Market sessions newest first, optionally those started within [since, until).
+         */
         get: operations["market_sessions_api_market_sessions_get"];
         put?: never;
         post?: never;
@@ -644,7 +647,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Runs */
+        /**
+         * List Runs
+         * @description Runs newest first (`order=asc`: oldest first), optionally for one job and outcome and started within
+         *     [since, until). Page with `before` (the oldest id seen, newest first) or `after` (the newest id seen, oldest
+         *     first).
+         */
         get: operations["list_runs_api_runs_get"];
         put?: never;
         post?: never;
@@ -5275,6 +5283,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                since?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
@@ -5527,6 +5537,10 @@ export interface operations {
                 outcome?: string | null;
                 limit?: number;
                 before?: number | null;
+                after?: number | null;
+                since?: string | null;
+                until?: string | null;
+                order?: "desc" | "asc";
             };
             header?: never;
             path?: never;

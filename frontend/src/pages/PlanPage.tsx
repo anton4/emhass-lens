@@ -5,7 +5,7 @@ import type { PlanRow } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { formatDuration, formatSlot, formatTime } from '../lib/format'
+import { formatDuration, formatSlotDate, formatTime } from '../lib/format'
 import { EXTERNAL_PLAN_NOTE, lastRunNote, planChanges, rowAt } from '../lib/plan'
 import {
   HISTORY_WINDOWS,
@@ -220,7 +220,7 @@ export function PlanPage() {
               <tbody>
                 {changes.slice(0, 96).map((c) => (
                   <tr key={c.time}>
-                    <td className="num">{formatSlot(c.timestamp, now, tz)}</td>
+                    <td className="num">{formatSlotDate(c.timestamp, tz, now)}</td>
                     <td className="num r">{formatPower(c.battBefore)}</td>
                     <td className="num r">{formatPower(c.battNow)}</td>
                     <td className="num r">{formatPower(c.gridBefore)}</td>
@@ -265,7 +265,7 @@ function PlanTable({
         <tbody>
           {rows.map((row) => (
             <tr key={String(row.timestamp)} data-current={row === current || undefined}>
-              <td className="num">{formatSlot(String(row.timestamp), new Date(nowS * 1000), timeZone)}</td>
+              <td className="num">{formatSlotDate(String(row.timestamp), timeZone, new Date(nowS * 1000))}</td>
               {shown.map((c) => {
                 const v = row[c]
                 return (

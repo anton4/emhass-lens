@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Derived, EvReserve, ExplainSlot } from '../api/types'
 import { evReserveText } from '../lib/evReserve'
-import { formatSlot, formatTime } from '../lib/format'
+import { formatSlotDate, formatTime } from '../lib/format'
 import { originLabel, periodLabel } from '../lib/prices'
 import { formatPower } from '../lib/units'
 
@@ -88,7 +88,7 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
               <tr key={s.i} data-forecast={s.origin !== 'actual' || undefined}>
                 <td className="num">{s.i}</td>
                 <td className="num">
-                  <time dateTime={s.start}>{formatSlot(s.start)}</time>
+                  <time dateTime={s.start}>{formatSlotDate(s.start)}</time>
                 </td>
                 <td className="cell-sub">{originLabel(s.origin)}</td>
                 <td>{periodLabel(s.period)}</td>

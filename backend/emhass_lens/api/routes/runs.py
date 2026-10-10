@@ -1,13 +1,27 @@
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from emhass_lens.api.deps import ContainerDep, Writable
 from emhass_lens.api.schemas import LogEntry, RunDetail, RunSummary
+from emhass_lens.core.clock import iso, parse_iso
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
+
+
+def utc_bound(value: str | None, name: str) -> str | None:
+    """An ISO datetime from the query (any offset) as the UTC ISO text runs are stored with."""
+    if value is None or value == "":
+        return None
+    try:
+        parsed = parse_iso(value)
+    except ValueError:
+        parsed = None
+    if parsed is None:
+        raise HTTPException(400, f"{name} must be an ISO date-time with a time zone, e.g. 2026-10-10T00:00:00+03:00")
+    return iso(parsed)
 
 
 @router.get("")
@@ -17,8 +31,25 @@ async def list_runs(
     outcome: str | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     before: int | None = None,
+    after: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    order: Literal["desc", "asc"] = "desc",
 ) -> list[RunSummary]:
-    return [RunSummary(**row) for row in await c.recorder.list(job, outcome, limit, before)]
+    """Runs newest first (`order=asc`: oldest first), optionally for one job and outcome and started within
+    [since, until). Page with `before` (the oldest id seen, newest first) or `after` (the newest id seen, oldest
+    first)."""
+    rows = await c.recorder.list(
+        job,
+        outcome,
+        limit,
+        before,
+        after=after,
+        since=utc_bound(since, "since"),
+        until=utc_bound(until, "until"),
+        ascending=order == "asc",
+    )
+    return [RunSummary(**row) for row in rows]
 
 
 @router.get("/{run_id}")

@@ -20,7 +20,11 @@ import {
 } from '../lib/charger'
 import { driftText } from '../lib/drift'
 import { evReserveText } from '../lib/evReserve'
-import { formatTime } from '../lib/format'
+import { formatDateTime, formatTime } from '../lib/format'
+import { runFilters, useListParams } from '../lib/listParams'
+import { matchesSearch, nextSort, sortRows } from '../lib/sort'
+import { ListControls } from '../components/ListControls'
+import { SortableTh } from '../components/SortableTh'
 import { formatAgreement } from '../lib/inverter'
 import type { Agreement, RunSummary } from '../api/types'
 
@@ -283,75 +287,103 @@ function AgreementFact({ title, agreement }: { title: string; agreement: Agreeme
 
 /** Recent decisions: what was decided and whether the automation did the same. */
 function ChargerHistory({ timeZone }: { timeZone?: string }) {
-  const decides = useRuns({ job: 'charger.decide', limit: 48 })
-  const compares = useRuns({ job: 'charger.compare', limit: 48 })
-  const rows = pairCompares(decides.data ?? [], compares.data ?? [])
-  const now = new Date()
+  const [list, setList] = useListParams('d.', { key: 'at', dir: 'desc' })
+  const decides = useRuns(runFilters('charger.decide', list.day, timeZone, 48))
+  const compares = useRuns(runFilters('charger.compare', list.day, timeZone, 48))
+  const all = pairCompares(decides.data ?? [], compares.data ?? []).map((row) => ({
+    row,
+    parsed: parseChargerSummary(row.decide?.summary),
+  }))
+  const rules = [...new Set(all.map((r) => r.parsed?.rule).filter((r): r is string => Boolean(r)))].sort()
+  const shown = sortRows(
+    all.filter(
+      ({ row, parsed }) =>
+        (!list.filter || parsed?.rule === list.filter) &&
+        (!list.mismatch || row.compare?.outcome === 'mismatch') &&
+        matchesSearch([row.decide?.summary, row.compare?.summary, parsed?.label], list.q),
+    ),
+    ({ row, parsed }) =>
+      list.sort.key === 'branch'
+        ? parsed?.rule
+        : list.sort.key === 'automation'
+          ? row.compare?.outcome
+          : Date.parse(row.at),
+    list.sort.dir,
+  )
+  const onSort = (key: string) => setList({ sort: nextSort(list.sort, key, key === 'at' ? 'desc' : 'asc') })
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Recent decisions</h2>
-        <span className="muted">Decisions and comparisons, newest first</span>
+        <span className="muted">{list.day ? `All of ${list.day}` : 'The latest decisions and comparisons'}</span>
       </div>
-      <ErrorNotice error={decides.error ?? compares.error} />
-      {rows.length === 0 ? (
+      <div className="panel-body">
+        <ListControls
+          value={list}
+          onChange={setList}
+          timeZone={timeZone}
+          filterLabel="Branches"
+          filterOptions={rules.map((r) => ({ value: r, label: r }))}
+          mismatchLabel="Only where the automation differed"
+          shown={`${shown.length} of ${all.length}`}
+        />
+        <ErrorNotice error={decides.error ?? compares.error} />
+      </div>
+      {shown.length === 0 ? (
         <div className="panel-body">
-          <Empty title="No decisions recorded yet" />
+          <Empty title={all.length === 0 ? 'No decisions recorded for this choice' : 'Nothing matches the filters'} />
         </div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>When</th>
+                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} />
                 <th>Decision</th>
-                <th>Branch</th>
-                <th>Automation</th>
+                <SortableTh label="Branch" sortKey="branch" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const parsed = parseChargerSummary(row.decide?.summary)
-                return (
-                  <tr key={`${row.decide?.id ?? 'c'}-${row.compare?.id ?? 'd'}`}>
-                    <td className="num">{formatTime(row.at, now, timeZone)}</td>
-                    <td>
-                      {row.decide ? (
-                        <Link to={`/runs/${row.decide.id}`}>
-                          <DecideChip run={row.decide} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.decide && !parsed && row.decide.summary && <div className="cell-sub">{row.decide.summary}</div>}
-                    </td>
-                    <td>
-                      {parsed ? (
-                        <>
-                          <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
-                          {parsed.action && parsed.rule !== 'none' && <strong> → {parsed.action}</strong>}
-                          {parsed.rule === 'none' && parsed.action && <span className="muted">: {parsed.action}</span>}
-                          {parsed.facts && <div className="cell-sub">{parsed.facts}</div>}
-                        </>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {row.compare ? (
-                        <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
-                          <CompareChip outcome={row.compare.outcome} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.compare?.outcome === 'mismatch' && row.compare.summary && (
-                        <div className="cell-sub">{row.compare.summary.replace(/^Decision #\d+: differs — /, '')}</div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {shown.map(({ row, parsed }) => (
+                <tr key={`${row.decide?.id ?? 'c'}-${row.compare?.id ?? 'd'}`}>
+                  <td className="num">{formatDateTime(row.at, timeZone)}</td>
+                  <td>
+                    {row.decide ? (
+                      <Link to={`/runs/${row.decide.id}`}>
+                        <DecideChip run={row.decide} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.decide && !parsed && row.decide.summary && <div className="cell-sub">{row.decide.summary}</div>}
+                  </td>
+                  <td>
+                    {parsed ? (
+                      <>
+                        <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
+                        {parsed.action && parsed.rule !== 'none' && <strong> → {parsed.action}</strong>}
+                        {parsed.rule === 'none' && parsed.action && <span className="muted">: {parsed.action}</span>}
+                        {parsed.facts && <div className="cell-sub">{parsed.facts}</div>}
+                      </>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.compare ? (
+                      <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
+                        <CompareChip outcome={row.compare.outcome} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.compare?.outcome === 'mismatch' && row.compare.summary && (
+                      <div className="cell-sub">{row.compare.summary.replace(/^Decision #\d+: differs — /, '')}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

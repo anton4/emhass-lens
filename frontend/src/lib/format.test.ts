@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatCountdown, formatDuration, formatQuarterOffset, formatValue } from './format'
+import {
+  formatBytes,
+  formatCountdown,
+  formatDateTime,
+  formatDuration,
+  formatQuarterOffset,
+  formatSlotDate,
+  formatValue,
+} from './format'
 
 describe('formatDuration', () => {
   it('scales units', () => {
@@ -53,5 +61,20 @@ describe('formatSlot', () => {
     expect(formatSlot(new Date(2026, 9, 10, 7, 0).toISOString(), now)).toMatch(/07[:.]00/)
     expect(formatSlot(new Date(2026, 9, 10, 7, 0).toISOString(), now)).not.toBe(formatSlot(new Date(2026, 9, 9, 7, 0).toISOString(), now))
     expect(formatSlot(null)).toBe('—')
+  })
+})
+
+describe('dated times', () => {
+  const now = new Date('2026-10-10T12:00:00Z')
+  const tz = 'Europe/Tallinn'
+  it('always shows the day, and the year only when it differs', () => {
+    expect(formatDateTime('2026-10-10T15:15:02Z', tz, now)).toBe('Sat, Oct 10, 18:15:02')
+    expect(formatDateTime('2025-12-31T22:30:00Z', tz, now)).toBe('Thu, Jan 1, 00:30:00')
+    expect(formatSlotDate('2026-10-10T15:15:00Z', tz, now)).toBe('Sat, Oct 10, 18:15')
+    expect(formatSlotDate('2025-10-10T15:15:00Z', tz, now)).toBe('Fri, Oct 10, 2025, 18:15')
+  })
+  it('shows a dash for a missing or broken time', () => {
+    expect(formatDateTime('nope', tz, now)).toBe('—')
+    expect(formatSlotDate(null, tz, now)).toBe('—')
   })
 })

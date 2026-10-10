@@ -2328,3 +2328,53 @@ dialog.confirm h2 {
 .storage-db .muted {
   font-size: var(--step--1);
 }
+
+/* ---------- list filters and sortable headers ---------- */
+
+.list-controls {
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.day-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.day-picker button[aria-pressed='true'] {
+  background: var(--tint-blue);
+  border-color: color-mix(in srgb, var(--lamp-blue) 45%, transparent);
+}
+
+.list-controls .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--step--1);
+}
+
+th .sort-button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  color: inherit;
+}
+
+th .sort-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+th .sort-mark {
+  font-size: 0.75em;
+  color: var(--ink-faint);
+}
+
+th[aria-sort='ascending'] .sort-mark,
+th[aria-sort='descending'] .sort-mark {
+  color: var(--ink);
+}

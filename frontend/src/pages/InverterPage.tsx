@@ -6,7 +6,11 @@ import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { driftText } from '../lib/drift'
-import { formatSlot } from '../lib/format'
+import { formatSlotDate } from '../lib/format'
+import { runFilters, useListParams } from '../lib/listParams'
+import { matchesSearch, nextSort, sortRows } from '../lib/sort'
+import { ListControls } from '../components/ListControls'
+import { SortableTh } from '../components/SortableTh'
 import {
   formatAgreement,
   inverterModeSpec,
@@ -114,7 +118,7 @@ export function InverterPage() {
             <h2>This slot</h2>
             {last && (
               <span className="muted">
-                slot {formatSlot(last.slot, new Date(), tz)} · <Link to={`/runs/${last.run_id}`}>run {last.run_id}</Link>
+                slot {formatSlotDate(last.slot, tz)} · <Link to={`/runs/${last.run_id}`}>run {last.run_id}</Link>
               </span>
             )}
           </div>
@@ -146,7 +150,7 @@ export function InverterPage() {
             <h2>Last comparison</h2>
             {lastCompare && (
               <span className="muted">
-                slot {formatSlot(lastCompare.slot, new Date(), tz)}
+                slot {formatSlotDate(lastCompare.slot, tz)}
                 {lastCompare.decision_run_id !== undefined && (
                   <>
                     {' '}
@@ -201,72 +205,96 @@ function AgreementFact({ title, agreement }: { title: string; agreement: Agreeme
 
 /** Recent slots: what was decided and whether the automation did the same. */
 function InverterHistory({ timeZone }: { timeZone?: string }) {
-  const decides = useRuns({ job: 'inverter.decide', limit: 48 })
-  const compares = useRuns({ job: 'inverter.compare', limit: 48 })
-  const rows = mergeBySlot(decides.data ?? [], compares.data ?? [])
-  const now = new Date()
+  const [list, setList] = useListParams('s.', { key: 'slot', dir: 'desc' })
+  const decides = useRuns(runFilters('inverter.decide', list.day, timeZone, 48))
+  const compares = useRuns(runFilters('inverter.compare', list.day, timeZone, 48))
+  const all = mergeBySlot(decides.data ?? [], compares.data ?? []).map((row) => ({
+    row,
+    parsed: parseDecisionSummary(row.decide?.summary),
+  }))
+  const rules = [...new Set(all.map((r) => r.parsed?.rule).filter((r): r is string => Boolean(r)))].sort()
+  const shown = sortRows(
+    all.filter(
+      ({ row, parsed }) =>
+        (!list.filter || parsed?.rule === list.filter) &&
+        (!list.mismatch || row.compare?.outcome === 'mismatch') &&
+        matchesSearch([row.decide?.summary, row.compare?.summary, parsed?.label], list.q),
+    ),
+    ({ row, parsed }) =>
+      list.sort.key === 'rule' ? parsed?.rule : list.sort.key === 'automation' ? row.compare?.outcome : row.slot,
+    list.sort.dir,
+  )
+  const onSort = (key: string) => setList({ sort: nextSort(list.sort, key, key === 'slot' ? 'desc' : 'asc') })
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Recent slots</h2>
-        <span className="muted">Decisions and comparisons, newest first</span>
+        <span className="muted">{list.day ? `All of ${list.day}` : 'The latest decisions and comparisons'}</span>
       </div>
-      <ErrorNotice error={decides.error ?? compares.error} />
-      {rows.length === 0 ? (
+      <div className="panel-body">
+        <ListControls
+          value={list}
+          onChange={setList}
+          timeZone={timeZone}
+          filterLabel="Rules"
+          filterOptions={rules.map((r) => ({ value: r, label: r }))}
+          mismatchLabel="Only where the automation differed"
+          shown={`${shown.length} of ${all.length}`}
+        />
+        <ErrorNotice error={decides.error ?? compares.error} />
+      </div>
+      {shown.length === 0 ? (
         <div className="panel-body">
-          <Empty title="No decisions recorded yet" />
+          <Empty title={all.length === 0 ? 'No decisions recorded for this choice' : 'Nothing matches the filters'} />
         </div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Slot</th>
+                <SortableTh label="Slot" sortKey="slot" sort={list.sort} onSort={onSort} />
                 <th>Decision</th>
-                <th>Rule</th>
-                <th>Automation</th>
+                <SortableTh label="Rule" sortKey="rule" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const parsed = parseDecisionSummary(row.decide?.summary)
-                return (
-                  <tr key={row.slot}>
-                    <td className="num">{formatSlot(new Date(row.slot).toISOString(), now, timeZone)}</td>
-                    <td>
-                      {row.decide ? (
-                        <Link to={`/runs/${row.decide.id}`}>
-                          <DecideChip run={row.decide} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.decide && !parsed && row.decide.summary && <div className="cell-sub">{row.decide.summary}</div>}
-                    </td>
-                    <td>
-                      {parsed ? (
-                        <>
-                          <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
-                        </>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {row.compare ? (
-                        <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
-                          <CompareChip outcome={row.compare.outcome} />
-                        </Link>
-                      ) : (
-                        <span className="faint">—</span>
-                      )}
-                      {row.compare?.outcome === 'mismatch' && row.compare.summary && (
-                        <div className="cell-sub">{row.compare.summary.replace(/^Differs — /, '')}</div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {shown.map(({ row, parsed }) => (
+                <tr key={row.slot}>
+                  <td className="num">{formatSlotDate(new Date(row.slot).toISOString(), timeZone)}</td>
+                  <td>
+                    {row.decide ? (
+                      <Link to={`/runs/${row.decide.id}`}>
+                        <DecideChip run={row.decide} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.decide && !parsed && row.decide.summary && <div className="cell-sub">{row.decide.summary}</div>}
+                  </td>
+                  <td>
+                    {parsed ? (
+                      <>
+                        <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
+                      </>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.compare ? (
+                      <Link to={`/runs/${row.compare.id}`} title={row.compare.summary ?? undefined}>
+                        <CompareChip outcome={row.compare.outcome} />
+                      </Link>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                    {row.compare?.outcome === 'mismatch' && row.compare.summary && (
+                      <div className="cell-sub">{row.compare.summary.replace(/^Differs — /, '')}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

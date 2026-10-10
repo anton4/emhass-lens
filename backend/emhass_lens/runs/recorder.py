@@ -168,14 +168,26 @@ class RunRecorder:
 
     # --- reading -----------------------------------------------------------------------------------
     async def list(
-        self, job: str | None = None, outcome: str | None = None, limit: int = 100, before: int | None = None
+        self,
+        job: str | None = None,
+        outcome: str | None = None,
+        limit: int = 100,
+        before: int | None = None,
+        *,
+        after: int | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        ascending: bool = False,
     ) -> list[dict[str, Any]]:
+        """Runs newest first (or oldest first), filtered by job, outcome and a started_at range [since, until),
+        paged by id: `before` going back, `after` going forward. `since`/`until` are UTC ISO like started_at."""
         return await self.db.aquery(
             "SELECT id, job, trigger, mode, scheduled_at, started_at, finished_at, duration_ms, outcome, "
             "summary, error, settings_rev, pinned FROM run "
             "WHERE (? IS NULL OR job = ?) AND (? IS NULL OR outcome = ?) AND (? IS NULL OR id < ?) "
-            "ORDER BY id DESC LIMIT ?",
-            (job, job, outcome, outcome, before, before, limit),
+            "AND (? IS NULL OR id > ?) AND (? IS NULL OR started_at >= ?) AND (? IS NULL OR started_at < ?) "
+            f"ORDER BY id {'ASC' if ascending else 'DESC'} LIMIT ?",
+            (job, job, outcome, outcome, before, before, after, after, since, since, until, until, limit),
         )
 
     async def get(self, run_id: int) -> dict[str, Any] | None:

@@ -1,5 +1,5 @@
 import type { ParityReport, ParitySection } from '../api/types'
-import { formatSlot, formatTime, formatValue } from '../lib/format'
+import { formatSlotDate, formatTime, formatValue } from '../lib/format'
 import { LabelledLamp } from './Lamp'
 
 function SectionRow({ section }: { section: ParitySection }) {
@@ -50,7 +50,7 @@ function SectionRow({ section }: { section: ParitySection }) {
                 {section.examples?.map((e) => (
                   <tr key={e.i}>
                     <td className="num">{e.i}</td>
-                    <td className="num">{e.slot ? formatSlot(e.slot) : '—'}</td>
+                    <td className="num">{e.slot ? formatSlotDate(e.slot) : '—'}</td>
                     <td className="num r">{e.ours}</td>
                     <td className="num r">{e.legacy}</td>
                     <td className="num r">{e.delta}</td>

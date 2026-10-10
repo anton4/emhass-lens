@@ -2,7 +2,8 @@
 // local time (Home Assistant users are in the same timezone as their installation), or in an explicit
 // timezone (e.g. the bidding zone's, from the API) when one is passed.
 
-type FormatKind = 'time' | 'dateTime' | 'day' | 'slot' | 'slotDay' | 'dayKey'
+type FormatKind =
+  'time' | 'dateTime' | 'day' | 'slot' | 'slotDay' | 'dayKey' | 'stamp' | 'stampYear' | 'slotDate' | 'slotDateYear'
 
 const OPTIONS: Record<FormatKind, Intl.DateTimeFormatOptions> = {
   time: { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false },
@@ -11,6 +12,35 @@ const OPTIONS: Record<FormatKind, Intl.DateTimeFormatOptions> = {
   slot: { hour: '2-digit', minute: '2-digit', hour12: false },
   slotDay: { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false },
   dayKey: { year: 'numeric', month: '2-digit', day: '2-digit' },
+  stamp: {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  },
+  stampYear: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  },
+  slotDate: { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false },
+  slotDateYear: {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  },
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>()
@@ -46,6 +76,24 @@ export function formatTime(iso: string | null | undefined, now: Date = new Date(
   const d = parseTime(iso)
   if (!d) return '—'
   return sameDay(d, now, timeZone) ? fmt('time', timeZone).format(d) : fmt('dateTime', timeZone).format(d)
+}
+
+function sameYear(a: Date, b: Date, timeZone?: string): boolean {
+  return dayKey(a, timeZone).slice(0, 4) === dayKey(b, timeZone).slice(0, 4)
+}
+
+/** Always with the date: "Sat, Oct 10, 18:15:02" (the year too when it isn't this year). For lists. */
+export function formatDateTime(iso: string | null | undefined, timeZone?: string, now: Date = new Date()): string {
+  const d = parseTime(iso)
+  if (!d) return '—'
+  return fmt(sameYear(d, now, timeZone) ? 'stamp' : 'stampYear', timeZone).format(d)
+}
+
+/** A slot with its date: "Sat, Oct 10, 18:15" (the year too when it isn't this year). */
+export function formatSlotDate(iso: string | null | undefined, timeZone?: string, now: Date = new Date()): string {
+  const d = parseTime(iso)
+  if (!d) return '—'
+  return fmt(sameYear(d, now, timeZone) ? 'slotDate' : 'slotDateYear', timeZone).format(d)
 }
 
 /** Always "14:13:00". */

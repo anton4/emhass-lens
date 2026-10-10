@@ -221,6 +221,15 @@ When Home Assistant can install a newer EMHASS Lens, the header shows **Update t
 
 - **Logs** shows the App's log live. Every line belongs to a component, and lines written during a job carry that run's number.
 - **Runs** lists every job execution with its outcome. Open one to see its inputs, the request it sent, the response it got and its log lines. You can also download it all as one JSON file for a bug report.
+  - **Filter** by job and outcome, and by a time range: **From** and **To** are read in Home Assistant's time zone, and **Today**, **Yesterday** and **Any time** set the range in one click. The range includes From but not To.
+  - **Sort** by clicking a column header; click it again to flip the direction. Run and Started sort on the server, so "Load more" continues in that order. Job, Took and Outcome sort the runs loaded so far.
+- **Recent decisions and slots** on the EV charger, Inverter and Market pages, and the Market sessions, have the same tools:
+  - **Day:** "Latest" shows the newest rows. Pick a day, or step with ← and →, to load that whole day.
+  - **Search** matches every word you type, and a select narrows the list to one rule, branch, kind or direction.
+  - **Only where the automation differed** keeps the comparisons that disagreed.
+  - **Sort** by clicking a column header.
+  - The choices live in the page address, so a filtered view survives a reload and can be bookmarked.
+- **Times carry their date** everywhere a list can span several days, for example "Sat, Oct 10, 18:15", with the year added when it isn't the current one.
 - The same log lines appear in the App's **Log** tab in Home Assistant.
 
 ## Security

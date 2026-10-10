@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
+from emhass_lens.api.routes.runs import utc_bound
 from emhass_lens.api.schemas import (
     ChargeModeRequest,
     ChargerStatus,
@@ -254,8 +255,15 @@ async def market_reconcile(c: ContainerDep, body: MarketReconcileRequest | None 
 
 
 @router.get("/market/sessions")
-async def market_sessions(c: ContainerDep, limit: Annotated[int, Query(ge=1, le=500)] = 50) -> list[MarketSession]:
-    return [MarketSession(**row) for row in await c.extras["market"].sessions(limit)]
+async def market_sessions(
+    c: ContainerDep,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    since: str | None = None,
+    until: str | None = None,
+) -> list[MarketSession]:
+    """Market sessions newest first, optionally those started within [since, until)."""
+    rows = await c.extras["market"].sessions(limit, utc_bound(since, "since"), utc_bound(until, "until"))
+    return [MarketSession(**row) for row in rows]
 
 
 @router.get("/setup")

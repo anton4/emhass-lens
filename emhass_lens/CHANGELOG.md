@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Recent decisions and slots on the EV charger, Inverter and Market pages, and the Market sessions, can be filtered and sorted. Pick a day (or step day by day), search, narrow to one rule or branch, keep only the mismatches with the automation, and click a column header to sort.
+- Runs has a time range (From and To in Home Assistant's time zone, plus Today and Yesterday) and sortable columns.
+- Times in these lists, the Plan page tables, the price table, the parity examples, the cost-function comparisons and the problem history now show the date, for example "Sat, Oct 10, 18:15".
+- The cost-function comparisons and the problem history sort by any column.
+
 ## 0.3.18
 
 - Chart legends keep their rows when the values change: every value takes the same width, so the charts below no longer jump up and down as the cursor moves.
