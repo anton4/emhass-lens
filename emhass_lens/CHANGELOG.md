@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.18
 
 - Chart legends keep their rows when the values change: every value takes the same width, so the charts below no longer jump up and down as the cursor moves.
 

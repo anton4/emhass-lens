@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): steady chart legends (unreleased)
+### 2026-10-10 (evening): steady chart legends (0.3.18)
 - `.time-chart .u-legend .u-value` is inline-block with `min-width: var(--legend-value-width, 10ch)`; `TimeChart` takes `legendValueWidth` (the price charts use 13ch). The owner's Power legend wrapped to a third row for "−5.00 kW … 1.04 kW" and back for "−4.85 kW … 866 W", moving the SoC chart.
 
 ### 2026-10-10 (evening): the update check also asks GitHub (0.3.17)
