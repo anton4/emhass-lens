@@ -4236,7 +4236,7 @@
         "properties": {
           "entity": {
             "default": "",
-            "description": "Leave empty to skip this quantity.",
+            "description": "A sensor in watts (W); a kW sensor works with Multiply by 1000. Leave empty to skip this quantity.",
             "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
             "title": "Entity",
             "type": "string",
@@ -4253,14 +4253,11 @@
           },
           "scale": {
             "default": 1.0,
-            "description": "1 for a sensor in W (or a SOC of 0–1), 1000 for kW, 0.01 for a SOC in %.",
+            "description": "Brings the sensor to EMHASS's units: 1 for W, 1000 for kW; for the state of charge 0.01 turns % into the 0–1 EMHASS uses.",
             "exclusiveMinimum": 0.0,
             "maximum": 10000.0,
             "title": "Multiply by",
-            "type": "number",
-            "ui": {
-              "advanced": true
-            }
+            "type": "number"
           }
         },
         "title": "MeasuredPower",
@@ -4370,7 +4367,8 @@
               "invert": false,
               "scale": 1.0
             },
-            "title": "Battery power (+ discharge, − charge, like EMHASS's P_batt)"
+            "description": "The battery's power in watts; for a sensor that counts charging as positive, tick Opposite sign.",
+            "title": "Battery power, W (+ discharge, − charge, like EMHASS's P_batt)"
           },
           "grid": {
             "$ref": "#/components/schemas/MeasuredPower",
@@ -4379,7 +4377,8 @@
               "invert": false,
               "scale": 1.0
             },
-            "title": "Grid power (+ import, − export, like EMHASS's P_grid)"
+            "description": "The power at the grid connection in watts. Many meters count export as positive: tick Opposite sign then.",
+            "title": "Grid power, W (+ import, − export, like EMHASS's P_grid)"
           },
           "keep_days": {
             "default": 120,
@@ -4398,7 +4397,8 @@
               "invert": false,
               "scale": 1.0
             },
-            "title": "House load without deferrable loads (what EMHASS forecasts as P_Load)"
+            "description": "The household consumption in watts without the deferrable loads (the EV charger), usually the same sensor EMHASS learns from.",
+            "title": "House load without deferrable loads, W (what EMHASS forecasts as P_Load)"
           },
           "pv": {
             "$ref": "#/components/schemas/MeasuredPower",
@@ -4407,7 +4407,8 @@
               "invert": false,
               "scale": 1.0
             },
-            "title": "PV power"
+            "description": "The PV production in watts, always positive.",
+            "title": "PV power, W"
           },
           "soc": {
             "$ref": "#/components/schemas/MeasuredPower",
@@ -4416,7 +4417,8 @@
               "invert": false,
               "scale": 0.01
             },
-            "title": "Battery state of charge"
+            "description": "The battery's state of charge; a sensor in % needs Multiply by 0.01 (the default here), a sensor that already reports 0–1 needs 1.",
+            "title": "Battery state of charge, %"
           }
         },
         "title": "Measurements",

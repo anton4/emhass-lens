@@ -487,7 +487,8 @@ class MeasuredPower(Section):
     entity: EntityId = Field(
         default="",
         title="Entity",
-        description="Leave empty to skip this quantity.",
+        description="A sensor in watts (W); a kW sensor works with Multiply by 1000. Leave empty to skip this "
+        "quantity.",
         json_schema_extra=ui(widget="entity", domain="sensor"),
     )
     scale: float = Field(
@@ -495,8 +496,8 @@ class MeasuredPower(Section):
         gt=0,
         le=10000,
         title="Multiply by",
-        description="1 for a sensor in W (or a SOC of 0–1), 1000 for kW, 0.01 for a SOC in %.",
-        json_schema_extra=ui(advanced=True),
+        description="Brings the sensor to EMHASS's units: 1 for W, 1000 for kW; for the state of charge 0.01 turns % "
+        "into the 0–1 EMHASS uses.",
     )
     invert: bool = Field(
         default=False,
@@ -506,17 +507,33 @@ class MeasuredPower(Section):
 
 
 class Measurements(Section):
-    grid: MeasuredPower = Field(default=MeasuredPower(), title="Grid power (+ import, − export, like EMHASS's P_grid)")
-    battery: MeasuredPower = Field(
-        default=MeasuredPower(), title="Battery power (+ discharge, − charge, like EMHASS's P_batt)"
+    grid: MeasuredPower = Field(
+        default=MeasuredPower(),
+        title="Grid power, W (+ import, − export, like EMHASS's P_grid)",
+        description="The power at the grid connection in watts. Many meters count export as positive: tick "
+        "Opposite sign then.",
     )
-    pv: MeasuredPower = Field(default=MeasuredPower(entity="sensor.sofar_pv_power_total_watt"), title="PV power")
+    battery: MeasuredPower = Field(
+        default=MeasuredPower(),
+        title="Battery power, W (+ discharge, − charge, like EMHASS's P_batt)",
+        description="The battery's power in watts; for a sensor that counts charging as positive, tick Opposite sign.",
+    )
+    pv: MeasuredPower = Field(
+        default=MeasuredPower(entity="sensor.sofar_pv_power_total_watt"),
+        title="PV power, W",
+        description="The PV production in watts, always positive.",
+    )
     load: MeasuredPower = Field(
         default=MeasuredPower(entity="sensor.house_power_without_deferrable"),
-        title="House load without deferrable loads (what EMHASS forecasts as P_Load)",
+        title="House load without deferrable loads, W (what EMHASS forecasts as P_Load)",
+        description="The household consumption in watts without the deferrable loads (the EV charger), usually the "
+        "same sensor EMHASS learns from.",
     )
     soc: MeasuredPower = Field(
-        default=MeasuredPower(entity="sensor.ev6_battery_soc", scale=0.01), title="Battery state of charge"
+        default=MeasuredPower(entity="sensor.ev6_battery_soc", scale=0.01),
+        title="Battery state of charge, %",
+        description="The battery's state of charge; a sensor in % needs Multiply by 0.01 (the default here), a sensor "
+        "that already reports 0–1 needs 1.",
     )
     backfill_days: int = Field(
         default=10,

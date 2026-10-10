@@ -7,6 +7,7 @@
 - **Backups.** Before a Home Assistant backup the App checkpoints `app.db` and checks its integrity (a damaged file aborts the backup); the add-on now has the Supervisor's `backup` role to list backups. After a restore the App notices the empty `runs.db`, continues run numbers after the ones `app.db` remembers and shows a "Restored from a backup" note. `docs/BACKUP.md` is the runbook; `scripts/restore-drill.sh` rehearses a restore from a backup file without Home Assistant.
 - Run details are capped at 512 KiB each (bigger ones are kept as a note with a preview); the cost-function comparison no longer stores each plan twice.
 - Shutdown: the UI's live event stream ends by itself when the App stops, so uvicorn no longer waits five seconds and logs a cancelled task on every restart.
+- Settings → Measurements says which unit each sensor is expected in (W, or % for the state of charge) and how to convert a kW sensor.
 
 ## 0.3.1
 
