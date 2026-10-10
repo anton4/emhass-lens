@@ -37,6 +37,11 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): catch-up after Home Assistant comes back; header problem link (unreleased)
+- **Why:** with Home Assistant down at :15 the publish fails, the inverter decision is refused ("not connected") and nothing retried the slot, so the inverter kept the previous slot's settings for up to 15 min; a restart also drops `sensor.p_*`. A host reboot gave the same result (first fire after start is the next quarter).
+- **Done:** `services/catchup.CatchUpService` on `ha.on_connect` (live MPC, App driving, no market hold): publish with `chain_inverter/chain_charger=False` when this slot wasn't published or `sensor.p_batt_forecast` is gone, then `charger.decide` and `inverter.decide` with `catch_up`; retries every 20 s (≤ 15 tries, within the slot) while `InverterService.refusal_this_slot()` is `transient_block` (entity missing/unavailable/unknown, not connected). `InverterService.last_refusal`, `applied_this_slot()`. Header "N problems" links to `/health?focus=problems` (scrolls to `#card-problems`, titles on hover).
+- **Verified:** `tests/test_catchup.py` (40/40 repeats), full suites green.
+
 ### 2026-10-10 (evening): automatic fit, leftover comparison plans, charger numbers, sensor rounding (0.3.9)
 - **Automatic fit:** `domain/ml_schedule.auto_fit_due` (night window from `emhass.ml.auto_fit_hour`, 3 h, crosses midnight; daily/weekly/off; fault fit at most every 6 h); `MlService.after_mpc_run()` from `MpcService.run` starts `ml.fit` with `{"auto": reason}` after the job lock frees, only when the App drives EMHASS; kv `ml.auto_fit`. Closes PLAN.md's "optionally weekly".
 - **Leftover comparison plans:** EMHASS's plan store keeps the last good plan, so a failed live run after a comparison left the last alternative there; the plan watch stored it as `external` with the failed run's status (the owner's "Made for someone else" + "EMHASS error"). `CostfunCompareService.leftover` (kv `costfun.leftover`) now keeps it out of `watch_plan` and `publish`, health `costfun.leftover`; cleared by the next good live plan. The Plan page shows EMHASS's `error_message` and explains `external`.

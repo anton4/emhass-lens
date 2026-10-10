@@ -41,6 +41,7 @@ class InverterService:
         self.last_decision: Decision | None = None
         self.last_compare: dict[str, Any] | None = None
         self.last_apply: dict[str, Any] | None = None  # {slot, run_id, ok, wrote}: the newest live write
+        self.last_refusal: dict[str, Any] | None = None  # {slot, why}: the newest live decision that wasn't applied
 
     @property
     def mode(self) -> str:
@@ -48,6 +49,17 @@ class InverterService:
 
     def active(self) -> bool:
         return self.mode != "off"
+
+    def applied_this_slot(self) -> bool:
+        """A live write for the current slot succeeded (or found everything already set)."""
+        slot = iso(slot_floor(self.c.clock.now()))
+        return bool(self.last_apply and self.last_apply.get("slot") == slot and self.last_apply.get("ok"))
+
+    def refusal_this_slot(self) -> str | None:
+        slot = iso(slot_floor(self.c.clock.now()))
+        if self.last_refusal and self.last_refusal.get("slot") == slot:
+            return str(self.last_refusal.get("why"))
+        return None
 
     def decided_this_slot(self) -> bool:
         return bool(self.last and self.last.get("slot") == iso(slot_floor(self.c.clock.now())))
@@ -136,13 +148,22 @@ class InverterService:
             "decision", {**self.last, "values": values.__dict__, "observed_before": self.observed().__dict__}
         )
         text = describe(decision)
+        catch_up = " (catch-up after Home Assistant came back)" if ctx.params.get("catch_up") else ""
         if blocked:
-            ctx.run.outcome, ctx.run.summary = "noop", f"Not in control ({blocked}); would: {text}"
+            if self.mode == "live":
+                self.last_refusal = {"slot": self.last["slot"], "why": blocked}
+            ctx.run.outcome, ctx.run.summary = "noop", f"Not in control ({blocked}); would: {text}{catch_up}"
             return
         if self.mode != "live":
             ctx.run.outcome, ctx.run.summary = "dry_run", f"Would set {text}"
             return
-        await self.apply(ctx, decision, now)
+        try:
+            await self.apply(ctx, decision, now)
+        except RunRefused as exc:
+            self.last_refusal = {"slot": self.last["slot"], "why": str(exc)}
+            raise RunRefused(f"{exc}{catch_up}") from exc
+        if catch_up and ctx.run.summary:
+            ctx.run.summary += catch_up
 
     async def apply(self, ctx: JobContext, decision: Decision, now: datetime) -> None:
         assert ctx.run is not None
@@ -233,3 +254,12 @@ def describe(decision: Decision) -> str:
         f"'{t.state}' (rule {decision.rule}): grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W, "
         f"{feed}"
     )
+
+
+TRANSIENT = ("not found", "'unavailable'", "'unknown'", "Not connected to Home Assistant")
+
+
+def transient_block(reason: str | None) -> bool:
+    """A refusal that goes away by itself once Home Assistant has started: an entity that isn't loaded yet, or the
+    connection itself. A stale plan, another inverter mode or the automation switch being off are not."""
+    return bool(reason) and any(part in str(reason) for part in TRANSIENT)

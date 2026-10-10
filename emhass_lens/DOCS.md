@@ -115,6 +115,8 @@ EMHASS Lens can set a Sofar inverter's passive mode from the plan itself, instea
 
 Nothing is written while the inverter isn't in passive mode, while the automation switch (`input_boolean.emhass_automation`) is off, for example during an mFRR session, or when the plan is stale.
 
+**When Home Assistant restarts.** While Home Assistant is away, the quarter-hour publish fails and the inverter and EV charger decisions are refused; the inverter keeps the settings it last got. A restart also drops EMHASS's `sensor.p_*` states. When Home Assistant answers again (after a restart, a host reboot or a lost connection), EMHASS Lens catches up the current quarter-hour in live mode: it publishes again (which brings `sensor.p_*` back and fires `emhass_lens_plan_published` once more), then decides the EV charger and the inverter for this slot. If the inverter's entities are still loading, it retries every 20 seconds for up to 5 minutes, within the slot; a stale plan or another inverter mode ends it. Runs started this way show *(catch-up after Home Assistant came back)*.
+
 **Moving the automation over:** set the thresholds under Limits to the automation's values, run **Dry run** for about a week and watch the agreement. When it stays at 99 % or more, turn the Home Assistant automation off (keep it) and switch to **Live**. To go back, set the mode to Off and turn the automation on again.
 
 ## During a market session (mFRR)

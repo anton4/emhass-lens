@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet } from 'react-router'
 import { useEvents } from '../api/events'
 import { useStatus, useVersion } from '../api/queries'
 import { LabelledLamp } from './Lamp'
@@ -73,9 +73,17 @@ export function Layout() {
                 </span>
               ))}
             <StreamLamp />
-            <span className={`problem-count${problems > 0 ? ' has-problems' : ''}`}>
-              {problems === 0 ? 'No problems' : problems === 1 ? '1 problem' : `${problems} problems`}
-            </span>
+            {problems === 0 ? (
+              <span className="problem-count">No problems</span>
+            ) : (
+              <Link
+                className="problem-count has-problems"
+                to="/health?focus=problems"
+                title={(s?.problems ?? []).map((p) => p.title).join('\n')}
+              >
+                {problems === 1 ? '1 problem' : `${problems} problems`}
+              </Link>
+            )}
           </div>
         </div>
         <nav className="tabs" aria-label="Main">

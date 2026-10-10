@@ -130,6 +130,12 @@ time,
 .problem-count.has-problems {
   color: var(--lamp-red);
   font-weight: 600;
+  text-decoration: none;
+}
+
+.problem-count.has-problems:hover,
+.problem-count.has-problems:focus-visible {
+  text-decoration: underline;
 }
 
 /* ---------- mode selector: the one bold element ---------- */

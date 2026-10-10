@@ -1,5 +1,6 @@
+import { useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api } from '../api/client'
 import { keys, useJobs, useProblems, useStatus } from '../api/queries'
 import type { JobInfo, RunStarted } from '../api/types'
@@ -86,6 +87,13 @@ export function HealthPage() {
 
 function ProblemsPanel() {
   const problems = useProblems()
+  const [params] = useSearchParams()
+  const focus = params.get('focus') === 'problems'
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    // the header's problem count links here
+    if (focus && problems.isSuccess) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [focus, problems.isSuccess])
   const active = problems.data?.active ?? []
   const history = (problems.data?.history ?? []) as {
     id: number
@@ -96,7 +104,7 @@ function ProblemsPanel() {
     ended_at: string | null
   }[]
   return (
-    <section className="panel">
+    <section id="card-problems" className="panel" ref={ref}>
       <div className="panel-head">
         <h2>Problems</h2>
         {problems.data && <span className="muted">{active.length === 0 ? 'None active' : `${active.length} active`}</span>}

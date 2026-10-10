@@ -14,6 +14,7 @@ from emhass_lens.container import Container
 from emhass_lens.scheduler.core import Job, JobContext
 from emhass_lens.scheduler.triggers import Dynamic, Manual, Periodic, QuarterHour
 from emhass_lens.services import health_rules
+from emhass_lens.services.catchup import CatchUpService
 from emhass_lens.services.charger import ChargerService
 from emhass_lens.services.costfun import CostfunCompareService
 from emhass_lens.services.emhass import EmhassService
@@ -62,6 +63,7 @@ def build(c: Container) -> None:
     x["inverter"] = InverterService(c)
     x["charger"] = ChargerService(c)
     x["market"] = MarketService(c)
+    x["catchup"] = CatchUpService(c)
     x["measurements"] = MeasurementService(c)
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
@@ -500,6 +502,7 @@ def subscribe(c: Container) -> None:
         x["market"].on_state,
     )
     ha.on_connect(x["market"].on_connect)
+    ha.on_connect(x["catchup"].on_connect)  # publish and decide the slot Home Assistant missed
     rewatch()
 
 
@@ -540,6 +543,7 @@ async def _index_plans(c: Container) -> None:
 async def stop(c: Container) -> None:
     x = c.extras
     x["market"].stop()
+    x["catchup"].stop()
     await x["outputs"].stop()
     await x["ha"].stop()
     for key in ("http_nordpool", "http_forecast"):

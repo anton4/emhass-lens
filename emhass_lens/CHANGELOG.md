@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- When Home Assistant comes back (a restart, a host reboot or a lost connection), EMHASS Lens catches up the current quarter-hour in live mode: it publishes again, which restores EMHASS's `sensor.p_*`, and sets the EV charger and the inverter for the slot it missed instead of waiting for the next one. It waits for the inverter's entities while Home Assistant is still starting.
+- The red problem count in the header links to Health → Problems and lists the problems on hover.
+
 ## 0.3.9
 
 - EMHASS Lens now fits EMHASS's load model by itself: every night right after the first MPC run from 03:00 (or weekly, or off), and right after the next run when the model can't serve the runs (a short tuned model, changed lags). Only while it drives EMHASS; it never tunes.

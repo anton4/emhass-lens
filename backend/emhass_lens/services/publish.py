@@ -121,7 +121,7 @@ class PublishService:
             # passes chain_inverter=False: the inverter keeps the targets it just got, one write per session end)
             self.c.scheduler.run_now("inverter.decide", {"after_publish": True})
         charger = self.c.extras.get("charger")
-        if charger is not None and charger.active():
+        if charger is not None and charger.active() and ctx.params.get("chain_charger", True):
             self.c.scheduler.run_now("charger.decide", {"trigger": "emhass_update", "after_publish": True})
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
