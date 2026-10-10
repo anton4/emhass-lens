@@ -30,12 +30,21 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 ## Open questions to verify on the real Home Assistant
 These come from docs/PLAN.md §10:
 1. The deployed EMHASS version (need ≥ 0.17.9 for `/api/v1/plan`, ≥ 0.18.2 avoids the grid-boundary waits, 0.18.5 recommended), and the address the App can reach it on.
-2. Whether Server-Sent Events stream through Ingress without buffering (the header lamp says "Live updates" when they do). If they don't, every page keeps its timers and the Logs page polls `/api/logs` every 5 s (since 0.3.20).
+2. Whether Server-Sent Events stream through Ingress without buffering (the status chip's panel says "Live updates" when they do). If they don't, every page keeps its timers and the Logs page polls `/api/logs` every 5 s (since 0.3.20).
 3. Whether Mosquitto is installed (needed for Phase 3).
 4. Your live tariff values: Võrk 4? Is excise 0.21 c or 0.307 c?
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-10 (night): redesign "D", step 1: look and shell (0.4.0)
+- The owner picked design **D** from the canvas https://claude.ai/artifact/1rEYmoWQuv6B9U7cMq1eKo: row C's "Workbench" layout (text sidebar, ⌘K, frameless sections, hairlines) in row B's Home Assistant colours (cool greys, HA blue for actions and selection), Geist kept.
+- Step 1 (this release) changes every page at once through the shell and the shared CSS:
+  - `styles/tokens.css`: the D palette, light and a matching dark one; `--on-*` text colours for status text on tints; `--q-*` fixed quantity colours for charts.
+  - Geist and Geist Mono come from `@fontsource-variable/*` (bundled, no network).
+  - `components/Layout.tsx`: sidebar (groups from `lib/nav.ts`), top bar (breadcrumb, ⌘K button, `StatusMenu` chip with the mode switch, problems chip, Run MPC now), one banner slot. `CommandPalette.tsx`, "g + letter" shortcuts.
+  - `.panel` is frameless now (heading + hairline); buttons are outlined blue, `.primary` filled blue; the selected state is the light-blue pill everywhere.
+- **Next (step 2, page layouts):** Plan (summary line, key-figure row, MPC run ticks on the time axis), Runs (timeline strip + list with a run preview), Run detail (tabs: Summary · Payload · EMHASS response · Artifacts · Logs), Health (in-page section links), Settings (inline old → new on changed fields), Logs (volume strip), prices in c/kWh everywhere, phone layouts for Plan and Runs. The canvas rows D01–D12 are the reference.
 
 ### 2026-10-10 (evening): auto-refresh gaps closed (0.3.20)
 - Logs page: without the live stream (`useEvents().state` is `polling` or `reconnecting`) it polls `/api/logs?limit=500` every 5 s into the same buffer as live lines.

@@ -1,99 +1,173 @@
 /*
- * Tokens. The base is the grey of electrical enclosures (RAL 7035); status colours follow
- * IEC 60073 indicator-lamp meanings: green = normal, amber = abnormal / attention,
- * red = alarm, blue = simulated / informational, white-grey = neutral.
+ * Tokens. Home Assistant's cool greys and blue on a white page: the chrome stays quiet, HA blue marks
+ * actions and the selected item, and status colours keep their indicator-lamp meanings: green = normal,
+ * amber = attention, red = alarm, blue = simulated / informational, grey = neutral. Status text never
+ * uses the lamp colour itself (too light on white): it uses the matching --on-* colour on a tint.
  */
 :root {
-  --panel: #e8ebe8;
-  --frame: #cbd0cc;
-  --frame-strong: #a9b0ab;
-  --surface: #f7f8f7;
-  --surface-sunk: #eef1ee;
-  --ink: #17232b;
-  --ink-muted: #56656b;
-  --ink-faint: #7d8a8f;
+  --panel: #ffffff;
+  --sidebar: #f3f4f7;
+  --surface: #ffffff;
+  --surface-sunk: #f6f7f9;
+  --surface-hover: #f1f2f4;
+  --frame: #e2e4e9;
+  --divider: #eceef2;
+  --frame-strong: #c4c7cf;
+  --ink: #1b1c1f;
+  --ink-2: #44474e;
+  --ink-muted: #5d6069;
+  --ink-faint: #6b6f78;
+  --ink-decor: #9a9ca3;
 
-  --lamp-green: #1f8a4c;
-  --lamp-amber: #b7791f;
-  --lamp-red: #c23b2a;
-  --lamp-blue: #2b62b0;
-  --lamp-neutral: #8a9499;
+  /* actions and selection */
+  --accent: #0277bd;
+  --accent-hover: #01579b;
+  --on-accent: #ffffff;
+  --accent-text: #0277bd;
+  --selected: #d7eefc;
+  --on-selected: #01579b;
+  --selected-hint: #2f6fa3;
+  --brand: #03a9f4;
 
-  --tint-green: #dcefe2;
-  --tint-amber: #f6ead2;
-  --tint-red: #f6dcd7;
-  --tint-blue: #dde6f4;
-  --tint-neutral: #e3e7e5;
+  --lamp-green: #2e7d32;
+  --lamp-amber: #ef8f00;
+  --lamp-red: #c62828;
+  --lamp-blue: #0277bd;
+  --lamp-neutral: #9a9ca3;
 
-  --focus: #2b62b0;
-  --link: #22549c;
+  --tint-green: #e8f5e9;
+  --tint-amber: #fff3e0;
+  --tint-red: #fdecea;
+  --tint-blue: #e1f0fb;
+  --tint-neutral: #eef0f3;
 
-  /* Chart series: categorical slots in fixed order (validated for CVD on this surface, light and dark).
-     Series 1 battery / import, 2 grid / export, 3 PV / spot, 4 load / fees, 5 deferrable / VAT. */
+  --line-green: #c8e6c9;
+  --line-amber: #ffe0b2;
+  --line-red: #f3c7c7;
+  --line-blue: #b9e3fb;
+  --line-neutral: #dfe1e6;
+
+  --on-green: #1b5e20;
+  --on-amber: #8a3c00;
+  --on-red: #8e1c1c;
+  --on-blue: #01579b;
+  --on-neutral: #44474e;
+
+  --focus: #0277bd;
+  --link: #0277bd;
+
+  /* One colour per quantity, the same on every chart (validated for colour-vision deficiency, light and dark). */
+  --q-pv: #eda100;
+  --q-load: #e87ba4;
+  --q-batt: #2a78d6;
+  --q-grid: #eb6834;
+  --q-ev: #1baf7a;
+  --q-import: #e34948;
+  --q-export: #008300;
+  --q-spot: #8a8984;
+
+  /* Categorical slots in fixed order, for charts whose series are not quantities (cost functions, fee parts). */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
-  --chart-grid: #e2e6e2;
-  --chart-axis: #a9b0ab;
-  --chart-wash: rgba(23, 35, 43, 0.06);
-  --chart-past: rgba(42, 120, 214, 0.045);
-  --chart-now: #c23b2a;
+  --chart-grid: #eceef2;
+  --chart-axis: #c4c7cf;
+  --chart-wash: rgba(27, 28, 31, 0.045);
+  --chart-past: rgba(27, 28, 31, 0.025);
+  --chart-now: #1b1c1f;
 
-  --font-readout: 'Bahnschrift', 'DIN Alternate', 'DIN 2014', 'D-DIN', 'Barlow', 'Roboto Condensed',
-    'Arial Narrow', system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-code: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-body: 'Geist Variable', 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-readout: var(--font-body);
+  --font-code: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
   --step--1: 0.8125rem;
-  --step-0: 0.9375rem;
-  --step-1: 1.125rem;
-  --step-2: 1.375rem;
-  --step-3: 1.75rem;
+  --step-0: 0.875rem;
+  --step-1: 1rem;
+  --step-2: 1.25rem;
+  --step-3: 2rem;
 
-  --radius-control: 3px;
-  --radius-panel: 6px;
-  --gutter: clamp(12px, 3vw, 28px);
+  --radius-control: 7px;
+  --radius-panel: 10px;
+  --gutter: clamp(16px, 3vw, 40px);
+  --shadow-pop: 0 12px 32px rgba(27, 28, 31, 0.16), 0 2px 6px rgba(27, 28, 31, 0.08);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --panel: #162026;
-    --frame: #2c3a42;
-    --frame-strong: #3d4d56;
-    --surface: #1e2a31;
-    --surface-sunk: #192329;
-    --ink: #e3e9e7;
-    --ink-muted: #9aa9ae;
-    --ink-faint: #74858b;
+    --panel: #111214;
+    --sidebar: #18191c;
+    --surface: #1a1b1e;
+    --surface-sunk: #202125;
+    --surface-hover: #26272b;
+    --frame: #2e3036;
+    --divider: #26282d;
+    --frame-strong: #44474e;
+    --ink: #e3e4e8;
+    --ink-2: #c4c6cc;
+    --ink-muted: #9da0a8;
+    --ink-faint: #8a8d95;
+    --ink-decor: #5d6069;
 
-    --lamp-green: #3fb46f;
-    --lamp-amber: #e0a440;
-    --lamp-red: #e8604d;
-    --lamp-blue: #6b9be0;
-    --lamp-neutral: #8d999e;
+    --accent: #0277bd;
+    --accent-hover: #0288d1;
+    --on-accent: #ffffff;
+    --accent-text: #4fc3f7;
+    --selected: #0d3a52;
+    --on-selected: #b3e5fc;
+    --selected-hint: #81c3f0;
+    --brand: #03a9f4;
 
-    --tint-green: #1d3b2b;
-    --tint-amber: #3d3220;
-    --tint-red: #43261f;
-    --tint-blue: #1f3150;
-    --tint-neutral: #26333a;
+    --lamp-green: #66bb6a;
+    --lamp-amber: #ffa726;
+    --lamp-red: #ef5350;
+    --lamp-blue: #4fc3f7;
+    --lamp-neutral: #8a8d95;
 
-    --focus: #6b9be0;
-    --link: #8fb3ea;
+    --tint-green: #1b2e1e;
+    --tint-amber: #33270f;
+    --tint-red: #3a1d1c;
+    --tint-blue: #0d2a3d;
+    --tint-neutral: #26272b;
+
+    --line-green: #2e4d31;
+    --line-amber: #5a4219;
+    --line-red: #5c2b29;
+    --line-blue: #164a68;
+    --line-neutral: #3a3c42;
+
+    --on-green: #a5d6a7;
+    --on-amber: #ffcc80;
+    --on-red: #ffab9f;
+    --on-blue: #b3e5fc;
+    --on-neutral: #c4c6cc;
+
+    --focus: #4fc3f7;
+    --link: #4fc3f7;
+
+    --q-pv: #c98500;
+    --q-load: #d55181;
+    --q-batt: #3987e5;
+    --q-grid: #d95926;
+    --q-ev: #199e70;
+    --q-import: #e66767;
+    --q-export: #0f9d0f;
+    --q-spot: #8f8e88;
 
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
-    --chart-grid: #26343c;
-    --chart-axis: #3d4d56;
-    --chart-wash: rgba(227, 233, 231, 0.07);
-    --chart-past: rgba(57, 135, 229, 0.09);
-    --chart-now: #e8604d;
+    --chart-grid: #26282d;
+    --chart-axis: #44474e;
+    --chart-wash: rgba(227, 228, 232, 0.06);
+    --chart-past: rgba(227, 228, 232, 0.035);
+    --chart-now: #e3e4e8;
+
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
 }

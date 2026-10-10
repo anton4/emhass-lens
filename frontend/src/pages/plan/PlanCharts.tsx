@@ -51,12 +51,12 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
   return out
 }
 
-// Power quantities in fixed slot order: battery, grid, PV, load (the deferrable loads follow).
+// Power quantities, each in its own colour on every chart: battery, grid, PV (an area), load; the deferrable loads follow.
 const POWER = [
-  { column: 'P_batt', measured: 'batt', planned: 'P_batt', label: 'Battery (+ discharge)', color: '--series-1' },
-  { column: 'P_grid', measured: 'grid', planned: 'P_grid', label: 'Grid (+ import)', color: '--series-2' },
-  { column: 'P_PV', measured: 'pv', planned: 'P_PV', label: 'PV', color: '--series-3' },
-  { column: 'P_Load', measured: 'load', planned: 'P_Load', label: 'House load', color: '--series-4' },
+  { column: 'P_batt', measured: 'batt', planned: 'P_batt', label: 'Battery (+ discharge)', color: '--q-batt', fill: undefined },
+  { column: 'P_grid', measured: 'grid', planned: 'P_grid', label: 'Grid (+ import)', color: '--q-grid', fill: undefined },
+  { column: 'P_PV', measured: 'pv', planned: 'P_PV', label: 'PV', color: '--q-pv', fill: 0.16 },
+  { column: 'P_Load', measured: 'load', planned: 'P_Load', label: 'House load', color: '--q-load', fill: undefined },
 ] as const
 
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
@@ -86,6 +86,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
       series.push({
         label: q.label,
         color: q.color,
+        fill: q.fill,
         values: pastAndFuture(x, past, q.measured, rows, q.column, pastEndS),
         format: formatPower,
       })
@@ -105,14 +106,14 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
       const label = deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads'
       series.push({
         label,
-        color: '--series-5',
+        color: '--q-ev',
         values: deferrableFuture(x, rows, deferrables, pastEndS),
         format: formatPower,
       })
       if (plannedDeferrable) {
         series.push({
           label: `${label}, planned at the time`,
-          color: '--series-5',
+          color: '--q-ev',
           ...DASHED,
           values: plannedAtTheTime(x, past, 'P_deferrable'),
           format: formatPower,
@@ -131,7 +132,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
     const first = columns[0] ?? 'SOC_opt'
     series.push({
       label: columns.length > 1 ? 'Battery 1 SOC' : 'Battery SOC',
-      color: '--series-1',
+      color: '--q-batt',
       step: false,
       values: pastAndFuture(x, past, 'soc', rows, first, pastEndS, 100, false),
       format: fmt,
@@ -139,7 +140,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
     if (plannedSoc) {
       series.push({
         label: columns.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
-        color: '--series-1',
+        color: '--q-batt',
         ...DASHED,
         step: false,
         values: plannedAtTheTime(x, past, 'SOC', 100, false),
@@ -184,8 +185,8 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
     }
     const fmt = (v: number) => formatPrice(v)
     const series: ChartSeries[] = [
-      { label: 'Import', color: '--series-1', values: imp, format: fmt },
-      { label: 'Export', color: '--series-2', values: exp, format: fmt },
+      { label: 'Import', color: '--q-import', values: imp, format: fmt },
+      { label: 'Export', color: '--q-export', dash: [6, 4], values: exp, format: fmt },
     ]
     return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS) }
   }, [history, data.prices, pastEndS])

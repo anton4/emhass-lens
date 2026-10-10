@@ -110,6 +110,18 @@ export function useInverterDecide() {
   })
 }
 
+/** Start a scheduler job now, as its "Run now" button on Health does; answers with the run id. */
+export function useRunJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => api.post<RunStarted>(`/api/jobs/${encodeURIComponent(jobId)}/run`),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.jobs })
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  })
+}
+
 /** Run the storage cleanup (retention, budgets, compaction when worthwhile) or a forced compaction now. */
 export function useStorageAction() {
   const queryClient = useQueryClient()

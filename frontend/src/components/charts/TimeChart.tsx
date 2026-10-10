@@ -7,15 +7,17 @@ import { useEffect, useRef, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { fitRange, type FitOptions } from '../../lib/chartRange'
-import { cssColor, useThemeVersion } from './useTheme'
+import { cssColor, useThemeVersion, withAlpha } from './useTheme'
 
 export interface ChartSeries {
   label: string
   values: (number | null)[]
-  /** CSS custom property ("--series-1") or colour. */
+  /** CSS custom property ("--q-batt") or colour. */
   color: string
   width?: number
   dash?: number[]
+  /** Fill the area between the line and zero at this opacity (PV is drawn as an area). */
+  fill?: number
   /** Step line (value holds until the next point). Default true. */
   step?: boolean
   /** Readout format for the legend. */
@@ -101,7 +103,7 @@ export function TimeChart({
 
   const zoomable = Boolean(onZoom)
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step]), height, yRange, fit, zoomable, syncKey, timeZone,
+    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill]), height, yRange, fit, zoomable, syncKey, timeZone,
     theme,
   ])
 
@@ -155,6 +157,8 @@ export function TimeChart({
           stroke: cssColor(s.color),
           width: s.width ?? 2,
           dash: s.dash,
+          fill: s.fill ? withAlpha(cssColor(s.color), s.fill) : undefined,
+          fillTo: s.fill ? 0 : undefined,
           paths: s.step === false ? undefined : stepped,
           points: { show: false },
           spanGaps: false,

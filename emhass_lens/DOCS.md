@@ -15,8 +15,18 @@ EMHASS Lens drives [EMHASS](https://github.com/davidusb-geek/emhass), and you ca
    - **Inputs**: the entities for battery state of charge, the target SOC and your deferrable loads (e.g. EV charging).
    - **Prices**: your Elektrilevi network package and the other fees.
    - **Price forecast** and **PV forecast**.
-3. Switch the EMHASS mode to **Dry run** to see the payloads EMHASS Lens would send, without sending them.
+3. Switch the EMHASS mode to **Dry run** to see the payloads EMHASS Lens would send, without sending them. The mode switch is in the status chip at the top right ("OFF · Nobody drives"): click it.
 4. When the dry runs look right, switch to **Live**.
+
+## Finding your way around
+
+- **The sidebar** groups the pages: **Operate** (Plan, Inputs), **Control** (Inverter, EV charger, Market, all experimental), **Diagnose** (Runs, Logs, Health) and **Configure** (Settings). On a phone it opens from the menu button next to the page name.
+- **The status chip** at the top shows the EMHASS mode and who drives EMHASS, for example "LIVE · EMHASS Lens drives". Click it for the mode switch, the next MPC run, the state of every part (Home Assistant, EMHASS, prices, forecasts, MQTT…) and the live-update connection. Its colour follows the mode: green for Live, blue for Dry run, grey for Off, red when the HACS integration and EMHASS Lens both drive.
+- **Problems**: when something needs attention a red or amber "N problems" chip appears next to it and opens the list on Health.
+- **Run MPC now** builds the payload and runs it straight away, as the mode says, and opens the run.
+- **⌘K** (Ctrl+K on Windows and Linux) or the search field opens a palette: type a page, a settings section or an action, or a run number to open that run or its logs.
+- **Shortcuts**: press **g** and then **p** (Plan), **i** (Inputs), **r** (Runs), **l** (Logs), **h** (Health) or **s** (Settings).
+- **One notice at a time** shows under the top bar (for example "EMHASS Lens was updated or restarted"); when there are more, **+N more** shows the rest.
 
 ## Modes
 
@@ -215,7 +225,7 @@ All other settings live in the App: every save is kept as a revision, with who c
 
 ## Updates
 
-When Home Assistant can install a newer EMHASS Lens, the header shows **Update to x.y.z** next to the version; it opens the App's page in Home Assistant. Home Assistant refreshes its App store on its own schedule, so EMHASS Lens also looks at GitHub: once a release's image for your machine is built, the header shows **x.y.z released · Check for updates** until Home Assistant picks it up (it opens the App store; use ⋮ → Check for updates there). Both are checked at start and every 30 minutes; a release whose image is still building isn't shown, so the link never leads to an update that fails.
+When Home Assistant can install a newer EMHASS Lens, the foot of the sidebar shows **Update to x.y.z**; it opens the App's page in Home Assistant. Home Assistant refreshes its App store on its own schedule, so EMHASS Lens also looks at GitHub: once a release's image for your machine is built, the sidebar shows **x.y.z released · Check for updates** until Home Assistant picks it up (it opens the App store; use ⋮ → Check for updates there). Both are checked at start and every 30 minutes; a release whose image is still building isn't shown, so the link never leads to an update that fails.
 
 ## Logs and runs
 
@@ -231,7 +241,7 @@ When Home Assistant can install a newer EMHASS Lens, the header shows **Update t
   - The choices live in the page address, so a filtered view survives a reload and can be bookmarked.
 - **Times carry their date** everywhere a list can span several days, for example "Sat, Oct 10, 18:15", with the year added when it isn't the current one.
 - The same log lines appear in the App's **Log** tab in Home Assistant.
-- **Pages refresh by themselves.** The header lamp **Live updates** is one connection that delivers log lines and says when each job starts and finishes, and every page reloads what that job changed. Each page also reloads on a timer of 10 seconds to 5 minutes.
+- **Pages refresh by themselves.** **Live updates** (in the status chip's panel) is one connection that delivers log lines and says when each job starts and finishes, and every page reloads what that job changed. Each page also reloads on a timer of 10 seconds to 5 minutes.
   - When the lamp is amber ("Polling every 10 s"), the live connection isn't getting through, often because a proxy buffers it. Pages keep refreshing on their timers, and the Logs page asks for new lines every 5 seconds.
   - An open run that is still running is followed every 3 seconds, with its log lines.
   - A list showing a day that has ended doesn't reload, because that day no longer changes.

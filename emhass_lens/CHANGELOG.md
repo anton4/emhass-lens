@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- A new look: Home Assistant's blue and cool greys on a white page, the Geist typeface (bundled with the App, nothing loads from the internet) and sections without boxes. Dark mode follows the system as before.
+- The pages sit in a sidebar, grouped into Operate, Control, Diagnose and Configure. On a phone the sidebar opens from the menu button.
+- The row of status lamps is now one chip at the top ("LIVE · EMHASS Lens drives"). Click it for the mode switch, the next MPC run, every part's state and the live-update connection. A "N problems" chip next to it opens the problem list.
+- **Run MPC now** is in the top bar on every page.
+- **⌘K** (Ctrl+K) opens a palette to jump to any page, settings section or run by typing; **g** then a letter opens a page.
+- Notices under the top bar show one at a time, with **+N more** for the rest.
+- Charts give every quantity its own colour on every page: battery blue, grid orange, PV yellow (drawn as an area), house load pink, EV and deferrable loads green-blue, import price red, export price green and dashed, spot grey and dotted.
+
 ## 0.3.20
 
 - The Logs page keeps showing new lines when the live connection isn't getting through (the amber "Polling" lamp in the header). It asks for them every 5 seconds.
