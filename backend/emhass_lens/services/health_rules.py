@@ -212,14 +212,17 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
     if mode == "live" and settings.emhass.mpc.auto:
         last = mpc.last_success_at
         stale_after = timedelta(minutes=15 * settings.health.plan_max_age_slots)
-        started = c.started_at
-        if (last is None and now - started > stale_after) or (last is not None and now - last > stale_after):
+        # the grace counts from the moment the App became the driver, not from the process start
+        since = max(c.started_at, mpc.live_since or c.started_at)
+        if (last is None and now - since > stale_after) or (last is not None and now - last > stale_after):
             out.append(
                 Problem(
                     "mpc.stale",
                     "error",
                     "No successful MPC run recently",
-                    f"last success {last.isoformat() if last else 'never'}",
+                    f"last success {last.isoformat()}"
+                    if last
+                    else f"no live run has succeeded since EMHASS Lens took over at {since.astimezone(tz):%H:%M}",
                     link="#/runs",
                 )
             )

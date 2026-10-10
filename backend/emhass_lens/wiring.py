@@ -478,6 +478,7 @@ def subscribe(c: Container) -> None:
     c.settings.subscribe("emhass.publish.slot_offset_s", on_publish_time)
     c.settings.subscribe("outputs", on_outputs)
     c.settings.subscribe(("emhass.mpc.auto", "prices.tariff"), on_state_change)
+    c.settings.subscribe(("emhass.mode", "emhass.mpc.auto"), x["mpc"].note_driver_change)
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
     ha.on_state(lambda entity_id: entity_id == c.settings.current.external_control.entity, x["external"].on_state)

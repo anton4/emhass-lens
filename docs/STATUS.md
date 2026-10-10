@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (afternoon): the owner took over; a premature health error fixed (unreleased)
+- The owner pressed Take over at 13:56 with parity 8/8. Six seconds later `mpc.stale` fired because its grace counted from the process start; `MpcService.live_since` (set when live + Auto MPC come on, via a settings subscription) is now the reference. Test in `test_phase2.py`.
+
 ### 2026-10-11: the owner's price sensors in the parity check (unreleased)
 - **Why:** the owner asked whether the App uses the `sensor.nordpool_import` / `nordpool_export` templates (it doesn't; it prices from Nord Pool itself) and wanted a check against them. The templates carry Võrk 2 network rates while the contract and the App are Võrk 4.
 - **Done:** `settings.prices.sensors` (import/export entity, tolerance), `domain/price_compare.py` (`sensor_intervals`, `compare` over hourly or quarter-hour intervals skipping forecast slots, `explain` naming the Elektrilevi package a constant per-period delta points at), `ParityService._price_sensors()` appended to the parity report; the run no longer noops when only the owner's sensors exist; `ParityView` uses a per-section label. Tests: `test_price_compare.py`, a phase-1 test with a Võrk 2 sensor.

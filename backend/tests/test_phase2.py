@@ -223,3 +223,25 @@ def test_publish_is_quiet_when_not_live(tmp_path: Path, world: World) -> None:
         container = client.app.state.container  # type: ignore[attr-defined]
         assert container.extras["publish"].active() is False
         assert container.scheduler.jobs["emhass.publish"].record() is False
+
+
+def test_taking_over_does_not_raise_a_stale_mpc_problem_before_the_first_run(tmp_path: Path, world: World) -> None:
+    """The grace for the first live run counts from the take-over, not from the process start hours earlier."""
+    clock = FakeClock(START - timedelta(hours=5))
+    client = live_client(
+        tmp_path, world, clock, emhass={"base_url": EMHASS_URL, "mode": "dry_run", "mpc": {"auto": True}}
+    )
+    try:
+        clock.set(datetime(2026, 10, 9, 10, 56, 24, tzinfo=UTC))  # five hours later the owner presses Take over
+        rev = client.get("/api/settings").json()["revision"]
+        assert client.post("/api/driver/take-over", json={"base_revision": rev}).json()["ok"] is True
+        run_job(client, "health.evaluate")
+        keys = {p["key"] for p in client.get("/api/problems").json()["active"]}
+        assert "mpc.stale" not in keys
+        # ... but it is raised when the first live runs never come
+        clock.set(datetime(2026, 10, 9, 12, 0, tzinfo=UTC))
+        run_job(client, "health.evaluate")
+        problems = {p["key"]: p for p in client.get("/api/problems").json()["active"]}
+        assert "mpc.stale" in problems and "took over at" in problems["mpc.stale"]["detail"]
+    finally:
+        client.__exit__(None, None, None)

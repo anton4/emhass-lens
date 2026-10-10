@@ -25,6 +25,7 @@ from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.inputs import describe
+from emhass_lens.settings.model import Settings
 
 if TYPE_CHECKING:
     from emhass_lens.container import Container
@@ -76,10 +77,20 @@ class MpcService:
         self.last_shadow: Shadow | None = None
         self.last_live_run_id: int | None = None
         self.last_success_at: datetime | None = None
+        # when the App became the driver (live mode with Auto MPC on); health counts the first run's grace from here
+        self.live_since: datetime | None = c.started_at if self._driving(c.settings.current) else None
 
     @property
     def mode(self) -> str:
         return "off" if self.c.boot.safe_mode else self.c.settings.current.emhass.mode
+
+    def _driving(self, settings: Settings) -> bool:
+        return not self.c.boot.safe_mode and settings.emhass.mode == "live" and settings.emhass.mpc.auto
+
+    def note_driver_change(self, old: Settings, new: Settings, paths: list[str]) -> None:
+        """Settings changed: remember the moment live mode with Auto MPC came on (Take over, or by hand)."""
+        if self._driving(new) and not self._driving(old):
+            self.live_since = self.c.clock.now()
 
     def legacy_driving(self) -> bool:
         """True while the HACS integration's Auto MPC switch is on."""
