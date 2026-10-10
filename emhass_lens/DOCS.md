@@ -163,6 +163,14 @@ Settings → **Qilowatt market control** holds the entities and thresholds (the 
 
 What stays as it was: the automation wrote feed-in only while selling, and a command under the gate during a session ends the session rather than flipping it. What is different on purpose: a session end goes straight to the plan's targets instead of the automation's "self-use, grid 0" defaults, and a burst of three sensor updates becomes one decision.
 
+## The ML load forecast
+
+EMHASS forecasts the house load with a model trained on your load sensor (`load_forecast_method: mlforecaster`). The Health page's **ML load forecast** card runs **Fit**, **Tune** and **Predict**; Fit uses the same number of lags the MPC runs send, so the model forecasts the whole horizon.
+
+**Tune** is different: EMHASS's tuner picks its own lag count from 6 h, 12 h, 1 day, 1.5 days, 2 days, 2.5 days or 3 days, and a tuned model forecasts only that far. Once tomorrow's prices and a forecast day are in, the horizon is about 2.5 days, so a model tuned to 1.5 days (144 slots) makes every run fail with "Unable to obtain 233 lags_opt values". EMHASS Lens recognises that answer, remembers how far the model reaches and plans again at once with the horizon cut to it; later runs are cut straight away. Health shows *EMHASS's load model forecasts only N slots* meanwhile. **Fit** restores the full horizon; after a day EMHASS Lens tries the full horizon again by itself, in case the model was fitted elsewhere.
+
+While EMHASS computes something for EMHASS Lens (an MPC solve, a fit or a tune), it may not answer its health check in time. The Health page's EMHASS card then shows *Busy with …* instead of calling EMHASS unreachable; a refused connection still counts as unreachable.
+
 ## EMHASS versions
 
 EMHASS Lens needs EMHASS **0.17.9** or later (the plan API). With **0.18.2** or later it no longer has to wait out the seconds around a slot boundary. **0.18.5** is recommended: the MPC horizon and the forecasts stay right across the DST changes, and a solution EMHASS calls `Optimal_Inaccurate` counts as a plan instead of an error. The Health page's EMHASS card shows the version and the configuration checks.

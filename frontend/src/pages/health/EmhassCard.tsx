@@ -6,10 +6,12 @@ import type { EmhassStatus, RunStarted } from '../../api/types'
 import { ChecksTable } from '../../components/ChecksTable'
 import { LabelledLamp } from '../../components/Lamp'
 import { ErrorNotice } from '../../components/PageHead'
-import { formatTime } from '../../lib/format'
+import { useNow } from '../../components/useNow'
+import { formatDuration, formatTime } from '../../lib/format'
 
 export function EmhassCard({ writable }: { writable: boolean }) {
   const emhass = useEmhass()
+  const now = useNow(5000)
   const queryClient = useQueryClient()
   const discover = useMutation({
     mutationFn: () => api.post<EmhassStatus>('/api/emhass/discover'),
@@ -52,6 +54,13 @@ export function EmhassCard({ writable }: { writable: boolean }) {
                   color={e.reachable === true ? 'green' : e.reachable === false ? 'red' : 'neutral'}
                   text={e.reachable === true ? 'Reachable' : e.reachable === false ? 'Unreachable' : 'Not checked yet'}
                 />
+                {e.busy_with && (
+                  <div className="cell-sub">
+                    Busy with {e.busy_with}
+                    {e.busy_since && <> for {formatDuration(now.getTime() - new Date(e.busy_since).getTime())}</>}; health
+                    checks may time out until it finishes
+                  </div>
+                )}
               </dd>
             </div>
             <div>

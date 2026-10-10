@@ -70,9 +70,11 @@ def build(
     *,
     emhass_version: tuple[int, ...] | None = None,
     compat: bool = False,
+    model_steps: int | None = None,
 ) -> BuildResult:
     """`emhass_version` gates keys older EMHASS versions don't know. `compat` builds what the HACS
-    integration sends (for the parity check): no P10 companion and no def_current_state."""
+    integration sends (for the parity check): no P10 companion and no def_current_state. `model_steps` is how far
+    EMHASS's (tuned) load model forecasts, when it is known to be shorter than the horizon."""
     issues: list[Issue] = []
     derived = derive(settings)
     mpc = settings.emhass.mpc
@@ -102,6 +104,19 @@ def build(
             )
         )
     slots = contiguous[: mpc.max_horizon]
+    if model_steps is not None and not compat and len(slots) > model_steps:
+        full_end = slots[-1].end
+        slots = slots[:model_steps]
+        issues.append(
+            Issue(
+                "warning",
+                "horizon_capped",
+                f"EMHASS's load model forecasts only {model_steps} slots (a tuned model forecasts as far as the lag "
+                f"count it picked); the plan stops at {local(slots[-1].end, settings)} instead of "
+                f"{local(full_end, settings)}",
+                hint="Run Fit under Health → ML load forecast to plan the full horizon again.",
+            )
+        )
     starts = [s.start for s in slots]
 
     p10_values: list[float] | None = None

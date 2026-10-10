@@ -18,7 +18,13 @@ const FALLBACK_MODELS: SklearnModel[] = [
 
 const JOBS: { action: MlAction; title: string; what: string }[] = [
   { action: 'fit', title: 'Fit', what: 'Trains the load forecast model on the load sensor history (forecast-model-fit).' },
-  { action: 'tune', title: 'Tune', what: 'Searches better model settings, then refits (forecast-model-tune). Slow.' },
+  {
+    action: 'tune',
+    title: 'Tune',
+    what:
+      'Searches better model settings, then refits (forecast-model-tune). Slow. The tuned model forecasts only as far as ' +
+      'the lag count the tuner picks (6 h to 3 days); longer plans are cut to it until you Fit again.',
+  },
   { action: 'predict', title: 'Predict', what: 'Publishes sensor.p_load_forecast_custom_model (forecast-model-predict).' },
 ]
 
@@ -37,6 +43,7 @@ export function MlCard({ writable }: { writable: boolean }) {
   const [historicDays, setHistoricDays] = useState('')
   const [trials, setTrials] = useState('')
   const lagsChanged = status.data?.problems.find((p) => p.key === 'ml.lags_changed')
+  const modelShort = status.data?.problems.find((p) => p.key === 'ml.model_short')
 
   const run = (action: MlAction) => {
     const params = {
@@ -64,6 +71,11 @@ export function MlCard({ writable }: { writable: boolean }) {
         {lagsChanged && (
           <div className="notice" data-color="amber" role="note">
             <strong>{lagsChanged.title}.</strong> {lagsChanged.detail} Run Fit so the model matches.
+          </div>
+        )}
+        {modelShort && (
+          <div className="notice" data-color="amber" role="note">
+            <strong>{modelShort.title}.</strong> {modelShort.detail} Run Fit to plan the full horizon again.
           </div>
         )}
         <ErrorNotice error={ml.error} />

@@ -74,6 +74,7 @@ async def events(c: ContainerDep, request: Request, topics: str | None = None) -
     async def stream() -> AsyncIterator[str]:
         yield "retry: 3000\n\n"
         closing = asyncio.ensure_future(c.bus.closing.wait())
+        getter: asyncio.Future[Any] | None = None
         try:
             async with c.bus.subscribe(wanted) as queue:
                 while not c.bus.is_closing:
@@ -95,6 +96,8 @@ async def events(c: ContainerDep, request: Request, topics: str | None = None) -
                     yield f"event: {event.topic}\ndata: {payload}\n\n"
         finally:
             closing.cancel()
+            if getter is not None and not getter.done():
+                getter.cancel()  # a disconnect mid-wait mustn't leave the queue.get() task pending
 
     return StreamingResponse(
         stream(),

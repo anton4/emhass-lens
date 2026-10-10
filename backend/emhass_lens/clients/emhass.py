@@ -1,5 +1,6 @@
 """EMHASS REST API: health, last run, plan, effective config and actions."""
 
+import json
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -80,7 +81,7 @@ class EmhassClient:
             return ActionResult(name, None, "", describe_error(exc), [], int((time.monotonic() - started) * 1000))
         ms = int((time.monotonic() - started) * 1000)
         body = redactor.text(resp.text)
-        error_lines = [line for line in body.splitlines() if "ERROR" in line]
+        error_lines = [line for line in body_lines(body) if "ERROR" in line]
         error = None
         if resp.status_code >= 400:
             error = f"HTTP {resp.status_code}" + (f": {error_lines[-1].strip()}" if error_lines else "")
@@ -88,3 +89,17 @@ class EmhassClient:
 
     async def close(self) -> None:
         await self.client.aclose()
+
+
+def body_lines(body: str) -> list[str]:
+    """The lines of an action's response. EMHASS answers a failed action with its log as a JSON list of strings
+    on one line; anything else is split on newlines."""
+    text = body.strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
+            return [line for item in parsed for line in item.splitlines()]
+    return body.splitlines()

@@ -67,6 +67,8 @@ class World:
     supervisor_lists_backups: bool = True  # hassio_role: backup
     supervisor_backups: list[dict[str, Any]] = field(default_factory=list)
     emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
+    emhass_model_steps: int | None = None  # a tuned load model: runs with a longer horizon fail (fit resets it)
+    emhass_health_timeout: bool = False  # /healthz doesn't answer in time (EMHASS busy computing)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -113,6 +115,8 @@ class World:
         if not self.emhass_up:
             raise httpx.ConnectError("connection refused", request=request)
         if path == "/healthz":
+            if self.emhass_health_timeout:
+                raise httpx.ReadTimeout("timed out", request=request)
             return httpx.Response(
                 200,
                 json={"status": "ok", "boot_ts": "2026-10-09T00:00:00Z", "versions": {"emhass": self.emhass_version}},
@@ -127,6 +131,11 @@ class World:
             name = path.removeprefix("/action/")
             payload = json.loads(request.content or b"{}")
             self.emhass_actions.append((name, payload))
+            if name == "forecast-model-fit":
+                self.emhass_model_steps = None  # a fitted model forecasts num_lags slots again
+            steps = self.emhass_model_steps
+            if name == "naive-mpc-optim" and steps is not None and payload["prediction_horizon"] > steps:
+                return httpx.Response(400, json=short_model_log(steps, payload["prediction_horizon"]))
             if name == "naive-mpc-optim":
                 now = self.clock_now() if self.clock_now else datetime.now(UTC)
                 stamp = now.astimezone(UTC).isoformat()
@@ -234,6 +243,19 @@ class World:
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.handler)
+
+
+def short_model_log(steps: int, wanted: int) -> list[str]:
+    """EMHASS 0.18.5's answer when its tuned load model forecasts fewer slots than the run asks for (run 755)."""
+    return [
+        "INFO - emhass.web_server -  >> Setting input data dict",
+        "INFO - emhass.web_server - Retrieving data from hass for load forecast using method = mlforecaster",
+        f"DEBUG - emhass.web_server - Number of ML predict forcast data generated (lags_opt): {steps}",
+        f"DEBUG - emhass.web_server - Number of forcast dates obtained (prediction_horizon): {wanted}",
+        f"ERROR - emhass.web_server - Unable to obtain: {wanted} lags_opt values from sensor: power load no var "
+        "loads, check optimization_time_step/freq and historic_days_to_retrieve/days_to_retrieve parameters",
+        "DEBUG - emhass.web_server - Stage [load_forecast] completed in 1.896s",
+    ]
 
 
 COSTFUN_COLUMN = {"profit": "cost_fun_profit", "cost": "cost_fun_cost", "self-consumption": "cost_fun_selfcons"}

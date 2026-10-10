@@ -20,6 +20,7 @@ from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.issues import Issue, errors
 from emhass_lens.domain.mpc.anchor import anchor_slot, hazard_wait
 from emhass_lens.domain.mpc.compare import costfun_of
+from emhass_lens.domain.mpc.model_steps import short_model
 from emhass_lens.domain.mpc.payload import BuildResult, build
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.runs.recorder import RunRefused
@@ -79,6 +80,7 @@ class MpcService:
         self.last_success_at: datetime | None = None
         # when the App became the driver (live mode with Auto MPC on); health counts the first run's grace from here
         self.live_since: datetime | None = c.started_at if self._driving(c.settings.current) else None
+        self._replan: asyncio.Task[None] | None = None
 
     @property
     def mode(self) -> str:
@@ -157,7 +159,14 @@ class MpcService:
         await self.c.extras["charger"].refresh_load_profile()
         inputs = self.c.extras["inputs"].snapshot(now)
         anchor = anchor_slot(now, rounding)
-        result = build(inputs, anchor, slot_floor(now), settings, emhass_version=emhass.version_tuple)
+        result = build(
+            inputs,
+            anchor,
+            slot_floor(now),
+            settings,
+            emhass_version=emhass.version_tuple,
+            model_steps=self.c.extras["ml"].model_steps(now),
+        )
         issues = validate(result, inputs, settings)
         compat = None
         if settings.parity.enabled:
@@ -231,7 +240,7 @@ class MpcService:
         settings = self.c.settings.current
         sent_at = self.c.clock.now()
         async with contextlib.nullcontext() if locked else emhass.action_lock:
-            response = await emhass.client.action("naive-mpc-optim", result.payload, settings.emhass.timeouts.mpc)
+            response = await emhass.act("naive-mpc-optim", result.payload, settings.emhass.timeouts.mpc)
         ctx.run.artifact(
             "response",
             {
@@ -256,6 +265,7 @@ class MpcService:
         if response.error:
             ctx.run.outcome = "error"
             ctx.run.error = response.error
+            await self.on_short_model(ctx, response.body)
             return
         if not fresh:  # anything EMHASS reports about an older run says nothing about this request
             ctx.run.outcome = "error"
@@ -291,6 +301,34 @@ class MpcService:
                 await outputs.refresh()
             except Exception as exc:  # MQTT trouble mustn't turn a good plan into a failed run
                 log.warning("Refreshing the MQTT entities failed: %s", exc)
+
+    async def on_short_model(self, ctx: JobContext, body: str) -> bool:
+        """When EMHASS refused the run because its (tuned) load model forecasts fewer slots than the horizon: learn
+        how many, say so, and plan again at once with the horizon cut to that. True when that was the reason."""
+        assert ctx.run is not None
+        short = short_model(body)
+        if short is None:
+            return False
+        steps, wanted = short
+        await self.c.extras["ml"].learn_steps(steps, wanted)
+        ctx.run.outcome = "error"
+        ctx.run.error = (
+            f"EMHASS's load model covers only {steps} of {wanted} slots (a tuned model forecasts as far as the lag "
+            f"count it picked)"
+        )
+        if ctx.params.get("replan"):
+            ctx.run.summary = "Failed again with the shorter horizon; run Fit under Health → ML load forecast"
+            return True
+        ctx.run.summary = f"{ctx.run.error}; planning again with {steps} slots"
+        trigger = "manual" if ctx.trigger == "manual" else "event"
+        self._replan = asyncio.create_task(self._replan_after(trigger), name="mpc:replan")
+        return True
+
+    async def _replan_after(self, trigger: str) -> None:
+        job = self.c.scheduler.jobs["emhass.mpc"]
+        async with job.lock:  # this run still holds the job; MPC runs don't queue a rerun, so wait for it to end
+            pass
+        self.c.scheduler.run_now("emhass.mpc", {"replan": True}, trigger=trigger)
 
     async def _costfun_note(self, result: BuildResult) -> str:
         """Did EMHASS use the cost function the payload asked for? Health warns while it doesn't."""

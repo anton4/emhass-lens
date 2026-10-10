@@ -1935,6 +1935,28 @@
       },
       "EmhassStatusOut": {
         "properties": {
+          "busy_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Since"
+          },
+          "busy_with": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy With"
+          },
           "checks": {
             "items": {
               "$ref": "#/components/schemas/EmhassCheck"

@@ -648,6 +648,8 @@ class EmhassStatusOut(BaseModel):
     last_error: str | None
     last_health_at: str | None
     unreachable_since: str | None
+    busy_with: str | None = None
+    busy_since: str | None = None
     method_ts_round: str
     config_at: str | None
     checks: list[EmhassCheck]

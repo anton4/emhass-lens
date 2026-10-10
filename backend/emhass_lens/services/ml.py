@@ -1,8 +1,10 @@
 """EMHASS's ML load forecaster: fit, tune and predict, run on demand with the same lag settings MPC uses."""
 
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.domain.mpc.payload import derive
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
@@ -13,11 +15,53 @@ if TYPE_CHECKING:
 log = logging.getLogger("emhass_lens.ml")
 
 FIT_KEY = "ml.last_fit"
+STEPS_KEY = "ml.model_steps"  # {steps, wanted, seen_at}: EMHASS's load model forecasts fewer slots than the horizon
+STEPS_MAX_AGE = timedelta(hours=24)  # then the full horizon is tried again (a refit outside the App would go unseen)
 
 
 class MlService:
     def __init__(self, c: Container) -> None:
         self.c = c
+        self._steps: dict[str, Any] | None = None
+        self._steps_loaded = False
+
+    # --- how far the model forecasts (learnt from EMHASS's error, see domain/mpc/model_steps.py) ------------
+    def _short(self) -> dict[str, Any] | None:
+        if not self._steps_loaded:
+            self._steps, self._steps_loaded = self.c.kv_get(STEPS_KEY), True
+        return self._steps
+
+    def model_steps(self, now: datetime) -> int | None:
+        """The slots EMHASS's load model forecasts, while that is known to be fewer than the horizon."""
+        known = self._short()
+        if not known:
+            return None
+        seen = parse_iso(known.get("seen_at"))
+        if seen is None or now - seen > STEPS_MAX_AGE:
+            return None
+        return int(known["steps"])
+
+    def short_info(self, now: datetime) -> dict[str, Any] | None:
+        known = self._short()
+        return known if known and self.model_steps(now) is not None else None
+
+    async def learn_steps(self, steps: int, wanted: int) -> None:
+        value = {"steps": steps, "wanted": wanted, "seen_at": iso(self.c.clock.now())}
+        self._steps, self._steps_loaded = value, True
+        await self.c.app_db.run(self.c.kv_set, STEPS_KEY, value)
+        log.warning(
+            "EMHASS's load model forecasts only %d slots but the run asked for %d (a tuned model forecasts as far as "
+            "the lag count it picked); planning %d slots until the model is fitted again",
+            steps,
+            wanted,
+            steps,
+        )
+
+    async def forget_steps(self) -> None:
+        if self._short() is None:
+            return
+        self._steps, self._steps_loaded = None, True
+        await self.c.app_db.run(self.c.kv_set, STEPS_KEY, None)
 
     def _base(self) -> dict[str, Any]:
         settings = self.c.settings.current
@@ -48,7 +92,7 @@ class MlService:
         self.c.extras["ml_running"] = self.c.extras.get("ml_running", 0) + 1
         try:
             async with emhass.action_lock:
-                result = await emhass.client.action(action, payload, timeout)
+                result = await emhass.act(action, payload, timeout)
         finally:
             self.c.extras["ml_running"] = max(0, self.c.extras.get("ml_running", 1) - 1)
         ctx.run.artifact(
@@ -79,6 +123,7 @@ class MlService:
                     "sklearn_model": payload["sklearn_model"],
                 },
             )
+            await self.forget_steps()  # a fitted model forecasts num_lags slots again
             assert ctx.run is not None
             ctx.run.summary = f"Fitted {payload['sklearn_model']} with {payload['num_lags']} lags"
 
@@ -89,6 +134,7 @@ class MlService:
         }
         timeout = self.c.settings.current.emhass.timeouts.tune
         if await self._action(ctx, "forecast-model-tune", payload, timeout):
+            await self.forget_steps()  # the next run learns how far the tuned model forecasts
             assert ctx.run is not None
             ctx.run.summary = f"Tuned {payload['sklearn_model']} ({payload['n_trials']} trials)"
 

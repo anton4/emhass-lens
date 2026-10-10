@@ -200,3 +200,37 @@ async def test_the_event_stream_ends_when_the_bus_announces_the_shutdown() -> No
     assert str(await asyncio.wait_for(waiting, 5)).startswith("event: shutdown")
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(iterator.__anext__(), 5)
+
+
+async def test_a_disconnect_while_the_stream_waits_leaves_no_pending_queue_read() -> None:
+    """Starlette cancels the response when the browser goes away; the queue.get() the stream waits on must go too,
+    or asyncio later reports "Task was destroyed but it is pending!"."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from emhass_lens.api.routes.logs import events
+    from emhass_lens.core.bus import EventBus
+
+    bus = EventBus()
+    bus.bind(asyncio.get_running_loop())
+    c = SimpleNamespace(bus=bus)
+
+    async def never_disconnected() -> bool:
+        return False
+
+    def queue_reads() -> list[asyncio.Task]:
+        return [t for t in asyncio.all_tasks() if not t.done() and "Queue.get" in repr(t.get_coro())]
+
+    response = await events(c, SimpleNamespace(is_disconnected=never_disconnected), "log")  # type: ignore[arg-type]
+    iterator = response.body_iterator.__aiter__()
+    await iterator.__anext__()
+    waiting = asyncio.ensure_future(iterator.__anext__())
+    await asyncio.sleep(0.05)
+    assert len(queue_reads()) == 1
+    waiting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+    for _ in range(3):
+        await asyncio.sleep(0)
+    assert queue_reads() == []
+    assert bus.subscriber_count == 0

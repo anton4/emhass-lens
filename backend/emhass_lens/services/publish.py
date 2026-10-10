@@ -68,7 +68,7 @@ class PublishService:
             ctx.run.outcome, ctx.run.summary = "noop", "Only publishes in live mode"
             return
         async with emhass.action_lock:
-            result = await emhass.client.action("publish-data", {}, settings.emhass.timeouts.publish)
+            result = await emhass.act("publish-data", {}, settings.emhass.timeouts.publish)
         ctx.run.artifact(
             "response",
             {

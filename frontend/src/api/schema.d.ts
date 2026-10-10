@@ -1809,6 +1809,10 @@ export interface components {
         };
         /** EmhassStatusOut */
         EmhassStatusOut: {
+            /** Busy Since */
+            busy_since?: string | null;
+            /** Busy With */
+            busy_with?: string | null;
             /** Checks */
             checks: components["schemas"]["EmhassCheck"][];
             /** Checks Status */

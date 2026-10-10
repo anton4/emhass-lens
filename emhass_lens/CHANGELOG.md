@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A tuned ML load model no longer stops planning. EMHASS's tuner picks its own lag count (6 h to 3 days) and a tuned model forecasts only that far, so runs with a longer horizon failed with "Unable to obtain … lags_opt values". EMHASS Lens now recognises that answer, plans again at once with the horizon cut to what the model covers, and shows a Health warning until the model is fitted again. The Tune button explains this.
+- EMHASS is shown as busy, not unreachable, while it computes an action for EMHASS Lens and its health check times out.
+- A failed EMHASS action shows its error line instead of EMHASS's whole log.
+- Fixed "Task was destroyed but it is pending!" log errors after a browser closed the live log stream.
+
 ## 0.3.7
 
 - PV reserved for Excess Solar charging (Settings → EV charger control, off by default): while the car charges from excess solar, the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, until the car's charge to its target is covered, so EMHASS does not plan the home battery or exports with energy the car will use. The Explain table shows the reserved watts per slot; the EV charger page shows the current state.

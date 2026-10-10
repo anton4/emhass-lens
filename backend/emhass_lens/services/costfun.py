@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.domain.mpc.compare import COSTFUNS, LABEL, costfun_of, plan_totals
+from emhass_lens.domain.mpc.model_steps import short_model
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 
@@ -81,15 +82,22 @@ class CostfunCompareService:
         live, _source = self.live_costfun()
         now = self.c.clock.now()
         async with emhass.action_lock:
-            results = await self._alternatives(ctx, built, live)
-            await mpc.send(ctx, built.result, built.horizon, built.warn_note, locked=True)
+            results, short_body = await self._alternatives(ctx, built, live)
+            if short_body is None:
+                await mpc.send(ctx, built.result, built.horizon, built.warn_note, locked=True)
+        if short_body is not None:
+            # EMHASS's load model can't cover the horizon: no method can plan it; plan again with it cut
+            await mpc.on_short_model(ctx, short_body)
+            return
         results.append(await self._live_entry(ctx, built, live))
         await self.c.app_db.run(self._store, ctx.run.id, now, built.anchor, results)
         self.last_compared_at = now
         head = self.describe(results, built)
         ctx.run.summary = f"{head} · {ctx.run.summary}" if ctx.run.summary else head
 
-    async def _alternatives(self, ctx: JobContext, built: Built, live: str) -> list[dict[str, Any]]:
+    async def _alternatives(self, ctx: JobContext, built: Built, live: str) -> tuple[list[dict[str, Any]], str | None]:
+        """The other methods' plans, and EMHASS's answer when its load model is shorter than the horizon (then the
+        comparison stops: no method can plan it)."""
         assert ctx.run is not None
         emhass = self.c.extras["emhass"]
         timeout = self.c.settings.current.emhass.timeouts.mpc
@@ -109,12 +117,14 @@ class CostfunCompareService:
                 "rows": [],
                 "totals": None,
             }
-            response = await emhass.client.action("naive-mpc-optim", payload, timeout)
+            response = await emhass.act("naive-mpc-optim", payload, timeout)
             entry["duration_ms"] = response.duration_ms
             if response.error:
                 entry["problem"] = response.error
                 out.append(entry)
                 ctx.run.artifact(f"costfun:{method}", {**entry, "rows": None, "rows_count": len(entry["rows"])})
+                if short_model(response.body) is not None:
+                    return out, response.body
                 continue
             try:
                 last_run = await emhass.client.last_run()
@@ -152,7 +162,7 @@ class CostfunCompareService:
             out.append(entry)
             if entry["problem"] and self.ignored:
                 break  # no point asking for the third one
-        return out
+        return out, None
 
     async def _live_entry(self, ctx: JobContext, built: Built, live: str) -> dict[str, Any]:
         assert ctx.run is not None

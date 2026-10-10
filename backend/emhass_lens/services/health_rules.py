@@ -311,6 +311,21 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 "#/health",
             )
         )
+    short = x["ml"].short_info(now)
+    if short:
+        hours = short["steps"] / 4
+        out.append(
+            Problem(
+                "ml.model_short",
+                "warning",
+                f"EMHASS's load model forecasts only {short['steps']} slots",
+                f"A tuned model forecasts only as far as the lag count the tuner picked ({hours:g} h here), so runs "
+                f"that asked for {short['wanted']} slots failed. Plans are cut to {short['steps']} slots until the "
+                "model is fitted again.",
+                "Run Fit under Health → ML load forecast; it forecasts the full horizon again.",
+                "#/health",
+            )
+        )
     outputs = x["outputs"]
     if outputs.enabled() and not outputs.connected:
         out.append(

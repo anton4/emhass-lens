@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from emhass_lens.clients.emhass import EmhassClient, EmhassError
+from emhass_lens.clients.emhass import ActionResult, EmhassClient, EmhassError
 from emhass_lens.clients.supervisor import SupervisorClient, SupervisorError, addon_hostname
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
@@ -80,6 +80,17 @@ class EmhassService:
         self.boot_ts: Any = None
         self.discovery_log: list[dict[str, Any]] = []
         self.action_lock = asyncio.Lock()
+        self.busy: tuple[str, datetime] | None = None  # the action EMHASS is computing for us, and since when
+        self._busy_noted: tuple[str, datetime] | None = None
+
+    async def act(self, name: str, payload: dict[str, Any], timeout: float) -> ActionResult:
+        """Run an EMHASS action, remembering that EMHASS is busy with it (its health check may time out meanwhile).
+        Callers hold `action_lock` themselves."""
+        self.busy = (name, self.c.clock.now())
+        try:
+            return await self.client.action(name, payload, timeout)
+        finally:
+            self.busy = None
 
     # --- facts other services rely on --------------------------------------------------------------
     @property
@@ -188,6 +199,17 @@ class EmhassService:
         try:
             health = await self.client.healthz()
         except EmhassError as exc:
+            busy = self.busy
+            if busy is not None and "timed out" in str(exc):
+                # computing our own action (an MPC solve, an ML fit or tune) keeps EMHASS from answering: not down
+                if self._busy_noted != busy:
+                    self._busy_noted = busy
+                    log.info(
+                        "EMHASS is busy with %s (since %s); its health check times out until it finishes",
+                        busy[0],
+                        busy[1].astimezone(self.c.extras["prices"].tz).strftime("%H:%M:%S"),
+                    )
+                return
             self._unreachable(str(exc))
             return
         restarted = self.boot_ts is not None and health.get("boot_ts") != self.boot_ts
@@ -407,6 +429,8 @@ class EmhassService:
             "last_error": self.last_error,
             "last_health_at": iso(self.last_health_at),
             "unreachable_since": iso(self.unreachable_since),
+            "busy_with": self.busy[0] if self.busy else None,
+            "busy_since": iso(self.busy[1]) if self.busy else None,
             "method_ts_round": self.method_ts_round(),
             "config_at": iso(self.config_at),
             "checks": [c.as_dict() for c in self.checks],
