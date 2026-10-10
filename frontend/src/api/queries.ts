@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, query } from './client'
 import type {
   ChargerStatus,
+  CostfunCompareResponse,
   EmhassStatus,
   EntityOption,
   InputsResponse,
@@ -11,6 +12,7 @@ import type {
   MarketSession,
   MarketStatus,
   OutputsStatus,
+  PlanHistoryResponse,
   PlanResponse,
   PricesResponse,
   ProblemsResponse,
@@ -34,6 +36,8 @@ export const keys = {
   schema: ['settings-schema'] as const,
   revisions: ['settings-revisions'] as const,
   plan: ['plan'] as const,
+  planHistory: (hours: number, horizon: number) => ['plan-history', hours, horizon] as const,
+  costfun: ['costfun'] as const,
   prices: (daysBack: number) => ['prices', daysBack] as const,
   inputs: ['inputs'] as const,
   emhass: ['emhass'] as const,
@@ -96,6 +100,25 @@ export function useRevisions() {
 
 export function usePlan() {
   return useQuery({ queryKey: keys.plan, queryFn: () => api.get<PlanResponse>('/api/plan'), refetchInterval: 60_000 })
+}
+
+/** The newest comparison of EMHASS's three cost functions, and a week of their totals. */
+export function useCostfun() {
+  return useQuery({
+    queryKey: keys.costfun,
+    queryFn: () => api.get<CostfunCompareResponse>('/api/plan/costfun'),
+    refetchInterval: 60_000,
+  })
+}
+
+/** The last `hours` of slots: measured values and what the plan said `horizon` slots ahead of each. */
+export function usePlanHistory(hours: number, horizon: number) {
+  return useQuery({
+    queryKey: keys.planHistory(hours, horizon),
+    queryFn: () => api.get<PlanHistoryResponse>(`/api/plan/history${query({ hours, horizon })}`),
+    refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
+  })
 }
 
 export function usePrices(daysBack = 1) {

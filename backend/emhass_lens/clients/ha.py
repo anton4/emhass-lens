@@ -140,6 +140,34 @@ class HaClient:
         if resp.status_code >= 400:
             raise HaError(f"firing {event_type} failed: HTTP {resp.status_code}")
 
+    async def history(
+        self, start: datetime, end: datetime, entity_ids: list[str], timeout: float = 60
+    ) -> list[list[dict[str, Any]]]:
+        """Recorder history of `entity_ids` in [start, end): one list per entity that has rows. The first
+        item is the state in force at `start` (a full state); items between the first and the last carry
+        only `state` and `last_changed`."""
+        if not entity_ids:
+            return []
+        resp = await self.rest.get(
+            f"/api/history/period/{iso(start)}",
+            params={
+                "filter_entity_id": ",".join(entity_ids),
+                "end_time": iso(end) or "",
+                "minimal_response": "",
+                "no_attributes": "",
+            },
+            timeout=timeout,
+        )
+        if resp.status_code == 404:
+            raise HaError(
+                "Home Assistant has no /api/history/period: the history integration isn't loaded "
+                "(it is part of default_config; otherwise add 'history:' to configuration.yaml)"
+            )
+        if resp.status_code >= 400:
+            raise HaError(f"reading history failed: HTTP {resp.status_code} {resp.text[:200]}")
+        data = resp.json()
+        return [lst for lst in data if isinstance(lst, list)] if isinstance(data, list) else []
+
     async def post(self, path: str, payload: dict[str, Any]) -> httpx.Response:
         return await self.rest.post(path, json=payload)
 

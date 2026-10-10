@@ -333,6 +333,61 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                     link="#/runs",
                 )
             )
+    # Cost function: did EMHASS honour the one asked for?
+    costfun = x.get("costfun")
+    if costfun is not None and costfun.ignored:
+        out.append(
+            Problem(
+                "emhass.costfun_ignored",
+                "warning",
+                "EMHASS ignored the cost function",
+                costfun.ignored,
+                "Update EMHASS (0.18.5 is recommended), or set the cost function in EMHASS itself and choose "
+                "'EMHASS's own setting' here.",
+                "#/settings?section=emhass",
+            )
+        )
+
+    # Measurements (plan history and accuracy)
+    measurements = x.get("measurements")
+    if measurements is not None and ha.connected:
+        missing = sorted(cfg.entity for cfg in measurements.configured().values() if ha.state(cfg.entity) is None)
+        if missing:
+            out.append(
+                Problem(
+                    "measurements.entity_missing",
+                    "warning",
+                    "A measurement entity isn't found",
+                    ", ".join(missing) + " has no state in Home Assistant, so the Plan page can't show what happened",
+                    "Check Settings → Measurements.",
+                    "#/settings?section=measurements",
+                )
+            )
+        last = measurements.last_sample_at
+        recent = last is not None and now - last <= timedelta(hours=1)
+        if measurements.enabled() and measurements.last_error and not recent:
+            out.append(
+                Problem(
+                    "measurements.unavailable",
+                    "warning",
+                    "Measurements can't be read from Home Assistant",
+                    measurements.last_error,
+                    "The Plan page can't show what happened until this works. See the Measurement history runs.",
+                    "#/runs?job=measure.backfill",
+                )
+            )
+        elif measurements.enabled() and now - (last or c.started_at) > timedelta(hours=1):
+            out.append(
+                Problem(
+                    "measurements.stale",
+                    "warning",
+                    "No measurements for over an hour",
+                    "The quarter-hourly recorder read hasn't stored anything.",
+                    "See the Measurements runs on the Runs page.",
+                    "#/runs?job=measure.sample",
+                )
+            )
+
     if not c.scheduler.started and not c.boot.safe_mode:
         out.append(Problem("scheduler.stopped", "error", "The scheduler is not running", link="#/health"))
 

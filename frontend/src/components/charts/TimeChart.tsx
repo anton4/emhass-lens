@@ -38,6 +38,8 @@ interface TimeChartProps {
   syncKey?: string
   timeZone?: string
   bands?: [number, number][]
+  /** Ranges washed in the past tint (measured history). */
+  shade?: [number, number][]
   markers?: number[]
   now?: number
 }
@@ -84,15 +86,15 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
-  markers = [], now,
+  shade = [], markers = [], now,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks read comes from this ref, so data and zoom updates don't need a rebuild.
-  const extras = useRef({ bands, markers, now, x, xRange, onZoom })
+  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom })
   useEffect(() => {
-    extras.current = { bands, markers, now, x, xRange, onZoom }
+    extras.current = { bands, shade, markers, now, x, xRange, onZoom }
   })
 
   const zoomable = Boolean(onZoom)
@@ -175,12 +177,16 @@ export function TimeChart({
           (u) => {
             const { ctx, bbox } = u
             ctx.save()
-            ctx.fillStyle = cssColor('--chart-wash')
-            for (const [a, b] of extras.current.bands) {
-              const left = Math.max(bbox.left, u.valToPos(a, 'x', true))
-              const right = Math.min(bbox.left + bbox.width, u.valToPos(b, 'x', true))
-              if (right > left) ctx.fillRect(left, bbox.top, right - left, bbox.height)
+            const fill = (ranges: [number, number][], color: string) => {
+              ctx.fillStyle = color
+              for (const [a, b] of ranges) {
+                const left = Math.max(bbox.left, u.valToPos(a, 'x', true))
+                const right = Math.min(bbox.left + bbox.width, u.valToPos(b, 'x', true))
+                if (right > left) ctx.fillRect(left, bbox.top, right - left, bbox.height)
+              }
             }
+            fill(extras.current.shade, cssColor('--chart-past'))
+            fill(extras.current.bands, cssColor('--chart-wash'))
             ctx.restore()
           },
         ],
@@ -236,7 +242,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, markers, now])
+  }, [bands, shade, markers, now])
 
   return <div ref={wrap} className="time-chart" role="img" aria-label={ariaLabel} />
 }

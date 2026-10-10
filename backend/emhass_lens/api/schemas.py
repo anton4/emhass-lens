@@ -394,6 +394,144 @@ class PlanResponse(BaseModel):
     emhass_url: str | None
 
 
+class PlannedValues(BaseModel):
+    """What the plan in force said for a past slot (EMHASS's columns and signs)."""
+
+    P_grid: float | None = None
+    P_batt: float | None = None
+    P_PV: float | None = None
+    P_Load: float | None = None
+    P_deferrable: float | None = None
+    SOC: float | None = None  # 0–1
+
+
+class ActualValues(BaseModel):
+    """Measured quarter-hour means in EMHASS's signs (W), SOC 0–1."""
+
+    grid: float | None = None
+    batt: float | None = None
+    pv: float | None = None
+    load: float | None = None
+    soc: float | None = None
+
+
+class HistorySlot(BaseModel):
+    start: str
+    planned: PlannedValues
+    planned_at: str | None = None  # generated_at of the plan the values come from
+    actual: ActualValues
+
+
+class QuantityAccuracy(BaseModel):
+    quantity: str  # load | pv | soc | grid | batt
+    unit: str  # W | %
+    n: int
+    coverage: float
+    mae: float | None = None
+    bias: float | None = None  # planned − actual
+    rmse: float | None = None
+    mape: float | None = None
+    sign_suspect: bool = False
+
+
+class AccuracyWindow(BaseModel):
+    hours: int
+    horizon: int  # slots of look-ahead the planned values were taken at
+    quantities: list[QuantityAccuracy]
+
+
+class PriceForecastAccuracy(BaseModel):
+    provider: str
+    lead_hours: int
+    n: int
+    mae: float | None = None  # c/kWh
+    bias: float | None = None
+    mape: float | None = None
+
+
+class MeasurementQuantity(BaseModel):
+    quantity: str
+    entity_id: str
+    last_slot: str | None = None
+    last_value: float | None = None
+
+
+class MeasurementStatus(BaseModel):
+    configured: list[MeasurementQuantity]
+    backfill_remaining_slots: int
+    last_sample_at: str | None = None
+    last_error: str | None = None
+
+
+class PlanHistoryResponse(BaseModel):
+    timezone: str
+    now: str
+    hours: int
+    horizon: int
+    slots: list[HistorySlot]
+    prices: list[PlanPrice]  # the window's past prices, [window start, now)
+    accuracy: list[AccuracyWindow]  # 24 h and 7 d
+    price_forecast: PriceForecastAccuracy | None = None
+    measurements: MeasurementStatus
+
+
+class CostfunTotals(BaseModel):
+    """Energy and money over a plan's horizon, computed the same way for every cost function."""
+
+    slots: int
+    hours: float
+    import_kwh: float
+    export_kwh: float
+    import_cost_eur: float
+    export_revenue_eur: float
+    net_cost_eur: float  # positive = money out
+    pv_kwh: float
+    load_kwh: float
+    self_consumption_kwh: float
+    self_consumption_pct: float | None = None
+    battery_charge_kwh: float
+    battery_discharge_kwh: float
+    soc_end: float | None = None
+    emhass_cost_profit_eur: float | None = None  # Σ cost_profit, EMHASS's own sign (positive = profit)
+    emhass_objective: float | None = None  # Σ of the cost_fun_* column EMHASS optimised
+    emhass_objective_column: str | None = None
+
+
+class CostfunResult(BaseModel):
+    costfun: str  # profit | cost | self-consumption
+    label: str
+    live: bool  # the method in use; its plan is EMHASS's current plan
+    optim_status: str | None = None
+    duration_ms: int | None = None
+    problem: str | None = None
+    generated_at: str | None = None
+    totals: CostfunTotals | None = None
+    rows: list[dict[str, Any]]
+
+
+class CostfunHistoryPoint(BaseModel):
+    run_id: int | None = None
+    compared_at: str
+    anchor: str
+    net_cost_eur: dict[str, float | None]
+    emhass_objective: dict[str, float | None]
+
+
+class CostfunCompareResponse(BaseModel):
+    available: bool
+    live_costfun: str
+    live_source: str  # settings | emhass_config | assumed
+    can_run: bool
+    cannot_run_reason: str | None = None
+    auto: bool  # compared on every live run
+    timezone: str
+    compared_at: str | None = None
+    anchor: str | None = None
+    run_id: int | None = None
+    results: list[CostfunResult]
+    history: list[CostfunHistoryPoint]
+
+
 class EmhassCheck(BaseModel):
     key: str
     title: str

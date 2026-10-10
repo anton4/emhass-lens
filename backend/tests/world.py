@@ -57,8 +57,13 @@ class World:
     ha_services: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     ha_events: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     failing_services: set[str] = field(default_factory=set)  # "domain/service" calls that answer 500
+    # recorder history per entity: (changed at, state), the way /api/history/period answers it
+    ha_history: dict[str, list[tuple[datetime, str]]] = field(default_factory=dict)
+    history_calls: list[tuple[datetime, datetime, list[str]]] = field(default_factory=list)
+    ha_history_status: int = 200  # 404 when the history integration isn't loaded
     clock_now: Any = None  # callable returning "now" for EMHASS timestamps
     supervisor_lists_addons: bool = False  # the default App role may not list Apps
+    emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -118,11 +123,15 @@ class World:
                     return httpx.Response(400, text="ERROR - solver failed\n")
                 self.emhass_last_run = {"status": self.action_status, "timestamp": stamp}
                 if self.action_status == "ok":
-                    self.emhass_plan = make_plan(now, payload)
+                    configured = self.emhass_config.get("costfun", "profit")
+                    costfun = configured if self.emhass_ignores_costfun else payload.get("costfun") or configured
+                    self.emhass_plan = make_plan(now, payload, costfun=costfun)
             return httpx.Response(200, text=f"EMHASS >> Action {name} executed... \n")
         return httpx.Response(404)
 
     def _ha(self, request: httpx.Request, path: str) -> httpx.Response:
+        if path.startswith("/api/history/period/"):
+            return self._history(request, path)
         if path.startswith("/api/states/"):
             state = self.ha_states.get(path.removeprefix("/api/states/"))
             if state is None:
@@ -155,6 +164,35 @@ class World:
             return httpx.Response(200, json={"message": "Event fired."})
         return httpx.Response(404)
 
+    def _history(self, request: httpx.Request, path: str) -> httpx.Response:
+        """HA's minimal_response shape: per entity the state in force at the start (a full state), then
+        the changes inside the window as {state, last_changed}; entities without any state are left out."""
+        if self.ha_history_status != 200:
+            return httpx.Response(self.ha_history_status, text=f"{self.ha_history_status}: Not Found")
+        start = datetime.fromisoformat(path.removeprefix("/api/history/period/"))
+        end = datetime.fromisoformat(request.url.params["end_time"])
+        ids = [e for e in request.url.params.get("filter_entity_id", "").split(",") if e]
+        self.history_calls.append((start, end, ids))
+        out: list[list[dict[str, Any]]] = []
+        for entity_id in ids:
+            changes = sorted(self.ha_history.get(entity_id, []))
+            before = [c for c in changes if c[0] <= start]
+            inside = [c for c in changes if start < c[0] < end]
+            items: list[dict[str, Any]] = []
+            if before:
+                at, state = before[-1]
+                items.append({"entity_id": entity_id, "state": state, "last_changed": at.isoformat(), "attributes": {}})
+            for at, state in inside:
+                if items:
+                    items.append({"state": state, "last_changed": at.isoformat()})
+                else:
+                    items.append(
+                        {"entity_id": entity_id, "state": state, "last_changed": at.isoformat(), "attributes": {}}
+                    )
+            if items:
+                out.append(items)
+        return httpx.Response(200, json=out)
+
     def set_state(
         self, entity_id: str, state: Any, attributes: dict[str, Any] | None = None, updated: datetime | None = None
     ) -> dict[str, Any]:
@@ -186,27 +224,39 @@ class World:
         return httpx.MockTransport(self.handler)
 
 
-def make_plan(now: datetime, payload: dict[str, Any]) -> dict[str, Any]:
-    """A plan shaped like EMHASS's /api/v1/plan, anchored where EMHASS would anchor it ('nearest')."""
+COSTFUN_COLUMN = {"profit": "cost_fun_profit", "cost": "cost_fun_cost", "self-consumption": "cost_fun_selfcons"}
+
+
+def make_plan(now: datetime, payload: dict[str, Any], costfun: str = "profit") -> dict[str, Any]:
+    """A plan shaped like EMHASS's /api/v1/plan, anchored where EMHASS would anchor it ('nearest'). The cost
+    function shapes the battery a little (cost never discharges into the grid) and names the cost_fun_* column."""
     ts = now.astimezone(UTC).timestamp()
     start = datetime.fromtimestamp(round(ts / 900) * 900, UTC)
     rows = []
     soc = payload.get("soc_init") or 0.5
     for i, cost in enumerate(payload.get("load_cost_forecast") or []):
         p_batt = -3000.0 if cost < 0.15 else 2000.0
+        if costfun == "cost":
+            p_batt = min(p_batt, 1500.0)  # never more than the house needs
+        if costfun == "self-consumption":
+            p_batt = -float(payload["pv_power_forecast"][i]) if payload["pv_power_forecast"][i] else p_batt
         soc = min(1.0, max(0.05, soc - p_batt / 74000 / 4))
-        rows.append(
-            {
-                "timestamp": (start + timedelta(minutes=15 * i)).isoformat().replace("+00:00", "Z"),
-                "P_PV": float(payload["pv_power_forecast"][i]),
-                "P_Load": 1500.0,
-                "P_batt": p_batt,
-                "P_grid": 1500.0 - payload["pv_power_forecast"][i] - p_batt,
-                "SOC_opt": round(soc, 4),
-                "P_deferrable0": 0.0,
-                "P_PV_curtailment": 0.0,
-                "unit_load_cost": cost,
-                "unit_prod_price": payload["prod_price_forecast"][i],
-            }
-        )
+        p_grid = 1500.0 - payload["pv_power_forecast"][i] - p_batt
+        prod = payload["prod_price_forecast"][i]
+        cost_profit = -0.001 * 0.25 * (cost * max(p_grid, 0.0) + prod * min(p_grid, 0.0))
+        row = {
+            "timestamp": (start + timedelta(minutes=15 * i)).isoformat().replace("+00:00", "Z"),
+            "P_PV": float(payload["pv_power_forecast"][i]),
+            "P_Load": 1500.0,
+            "P_batt": p_batt,
+            "P_grid": p_grid,
+            "SOC_opt": round(soc, 4),
+            "P_deferrable0": 0.0,
+            "P_PV_curtailment": 0.0,
+            "unit_load_cost": cost,
+            "unit_prod_price": prod,
+            "cost_profit": cost_profit,
+        }
+        row[COSTFUN_COLUMN[costfun]] = cost_profit if costfun != "cost" else -0.001 * 0.25 * cost * max(p_grid, 0.0)
+        rows.append(row)
     return {"status": "ok", "generated_at": now.astimezone(UTC).isoformat(), "emhass_schema_version": "1", "plan": rows}

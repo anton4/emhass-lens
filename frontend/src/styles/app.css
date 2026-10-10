@@ -2110,3 +2110,76 @@ dialog.confirm h2 {
 @media (max-width: 560px) {
   .setup-step { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* ---------- Plan history and accuracy ---------- */
+
+.history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0 0 12px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.history-controls > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accuracy-table td.r,
+.accuracy-table th.r {
+  white-space: nowrap;
+}
+
+.accuracy-hint {
+  margin: 8px 0 0;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+/* ---------- Cost functions ---------- */
+
+.costfun-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+}
+
+.costfun-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 12px 0 10px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.costfun-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.costfun-toggles .swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.costfun-table td.live {
+  font-weight: 600;
+}
+
+.costfun-table td.best {
+  color: var(--ok, #1baf7a);
+  font-weight: 600;
+}

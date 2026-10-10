@@ -8,6 +8,9 @@ from fastapi import APIRouter, Query
 
 from emhass_lens.api.deps import ContainerDep
 from emhass_lens.api.schemas import (
+    CostfunCompareResponse,
+    CostfunHistoryPoint,
+    CostfunResult,
     Derived,
     ExplainSlot,
     ForecastStatus,
@@ -18,6 +21,7 @@ from emhass_lens.api.schemas import (
     MpcPreview,
     MpcStatus,
     NordpoolStatus,
+    PlanHistoryResponse,
     PlanPrice,
     PlanResponse,
     PlanSnapshotOut,
@@ -114,6 +118,41 @@ def _snapshot_out(row: dict[str, Any] | None) -> PlanSnapshotOut | None:
         run_id=row.get("run_id"),
         last_run=row.get("last_run"),
         rows=row["plan"],
+    )
+
+
+@router.get("/plan/history")
+async def plan_history(
+    c: ContainerDep,
+    hours: Annotated[int, Query(ge=1, le=168)] = 24,
+    horizon: Annotated[int, Query(ge=0, le=96)] = 0,
+) -> PlanHistoryResponse:
+    """The last `hours` of slots: what the plan said `horizon` slots ahead of each, what was measured,
+    and error statistics over 24 h and 7 d."""
+    return await c.extras["history"].history(hours, horizon)
+
+
+@router.get("/plan/costfun")
+async def plan_costfun(c: ContainerDep) -> CostfunCompareResponse:
+    """The newest comparison of the three cost functions (same inputs, three plans), and a week of totals."""
+    svc = c.extras["costfun"]
+    latest = await c.app_db.run(svc.latest)
+    history = await c.app_db.run(svc.history, c.clock.now())
+    live, source = svc.live_costfun()
+    why = svc.cannot_run()
+    return CostfunCompareResponse(
+        available=latest is not None,
+        live_costfun=live,
+        live_source=source,
+        can_run=why is None,
+        cannot_run_reason=why,
+        auto=c.settings.current.emhass.mpc.compare_costfuns,
+        timezone=str(area_tz(c.settings.current)),
+        compared_at=latest["compared_at"] if latest else None,
+        anchor=latest["anchor"] if latest else None,
+        run_id=latest["run_id"] if latest else None,
+        results=[CostfunResult(**r) for r in latest["results"]] if latest else [],
+        history=[CostfunHistoryPoint(**p) for p in history],
     )
 
 

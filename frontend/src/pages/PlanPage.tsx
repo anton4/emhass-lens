@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { useOutputs, usePlan } from '../api/queries'
+import { useOutputs, usePlan, usePlanHistory } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
@@ -8,7 +8,20 @@ import { useNow } from '../components/useNow'
 import { formatClock, formatDuration, formatSlot, formatTime } from '../lib/format'
 import { inCurrentSlot } from '../lib/publish'
 import { planChanges, rowAt } from '../lib/plan'
+import {
+  HISTORY_WINDOWS,
+  HORIZON_KEY,
+  HORIZON_SLOTS,
+  HOURS_KEY,
+  loadPref,
+  savePref,
+  type HistoryHours,
+  type HorizonSlots,
+} from '../lib/planHistory'
 import { formatPower } from '../lib/units'
+import { AccuracyCard } from './plan/AccuracyCard'
+import { CostfunPanel } from './plan/CostfunPanel'
+import { HistoryControls } from './plan/HistoryControls'
 import { PlanCharts } from './plan/PlanCharts'
 import { ThisSlot } from './plan/ThisSlot'
 
@@ -29,6 +42,17 @@ export function PlanPage() {
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
   const changes = useMemo(() => planChanges(rows, (previousRows ?? []) as PlanRow[]), [rows, previousRows])
   const [table, setTable] = useState(false)
+  const [hours, setHours] = useState<HistoryHours>(() => loadPref(HOURS_KEY, HISTORY_WINDOWS, 24))
+  const [horizon, setHorizon] = useState<HorizonSlots>(() => loadPref(HORIZON_KEY, HORIZON_SLOTS, 0))
+  const history = usePlanHistory(hours, horizon)
+  const chooseHours = (h: HistoryHours) => {
+    setHours(h)
+    savePref(HOURS_KEY, h)
+  }
+  const chooseHorizon = (h: HorizonSlots) => {
+    setHorizon(h)
+    savePref(HORIZON_KEY, h)
+  }
 
   if (plan.isLoading) return <PageHead title="Plan" />
   if (!data?.available || !data.current) {
@@ -138,7 +162,39 @@ export function PlanPage() {
             {table ? 'Show charts' : 'Show as a table'}
           </button>
         </div>
-        <div className="panel-body">{table ? <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} /> : <PlanCharts data={data} nowS={nowS} />}</div>
+        <div className="panel-body">
+          {table ? (
+            <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
+          ) : (
+            <>
+              <HistoryControls hours={hours} horizon={horizon} onHours={chooseHours} onHorizon={chooseHorizon} />
+              <PlanCharts data={data} history={history.data} nowS={nowS} />
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>How accurate the plan has been</h2>
+          {history.data?.measurements.last_sample_at && (
+            <span className="muted">measured until {formatTime(history.data.measurements.last_sample_at, now, tz)}</span>
+          )}
+        </div>
+        <div className="panel-body">
+          <ErrorNotice error={history.error} />
+          <AccuracyCard history={history.data} />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Cost functions</h2>
+          <span className="muted">profit, cost and self-consumption with the same inputs</span>
+        </div>
+        <div className="panel-body">
+          <CostfunPanel nowS={nowS} now={now} />
+        </div>
       </section>
 
       <section className="panel">

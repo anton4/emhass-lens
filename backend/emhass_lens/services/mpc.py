@@ -9,6 +9,7 @@ Modes:
 """
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.issues import Issue, errors
 from emhass_lens.domain.mpc.anchor import anchor_slot, hazard_wait
+from emhass_lens.domain.mpc.compare import costfun_of
 from emhass_lens.domain.mpc.payload import BuildResult, build
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.runs.recorder import RunRefused
@@ -39,6 +41,22 @@ class Shadow:
     result: BuildResult
     compat: BuildResult | None
     run_id: int | None
+
+
+@dataclass
+class Built:
+    """A payload built and checked for this quarter, with what the run recorded about it."""
+
+    now: datetime
+    anchor: datetime
+    result: BuildResult
+    issues: list[Issue]
+    horizon: str
+    warn_note: str
+
+    @property
+    def blocking(self) -> list[Issue]:
+        return errors(self.issues)
 
 
 def describe_horizon(slots: int, anchor: datetime, tz: Any) -> str:
@@ -81,15 +99,44 @@ class MpcService:
     async def run(self, ctx: JobContext) -> None:
         assert ctx.run is not None
         settings = self.c.settings.current
-        emhass = self.c.extras["emhass"]
         mode = self.mode
         external = self.c.extras.get("external")
         held = external is not None and external.holding
         send = mode == "live" and (settings.emhass.mpc.auto or ctx.trigger == "manual") and not held
+
+        built = await self.build_now(ctx, send=send if mode != "off" else None)
+        blocking, horizon, warn_note = built.blocking, built.horizon, built.warn_note
+
+        if not send:
+            why = {"off": "mode Off", "dry_run": "dry run", "live": "Auto MPC is off"}[mode]
+            if held and external is not None:
+                why = f"held: a market session owns the inverter, {external.hold_text()}"
+            if blocking:
+                ctx.run.outcome = "refused" if mode == "dry_run" else "shadow"
+                ctx.run.summary = f"Would refuse ({why}): " + "; ".join(i.message for i in blocking)
+            else:
+                ctx.run.outcome = "dry_run" if mode == "dry_run" else "shadow"
+                ctx.run.summary = f"Built {horizon}, not sent ({why}){warn_note}"
+            return
+
+        if blocking:
+            raise RunRefused("; ".join(i.message for i in blocking))
+        costfun = self.c.extras.get("costfun")
+        if settings.emhass.mpc.compare_costfuns and costfun is not None and costfun.cannot_run() is None:
+            await costfun.compare_then_send(ctx, built)
+            return
+        await self.send(ctx, built.result, horizon, warn_note)
+
+    async def build_now(self, ctx: JobContext, *, send: bool | None) -> Built:
+        """Build and check this quarter's payload the way a run does, recording inputs, request, explain and
+        validation on the run. `send` None skips the pre-flight checks (mode Off); otherwise they are added."""
+        assert ctx.run is not None
+        settings = self.c.settings.current
+        emhass = self.c.extras["emhass"]
         rounding = emhass.method_ts_round()
 
         now = self.c.clock.now()
-        if mode != "off":
+        if send is not None:
             wait = hazard_wait(now, rounding, emhass.version_tuple, settings.emhass.mpc.hazard_guard_s)
             if wait > 0:
                 log.info("Waiting %.0f s: too close to a slot boundary for EMHASS %s", wait, emhass.version or "?")
@@ -106,7 +153,7 @@ class MpcService:
             compat = build(compat_inputs, anchor, slot_floor(now), settings, compat=True)
         self.last_shadow = Shadow(now, anchor, result, compat, ctx.run.id)
 
-        if mode != "off":
+        if send is not None:
             issues += self._preflight(send)
 
         ctx.run.artifact("inputs", describe(inputs))
@@ -124,28 +171,12 @@ class MpcService:
         ctx.run.artifact("validation", [i.as_dict() for i in issues])
 
         horizon = describe_horizon(result.horizon, anchor, self.c.extras["prices"].tz)
-        blocking = errors(issues)
         warn_note = (
             f"; {sum(1 for i in issues if i.level == 'warning')} warning(s)"
             if any(i.level == "warning" for i in issues)
             else ""
         )
-
-        if not send:
-            why = {"off": "mode Off", "dry_run": "dry run", "live": "Auto MPC is off"}[mode]
-            if held and external is not None:
-                why = f"held: a market session owns the inverter, {external.hold_text()}"
-            if blocking:
-                ctx.run.outcome = "refused" if mode == "dry_run" else "shadow"
-                ctx.run.summary = f"Would refuse ({why}): " + "; ".join(i.message for i in blocking)
-            else:
-                ctx.run.outcome = "dry_run" if mode == "dry_run" else "shadow"
-                ctx.run.summary = f"Built {horizon}, not sent ({why}){warn_note}"
-            return
-
-        if blocking:
-            raise RunRefused("; ".join(i.message for i in blocking))
-        await self._send(ctx, result, horizon, warn_note)
+        return Built(now, anchor, result, issues, horizon, warn_note)
 
     def _preflight(self, send: bool) -> list[Issue]:
         emhass = self.c.extras["emhass"]
@@ -177,12 +208,16 @@ class MpcService:
             issues.append(Issue("error", "ml_fit_running", "An ML model fit is running in EMHASS"))
         return issues
 
-    async def _send(self, ctx: JobContext, result: BuildResult, horizon: str, warn_note: str) -> None:
+    async def send(
+        self, ctx: JobContext, result: BuildResult, horizon: str, warn_note: str, *, locked: bool = False
+    ) -> None:
+        """Send the payload, read the plan back and store it. `locked` when the caller already holds the EMHASS
+        action lock (a cost-function comparison keeps it for its whole sequence)."""
         assert ctx.run is not None
         emhass = self.c.extras["emhass"]
         settings = self.c.settings.current
         sent_at = self.c.clock.now()
-        async with emhass.action_lock:
+        async with contextlib.nullcontext() if locked else emhass.action_lock:
             response = await emhass.client.action("naive-mpc-optim", result.payload, settings.emhass.timeouts.mpc)
         ctx.run.artifact(
             "response",
@@ -235,6 +270,7 @@ class MpcService:
         ctx.run.outcome = "ok"
         ctx.run.error = None
         ctx.run.summary = f"Planned {horizon} in {response.duration_ms / 1000:.1f} s{warn_note}"
+        ctx.run.summary += await self._costfun_note(result)
         self.c.bus.publish("plan.updated", {"run_id": ctx.run.id})
         outputs = self.c.extras.get("outputs")
         if outputs is not None:
@@ -242,6 +278,23 @@ class MpcService:
                 await outputs.refresh()
             except Exception as exc:  # MQTT trouble mustn't turn a good plan into a failed run
                 log.warning("Refreshing the MQTT entities failed: %s", exc)
+
+    async def _costfun_note(self, result: BuildResult) -> str:
+        """Did EMHASS use the cost function the payload asked for? Health warns while it doesn't."""
+        requested = result.payload.get("costfun")
+        costfun = self.c.extras.get("costfun")
+        if not requested or costfun is None:
+            return ""
+        plans = await self.c.extras["emhass"].plans(1)
+        used = costfun_of(plans[0]["plan"]) if plans else None
+        if used is None or used == requested:
+            costfun.ignored = None
+            return ""
+        costfun.ignored = (
+            f"EMHASS {self.c.extras['emhass'].version or '?'} made the plan with {used} although "
+            f"{requested} was requested"
+        )
+        return f"; EMHASS used {used}, not {requested}"
 
     def status(self) -> dict[str, Any]:
         shadow = self.last_shadow

@@ -1,8 +1,19 @@
 import { useMemo, useState } from 'react'
-import type { PlanPrice, PlanResponse, PlanRow } from '../../api/types'
+import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { snapWindow } from '../../lib/chartRange'
-import { alignTo, deferrableColumns, hasColumn, socColumns, stepSeries } from '../../lib/plan'
+import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
+import {
+  deferrableFuture,
+  hasMeasured,
+  hasPlanned,
+  mergePrices,
+  pastAndFuture,
+  pastEnd,
+  pastShade,
+  plannedAtTheTime,
+  timeGrid,
+} from '../../lib/planHistory'
 import { formatPower } from '../../lib/units'
 
 const SYNC = 'plan'
@@ -40,91 +51,134 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
   return out
 }
 
-/** Power, state of charge and prices on one synced time axis. */
-export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number }) {
-  // One zoom window for all three charts (unix seconds); null shows the whole plan
+// Power quantities in fixed slot order: battery, grid, PV, load (the deferrable loads follow).
+const POWER = [
+  { column: 'P_batt', measured: 'batt', planned: 'P_batt', label: 'Battery (+ discharge)', color: '--series-1' },
+  { column: 'P_grid', measured: 'grid', planned: 'P_grid', label: 'Grid (+ import)', color: '--series-2' },
+  { column: 'P_PV', measured: 'pv', planned: 'P_PV', label: 'PV', color: '--series-3' },
+  { column: 'P_Load', measured: 'load', planned: 'P_Load', label: 'House load', color: '--series-4' },
+] as const
+
+const DASHED = { width: 1.5, dash: [4, 4] as number[] }
+
+/** Power, state of charge and prices on one synced time axis: measured history (solid) with what the plan
+ *  said at the time (dashed) left of the now line, the current plan right of it. */
+export function PlanCharts({ data, history, nowS }: { data: PlanResponse; history?: PlanHistoryResponse; nowS: number }) {
+  // One zoom window for all three charts (unix seconds); null shows the whole range
   const [zoom, setZoom] = useState<[number, number] | null>(null)
   const zoomTo = (range: [number, number] | null) => setZoom(range && snapWindow(range, 900))
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
   const previous = useMemo(() => (previousRows ?? []) as PlanRow[], [previousRows])
+  const past = useMemo(() => history?.slots ?? [], [history])
+  const pastEndS = pastEnd(past, nowS)
+  const x = useMemo(() => timeGrid(past, rows), [past, rows])
+  const shade = useMemo(() => pastShade(x, pastEndS), [x, pastEndS])
 
   const power = useMemo(() => {
-    const deferrables = deferrableColumns(data.columns)
-    // Fixed slot order: battery, grid, PV, load, deferrable loads.
-    const spec = [
-      { column: 'P_batt', label: 'Battery (+ discharge)', color: '--series-1' },
-      { column: 'P_grid', label: 'Grid (+ import)', color: '--series-2' },
-      { column: 'P_PV', label: 'PV', color: '--series-3' },
-      { column: 'P_Load', label: 'House load', color: '--series-4' },
-    ].filter((s) => hasColumn(rows, s.column))
-    const { x, ys } = stepSeries(
-      rows,
-      spec.map((s) => s.column),
-    )
-    const series: ChartSeries[] = spec.map((s, i) => ({
-      label: s.label,
-      color: s.color,
-      values: ys[i] ?? [],
-      format: formatPower,
-    }))
-    if (deferrables.length > 0) {
-      const parts = stepSeries(rows, deferrables).ys
-      const total = x.map((_, i) => {
-        let sum: number | null = null
-        for (const p of parts) {
-          const v = p[i]
-          if (v !== null && v !== undefined) sum = (sum ?? 0) + v
-        }
-        return sum
-      })
+    const series: ChartSeries[] = []
+    for (const q of POWER) {
+      const inPlan = hasColumn(rows, q.column)
+      const measured = hasMeasured(past, q.measured)
+      const planned = hasPlanned(past, q.planned)
+      if (!inPlan && !measured && !planned) continue
       series.push({
-        label: deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads',
-        color: '--series-5',
-        values: total,
+        label: q.label,
+        color: q.color,
+        values: pastAndFuture(x, past, q.measured, rows, q.column, pastEndS),
         format: formatPower,
       })
+      if (planned) {
+        series.push({
+          label: `${q.label}, planned at the time`,
+          color: q.color,
+          ...DASHED,
+          values: plannedAtTheTime(x, past, q.planned),
+          format: formatPower,
+        })
+      }
     }
-    return { x, series }
-  }, [rows, data.columns])
+    const deferrables = deferrableColumns(data.columns)
+    const plannedDeferrable = hasPlanned(past, 'P_deferrable')
+    if (deferrables.length > 0 || plannedDeferrable) {
+      const label = deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads'
+      series.push({
+        label,
+        color: '--series-5',
+        values: deferrableFuture(x, rows, deferrables, pastEndS),
+        format: formatPower,
+      })
+      if (plannedDeferrable) {
+        series.push({
+          label: `${label}, planned at the time`,
+          color: '--series-5',
+          ...DASHED,
+          values: plannedAtTheTime(x, past, 'P_deferrable'),
+          format: formatPower,
+        })
+      }
+    }
+    return series
+  }, [x, rows, past, pastEndS, data.columns])
 
   const soc = useMemo(() => {
     const columns = socColumns(data.columns).filter((c) => hasColumn(rows, c))
-    if (columns.length === 0) return null
-    const { x, ys } = stepSeries(rows, columns)
-    const pct = (v: number | null) => (v === null ? null : v * 100)
+    const plannedSoc = hasPlanned(past, 'SOC')
+    if (columns.length === 0 && !plannedSoc && !hasMeasured(past, 'soc')) return null
     const fmt = (v: number) => `${v.toFixed(1)} %`
-    const series: ChartSeries[] = columns.map((_column, i) => ({
-      label: columns.length === 1 ? 'Planned SOC' : `Battery ${i + 1} SOC`,
-      color: `--series-${i + 1}`,
-      values: (ys[i] ?? []).map(pct),
+    const series: ChartSeries[] = []
+    const first = columns[0] ?? 'SOC_opt'
+    series.push({
+      label: columns.length > 1 ? 'Battery 1 SOC' : 'Battery SOC',
+      color: '--series-1',
       step: false,
+      values: pastAndFuture(x, past, 'soc', rows, first, pastEndS, 100, false),
       format: fmt,
-    }))
-    if (previous.length > 0 && columns[0] !== undefined) {
+    })
+    if (plannedSoc) {
       series.push({
-        label: columns.length === 1 ? 'Previous plan' : 'Battery 1, previous plan',
-        color: '--ink-faint',
-        width: 1.5,
-        dash: [4, 4],
+        label: columns.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
+        color: '--series-1',
+        ...DASHED,
         step: false,
-        values: alignTo(x, previous, columns[0]).map(pct),
+        values: plannedAtTheTime(x, past, 'SOC', 100, false),
         format: fmt,
       })
     }
-    return { x, series }
-  }, [rows, previous, data.columns])
+    columns.slice(1).forEach((column, i) => {
+      series.push({
+        label: `Battery ${i + 2} SOC`,
+        color: `--series-${i + 2}`,
+        step: false,
+        values: pastAndFuture(x, past, null, rows, column, pastEndS, 100, false),
+        format: fmt,
+      })
+    })
+    if (previous.length > 0) {
+      const pct = (v: number | null) => (v === null ? null : v * 100)
+      series.push({
+        label: columns.length > 1 ? 'Battery 1, previous plan' : 'Previous plan',
+        color: '--ink-faint',
+        width: 1.5,
+        dash: [2, 3],
+        step: false,
+        values: alignTo(x, previous, first).map(pct),
+        format: fmt,
+      })
+    }
+    return series
+  }, [x, rows, previous, past, pastEndS, data.columns])
 
   const prices = useMemo(() => {
-    const slots = data.prices
+    const slots = mergePrices(history?.prices ?? [], data.prices)
     if (slots.length === 0) return null
-    const x = slots.map((p) => Date.parse(p.start) / 1000)
+    const px = slots.map((p) => Date.parse(p.start) / 1000)
     const imp: (number | null)[] = slots.map((p) => p.import_price * 100)
     const exp: (number | null)[] = slots.map((p) => p.export_price * 100)
-    const last = x[x.length - 1]
+    const last = px[px.length - 1]
     if (last !== undefined) {
-      x.push(last + 900)
+      px.push(last + 900)
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
@@ -133,9 +187,10 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
       { label: 'Import', color: '--series-1', values: imp, format: fmt },
       { label: 'Export', color: '--series-2', values: exp, format: fmt },
     ]
-    return { x, series, bands: forecastBands(slots) }
-  }, [data.prices])
+    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS) }
+  }, [history, data.prices, pastEndS])
 
+  const hasPast = past.length > 0
   return (
     <div className="chart-stack">
       <p className="chart-note chart-zoom" role="status">
@@ -147,37 +202,45 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             </button>
           </>
         ) : (
-          'Drag across a chart to zoom in; double-click to see the whole plan again.'
+          `Drag across a chart to zoom in; double-click to see the whole ${hasPast ? 'range' : 'plan'} again.`
         )}
       </p>
       <section className="chart-block">
         <h3>Power</h3>
         <TimeChart
-          x={power.x}
-          series={power.series}
-          ariaLabel="Planned power per quarter-hour: battery, grid, PV, house load and deferrable loads"
+          x={x}
+          series={power}
+          ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads"
           syncKey={SYNC}
           yFormat={kwTick}
           fit={POWER_FIT}
           xRange={zoom}
           onZoom={zoomTo}
+          shade={shade}
           now={nowS}
           timeZone={data.timezone}
           height={240}
         />
+        {hasPast && (
+          <p className="chart-note">
+            Left of the now line: measured values (solid) and what the plan said at the time (dashed). Right of it: the
+            current plan.
+          </p>
+        )}
       </section>
       {soc && (
         <section className="chart-block">
           <h3>Battery state of charge</h3>
           <TimeChart
-            x={soc.x}
-            series={soc.series}
-            ariaLabel="Planned battery state of charge, with the previous plan for comparison"
+            x={x}
+            series={soc}
+            ariaLabel="Battery state of charge: measured history, what the plan said at the time, the current plan and the previous plan"
             syncKey={SYNC}
             yFormat={(v) => `${v.toFixed(0)} %`}
             fit={SOC_FIT}
             xRange={zoom}
             onZoom={zoomTo}
+            shade={shade}
             now={nowS}
             timeZone={data.timezone}
             height={170}
@@ -197,6 +260,7 @@ export function PlanCharts({ data, nowS }: { data: PlanResponse; nowS: number })
             xRange={zoom}
             onZoom={zoomTo}
             bands={prices.bands}
+            shade={prices.shade}
             now={nowS}
             timeZone={data.timezone}
             height={170}

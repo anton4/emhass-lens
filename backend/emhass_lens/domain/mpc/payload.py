@@ -184,6 +184,9 @@ def build(
     if running_known and not compat:
         # a load that is on right now is planned as on, instead of getting a fresh start (EMHASS 0.18.2+)
         payload["def_current_state"] = running
+    if mpc.costfun != "default" and not compat:
+        # a runtime parameter since EMHASS 0.18 (optim_conf.costfun); the plan's cost_fun_* column shows what was used
+        payload["costfun"] = mpc.costfun
     extra = settings.emhass.extra_runtime_params
     if extra:
         payload.update(extra)

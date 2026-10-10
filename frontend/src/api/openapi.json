@@ -1,6 +1,94 @@
 {
   "components": {
     "schemas": {
+      "AccuracyWindow": {
+        "properties": {
+          "horizon": {
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "integer"
+          },
+          "quantities": {
+            "items": {
+              "$ref": "#/components/schemas/QuantityAccuracy"
+            },
+            "title": "Quantities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hours",
+          "horizon",
+          "quantities"
+        ],
+        "title": "AccuracyWindow",
+        "type": "object"
+      },
+      "ActualValues": {
+        "description": "Measured quarter-hour means in EMHASS's signs (W), SOC 0–1.",
+        "properties": {
+          "batt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batt"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid"
+          },
+          "load": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load"
+          },
+          "pv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv"
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc"
+          }
+        },
+        "title": "ActualValues",
+        "type": "object"
+      },
       "Agreement": {
         "properties": {
           "agreed": {
@@ -514,6 +602,373 @@
         "title": "ComponentStatus",
         "type": "object"
       },
+      "CostfunCompareResponse": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "auto": {
+            "title": "Auto",
+            "type": "boolean"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "can_run": {
+            "title": "Can Run",
+            "type": "boolean"
+          },
+          "cannot_run_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cannot Run Reason"
+          },
+          "compared_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compared At"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/CostfunHistoryPoint"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "live_costfun": {
+            "title": "Live Costfun",
+            "type": "string"
+          },
+          "live_source": {
+            "title": "Live Source",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CostfunResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "live_costfun",
+          "live_source",
+          "can_run",
+          "auto",
+          "timezone",
+          "results",
+          "history"
+        ],
+        "title": "CostfunCompareResponse",
+        "type": "object"
+      },
+      "CostfunHistoryPoint": {
+        "properties": {
+          "anchor": {
+            "title": "Anchor",
+            "type": "string"
+          },
+          "compared_at": {
+            "title": "Compared At",
+            "type": "string"
+          },
+          "emhass_objective": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Emhass Objective",
+            "type": "object"
+          },
+          "net_cost_eur": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Net Cost Eur",
+            "type": "object"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "compared_at",
+          "anchor",
+          "net_cost_eur",
+          "emhass_objective"
+        ],
+        "title": "CostfunHistoryPoint",
+        "type": "object"
+      },
+      "CostfunResult": {
+        "properties": {
+          "costfun": {
+            "title": "Costfun",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "optim_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optim Status"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostfunTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "costfun",
+          "label",
+          "live",
+          "rows"
+        ],
+        "title": "CostfunResult",
+        "type": "object"
+      },
+      "CostfunTotals": {
+        "description": "Energy and money over a plan's horizon, computed the same way for every cost function.",
+        "properties": {
+          "battery_charge_kwh": {
+            "title": "Battery Charge Kwh",
+            "type": "number"
+          },
+          "battery_discharge_kwh": {
+            "title": "Battery Discharge Kwh",
+            "type": "number"
+          },
+          "emhass_cost_profit_eur": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emhass Cost Profit Eur"
+          },
+          "emhass_objective": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emhass Objective"
+          },
+          "emhass_objective_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emhass Objective Column"
+          },
+          "export_kwh": {
+            "title": "Export Kwh",
+            "type": "number"
+          },
+          "export_revenue_eur": {
+            "title": "Export Revenue Eur",
+            "type": "number"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "import_cost_eur": {
+            "title": "Import Cost Eur",
+            "type": "number"
+          },
+          "import_kwh": {
+            "title": "Import Kwh",
+            "type": "number"
+          },
+          "load_kwh": {
+            "title": "Load Kwh",
+            "type": "number"
+          },
+          "net_cost_eur": {
+            "title": "Net Cost Eur",
+            "type": "number"
+          },
+          "pv_kwh": {
+            "title": "Pv Kwh",
+            "type": "number"
+          },
+          "self_consumption_kwh": {
+            "title": "Self Consumption Kwh",
+            "type": "number"
+          },
+          "self_consumption_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Consumption Pct"
+          },
+          "slots": {
+            "title": "Slots",
+            "type": "integer"
+          },
+          "soc_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc End"
+          }
+        },
+        "required": [
+          "slots",
+          "hours",
+          "import_kwh",
+          "export_kwh",
+          "import_cost_eur",
+          "export_revenue_eur",
+          "net_cost_eur",
+          "pv_kwh",
+          "load_kwh",
+          "self_consumption_kwh",
+          "battery_charge_kwh",
+          "battery_discharge_kwh"
+        ],
+        "title": "CostfunTotals",
+        "type": "object"
+      },
       "DeferrableDescription": {
         "properties": {
           "deadline_timesteps": {
@@ -910,6 +1365,8 @@
             "$ref": "#/components/schemas/EmhassMpc",
             "default": {
               "auto": false,
+              "compare_costfuns": false,
+              "costfun": "default",
               "hazard_guard_s": 30,
               "max_horizon": 672,
               "min_horizon": 8,
@@ -1057,6 +1514,32 @@
             "description": "Run naive-mpc-optim every quarter-hour. Only acts when the mode is dry run or live.",
             "title": "Run MPC automatically",
             "type": "boolean"
+          },
+          "compare_costfuns": {
+            "default": false,
+            "description": "Before each live plan, also run the other two cost functions with the same inputs, so the Plan page can show what each would do and cost. Two extra optimisations per quarter-hour (each a few seconds to a minute, EMHASS's latest plan is only final once all three are done), so move the MPC time earlier if publishing gets tight. 'Compare now' on the Plan page does the same once.",
+            "title": "Compare cost functions on every run",
+            "type": "boolean"
+          },
+          "costfun": {
+            "default": "default",
+            "description": "What EMHASS optimises for. Profit: import cost minus export revenue (EMHASS's usual default). Cost: import cost only, exports earn nothing. Self-consumption: use as much PV on site as possible. 'EMHASS's own setting' sends nothing and leaves EMHASS's configured costfun in charge. Needs EMHASS 0.18 or newer; the plan read back shows which one EMHASS used, and Health warns if it was ignored.",
+            "enum": [
+              "default",
+              "profit",
+              "cost",
+              "self-consumption"
+            ],
+            "title": "Cost function",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "cost": "Cost",
+                "default": "EMHASS's own setting",
+                "profit": "Profit",
+                "self-consumption": "Self-consumption"
+              }
+            }
           },
           "hazard_guard_s": {
             "default": 30,
@@ -1947,6 +2430,38 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "HistorySlot": {
+        "properties": {
+          "actual": {
+            "$ref": "#/components/schemas/ActualValues"
+          },
+          "planned": {
+            "$ref": "#/components/schemas/PlannedValues"
+          },
+          "planned_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned At"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "planned",
+          "actual"
+        ],
+        "title": "HistorySlot",
         "type": "object"
       },
       "HoldStatus": {
@@ -3502,6 +4017,197 @@
         "title": "MarketThresholds",
         "type": "object"
       },
+      "MeasuredPower": {
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "default": "",
+            "description": "Leave empty to skip this quantity.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "invert": {
+            "default": false,
+            "description": "Tick when the sensor's sign is the reverse of EMHASS's (see the quantity's title).",
+            "title": "Opposite sign",
+            "type": "boolean"
+          },
+          "scale": {
+            "default": 1.0,
+            "description": "1 for a sensor in W (or a SOC of 0–1), 1000 for kW, 0.01 for a SOC in %.",
+            "exclusiveMinimum": 0.0,
+            "maximum": 10000.0,
+            "title": "Multiply by",
+            "type": "number",
+            "ui": {
+              "advanced": true
+            }
+          }
+        },
+        "title": "MeasuredPower",
+        "type": "object"
+      },
+      "MeasurementQuantity": {
+        "properties": {
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "last_slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Slot"
+          },
+          "last_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Value"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "entity_id"
+        ],
+        "title": "MeasurementQuantity",
+        "type": "object"
+      },
+      "MeasurementStatus": {
+        "properties": {
+          "backfill_remaining_slots": {
+            "title": "Backfill Remaining Slots",
+            "type": "integer"
+          },
+          "configured": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementQuantity"
+            },
+            "title": "Configured",
+            "type": "array"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_sample_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sample At"
+          }
+        },
+        "required": [
+          "configured",
+          "backfill_remaining_slots"
+        ],
+        "title": "MeasurementStatus",
+        "type": "object"
+      },
+      "Measurements": {
+        "additionalProperties": false,
+        "properties": {
+          "backfill_days": {
+            "default": 10,
+            "description": "How far back to read from Home Assistant's recorder on start and after a change here. The recorder keeps 10 days by default.",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Read history back",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "battery": {
+            "$ref": "#/components/schemas/MeasuredPower",
+            "default": {
+              "entity": "",
+              "invert": false,
+              "scale": 1.0
+            },
+            "title": "Battery power (+ discharge, − charge, like EMHASS's P_batt)"
+          },
+          "grid": {
+            "$ref": "#/components/schemas/MeasuredPower",
+            "default": {
+              "entity": "",
+              "invert": false,
+              "scale": 1.0
+            },
+            "title": "Grid power (+ import, − export, like EMHASS's P_grid)"
+          },
+          "keep_days": {
+            "default": 120,
+            "maximum": 730.0,
+            "minimum": 7.0,
+            "title": "Keep measurements",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "load": {
+            "$ref": "#/components/schemas/MeasuredPower",
+            "default": {
+              "entity": "sensor.house_power_without_deferrable",
+              "invert": false,
+              "scale": 1.0
+            },
+            "title": "House load without deferrable loads (what EMHASS forecasts as P_Load)"
+          },
+          "pv": {
+            "$ref": "#/components/schemas/MeasuredPower",
+            "default": {
+              "entity": "sensor.sofar_pv_power_total_watt",
+              "invert": false,
+              "scale": 1.0
+            },
+            "title": "PV power"
+          },
+          "soc": {
+            "$ref": "#/components/schemas/MeasuredPower",
+            "default": {
+              "entity": "sensor.ev6_battery_soc",
+              "invert": false,
+              "scale": 0.01
+            },
+            "title": "Battery state of charge"
+          }
+        },
+        "title": "Measurements",
+        "type": "object"
+      },
       "MlRequest": {
         "properties": {
           "historic_days": {
@@ -4212,6 +4918,72 @@
         "title": "Parity",
         "type": "object"
       },
+      "PlanHistoryResponse": {
+        "properties": {
+          "accuracy": {
+            "items": {
+              "$ref": "#/components/schemas/AccuracyWindow"
+            },
+            "title": "Accuracy",
+            "type": "array"
+          },
+          "horizon": {
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "integer"
+          },
+          "measurements": {
+            "$ref": "#/components/schemas/MeasurementStatus"
+          },
+          "now": {
+            "title": "Now",
+            "type": "string"
+          },
+          "price_forecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceForecastAccuracy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PlanPrice"
+            },
+            "title": "Prices",
+            "type": "array"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/HistorySlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "now",
+          "hours",
+          "horizon",
+          "slots",
+          "prices",
+          "accuracy",
+          "measurements"
+        ],
+        "title": "PlanHistoryResponse",
+        "type": "object"
+      },
       "PlanPrice": {
         "properties": {
           "export_price": {
@@ -4379,6 +5151,135 @@
           "rows"
         ],
         "title": "PlanSnapshotOut",
+        "type": "object"
+      },
+      "PlannedValues": {
+        "description": "What the plan in force said for a past slot (EMHASS's columns and signs).",
+        "properties": {
+          "P_Load": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Load"
+          },
+          "P_PV": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Pv"
+          },
+          "P_batt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Batt"
+          },
+          "P_deferrable": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Deferrable"
+          },
+          "P_grid": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Grid"
+          },
+          "SOC": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc"
+          }
+        },
+        "title": "PlannedValues",
+        "type": "object"
+      },
+      "PriceForecastAccuracy": {
+        "properties": {
+          "bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias"
+          },
+          "lead_hours": {
+            "title": "Lead Hours",
+            "type": "integer"
+          },
+          "mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae"
+          },
+          "mape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mape"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "lead_hours",
+          "n"
+        ],
+        "title": "PriceForecastAccuracy",
         "type": "object"
       },
       "PriceSlotOut": {
@@ -5120,6 +6021,83 @@
         "title": "PvSummary",
         "type": "object"
       },
+      "QuantityAccuracy": {
+        "properties": {
+          "bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias"
+          },
+          "coverage": {
+            "title": "Coverage",
+            "type": "number"
+          },
+          "mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae"
+          },
+          "mape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mape"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "rmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rmse"
+          },
+          "sign_suspect": {
+            "default": false,
+            "title": "Sign Suspect",
+            "type": "boolean"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quantity",
+          "unit",
+          "n",
+          "coverage"
+        ],
+        "title": "QuantityAccuracy",
+        "type": "object"
+      },
       "Reading": {
         "description": "One value read from Home Assistant (or a fallback) with where it came from.",
         "properties": {
@@ -5689,6 +6667,8 @@
               "mode": "off",
               "mpc": {
                 "auto": false,
+                "compare_costfuns": false,
+                "costfun": "default",
                 "hazard_guard_s": 30,
                 "max_horizon": 672,
                 "min_horizon": 8,
@@ -5872,6 +6852,39 @@
               }
             },
             "title": "Qilowatt market control (experimental)"
+          },
+          "measurements": {
+            "$ref": "#/components/schemas/Measurements",
+            "default": {
+              "backfill_days": 10,
+              "battery": {
+                "entity": "",
+                "invert": false,
+                "scale": 1.0
+              },
+              "grid": {
+                "entity": "",
+                "invert": false,
+                "scale": 1.0
+              },
+              "keep_days": 120,
+              "load": {
+                "entity": "sensor.house_power_without_deferrable",
+                "invert": false,
+                "scale": 1.0
+              },
+              "pv": {
+                "entity": "sensor.sofar_pv_power_total_watt",
+                "invert": false,
+                "scale": 1.0
+              },
+              "soc": {
+                "entity": "sensor.ev6_battery_soc",
+                "invert": false,
+                "scale": 0.01
+              }
+            },
+            "title": "Measurements (plan history and accuracy)"
           },
           "notifications": {
             "$ref": "#/components/schemas/Notifications",
@@ -7510,6 +8523,86 @@
           }
         },
         "summary": "Plan",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/plan/costfun": {
+      "get": {
+        "description": "The newest comparison of the three cost functions (same inputs, three plans), and a week of totals.",
+        "operationId": "plan_costfun_api_plan_costfun_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostfunCompareResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plan Costfun",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/plan/history": {
+      "get": {
+        "description": "The last `hours` of slots: what the plan said `horizon` slots ahead of each, what was measured,\nand error statistics over 24 h and 7 d.",
+        "operationId": "plan_history_api_plan_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 168,
+              "minimum": 1,
+              "title": "Hours",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 96,
+              "minimum": 0,
+              "title": "Horizon",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plan History",
         "tags": [
           "data"
         ]

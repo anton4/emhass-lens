@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Plan page: the charts now reach back in time. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); **History** picks 6 h to 7 days, **Compare with** picks the plan in force or the one made 1, 6 or 24 h earlier. A new **How accurate the plan has been** card gives the error and bias per quantity over 24 h and 7 d, plus the price forecast's error against Nord Pool.
+- Settings → **Measurements**: the sensors for grid, battery, PV, house load and SOC, with a sign switch and a scale each. Measured quarter-hour means are read from Home Assistant's recorder every quarter-hour (run *Measurements*) and backfilled after a start or a change (run *Measurement history*); Health warns when a sensor is missing or nothing has been read for an hour.
+- Settings → EMHASS → MPC optimization → **Cost function**: ask EMHASS for profit, cost or self-consumption on every run (EMHASS 0.18+; Health warns if EMHASS ignored it).
+- Plan page → **Cost functions**: *Compare now* runs the MPC with all three cost functions for the same inputs and shows each plan's net cost, import, export, self-consumption, battery use, end SOC and EMHASS's objective total, one chart overlaying the three plans (each switchable), and the earlier comparisons. **Compare cost functions on every run** does it before every live plan. The method in use always runs last, so EMHASS keeps the real plan.
+- `app.db` grows: measurements (kept 120 days by default), per-slot rows of stored plans (14 days) and cost-function plans (30 days).
 - Inverter control: the rules now follow the current, template-based version of the automation "EMHASS: Consolidated Inverter Control": ±100 W bands for grid and battery power, "Charge battery and export some to grid" can match, PV export depends on the export price, and the feed-in limit depends only on the export price. Every combination of grid and battery power now maps to a mode. Rule ids are the automation's mode names (`force_charge`, `self_use`, …).
 - Settings → Inverter control → Limits: "Block export at or below this price" replaces "Block export below this price" and now defaults to 0.03 €/kWh. An existing install keeps its stored value; set it to the automation's value by hand.
 - DOCS: a section on inverter control and how to move the automation over.

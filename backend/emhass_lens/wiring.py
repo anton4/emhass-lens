@@ -15,12 +15,15 @@ from emhass_lens.scheduler.core import Job, JobContext
 from emhass_lens.scheduler.triggers import Dynamic, Manual, Periodic, QuarterHour
 from emhass_lens.services import health_rules
 from emhass_lens.services.charger import ChargerService
+from emhass_lens.services.costfun import CostfunCompareService
 from emhass_lens.services.emhass import EmhassService
 from emhass_lens.services.external import ExternalControlService
 from emhass_lens.services.forecasts import ForecastService
+from emhass_lens.services.history import PlanHistoryService
 from emhass_lens.services.inputs import InputsService
 from emhass_lens.services.inverter import InverterService
 from emhass_lens.services.market import MarketService
+from emhass_lens.services.measurements import MeasurementService
 from emhass_lens.services.ml import MlService
 from emhass_lens.services.mpc import MpcService
 from emhass_lens.services.outputs import OutputService
@@ -59,6 +62,9 @@ def build(c: Container) -> None:
     x["inverter"] = InverterService(c)
     x["charger"] = ChargerService(c)
     x["market"] = MarketService(c)
+    x["measurements"] = MeasurementService(c)
+    x["costfun"] = CostfunCompareService(c)
+    x["history"] = PlanHistoryService(c)
     x["prices"].load()
     x["problems"].load()
     x["sofar"].load()
@@ -83,6 +89,7 @@ def watched_entities(c: Container) -> set[str]:
         | x["external"].entities()
         | x["charger"].entities()
         | x["market"].entities()
+        | x["measurements"].entities()
     )
     if settings.forecast.source == "fi_ha_entity":
         ids.add(settings.forecast.fi.entity)
@@ -124,6 +131,17 @@ def register_jobs(c: Container) -> None:
             trigger=QuarterHour(settings.emhass.mpc.slot_offset_s),
             func=x["mpc"].run,
             grace=timedelta(minutes=2),
+            mode=lambda: x["mpc"].mode,
+        )
+    )
+    s.add(
+        Job(
+            id="emhass.costfun_compare",
+            title="Cost function comparison",
+            description="Runs the MPC with the other two cost functions and then the one in use, so the Plan page "
+            "can show what each would do and cost (EMHASS ends up with the plan of the method in use).",
+            trigger=Manual(),
+            func=x["costfun"].run,
             mode=lambda: x["mpc"].mode,
         )
     )
@@ -322,6 +340,30 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="measure.sample",
+            title="Measurements",
+            description="Reads the slot that just ended from Home Assistant's recorder (grid, battery, PV, load, "
+            "SOC) for the Plan page's history and accuracy.",
+            trigger=QuarterHour(20),
+            func=x["measurements"].sample,
+            record=x["measurements"].enabled,
+            grace=timedelta(minutes=10),
+        )
+    )
+    s.add(
+        Job(
+            id="measure.backfill",
+            title="Measurement history",
+            description="After a start or a settings change: reads older history from the recorder in six-hour "
+            "chunks, newest first, until the configured number of days is covered.",
+            trigger=Dynamic(x["measurements"].next_backfill, "Shortly after a start or a settings change, until done"),
+            func=x["measurements"].backfill,
+            record=x["measurements"].enabled,
+            grace=timedelta(minutes=10),
+        )
+    )
+    s.add(
+        Job(
             id="health.evaluate",
             title="Health",
             description="Evaluates the health rules and updates the problem list.",
@@ -362,6 +404,8 @@ def subscribe(c: Container) -> None:
         loading = ha.set_watched(watched_entities(c))
         if loading is not None:
             _spawn(c, _evaluate_after(c, loading))
+        else:  # nothing new to load (the entity was already watched for something else): re-check right away
+            c.scheduler.run_now("health.evaluate")
 
     def on_prices(old: Settings, new: Settings, paths: list[str]) -> None:
         if old.prices.nordpool.area != new.prices.nordpool.area:
@@ -401,8 +445,11 @@ def subscribe(c: Container) -> None:
 
     c.settings.subscribe("prices.nordpool", on_prices)
     c.settings.subscribe("forecast", on_forecast)
-    c.settings.subscribe(("inputs", "pv", "parity", "inverter", "charger", "market", "external_control"), rewatch)
+    c.settings.subscribe(
+        ("inputs", "pv", "parity", "inverter", "charger", "market", "external_control", "measurements"), rewatch
+    )
     c.settings.subscribe("external_control", x["external"].on_settings)
+    c.settings.subscribe("measurements", x["measurements"].on_settings)
 
     def on_market_time(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.retime("market.reconcile", Periodic(60, new.market.reconcile_offset_s))
@@ -476,6 +523,15 @@ async def start(c: Container) -> None:
     c.extras["ha"].start()
     c.extras["outputs"].start()
     _spawn(c, _resolve_and_check(c))
+    _spawn(c, _index_plans(c))
+
+
+async def _index_plans(c: Container) -> None:
+    """Plans stored before plan_row existed get their per-slot rows once, for the accuracy view."""
+    try:
+        await c.app_db.run(c.extras["emhass"].index_plan_rows, c.clock.now())
+    except Exception as exc:  # a failure here mustn't stop the start
+        log.warning("Indexing stored plans failed: %s", exc)
 
 
 async def stop(c: Container) -> None:

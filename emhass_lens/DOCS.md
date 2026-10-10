@@ -77,6 +77,24 @@ triggers:
 mode: queued
 ```
 
+## Plan history and accuracy
+
+The Plan page's charts reach back in time as well as forward. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); right of it, the current plan. **History** picks how far back (6 h to 7 days) and **Compare with** which earlier plan a past slot is held against: *Plan in force* is the plan that was current when the slot came (what the inverter followed), *1 h / 6 h / 24 h ahead* the plan made that long before it, which shows how good the forecasts were at a distance.
+
+Measured values come from Home Assistant's recorder. **Settings → Measurements** names the sensors for grid power, battery power, PV power, house load and battery SOC; leave one empty to skip it. Signs follow EMHASS: grid positive when importing, battery positive when discharging. If a sensor counts the other way round, tick **Opposite sign**; **Multiply by** turns kW into W or a percentage SOC into 0–1. The House load sensor should be the load *without* deferrable loads (what EMHASS forecasts as `P_Load`), usually the same sensor EMHASS learns from.
+
+Every quarter-hour the run *Measurements* reads the slot that just ended and stores its time-weighted mean per quantity. After a start, and after a change under Settings → Measurements, *Measurement history* reads older history in six-hour chunks (newest first) back to **Read history back** days, the recorder's reach (10 days by default in Home Assistant). Measurements are kept for **Keep measurements** days in `app.db`.
+
+**How accurate the plan has been** (under the charts) gives, per quantity, the mean absolute error and the bias (plan minus measurement; plus means the plan expected more) over the last 24 hours and 7 days, the load error also as a share of the measured load, and the price forecast's error against Nord Pool's price for the forecast fetched 24 hours before each slot. When grid or battery power moves against the plan most of the time, the card says so: that nearly always means the sensor's sign is the reverse of EMHASS's.
+
+## Cost functions
+
+EMHASS can optimise for one of three things, its `costfun`: **profit** (import cost minus export revenue, EMHASS's usual default), **cost** (import cost only, exports earn nothing) or **self-consumption** (use as much PV on site as possible). **Settings → EMHASS → MPC optimization → Cost function** picks the one every live run asks for; *EMHASS's own setting* sends nothing and leaves EMHASS's configured value in charge. The cost function is a runtime parameter since EMHASS 0.18; the plan read back shows which one EMHASS used, and Health warns if it was ignored.
+
+**Cost functions** on the Plan page compares the three. **Compare now** runs the MPC three times with the same inputs, once per method, and shows what each would do with the battery and the grid and what it would cost over the plan's horizon: net cost, import and export, self-consumption, battery throughput, end SOC, and EMHASS's own objective total (the sum of the plan's `cost_fun_*` column, in EMHASS's sign, only comparable within one method). One chart overlays the three plans for a chosen quantity, with each method switchable on and off; a table below lists earlier comparisons. **Compare cost functions on every run** does the same before every live plan.
+
+Every optimisation replaces EMHASS's latest plan, which publish-data and the plan API read, so the method in use always runs last and EMHASS ends with the real plan; the plan watch and publishing wait while a comparison runs. A comparison is refused while the mode is Off, EMHASS is unreachable, the HACS integration still drives EMHASS, an ML fit runs or a market session holds the inverter. Two extra optimisations take a few seconds to a minute each; if publishing gets tight, move the MPC time earlier under Settings → EMHASS → MPC optimization.
+
 ## Inverter control (experimental)
 
 EMHASS Lens can set a Sofar inverter's passive mode from the plan itself, instead of a Home Assistant automation doing it. It mirrors the automation "EMHASS: Consolidated Inverter Control" rule for rule: the plan's grid power picks the branch (importing, exporting or neutral), the battery power picks the mode (force charge, force discharge, use only grid, self-use, …), and when exporting with an idle battery the export price decides whether the PV is exported or kept. The feed-in limit is 0 W whenever the export price is at or below **Settings → Inverter control → Limits → Block export at or below this price**, otherwise the export maximum.
@@ -172,5 +190,5 @@ All other settings live in the App: every save is kept as a revision, with who c
 
 ## Data and backups
 
-- **`app.db`** holds settings, their history, prices and forecasts. It is part of Home Assistant backups.
+- **`app.db`** holds settings, their history, prices and forecasts, stored plans, measurements and cost-function comparisons. It is part of Home Assistant backups.
 - **`runs.db`** holds run details and logs. It is excluded from backups and pruned by the retention settings (Settings → Logging → Retention).

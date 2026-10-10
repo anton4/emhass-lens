@@ -518,6 +518,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/costfun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan Costfun
+         * @description The newest comparison of the three cost functions (same inputs, three plans), and a week of totals.
+         */
+        get: operations["plan_costfun_api_plan_costfun_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan History
+         * @description The last `hours` of slots: what the plan said `horizon` slots ahead of each, what was measured,
+         *     and error statistics over 24 h and 7 d.
+         */
+        get: operations["plan_history_api_plan_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prices": {
         parameters: {
             query?: never;
@@ -920,6 +961,31 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccuracyWindow */
+        AccuracyWindow: {
+            /** Horizon */
+            horizon: number;
+            /** Hours */
+            hours: number;
+            /** Quantities */
+            quantities: components["schemas"]["QuantityAccuracy"][];
+        };
+        /**
+         * ActualValues
+         * @description Measured quarter-hour means in EMHASS's signs (W), SOC 0–1.
+         */
+        ActualValues: {
+            /** Batt */
+            batt?: number | null;
+            /** Grid */
+            grid?: number | null;
+            /** Load */
+            load?: number | null;
+            /** Pv */
+            pv?: number | null;
+            /** Soc */
+            soc?: number | null;
+        };
         /** Agreement */
         Agreement: {
             /** Agreed */
@@ -1166,6 +1232,112 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** CostfunCompareResponse */
+        CostfunCompareResponse: {
+            /** Anchor */
+            anchor?: string | null;
+            /** Auto */
+            auto: boolean;
+            /** Available */
+            available: boolean;
+            /** Can Run */
+            can_run: boolean;
+            /** Cannot Run Reason */
+            cannot_run_reason?: string | null;
+            /** Compared At */
+            compared_at?: string | null;
+            /** History */
+            history: components["schemas"]["CostfunHistoryPoint"][];
+            /** Live Costfun */
+            live_costfun: string;
+            /** Live Source */
+            live_source: string;
+            /** Results */
+            results: components["schemas"]["CostfunResult"][];
+            /** Run Id */
+            run_id?: number | null;
+            /** Timezone */
+            timezone: string;
+        };
+        /** CostfunHistoryPoint */
+        CostfunHistoryPoint: {
+            /** Anchor */
+            anchor: string;
+            /** Compared At */
+            compared_at: string;
+            /** Emhass Objective */
+            emhass_objective: {
+                [key: string]: number | null;
+            };
+            /** Net Cost Eur */
+            net_cost_eur: {
+                [key: string]: number | null;
+            };
+            /** Run Id */
+            run_id?: number | null;
+        };
+        /** CostfunResult */
+        CostfunResult: {
+            /** Costfun */
+            costfun: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Label */
+            label: string;
+            /** Live */
+            live: boolean;
+            /** Optim Status */
+            optim_status?: string | null;
+            /** Problem */
+            problem?: string | null;
+            /** Rows */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            totals?: components["schemas"]["CostfunTotals"] | null;
+        };
+        /**
+         * CostfunTotals
+         * @description Energy and money over a plan's horizon, computed the same way for every cost function.
+         */
+        CostfunTotals: {
+            /** Battery Charge Kwh */
+            battery_charge_kwh: number;
+            /** Battery Discharge Kwh */
+            battery_discharge_kwh: number;
+            /** Emhass Cost Profit Eur */
+            emhass_cost_profit_eur?: number | null;
+            /** Emhass Objective */
+            emhass_objective?: number | null;
+            /** Emhass Objective Column */
+            emhass_objective_column?: string | null;
+            /** Export Kwh */
+            export_kwh: number;
+            /** Export Revenue Eur */
+            export_revenue_eur: number;
+            /** Hours */
+            hours: number;
+            /** Import Cost Eur */
+            import_cost_eur: number;
+            /** Import Kwh */
+            import_kwh: number;
+            /** Load Kwh */
+            load_kwh: number;
+            /** Net Cost Eur */
+            net_cost_eur: number;
+            /** Pv Kwh */
+            pv_kwh: number;
+            /** Self Consumption Kwh */
+            self_consumption_kwh: number;
+            /** Self Consumption Pct */
+            self_consumption_pct?: number | null;
+            /** Slots */
+            slots: number;
+            /** Soc End */
+            soc_end?: number | null;
+        };
         /** DeferrableDescription */
         DeferrableDescription: {
             deadline_timesteps: components["schemas"]["Reading"];
@@ -1324,6 +1496,8 @@ export interface components {
              * MPC optimization
              * @default {
              *       "auto": false,
+             *       "compare_costfuns": false,
+             *       "costfun": "default",
              *       "hazard_guard_s": 30,
              *       "max_horizon": 672,
              *       "min_horizon": 8,
@@ -1404,6 +1578,19 @@ export interface components {
              * @default false
              */
             auto: boolean;
+            /**
+             * Compare cost functions on every run
+             * @description Before each live plan, also run the other two cost functions with the same inputs, so the Plan page can show what each would do and cost. Two extra optimisations per quarter-hour (each a few seconds to a minute, EMHASS's latest plan is only final once all three are done), so move the MPC time earlier if publishing gets tight. 'Compare now' on the Plan page does the same once.
+             * @default false
+             */
+            compare_costfuns: boolean;
+            /**
+             * Cost function
+             * @description What EMHASS optimises for. Profit: import cost minus export revenue (EMHASS's usual default). Cost: import cost only, exports earn nothing. Self-consumption: use as much PV on site as possible. 'EMHASS's own setting' sends nothing and leaves EMHASS's configured costfun in charge. Needs EMHASS 0.18 or newer; the plan read back shows which one EMHASS used, and Health warns if it was ignored.
+             * @default default
+             * @enum {string}
+             */
+            costfun: "default" | "profit" | "cost" | "self-consumption";
             /**
              * Grid-boundary guard
              * @description Older EMHASS versions (< 0.18.2) can fail when a run starts within this many seconds of a slot rounding boundary; the run waits it out.
@@ -1727,6 +1914,15 @@ export interface components {
              * @default 15:30
              */
             tomorrow_warn_after: string;
+        };
+        /** HistorySlot */
+        HistorySlot: {
+            actual: components["schemas"]["ActualValues"];
+            planned: components["schemas"]["PlannedValues"];
+            /** Planned At */
+            planned_at?: string | null;
+            /** Start */
+            start: string;
         };
         /**
          * HoldStatus
@@ -2361,6 +2557,108 @@ export interface components {
              */
             unavailable_timeout_s: number;
         };
+        /** MeasuredPower */
+        MeasuredPower: {
+            /**
+             * Entity
+             * @description Leave empty to skip this quantity.
+             * @default
+             */
+            entity: string;
+            /**
+             * Opposite sign
+             * @description Tick when the sensor's sign is the reverse of EMHASS's (see the quantity's title).
+             * @default false
+             */
+            invert: boolean;
+            /**
+             * Multiply by
+             * @description 1 for a sensor in W (or a SOC of 0–1), 1000 for kW, 0.01 for a SOC in %.
+             * @default 1
+             */
+            scale: number;
+        };
+        /** MeasurementQuantity */
+        MeasurementQuantity: {
+            /** Entity Id */
+            entity_id: string;
+            /** Last Slot */
+            last_slot?: string | null;
+            /** Last Value */
+            last_value?: number | null;
+            /** Quantity */
+            quantity: string;
+        };
+        /** MeasurementStatus */
+        MeasurementStatus: {
+            /** Backfill Remaining Slots */
+            backfill_remaining_slots: number;
+            /** Configured */
+            configured: components["schemas"]["MeasurementQuantity"][];
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Sample At */
+            last_sample_at?: string | null;
+        };
+        /** Measurements */
+        Measurements: {
+            /**
+             * Read history back
+             * @description How far back to read from Home Assistant's recorder on start and after a change here. The recorder keeps 10 days by default.
+             * @default 10
+             */
+            backfill_days: number;
+            /**
+             * Battery power (+ discharge, − charge, like EMHASS's P_batt)
+             * @default {
+             *       "entity": "",
+             *       "invert": false,
+             *       "scale": 1
+             *     }
+             */
+            battery: components["schemas"]["MeasuredPower"];
+            /**
+             * Grid power (+ import, − export, like EMHASS's P_grid)
+             * @default {
+             *       "entity": "",
+             *       "invert": false,
+             *       "scale": 1
+             *     }
+             */
+            grid: components["schemas"]["MeasuredPower"];
+            /**
+             * Keep measurements
+             * @default 120
+             */
+            keep_days: number;
+            /**
+             * House load without deferrable loads (what EMHASS forecasts as P_Load)
+             * @default {
+             *       "entity": "sensor.house_power_without_deferrable",
+             *       "invert": false,
+             *       "scale": 1
+             *     }
+             */
+            load: components["schemas"]["MeasuredPower"];
+            /**
+             * PV power
+             * @default {
+             *       "entity": "sensor.sofar_pv_power_total_watt",
+             *       "invert": false,
+             *       "scale": 1
+             *     }
+             */
+            pv: components["schemas"]["MeasuredPower"];
+            /**
+             * Battery state of charge
+             * @default {
+             *       "entity": "sensor.ev6_battery_soc",
+             *       "invert": false,
+             *       "scale": 0.01
+             *     }
+             */
+            soc: components["schemas"]["MeasuredPower"];
+        };
         /** MlRequest */
         MlRequest: {
             /** Historic Days */
@@ -2647,6 +2945,25 @@ export interface components {
              */
             tolerance: number;
         };
+        /** PlanHistoryResponse */
+        PlanHistoryResponse: {
+            /** Accuracy */
+            accuracy: components["schemas"]["AccuracyWindow"][];
+            /** Horizon */
+            horizon: number;
+            /** Hours */
+            hours: number;
+            measurements: components["schemas"]["MeasurementStatus"];
+            /** Now */
+            now: string;
+            price_forecast?: components["schemas"]["PriceForecastAccuracy"] | null;
+            /** Prices */
+            prices: components["schemas"]["PlanPrice"][];
+            /** Slots */
+            slots: components["schemas"]["HistorySlot"][];
+            /** Timezone */
+            timezone: string;
+        };
         /** PlanPrice */
         PlanPrice: {
             /** Export Price */
@@ -2697,6 +3014,39 @@ export interface components {
             }[];
             /** Run Id */
             run_id?: number | null;
+        };
+        /**
+         * PlannedValues
+         * @description What the plan in force said for a past slot (EMHASS's columns and signs).
+         */
+        PlannedValues: {
+            /** P Load */
+            P_Load?: number | null;
+            /** P Pv */
+            P_PV?: number | null;
+            /** P Batt */
+            P_batt?: number | null;
+            /** P Deferrable */
+            P_deferrable?: number | null;
+            /** P Grid */
+            P_grid?: number | null;
+            /** Soc */
+            SOC?: number | null;
+        };
+        /** PriceForecastAccuracy */
+        PriceForecastAccuracy: {
+            /** Bias */
+            bias?: number | null;
+            /** Lead Hours */
+            lead_hours: number;
+            /** Mae */
+            mae?: number | null;
+            /** Mape */
+            mape?: number | null;
+            /** N */
+            n: number;
+            /** Provider */
+            provider: string;
         };
         /** PriceSlotOut */
         PriceSlotOut: {
@@ -2955,6 +3305,30 @@ export interface components {
             /** Slots Missing */
             slots_missing: number;
         };
+        /** QuantityAccuracy */
+        QuantityAccuracy: {
+            /** Bias */
+            bias?: number | null;
+            /** Coverage */
+            coverage: number;
+            /** Mae */
+            mae?: number | null;
+            /** Mape */
+            mape?: number | null;
+            /** N */
+            n: number;
+            /** Quantity */
+            quantity: string;
+            /** Rmse */
+            rmse?: number | null;
+            /**
+             * Sign Suspect
+             * @default false
+             */
+            sign_suspect: boolean;
+            /** Unit */
+            unit: string;
+        };
         /**
          * Reading
          * @description One value read from Home Assistant (or a fallback) with where it came from.
@@ -3166,6 +3540,8 @@ export interface components {
              *       "mode": "off",
              *       "mpc": {
              *         "auto": false,
+             *         "compare_costfuns": false,
+             *         "costfun": "default",
              *         "hazard_guard_s": 30,
              *         "max_horizon": 672,
              *         "min_horizon": 8,
@@ -3350,6 +3726,39 @@ export interface components {
              *     }
              */
             market: components["schemas"]["Market"];
+            /**
+             * Measurements (plan history and accuracy)
+             * @default {
+             *       "backfill_days": 10,
+             *       "battery": {
+             *         "entity": "",
+             *         "invert": false,
+             *         "scale": 1
+             *       },
+             *       "grid": {
+             *         "entity": "",
+             *         "invert": false,
+             *         "scale": 1
+             *       },
+             *       "keep_days": 120,
+             *       "load": {
+             *         "entity": "sensor.house_power_without_deferrable",
+             *         "invert": false,
+             *         "scale": 1
+             *       },
+             *       "pv": {
+             *         "entity": "sensor.sofar_pv_power_total_watt",
+             *         "invert": false,
+             *         "scale": 1
+             *       },
+             *       "soc": {
+             *         "entity": "sensor.ev6_battery_soc",
+             *         "invert": false,
+             *         "scale": 0.01
+             *       }
+             *     }
+             */
+            measurements: components["schemas"]["Measurements"];
             /**
              * @default {
              *       "mobile_service": "",
@@ -4354,6 +4763,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanResponse"];
+                };
+            };
+        };
+    };
+    plan_costfun_api_plan_costfun_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostfunCompareResponse"];
+                };
+            };
+        };
+    };
+    plan_history_api_plan_history_get: {
+        parameters: {
+            query?: {
+                hours?: number;
+                horizon?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

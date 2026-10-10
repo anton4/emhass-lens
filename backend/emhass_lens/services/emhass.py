@@ -4,12 +4,14 @@ import asyncio
 import gzip
 import json
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.clients.emhass import EmhassClient, EmhassError
 from emhass_lens.clients.supervisor import SupervisorClient, SupervisorError, addon_hostname
 from emhass_lens.core.clock import iso, parse_iso
+from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.emhass_checks import Check, run_checks, worst
 from emhass_lens.domain.mpc.anchor import parse_version
 from emhass_lens.scheduler.core import JobContext
@@ -24,6 +26,40 @@ HOST_GATEWAY = "172.30.32.1"
 # The EMHASS App from https://github.com/davidusb-geek/emhass-add-on (Supervisor slug = sha1(repo url)[:8]_emhass),
 # and the same App installed as a local App.
 KNOWN_SLUGS = ("5b918bf2_emhass", "local_emhass")
+PLAN_ROW_DAYS = 14  # how far back plan_row keeps the per-slot plan columns (the accuracy view's reach)
+_DEFERRABLE = re.compile(r"^P_deferrable\d+$")
+
+
+def _num(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def plan_rows(snapshot_id: int, plan: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
+    """plan_row records of a plan: slot normalised to UTC, the power columns, the deferrable total and the
+    (first) battery's SOC."""
+    out: list[tuple[Any, ...]] = []
+    for row in plan:
+        stamp = parse_iso(str(row.get("timestamp"))) if row.get("timestamp") else None
+        if stamp is None:
+            continue
+        deferrables = [_num(v) for k, v in row.items() if _DEFERRABLE.match(k)]
+        known = [d for d in deferrables if d is not None]
+        soc = _num(row.get("SOC_opt"))
+        if soc is None:
+            soc = _num(row.get("SOC_opt_0"))
+        out.append(
+            (
+                snapshot_id,
+                iso(slot_floor(stamp)),
+                _num(row.get("P_grid")),
+                _num(row.get("P_batt")),
+                _num(row.get("P_PV")),
+                _num(row.get("P_Load")),
+                sum(known) if known else None,
+                soc,
+            )
+        )
+    return out
 
 
 class EmhassService:
@@ -251,19 +287,71 @@ class EmhassService:
     def _store_plan(
         self, generated: str, driver: str, run_id: int | None, last_run: dict[str, Any], plan: dict[str, Any]
     ) -> bool:
-        cur = self.c.app_db.execute(
-            "INSERT OR IGNORE INTO plan_snapshot (generated_at, fetched_at, driver, run_id, last_run_json, plan_gz) "
-            "VALUES (?,?,?,?,?,?)",
-            (
-                generated,
-                iso(self.c.clock.now()),
-                driver,
-                run_id,
-                json.dumps(last_run, default=str),
-                gzip.compress(json.dumps(plan, default=str).encode()),
-            ),
+        def write(conn: Any) -> bool:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO plan_snapshot "
+                "(generated_at, fetched_at, driver, run_id, last_run_json, plan_gz) "
+                "VALUES (?,?,?,?,?,?)",
+                (
+                    generated,
+                    iso(self.c.clock.now()),
+                    driver,
+                    run_id,
+                    json.dumps(last_run, default=str),
+                    gzip.compress(json.dumps(plan, default=str).encode()),
+                ),
+            )
+            if cur.rowcount <= 0:
+                return False
+            conn.executemany(_PLAN_ROW_INSERT, plan_rows(int(cur.lastrowid), plan.get("plan") or []))
+            return True
+
+        return self.c.app_db.transaction(write)
+
+    def index_plan_rows(self, now: datetime) -> int:
+        """Fill plan_row for stored plans that don't have rows yet (plans stored before plan_row existed).
+        Runs in a worker thread; returns the number of plans indexed."""
+        cut = iso(now - timedelta(days=PLAN_ROW_DAYS))
+        rows = self.c.app_db.query(
+            "SELECT id, plan_gz FROM plan_snapshot WHERE fetched_at >= ? "
+            "AND id NOT IN (SELECT DISTINCT snapshot_id FROM plan_row) ORDER BY id",
+            (cut,),
         )
-        return cur.rowcount > 0
+        for row in rows:
+            body = json.loads(gzip.decompress(row["plan_gz"]))
+            self.c.app_db.executemany(_PLAN_ROW_INSERT, plan_rows(int(row["id"]), body.get("plan") or []))
+        if rows:
+            log.info("Indexed the slots of %d stored plans for the accuracy view", len(rows))
+        return len(rows)
+
+    def snapshots_between(self, start: datetime, end: datetime) -> list[tuple[int, datetime]]:
+        """(id, generated_at) of the plans fetched in [start, end], sorted by generated_at as datetimes
+        (the stored text may carry EMHASS's local offset)."""
+        rows = self.c.app_db.query(
+            "SELECT id, generated_at FROM plan_snapshot WHERE fetched_at >= ? AND fetched_at <= ?",
+            (iso(start), iso(end)),
+        )
+        out: list[tuple[int, datetime]] = []
+        for row in rows:
+            stamp = parse_iso(row["generated_at"])
+            if stamp is not None:
+                out.append((int(row["id"]), stamp))
+        out.sort(key=lambda s: s[1])
+        return out
+
+    def plan_rows_for(self, wanted: list[tuple[int, str]]) -> dict[tuple[int, str], dict[str, Any]]:
+        """plan_row records for (snapshot id, slot_utc) pairs."""
+        if not wanted:
+            return {}
+        ids = sorted({sid for sid, _ in wanted})
+        slots = [s for _, s in wanted]
+        marks = ",".join("?" * len(ids))
+        rows = self.c.app_db.query(
+            f"SELECT * FROM plan_row WHERE snapshot_id IN ({marks}) AND slot_utc >= ? AND slot_utc <= ?",
+            (*ids, min(slots), max(slots)),
+        )
+        asked = set(wanted)
+        return {(r["snapshot_id"], r["slot_utc"]): r for r in rows if (r["snapshot_id"], r["slot_utc"]) in asked}
 
     async def claim_plan(self, generated_at: str, run_id: int) -> bool:
         """Mark the stored plan with this generated_at as made by EMHASS Lens run `run_id`. False if not stored."""
@@ -298,12 +386,15 @@ class EmhassService:
             out.append(row)
         return out
 
-    def prune(self, keep: int = 2000) -> int:
-        return self.c.app_db.execute(
+    def prune(self, keep: int = 2000, now: datetime | None = None) -> int:
+        removed = self.c.app_db.execute(
             "DELETE FROM plan_snapshot WHERE id NOT IN "
             "(SELECT id FROM plan_snapshot ORDER BY generated_at DESC LIMIT ?)",
             (keep,),
         ).rowcount
+        cut = iso((now or self.c.clock.now()) - timedelta(days=PLAN_ROW_DAYS))
+        self.c.app_db.execute("DELETE FROM plan_row WHERE slot_utc < ?", (cut,))
+        return removed
 
     def status(self) -> dict[str, Any]:
         return {
@@ -326,3 +417,9 @@ class EmhassService:
 
 def parse_ts(value: Any) -> datetime | None:
     return parse_iso(str(value)) if value else None
+
+
+_PLAN_ROW_INSERT = (
+    "INSERT OR REPLACE INTO plan_row (snapshot_id, slot_utc, p_grid, p_batt, p_pv, p_load, p_deferrable, soc) "
+    "VALUES (?,?,?,?,?,?,?,?)"
+)

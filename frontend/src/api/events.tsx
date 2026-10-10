@@ -29,8 +29,10 @@ const POLL_MS = 10_000
 /** Which cached data a finished job may have changed. */
 // eslint-disable-next-line react-refresh/only-export-components
 export function familiesForJob(job: string): string[] {
-  if (job === 'emhass.plan_watch' || job === 'emhass.mpc') return ['plan', 'emhass', 'outputs']
+  if (job === 'emhass.plan_watch') return ['plan', 'emhass', 'outputs']
+  if (job === 'emhass.mpc' || job === 'emhass.costfun_compare') return ['plan', 'costfun', 'emhass', 'outputs']
   if (job === 'emhass.publish') return ['plan', 'outputs']
+  if (job.startsWith('measure.')) return ['plan']
   if (job === 'nordpool.poll' || job.startsWith('forecast.')) return ['prices']
   if (job.startsWith('emhass.')) return ['emhass']
   if (job.startsWith('driver.')) return ['settings', 'emhass', 'outputs']
@@ -89,6 +91,9 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: keys.inverter })
           } else if (name === 'plan') {
             void queryClient.invalidateQueries({ queryKey: keys.plan })
+            void queryClient.invalidateQueries({ queryKey: ['plan-history'] })
+          } else if (name === 'costfun') {
+            void queryClient.invalidateQueries({ queryKey: keys.costfun })
             void queryClient.invalidateQueries({ queryKey: keys.outputs })
           } else if (name === 'outputs') {
             void queryClient.invalidateQueries({ queryKey: keys.outputs })

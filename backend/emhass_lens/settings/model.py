@@ -81,6 +81,30 @@ class EmhassMpc(Section):
         description="Cap the number of slots sent to EMHASS.",
         json_schema_extra=ui(unit="slots", advanced=True),
     )
+    costfun: Literal["default", "profit", "cost", "self-consumption"] = Field(
+        default="default",
+        title="Cost function",
+        description="What EMHASS optimises for. Profit: import cost minus export revenue (EMHASS's usual default). "
+        "Cost: import cost only, exports earn nothing. Self-consumption: use as much PV on site as possible. "
+        "'EMHASS's own setting' sends nothing and leaves EMHASS's configured costfun in charge. Needs EMHASS 0.18 "
+        "or newer; the plan read back shows which one EMHASS used, and Health warns if it was ignored.",
+        json_schema_extra=ui(
+            labels={
+                "default": "EMHASS's own setting",
+                "profit": "Profit",
+                "cost": "Cost",
+                "self-consumption": "Self-consumption",
+            }
+        ),
+    )
+    compare_costfuns: bool = Field(
+        default=False,
+        title="Compare cost functions on every run",
+        description="Before each live plan, also run the other two cost functions with the same inputs, so the Plan "
+        "page can show what each would do and cost. Two extra optimisations per quarter-hour (each a few seconds to "
+        "a minute, EMHASS's latest plan is only final once all three are done), so move the MPC time earlier if "
+        "publishing gets tight. 'Compare now' on the Plan page does the same once.",
+    )
     hazard_guard_s: int = Field(
         default=30,
         ge=0,
@@ -454,6 +478,56 @@ class Pv(Section):
         "above is P10 itself.",
     )
     scale: float = Field(default=1.0, ge=0, le=10, title="Multiply by", json_schema_extra=ui(advanced=True))
+
+
+# --- Measurements (what actually happened, for the Plan page's history and accuracy) --------------------
+
+
+class MeasuredPower(Section):
+    entity: EntityId = Field(
+        default="",
+        title="Entity",
+        description="Leave empty to skip this quantity.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    scale: float = Field(
+        default=1.0,
+        gt=0,
+        le=10000,
+        title="Multiply by",
+        description="1 for a sensor in W (or a SOC of 0–1), 1000 for kW, 0.01 for a SOC in %.",
+        json_schema_extra=ui(advanced=True),
+    )
+    invert: bool = Field(
+        default=False,
+        title="Opposite sign",
+        description="Tick when the sensor's sign is the reverse of EMHASS's (see the quantity's title).",
+    )
+
+
+class Measurements(Section):
+    grid: MeasuredPower = Field(default=MeasuredPower(), title="Grid power (+ import, − export, like EMHASS's P_grid)")
+    battery: MeasuredPower = Field(
+        default=MeasuredPower(), title="Battery power (+ discharge, − charge, like EMHASS's P_batt)"
+    )
+    pv: MeasuredPower = Field(default=MeasuredPower(entity="sensor.sofar_pv_power_total_watt"), title="PV power")
+    load: MeasuredPower = Field(
+        default=MeasuredPower(entity="sensor.house_power_without_deferrable"),
+        title="House load without deferrable loads (what EMHASS forecasts as P_Load)",
+    )
+    soc: MeasuredPower = Field(
+        default=MeasuredPower(entity="sensor.ev6_battery_soc", scale=0.01), title="Battery state of charge"
+    )
+    backfill_days: int = Field(
+        default=10,
+        ge=1,
+        le=30,
+        title="Read history back",
+        description="How far back to read from Home Assistant's recorder on start and after a change here. "
+        "The recorder keeps 10 days by default.",
+        json_schema_extra=ui(unit="days"),
+    )
+    keep_days: int = Field(default=120, ge=7, le=730, title="Keep measurements", json_schema_extra=ui(unit="days"))
 
 
 # --- Outputs, health, logging ------------------------------------------------------------------------
@@ -1044,6 +1118,7 @@ class Settings(Section):
     prices: Prices = Field(default=Prices(), title="Prices")
     forecast: Forecast = Field(default=Forecast(), title="Price forecast")
     pv: Pv = Field(default=Pv(), title="PV forecast")
+    measurements: Measurements = Field(default=Measurements(), title="Measurements (plan history and accuracy)")
     outputs: Outputs = Field(default=Outputs(), title="Home Assistant outputs")
     health: Health = Field(default=Health(), title="Health")
     notifications: Notifications = Field(default=Notifications(), title="Notifications")

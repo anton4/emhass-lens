@@ -45,8 +45,14 @@ def register(c: Container) -> None:
         if "prices" in x:
             slots = await c.app_db.run(x["prices"].prune, now)
             snapshots = await c.app_db.run(x["forecasts"].prune, now)
-            plans = await c.app_db.run(x["emhass"].prune)
+            plans = await c.app_db.run(x["emhass"].prune, 2000, now)
             summary += f"; {slots} old price slots, {snapshots} forecast snapshots, {plans} plans"
+        if "measurements" in x:
+            measured = await c.app_db.run(x["measurements"].prune, now)
+            summary += f"; {measured} measurements"
+        if "costfun" in x:
+            compared = await c.app_db.run(x["costfun"].prune, now)
+            summary += f"; {compared} cost function plans"
         if "sofar" in x:
             wear = await c.app_db.run(x["sofar"].prune, now)
             summary += f"; {wear} inverter write records"

@@ -38,6 +38,7 @@
   --chart-grid: #e2e6e2;
   --chart-axis: #a9b0ab;
   --chart-wash: rgba(23, 35, 43, 0.06);
+  --chart-past: rgba(42, 120, 214, 0.045);
   --chart-now: #c23b2a;
 
   --font-readout: 'Bahnschrift', 'DIN Alternate', 'DIN 2014', 'D-DIN', 'Barlow', 'Roboto Condensed',
@@ -91,6 +92,7 @@
     --chart-grid: #26343c;
     --chart-axis: #3d4d56;
     --chart-wash: rgba(227, 233, 231, 0.07);
+    --chart-past: rgba(57, 135, 229, 0.09);
     --chart-now: #e8604d;
     color-scheme: dark;
   }

@@ -201,6 +201,34 @@ def main() -> int:
                 f"{pub['summary']}; sensor.p_batt_forecast={batt}",
             )
 
+            compared = run_job(http, "emhass.costfun_compare", timeout=300)
+            costfun = http.get("/api/plan/costfun").json()
+            columns = sorted(
+                (r["totals"] or {}).get("emhass_objective_column") or f"none ({r['problem']})" for r in costfun["results"]
+            )
+            after = http.get("/api/plan").json()
+            live_plan_ok = after.get("current") is not None and after["current"]["run_id"] == compared["id"]
+            check(
+                "compares the three cost functions and leaves EMHASS with the plan of the one in use",
+                compared["outcome"] == "ok"
+                and columns == ["cost_fun_cost", "cost_fun_profit", "cost_fun_selfcons"]
+                and live_plan_ok,
+                f"{compared['summary']}; columns {columns}",
+            )
+
+            patch(http, {"measurements": {"pv": {"entity": ""}, "backfill_days": 1}}, "e2e: measurements")
+            filled = run_job(http, "measure.backfill")
+            history = http.get("/api/plan/history", params={"hours": 6}).json()
+            configured = sorted(q["quantity"] for q in history["measurements"]["configured"])
+            check(
+                "reads measured history from the recorder for the Plan page",
+                filled["outcome"] in ("ok", "noop")
+                and len(history["slots"]) == 24
+                and configured == ["load", "soc"]
+                and history["measurements"]["last_error"] is None,
+                f"{filled['summary']}; {configured}",
+            )
+
             if legacy:
                 switch = "switch.nordpool_ee_prices_emhass_auto_mpc"
                 ha.post("/api/services/switch/turn_on", json={"entity_id": switch})
