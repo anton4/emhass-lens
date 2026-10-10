@@ -150,6 +150,9 @@ def test_the_soc_stop_fires_once_after_the_holding_time(tmp_path: Path, world: W
         assert soc["since"] is not None and soc["fired"] is False and soc["due_at"] is not None
         before = newest_id(client, "charger.decide")
         assert before == 0
+        # keep the live scheduler's minute tick out of the way: it would add an EMHASS adjustment right after the
+        # stop (the mode resumes charging once the target is back at 100 %) and muddle the calls asserted below
+        assert client.post("/api/jobs/charger.tick/pause").status_code == 200
         clock.advance(seconds=60)  # the scheduler may fire the overdue stop itself; run it by hand as well
         run_job(client, "charger.soc_stop")
         stopped = wait_for_run(client, "charger.decide", before, summary="Did 'Target SoC")
@@ -163,6 +166,7 @@ def test_the_soc_stop_fires_once_after_the_holding_time(tmp_path: Path, world: W
         assert world.ha_states[TARGET_SOC]["state"] == "100.0" and world.ha_states[LIMIT]["state"] == "0.0"
         assert client.get(f"/api/runs/{stopped['id']}/artifacts/charger_readback").json()["agree"] is True
         # the target is 100 % now: the SoC clock resets, and EMHASS mode resumes charging (the automation does too)
+        assert client.post("/api/jobs/charger.tick/resume").status_code == 200
         run_job(client, "charger.tick")
         assert client.get("/api/charger").json()["soc"] == {"since": None, "fired": False, "due_at": None}
         resumed = wait_for_run(client, "charger.decide", stopped["id"], summary="Did 'EMHASS")
