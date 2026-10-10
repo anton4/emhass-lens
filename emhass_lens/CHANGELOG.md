@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.14
 
 - MQTT: Health no longer warns while the first connection is being made (after a start or after switching MQTT entities on); after 2 minutes without a broker it says why (no Mosquitto broker App, login refused, broker unreachable), and the log line carries that reason too.
 
