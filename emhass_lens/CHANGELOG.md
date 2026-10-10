@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The header also checks GitHub: once a new release's image for your machine is built, it shows **x.y.z released · Check for updates** until Home Assistant's App store picks it up.
+
 ## 0.3.16
 
 - The header shows **Update to x.y.z** next to the version when Home Assistant can install a newer EMHASS Lens (checked with the Supervisor every 30 minutes and at start); it opens the App's page in Home Assistant.

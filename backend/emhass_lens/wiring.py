@@ -65,7 +65,8 @@ def build(c: Container) -> None:
     x["charger"] = ChargerService(c)
     x["market"] = MarketService(c)
     x["catchup"] = CatchUpService(c)
-    x["updates"] = UpdateService(c)
+    x["http_updates"] = make_client("github", timeout=15, transport=transport)
+    x["updates"] = UpdateService(c, x["http_updates"])
     x["measurements"] = MeasurementService(c)
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
@@ -256,7 +257,7 @@ def register_jobs(c: Container) -> None:
         Job(
             id="app.update_check",
             title="App update check",
-            description="Asks the Supervisor whether a newer EMHASS Lens can be installed (shown next to the version).",
+            description="Asks the Supervisor and GitHub whether a newer EMHASS Lens exists (shown by the version).",
             trigger=Periodic(1800, 45),
             func=x["updates"].check,
             record=False,
@@ -572,7 +573,7 @@ async def stop(c: Container) -> None:
     x["catchup"].stop()
     await x["outputs"].stop()
     await x["ha"].stop()
-    for key in ("http_nordpool", "http_forecast"):
+    for key in ("http_nordpool", "http_forecast", "http_updates"):
         await x[key].aclose()
     await x["supervisor"].close()
     await x["emhass_client"].close()

@@ -33,6 +33,8 @@ class UpdateInfo(BaseModel):
     update_available: bool
     version_latest: str | None = None
     addon_path: str | None = None  # the App's page in Home Assistant, e.g. /hassio/addon/<slug>/info
+    released_version: str | None = None  # on GitHub with its image built, not picked up by Home Assistant yet
+    store_path: str | None = None  # Home Assistant's App store (⋮ → Check for updates)
     checked_at: str | None = None
 
 

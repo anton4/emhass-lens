@@ -26,8 +26,8 @@ def world() -> World:
 
 
 def make_client(tmp_path: Path, world: World, clock: FakeClock, **boot_kwargs) -> TestClient:
-    options = {"safe_mode": True, **boot_kwargs}
-    boot = Bootstrap(version="test", data_dir=tmp_path, static_dir=None, ha_url=HA_URL, **options)
+    options = {"safe_mode": True, "version": "test", **boot_kwargs}
+    boot = Bootstrap(data_dir=tmp_path, static_dir=None, ha_url=HA_URL, **options)
     world.clock_now = clock.now
     return TestClient(create_app(boot, clock=clock, http_transport=world.transport()))
 

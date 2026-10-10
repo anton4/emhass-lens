@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): the update check also asks GitHub (unreleased)
+- `UpdateService._github`: version from `raw.githubusercontent.com/anton4/emhass-lens/main/emhass_lens/config.yaml`; when newer than installed, an anonymous ghcr.io token + `HEAD /v2/anton4/emhass-lens-<arch>/manifests/<version>` (arch from `platform.machine()`); `UpdateInfo.released_version` / `store_path`; header chip "x.y.z released · Check for updates" (to `/hassio/store`) while the Supervisor hasn't picked it up. A ready release isn't looked up again. Tests in `test_updates.py`; the world fakes GitHub and the registry.
+
 ### 2026-10-10 (evening): update available in the header (0.3.16)
 - `services/updates.UpdateService` reads `/addons/self/info` (`version_latest`, `update_available`, `slug`) at start and every 30 min (job `app.update_check`, unrecorded); `StatusInfo.update` (`UpdateInfo`); `Layout.tsx` shows an "Update to x.y.z" chip linking to `/hassio/addon/<slug>/info` (`target=_top`, out of the Ingress frame). The API tests that run "under the Supervisor" now get the fake transport (they had made real requests to http://supervisor). Test `test_updates.py`.
 

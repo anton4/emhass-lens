@@ -67,6 +67,9 @@ class World:
     supervisor_lists_backups: bool = True  # hassio_role: backup
     supervisor_backups: list[dict[str, Any]] = field(default_factory=list)
     emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
+    github_version: str = "0.3.16"  # emhass_lens/config.yaml on main
+    ghcr_tags: set[str] = field(default_factory=set)  # image tags in the registry
+    ghcr_heads: list[str] = field(default_factory=list)  # manifest lookups made
     supervisor_self: dict[str, Any] = field(
         default_factory=lambda: {"slug": "local_emhass_lens", "state": "started"}
     )  # /addons/self/info (version, version_latest, update_available ...)
@@ -91,6 +94,15 @@ class World:
             if self.ee_status != 200:
                 return httpx.Response(self.ee_status, json={"detail": "nope"})
             return httpx.Response(200, json=self.ee_forecast or {"series": []})
+        if host == "raw.githubusercontent.com":
+            text = f'name: EMHASS Lens\nversion: "{self.github_version}"\nimage: ghcr.io/anton4/emhass-lens-{{arch}}\n'
+            return httpx.Response(200, text=text)
+        if host == "ghcr.io":
+            if path == "/token":
+                return httpx.Response(200, json={"token": "anonymous"})
+            tag = path.rsplit("/", 1)[-1]
+            self.ghcr_heads.append(path)
+            return httpx.Response(200 if tag in self.ghcr_tags else 404)
         if host in ("emhass.test", "5b918bf2-emhass"):
             return self._emhass(request, path)
         if host == "supervisor":

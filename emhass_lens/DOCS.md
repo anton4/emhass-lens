@@ -215,7 +215,7 @@ All other settings live in the App: every save is kept as a revision, with who c
 
 ## Updates
 
-When Home Assistant can install a newer EMHASS Lens, the header shows **Update to x.y.z** next to the version; it opens the App's page in Home Assistant. EMHASS Lens asks the Supervisor every 30 minutes and at start, so it shows exactly what Home Assistant offers. Home Assistant refreshes its App store on its own schedule: Settings → Add-ons → Add-on Store → ⋮ → Check for updates makes it notice a new release at once.
+When Home Assistant can install a newer EMHASS Lens, the header shows **Update to x.y.z** next to the version; it opens the App's page in Home Assistant. Home Assistant refreshes its App store on its own schedule, so EMHASS Lens also looks at GitHub: once a release's image for your machine is built, the header shows **x.y.z released · Check for updates** until Home Assistant picks it up (it opens the App store; use ⋮ → Check for updates there). Both are checked at start and every 30 minutes; a release whose image is still building isn't shown, so the link never leads to an update that fails.
 
 ## Logs and runs
 

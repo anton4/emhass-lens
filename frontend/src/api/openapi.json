@@ -8721,6 +8721,28 @@
             ],
             "title": "Checked At"
           },
+          "released_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released Version"
+          },
+          "store_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Path"
+          },
           "update_available": {
             "title": "Update Available",
             "type": "boolean"

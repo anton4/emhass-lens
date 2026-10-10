@@ -4593,6 +4593,10 @@ export interface components {
             addon_path?: string | null;
             /** Checked At */
             checked_at?: string | null;
+            /** Released Version */
+            released_version?: string | null;
+            /** Store Path */
+            store_path?: string | null;
             /** Update Available */
             update_available: boolean;
             /** Version Latest */

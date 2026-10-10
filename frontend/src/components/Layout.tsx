@@ -70,6 +70,18 @@ export function Layout() {
                 Update to {s.update.version_latest}
               </a>
             )}
+            {!s?.update?.update_available && s?.update?.released_version && (
+              <a
+                className="update-chip"
+                href={s.update.store_path ?? '/hassio/store'}
+                target="_top"
+                rel="noopener"
+                title={`EMHASS Lens ${s.update.released_version} is released, but Home Assistant hasn't picked it up yet: in the App store use ⋮ → Check for updates, then update EMHASS Lens`}
+              >
+                <Lamp color="blue" />
+                {s.update.released_version} released · Check for updates
+              </a>
+            )}
           </div>
           <ModeSwitch mode={s?.emhass_mode} writable={s?.writable} driver={s?.driver} safeMode={s?.safe_mode} />
           <div className="lamps" aria-label="Status">
