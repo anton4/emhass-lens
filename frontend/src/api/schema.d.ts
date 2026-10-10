@@ -3168,6 +3168,27 @@ export interface components {
             /** Provider */
             provider: string;
         };
+        /** PriceSensors */
+        PriceSensors: {
+            /**
+             * Export price sensor
+             * @description Same shape, for the export price. Leave empty to skip.
+             * @default sensor.nordpool_export
+             */
+            export_entity: string;
+            /**
+             * Import price sensor
+             * @description A Home Assistant sensor whose raw_today / raw_tomorrow (or raw_all) attribute lists {start, end, value} in €/kWh including VAT, like a Nord Pool template. Leave empty to skip the comparison.
+             * @default sensor.nordpool_import
+             */
+            import_entity: string;
+            /**
+             * Tolerance
+             * @description Differences up to this count as equal (templates usually round to 4 decimals).
+             * @default 0.0001
+             */
+            tolerance: number;
+        };
         /** PriceSlotOut */
         PriceSlotOut: {
             /** Balancing */
@@ -3218,6 +3239,15 @@ export interface components {
              *     }
              */
             nordpool: components["schemas"]["NordpoolPolling"];
+            /**
+             * Compare with your price sensors
+             * @default {
+             *       "export_entity": "sensor.nordpool_export",
+             *       "import_entity": "sensor.nordpool_import",
+             *       "tolerance": 0.0001
+             *     }
+             */
+            sensors: components["schemas"]["PriceSensors"];
             /**
              * @default {
              *       "balancing": 0.00373,
@@ -3944,6 +3974,11 @@ export interface components {
              *         "fast_until": "15:00",
              *         "publish_time": "13:45",
              *         "slow_interval_min": 60
+             *       },
+             *       "sensors": {
+             *         "export_entity": "sensor.nordpool_export",
+             *         "import_entity": "sensor.nordpool_import",
+             *         "tolerance": 0.0001
              *       },
              *       "tariff": {
              *         "balancing": 0.00373,

@@ -5498,6 +5498,46 @@
         "title": "PriceForecastAccuracy",
         "type": "object"
       },
+      "PriceSensors": {
+        "additionalProperties": false,
+        "properties": {
+          "export_entity": {
+            "default": "sensor.nordpool_export",
+            "description": "Same shape, for the export price. Leave empty to skip.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Export price sensor",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "import_entity": {
+            "default": "sensor.nordpool_import",
+            "description": "A Home Assistant sensor whose raw_today / raw_tomorrow (or raw_all) attribute lists {start, end, value} in €/kWh including VAT, like a Nord Pool template. Leave empty to skip the comparison.",
+            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Import price sensor",
+            "type": "string",
+            "ui": {
+              "domain": "sensor",
+              "widget": "entity"
+            }
+          },
+          "tolerance": {
+            "default": 0.0001,
+            "description": "Differences up to this count as equal (templates usually round to 4 decimals).",
+            "maximum": 0.1,
+            "minimum": 0.0,
+            "title": "Tolerance",
+            "type": "number",
+            "ui": {
+              "unit": "€/kWh"
+            }
+          }
+        },
+        "title": "PriceSensors",
+        "type": "object"
+      },
       "PriceSlotOut": {
         "properties": {
           "balancing": {
@@ -5604,6 +5644,15 @@
               "slow_interval_min": 60
             },
             "title": "Nord Pool day-ahead"
+          },
+          "sensors": {
+            "$ref": "#/components/schemas/PriceSensors",
+            "default": {
+              "export_entity": "sensor.nordpool_export",
+              "import_entity": "sensor.nordpool_import",
+              "tolerance": 0.0001
+            },
+            "title": "Compare with your price sensors"
           },
           "tariff": {
             "$ref": "#/components/schemas/Tariff",
@@ -7200,6 +7249,11 @@
                 "fast_until": "15:00",
                 "publish_time": "13:45",
                 "slow_interval_min": 60
+              },
+              "sensors": {
+                "export_entity": "sensor.nordpool_export",
+                "import_entity": "sensor.nordpool_import",
+                "tolerance": 0.0001
               },
               "tariff": {
                 "balancing": 0.00373,

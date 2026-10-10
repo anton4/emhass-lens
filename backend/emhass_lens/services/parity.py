@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
+from emhass_lens.domain import price_compare
 from emhass_lens.scheduler.core import JobContext
 
 if TYPE_CHECKING:
@@ -89,46 +90,53 @@ class ParityService:
     async def run(self, ctx: JobContext) -> None:
         assert ctx.run is not None
         settings = self.c.settings.current
-        if not settings.parity.enabled:
-            ctx.run.outcome, ctx.run.summary = "noop", "Parity checks are off"
-            return
         ha = self.c.extras["ha"]
         if not ha.connected:
             ctx.run.outcome, ctx.run.summary = "noop", "Not connected to Home Assistant"
             return
-        names = (
-            "import_cost",
-            "export_cost",
-            "prices_from_now",
-            "solcast_forecast_15min",
-            "emhass_last_mpc",
-            "forecast_api_last_poll",
-        )
-        states: dict[str, dict[str, Any] | None] = {}
-        for name in names:
-            try:
-                states[name] = await ha.get_state(self.entity(name))
-            except Exception as exc:
-                states[name] = None
-                log.debug("Reading %s failed: %s", self.entity(name), exc)
-        if all(v is None for v in states.values()):
-            ctx.run.outcome = "noop"
-            ctx.run.summary = f"HACS integration not found ({self.entity('import_cost')} missing)"
-            return
-
-        tol = settings.parity.tolerance
-        legacy_poll = _timestamp((states.get("forecast_api_last_poll") or {}).get("state"))
         sections: list[dict[str, Any]] = []
-        sections += self._timestamped(states, tol)
-        sections += self._from_now(states, tol)
-        payload = self._payload(states, legacy_poll)
-        if payload:
-            sections.append(payload)
-        for section in sections:
-            if not section.get("ok") and not section.get("explained"):
-                note = self._forecast_only(section, legacy_poll)
-                if note:
-                    section["explained"] = note
+        legacy_found = False
+        if settings.parity.enabled:
+            names = (
+                "import_cost",
+                "export_cost",
+                "prices_from_now",
+                "solcast_forecast_15min",
+                "emhass_last_mpc",
+                "forecast_api_last_poll",
+            )
+            states: dict[str, dict[str, Any] | None] = {}
+            for name in names:
+                try:
+                    states[name] = await ha.get_state(self.entity(name))
+                except Exception as exc:
+                    states[name] = None
+                    log.debug("Reading %s failed: %s", self.entity(name), exc)
+            legacy_found = any(v is not None for v in states.values())
+            if legacy_found:
+                tol = settings.parity.tolerance
+                legacy_poll = _timestamp((states.get("forecast_api_last_poll") or {}).get("state"))
+                sections += self._timestamped(states, tol)
+                sections += self._from_now(states, tol)
+                payload = self._payload(states, legacy_poll)
+                if payload:
+                    sections.append(payload)
+                for section in sections:
+                    if not section.get("ok") and not section.get("explained"):
+                        note = self._forecast_only(section, legacy_poll)
+                        if note:
+                            section["explained"] = note
+        sensor_sections = await self._price_sensors()
+        sections += sensor_sections
+        if not sections:
+            ctx.run.outcome = "noop"
+            if not settings.parity.enabled and not self._sensor_entities():
+                ctx.run.summary = "Parity checks are off and no price sensor is set"
+            elif settings.parity.enabled and not legacy_found and not self._sensor_entities():
+                ctx.run.summary = f"HACS integration not found ({self.entity('import_cost')} missing)"
+            else:
+                ctx.run.summary = "Nothing to compare: the HACS integration and the price sensors weren't found"
+            return
 
         unexplained = [s for s in sections if not s.get("ok") and not s.get("explained")]
         report = {"checked_at": iso(self.c.clock.now()), "sections": sections, "ok": not unexplained}
@@ -162,6 +170,61 @@ class ParityService:
         else:
             when = "each fetches it on its own schedule"
         return f"only forecast slots differ: the price forecast was fetched at different times ({when})"
+
+    # --- the owner's own price sensors ------------------------------------------------------------------
+    def _sensor_entities(self) -> list[tuple[str, str]]:
+        sensors = self.c.settings.current.prices.sensors
+        out = []
+        if sensors.import_entity:
+            out.append((sensors.import_entity, "import_price"))
+        if sensors.export_entity:
+            out.append((sensors.export_entity, "export_price"))
+        return out
+
+    async def _price_sensors(self) -> list[dict[str, Any]]:
+        """A Nord Pool template sensor with fees (raw_today / raw_tomorrow / raw_all) against our priced slots."""
+        settings = self.c.settings.current
+        ha = self.c.extras["ha"]
+        out: list[dict[str, Any]] = []
+        for entity, field in self._sensor_entities():
+            try:
+                state = await ha.get_state(entity)
+            except Exception as exc:
+                log.debug("Reading %s failed: %s", entity, exc)
+                state = None
+            if state is None:
+                out.append(
+                    {
+                        "name": entity,
+                        "theirs_label": entity,
+                        "ok": False,
+                        "missing": True,
+                        "explained": f"{entity} wasn't found in Home Assistant (Settings → Prices → Compare with "
+                        "your price sensors)",
+                    }
+                )
+                continue
+            intervals = price_compare.sensor_intervals(state.get("attributes"))
+            if not intervals:
+                out.append(
+                    {
+                        "name": entity,
+                        "theirs_label": entity,
+                        "ok": False,
+                        "missing": True,
+                        "explained": f"{entity} has no raw_today / raw_tomorrow / raw_all list with prices",
+                    }
+                )
+                continue
+            ours = self.c.extras["prices"].priced(intervals[0].start, self.c.extras["forecasts"].current())
+            section = price_compare.compare(entity, intervals, ours, field, settings.prices.sensors.tolerance)
+            if not section["ok"]:
+                # a cause, not an excuse: the sensor is still different, so the run says mismatch
+                note = price_compare.explain(section, settings.prices.tariff, field, settings.prices.sensors.tolerance)
+                if note:
+                    section["note"] = note
+            out.append(section)
+        return out
 
     def _local_time(self, at: datetime) -> str:
         """HH:MM in Home Assistant's timezone (the App's own when HA hasn't said yet)."""

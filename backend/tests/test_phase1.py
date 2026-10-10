@@ -401,3 +401,58 @@ def test_setup_checklist_tracks_the_migration(tmp_path: Path, world: World) -> N
         assert steps["ha"]["link"] == "#/health?card=components"
         assert steps["drive"]["link"] == "#/health?card=driver"
         assert not [s for s in checklist["steps"] if s["link"] == "#/health"]
+
+
+def _raw(slots, field: str, bump) -> list[dict]:
+    return [
+        {
+            "start": s.start.astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "end": s.end.astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "value": round(float(getattr(s, field)) + bump(s), 4),
+        }
+        for s in slots
+        if not s.is_forecast
+    ]
+
+
+def test_the_owners_price_sensors_are_compared_and_a_package_difference_is_explained(
+    tmp_path: Path, world: World
+) -> None:
+    clock = FakeClock(START)
+    with make_client(tmp_path, world, clock) as client:
+        run_job(client, "nordpool.poll")
+        container = client.app.state.container  # type: ignore[attr-defined]
+        tariff = container.settings.current.prices.tariff
+        ours = container.extras["prices"].priced(datetime(2026, 10, 8, 21, 0, tzinfo=UTC), None)  # from 9 Oct 00:00
+        vat = 1 + tariff.vat_pct / 100
+        bumps = {"day": (0.0607 - 0.0369) * vat, "night": (0.0351 - 0.0210) * vat}  # Võrk 2 where the App has Võrk 4
+        raw_import = _raw(ours, "import_price", lambda s: bumps.get(s.period, 0.0))
+        raw_export = _raw(ours, "export_price", lambda s: 0.0)
+        world.set_state("sensor.nordpool_import", "0.1", {"raw_all": raw_import}, START)
+        world.set_state(
+            "sensor.nordpool_export", "0.05", {"raw_today": raw_export[:96], "raw_tomorrow": raw_export[96:]}, START
+        )
+        prime(client, world)
+        run = run_job(client, "parity.check")
+        assert run["outcome"] == "mismatch", run  # no HACS entities here: only the owner's sensors count
+        report = client.get(f"/api/runs/{run['id']}/artifacts/parity").json()
+        names = {s["name"]: s for s in report["sections"]}
+        imp, exp = names["sensor.nordpool_import"], names["sensor.nordpool_export"]
+        assert imp["ok"] is False and "Võrk 2" in imp["note"], imp.get("note")
+        assert imp["theirs_label"] == "sensor.nordpool_import"
+        assert exp["ok"] is True and exp["compared"] == len(raw_export)
+
+        # the owner fixes the template: both agree
+        world.set_state("sensor.nordpool_import", "0.1", {"raw_all": _raw(ours, "import_price", lambda s: 0.0)}, START)
+        prime(client, world)
+        run = run_job(client, "parity.check")
+        assert run["outcome"] == "ok", run
+
+        # a missing sensor is reported, not an error
+        rev = client.get("/api/settings").json()["revision"]
+        changes = {"prices": {"sensors": {"export_entity": "sensor.nope"}}}
+        assert client.patch("/api/settings", json={"base_revision": rev, "changes": changes}).status_code == 200
+        run = run_job(client, "parity.check")
+        report = client.get(f"/api/runs/{run['id']}/artifacts/parity").json()
+        nope = next(s for s in report["sections"] if s["name"] == "sensor.nope")
+        assert nope["missing"] is True and run["outcome"] == "ok"

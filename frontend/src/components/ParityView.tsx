@@ -6,12 +6,13 @@ function SectionRow({ section }: { section: ParitySection }) {
   const ok = section.ok
   const explained = !ok && (section.explained || (section.explained_differences?.length ?? 0) > 0)
   const counted = section.compared !== undefined
+  const theirs = section.theirs_label ?? 'HACS integration'
   return (
     <details className="parity-section">
       <summary>
         <LabelledLamp
-          color={ok ? 'green' : explained ? 'blue' : 'amber'}
-          text={ok ? 'Same' : explained ? 'Explained' : 'Different'}
+          color={ok ? 'green' : section.missing ? 'neutral' : explained ? 'blue' : 'amber'}
+          text={ok ? 'Same' : section.missing ? 'Not found' : explained ? 'Explained' : 'Different'}
         />
         <span className="cell-title">{section.name}</span>
         {counted && (
@@ -21,11 +22,13 @@ function SectionRow({ section }: { section: ParitySection }) {
           </span>
         )}
         {section.legacy_slots_without_ours ? (
-          <span className="muted">{section.legacy_slots_without_ours} legacy slots we don't have</span>
+          <span className="muted">{section.legacy_slots_without_ours} of their slots we don't have</span>
         ) : null}
+        {section.skipped_forecast ? <span className="muted">{section.skipped_forecast} forecast slots not compared</span> : null}
       </summary>
       <div className="parity-body">
         {section.explained && <p className="cell-sub">{section.explained}</p>}
+        {section.note && <p className="cell-sub">Likely cause: {section.note}</p>}
         {section.explained_differences?.map((text) => (
           <p key={text} className="cell-sub">
             Expected difference: {text}
@@ -39,7 +42,7 @@ function SectionRow({ section }: { section: ParitySection }) {
                   <th>#</th>
                   <th>Slot</th>
                   <th className="r">EMHASS Lens</th>
-                  <th className="r">HACS integration</th>
+                  <th className="r">{theirs}</th>
                   <th className="r">Difference</th>
                 </tr>
               </thead>
@@ -87,7 +90,7 @@ function SectionRow({ section }: { section: ParitySection }) {
   )
 }
 
-/** Comparison with the HACS integration's entities, section by section. */
+/** Comparisons with the HACS integration's entities and with the owner's price sensors, section by section. */
 export function ParityView({ report }: { report: ParityReport }) {
   return (
     <div>

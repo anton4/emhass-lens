@@ -8,7 +8,7 @@ import { Empty } from '../../components/PageHead'
 import { ParityView } from '../../components/ParityView'
 import { formatTime } from '../../lib/format'
 
-/** The latest comparison with the HACS integration. */
+/** The latest parity check: the HACS integration's entities and the owner's own price sensors. */
 export function ParityCard() {
   const latest = useLatestRun('parity.check')
   const run = latest.data
@@ -22,7 +22,7 @@ export function ParityCard() {
   return (
     <section id="card-parity" className="panel">
       <div className="panel-head">
-        <h2>Parity with the HACS integration</h2>
+        <h2>Parity checks</h2>
         {run && (
           <span className="toolbar">
             <OutcomeChip outcome={run.outcome} />
@@ -31,7 +31,10 @@ export function ParityCard() {
         )}
       </div>
       {!run ? (
-        <Empty title="Not compared yet">Runs every quarter-hour at :05 while the HACS integration is installed.</Empty>
+        <Empty title="Not compared yet">
+          Runs every quarter-hour at :05: the HACS integration's entities while it is installed, and your own price
+          sensors from Settings → Prices → Compare with your price sensors.
+        </Empty>
       ) : report.data ? (
         <div className="panel-body">
           <ParityView report={report.data} />

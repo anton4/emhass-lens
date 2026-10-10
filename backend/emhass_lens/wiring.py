@@ -474,6 +474,7 @@ def subscribe(c: Container) -> None:
     c.settings.subscribe("emhass.mpc.slot_offset_s", on_mpc_time)
     c.settings.subscribe("emhass.base_url", on_emhass_url)
     c.settings.subscribe(("emhass.mode", "emhass.publish", "emhass.ml", "inputs.deferrable_loads"), on_checks)
+    c.settings.subscribe(("prices.sensors", "prices.tariff"), lambda *_: c.scheduler.run_now("parity.check"))
     c.settings.subscribe("emhass.publish.slot_offset_s", on_publish_time)
     c.settings.subscribe("outputs", on_outputs)
     c.settings.subscribe(("emhass.mpc.auto", "prices.tariff"), on_state_change)

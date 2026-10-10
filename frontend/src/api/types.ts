@@ -119,6 +119,11 @@ export interface ParitySection {
   ours_len?: number
   legacy_len?: number
   legacy_slots_without_ours?: number
+  theirs_label?: string
+  skipped_forecast?: number
+  missing?: boolean
+  note?: string
+  period_deltas?: Record<string, number>
   examples?: ParityExample[]
   differences?: Record<string, unknown>[]
   explained_differences?: string[]

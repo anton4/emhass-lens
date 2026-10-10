@@ -374,9 +374,34 @@ class Tariff(Section):
     )
 
 
+class PriceSensors(Section):
+    import_entity: EntityId = Field(
+        default="sensor.nordpool_import",
+        title="Import price sensor",
+        description="A Home Assistant sensor whose raw_today / raw_tomorrow (or raw_all) attribute lists {start, end, "
+        "value} in €/kWh including VAT, like a Nord Pool template. Leave empty to skip the comparison.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    export_entity: EntityId = Field(
+        default="sensor.nordpool_export",
+        title="Export price sensor",
+        description="Same shape, for the export price. Leave empty to skip.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
+    tolerance: float = Field(
+        default=0.0001,
+        ge=0,
+        le=0.1,
+        title="Tolerance",
+        description="Differences up to this count as equal (templates usually round to 4 decimals).",
+        json_schema_extra=ui(unit="€/kWh"),
+    )
+
+
 class Prices(Section):
     nordpool: NordpoolPolling = Field(default=NordpoolPolling(), title="Nord Pool day-ahead")
     tariff: Tariff = Field(default=Tariff(), title="Tariff")
+    sensors: PriceSensors = Field(default=PriceSensors(), title="Compare with your price sensors")
 
 
 # --- Forecasts ---------------------------------------------------------------------------------------

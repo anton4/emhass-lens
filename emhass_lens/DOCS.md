@@ -77,6 +77,10 @@ triggers:
 mode: queued
 ```
 
+## Prices and your own price sensors
+
+EMHASS Lens fetches Nord Pool's day-ahead prices itself and prices every quarter-hour with the fees, Elektrilevi network package, night hours, holidays and VAT under **Settings → Prices → Tariff**; the Inputs page shows the breakdown per slot. It does not read Home Assistant price sensors. If you keep Nord Pool template sensors with fees for dashboards or automations, **Settings → Prices → Compare with your price sensors** names them (a sensor with a `raw_today` / `raw_tomorrow` or `raw_all` attribute of `{start, end, value}` in €/kWh including VAT), and the parity check (every quarter-hour at :05, Health → Parity checks) compares them with the App's prices slot by slot. A difference that is the same for every day slot and every night slot is explained in words, for example a template still on Elektrilevi Võrk 2 rates while the contract is Võrk 4.
+
 ## Plan history and accuracy
 
 The Plan page's charts reach back in time as well as forward. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); right of it, the current plan. **History** picks how far back (6 h to 7 days) and **Compare with** which earlier plan a past slot is held against: *Plan in force* is the plan that was current when the slot came (what the inverter followed), *1 h / 6 h / 24 h ahead* the plan made that long before it, which shows how good the forecasts were at a distance.

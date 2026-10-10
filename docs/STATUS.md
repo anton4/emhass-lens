@@ -37,6 +37,10 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-11: the owner's price sensors in the parity check (unreleased)
+- **Why:** the owner asked whether the App uses the `sensor.nordpool_import` / `nordpool_export` templates (it doesn't; it prices from Nord Pool itself) and wanted a check against them. The templates carry Võrk 2 network rates while the contract and the App are Võrk 4.
+- **Done:** `settings.prices.sensors` (import/export entity, tolerance), `domain/price_compare.py` (`sensor_intervals`, `compare` over hourly or quarter-hour intervals skipping forecast slots, `explain` naming the Elektrilevi package a constant per-period delta points at), `ParityService._price_sensors()` appended to the parity report; the run no longer noops when only the owner's sensors exist; `ParityView` uses a per-section label. Tests: `test_price_compare.py`, a phase-1 test with a Võrk 2 sensor.
+
 ### 2026-10-10 (night): storage retention and budgets, clean shutdown, backup and restore (unreleased)
 - **Why:** the owner asked for automatic log/storage/database retention and cleanup, noticed the uvicorn traceback at every restart, and wanted a backup story that survives a wiped machine (the machine is backed up with the Google Drive Backup add-on; scope here is EMHASS Lens).
 - **Storage (`services/storage.py`, `db/conn.py` page stats/VACUUM/dbstat, settings `Storage` with `Retention` moved from `Logging`, schema 3):** day-based rules now cover `problem_event`, `market_session` and `settings_revision`; pinned runs keep logs; a size budget per database trims the oldest calendar day of one table at a time in a fixed ladder with floors (`RUNS_LADDER`, `APP_LADDER`); checkpoints after the deletes; VACUUM when ≥ 20 % and ≥ 16 MiB are free and the disk has room; `maintenance.compact` (manual). `GET /api/storage`, Health → Storage card, rules `storage.over_budget.*`, `storage.disk_low`. Artifacts capped at 512 KiB; `costfun:*` artifacts no longer carry the rows.
