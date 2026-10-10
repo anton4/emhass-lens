@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Plan page: **This slot** now shows the plan row in force for the current quarter-hour (not the next one in the last minutes of a quarter), with a **Next slot** button. Each tile shows what is measured now next to the plan, with an amber edge when they differ, and a strip below shows what the inverter is set to (mode, grid target, battery window, feed-in limit, when it was written) or why EMHASS Lens isn't in control.
+
 ## 0.3.12
 
 - EMHASS's solver gets a time limit per optimisation from the time left before the next publish (the live plan most of it, cost-function comparison steps at most 30 s), and a live solve that stops at its limit is retried once with a 5 % MIP gap, so EMHASS ends with a live plan instead of a comparison plan. A solver error without a message is explained ("stopped at its time limit"). Settings → EMHASS → MPC optimization → *Solver time limit*.

@@ -13,6 +13,7 @@ import type {
   MarketStatus,
   OutputsStatus,
   PlanHistoryResponse,
+  PlanNow,
   PlanResponse,
   PricesResponse,
   ProblemsResponse,
@@ -37,6 +38,7 @@ export const keys = {
   schema: ['settings-schema'] as const,
   revisions: ['settings-revisions'] as const,
   plan: ['plan'] as const,
+  planNow: ['plan-now'] as const,
   planHistory: (hours: number, horizon: number) => ['plan-history', hours, horizon] as const,
   costfun: ['costfun'] as const,
   storage: ['storage'] as const,
@@ -102,6 +104,11 @@ export function useRevisions() {
 
 export function usePlan() {
   return useQuery({ queryKey: keys.plan, queryFn: () => api.get<PlanResponse>('/api/plan'), refetchInterval: 60_000 })
+}
+
+/** The plan row in force for this quarter, what is measured now and what the inverter is set to. */
+export function usePlanNow() {
+  return useQuery({ queryKey: keys.planNow, queryFn: () => api.get<PlanNow>('/api/plan/now'), refetchInterval: 15_000 })
 }
 
 /** Both databases: sizes, budgets, tables, the last cleanup and compaction, backups and restores. */

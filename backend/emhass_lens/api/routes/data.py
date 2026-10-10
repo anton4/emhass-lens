@@ -23,6 +23,7 @@ from emhass_lens.api.schemas import (
     MpcStatus,
     NordpoolStatus,
     PlanHistoryResponse,
+    PlanNow,
     PlanPrice,
     PlanResponse,
     PlanSnapshotOut,
@@ -36,6 +37,7 @@ from emhass_lens.domain.mpc.anchor import anchor_slot, published_row
 from emhass_lens.domain.mpc.payload import build
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.services.inputs import describe
+from emhass_lens.services.plan_now import plan_now as plan_now_service
 from emhass_lens.services.prices import area_tz, utc_day_start
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -164,6 +166,13 @@ async def plan_costfun(c: ContainerDep) -> CostfunCompareResponse:
         results=[CostfunResult(**r) for r in latest["results"]] if latest else [],
         history=[CostfunHistoryPoint(**p) for p in history],
     )
+
+
+@router.get("/plan/now")
+async def plan_now(c: ContainerDep) -> PlanNow:
+    """The plan row in force for the current quarter (and the next), with the measured values and the inverter's
+    settings now, for comparing at a glance."""
+    return PlanNow(**await plan_now_service(c))
 
 
 @router.get("/plan")

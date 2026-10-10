@@ -649,6 +649,34 @@
         "title": "ChargerLimits",
         "type": "object"
       },
+      "ChargerNow": {
+        "properties": {
+          "current_limit_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Limit A"
+          },
+          "state_raw": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Raw"
+          }
+        },
+        "title": "ChargerNow",
+        "type": "object"
+      },
       "ChargerStatus": {
         "properties": {
           "agreement_24h": {
@@ -3584,6 +3612,123 @@
         "title": "InverterLimits",
         "type": "object"
       },
+      "InverterNow": {
+        "properties": {
+          "battery_max_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Max W"
+          },
+          "battery_min_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Min W"
+          },
+          "charger_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Charger Mode"
+          },
+          "feedin_max_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedin Max W"
+          },
+          "grid_power_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Power W"
+          },
+          "in_control": {
+            "title": "In Control",
+            "type": "boolean"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "written_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Written At"
+          }
+        },
+        "required": [
+          "mode",
+          "in_control"
+        ],
+        "title": "InverterNow",
+        "type": "object"
+      },
       "InverterStatus": {
         "properties": {
           "agreement_24h": {
@@ -5325,6 +5470,85 @@
         "title": "Notifications",
         "type": "object"
       },
+      "NowQuantity": {
+        "properties": {
+          "age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age S"
+          },
+          "differs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Differs"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "NowQuantity",
+        "type": "object"
+      },
       "Outputs": {
         "additionalProperties": false,
         "properties": {
@@ -5547,6 +5771,115 @@
           "measurements"
         ],
         "title": "PlanHistoryResponse",
+        "type": "object"
+      },
+      "PlanNow": {
+        "description": "The plan row in force for the current quarter next to what is measured and set now.",
+        "properties": {
+          "charger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChargerNow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inverter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InverterNow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_row": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Row"
+          },
+          "next_start": {
+            "title": "Next Start",
+            "type": "string"
+          },
+          "plan_generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Generated At"
+          },
+          "plan_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Run Id"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "quantities": {
+            "items": {
+              "$ref": "#/components/schemas/NowQuantity"
+            },
+            "title": "Quantities",
+            "type": "array"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          },
+          "slot_end": {
+            "title": "Slot End",
+            "type": "string"
+          },
+          "slot_start": {
+            "title": "Slot Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot_start",
+          "slot_end",
+          "next_start",
+          "quantities"
+        ],
+        "title": "PlanNow",
         "type": "object"
       },
       "PlanPrice": {
@@ -9636,6 +9969,28 @@
           }
         },
         "summary": "Plan History",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/plan/now": {
+      "get": {
+        "description": "The plan row in force for the current quarter (and the next), with the measured values and the inverter's\nsettings now, for comparing at a glance.",
+        "operationId": "plan_now_api_plan_now_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanNow"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plan Now",
         "tags": [
           "data"
         ]

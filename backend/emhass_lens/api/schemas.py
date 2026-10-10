@@ -409,6 +409,51 @@ class PlanResponse(BaseModel):
     emhass_url: str | None
 
 
+class NowQuantity(BaseModel):
+    key: str  # batt | grid | pv | load | soc
+    plan: float | None = None
+    expected: float | None = None  # soc: where the plan expects it at this moment of the slot
+    measured: float | None = None
+    entity: str | None = None
+    age_s: float | None = None
+    differs: bool | None = None  # None when either side is unknown
+
+
+class InverterNow(BaseModel):
+    mode: str
+    in_control: bool
+    reason: str | None = None
+    charger_mode: str | None = None
+    state: str | None = None
+    grid_power_w: float | None = None
+    battery_max_w: float | None = None
+    battery_min_w: float | None = None
+    feedin_max_w: float | None = None
+    written_at: str | None = None
+    run_id: int | None = None
+
+
+class ChargerNow(BaseModel):
+    current_limit_a: float | None = None
+    state_raw: int | None = None
+
+
+class PlanNow(BaseModel):
+    """The plan row in force for the current quarter next to what is measured and set now."""
+
+    slot_start: str
+    slot_end: str
+    published_at: str | None = None
+    row: dict[str, Any] | None = None
+    plan_generated_at: str | None = None
+    plan_run_id: int | None = None
+    next_start: str
+    next_row: dict[str, Any] | None = None
+    quantities: list[NowQuantity]
+    inverter: InverterNow | None = None
+    charger: ChargerNow | None = None
+
+
 class PlannedValues(BaseModel):
     """What the plan in force said for a past slot (EMHASS's columns and signs)."""
 

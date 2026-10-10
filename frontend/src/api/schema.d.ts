@@ -579,6 +579,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plan Now
+         * @description The plan row in force for the current quarter (and the next), with the measured values and the inverter's
+         *     settings now, for comparing at a glance.
+         */
+        get: operations["plan_now_api_plan_now_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prices": {
         parameters: {
             query?: never;
@@ -1320,6 +1341,13 @@ export interface components {
              * @default 690
              */
             w_per_amp: number;
+        };
+        /** ChargerNow */
+        ChargerNow: {
+            /** Current Limit A */
+            current_limit_a?: number | null;
+            /** State Raw */
+            state_raw?: number | null;
         };
         /** ChargerStatus */
         ChargerStatus: {
@@ -2463,6 +2491,31 @@ export interface components {
              */
             low_export_price: number;
         };
+        /** InverterNow */
+        InverterNow: {
+            /** Battery Max W */
+            battery_max_w?: number | null;
+            /** Battery Min W */
+            battery_min_w?: number | null;
+            /** Charger Mode */
+            charger_mode?: string | null;
+            /** Feedin Max W */
+            feedin_max_w?: number | null;
+            /** Grid Power W */
+            grid_power_w?: number | null;
+            /** In Control */
+            in_control: boolean;
+            /** Mode */
+            mode: string;
+            /** Reason */
+            reason?: string | null;
+            /** Run Id */
+            run_id?: number | null;
+            /** State */
+            state?: string | null;
+            /** Written At */
+            written_at?: string | null;
+        };
         /** InverterStatus */
         InverterStatus: {
             agreement_24h: components["schemas"]["Agreement"];
@@ -3153,6 +3206,23 @@ export interface components {
              */
             persistent: boolean;
         };
+        /** NowQuantity */
+        NowQuantity: {
+            /** Age S */
+            age_s?: number | null;
+            /** Differs */
+            differs?: boolean | null;
+            /** Entity */
+            entity?: string | null;
+            /** Expected */
+            expected?: number | null;
+            /** Key */
+            key: string;
+            /** Measured */
+            measured?: number | null;
+            /** Plan */
+            plan?: number | null;
+        };
         /** Outputs */
         Outputs: {
             /**
@@ -3245,6 +3315,36 @@ export interface components {
             slots: components["schemas"]["HistorySlot"][];
             /** Timezone */
             timezone: string;
+        };
+        /**
+         * PlanNow
+         * @description The plan row in force for the current quarter next to what is measured and set now.
+         */
+        PlanNow: {
+            charger?: components["schemas"]["ChargerNow"] | null;
+            inverter?: components["schemas"]["InverterNow"] | null;
+            /** Next Row */
+            next_row?: {
+                [key: string]: unknown;
+            } | null;
+            /** Next Start */
+            next_start: string;
+            /** Plan Generated At */
+            plan_generated_at?: string | null;
+            /** Plan Run Id */
+            plan_run_id?: number | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Quantities */
+            quantities: components["schemas"]["NowQuantity"][];
+            /** Row */
+            row?: {
+                [key: string]: unknown;
+            } | null;
+            /** Slot End */
+            slot_end: string;
+            /** Slot Start */
+            slot_start: string;
         };
         /** PlanPrice */
         PlanPrice: {
@@ -5321,6 +5421,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_now_api_plan_now_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanNow"];
                 };
             };
         };

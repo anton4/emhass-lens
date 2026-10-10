@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { useOutputs, usePlan, usePlanHistory, useStatus } from '../api/queries'
+import { usePlan, usePlanHistory, useStatus } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { formatClock, formatDuration, formatSlot, formatTime } from '../lib/format'
-import { inCurrentSlot } from '../lib/publish'
+import { formatDuration, formatSlot, formatTime } from '../lib/format'
 import { EXTERNAL_PLAN_NOTE, lastRunNote, planChanges, rowAt } from '../lib/plan'
 import {
   HISTORY_WINDOWS,
@@ -23,7 +22,7 @@ import { AccuracyCard } from './plan/AccuracyCard'
 import { CostfunPanel } from './plan/CostfunPanel'
 import { HistoryControls } from './plan/HistoryControls'
 import { PlanCharts } from './plan/PlanCharts'
-import { ThisSlot } from './plan/ThisSlot'
+import { NowSlot } from './plan/NowSlot'
 
 const DRIVERS: Record<string, string> = {
   app: 'EMHASS Lens',
@@ -34,7 +33,6 @@ const DRIVERS: Record<string, string> = {
 export function PlanPage() {
   const plan = usePlan()
   const appStatus = useStatus()
-  const outputs = useOutputs()
   const now = useNow(15_000)
   const nowS = now.getTime() / 1000
   const data = plan.data
@@ -73,13 +71,11 @@ export function PlanPage() {
 
   const current = data.current
   const tz = data.timezone
-  const publishedAt = outputs.data?.last_published_at
   const lastRun = (current.last_run ?? {}) as Record<string, unknown>
   const status = typeof lastRun.status === 'string' ? lastRun.status : null
   const runNote = lastRunNote(lastRun, current.generated_at, now, tz)
   const leftover = appStatus.data?.problems.find((p) => p.key === 'costfun.leftover')
   const duration = typeof lastRun.duration_total_seconds === 'number' ? lastRun.duration_total_seconds * 1000 : null
-  const currentRow = (data.current_row as PlanRow | null) ?? rowAt(rows, nowS)
   const first = rows[0]?.timestamp
   const last = rows[rows.length - 1]?.timestamp
 
@@ -156,27 +152,7 @@ export function PlanPage() {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>This slot</h2>
-          {currentRow?.timestamp && <span className="muted">from {formatSlot(String(currentRow.timestamp), now, tz)}</span>}
-        </div>
-        <div className="panel-body">
-          {currentRow ? (
-            <ThisSlot row={currentRow} columns={data.columns} />
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>
-              The plan doesn't cover the current quarter-hour (it starts {formatTime(first, now, tz)}).
-            </p>
-          )}
-          {inCurrentSlot(publishedAt, now) && (
-            <p className="published-note">
-              Published to Home Assistant at {formatClock(publishedAt, tz)} (EMHASS sensors and the{' '}
-              <code>emhass_lens_plan_published</code> event).
-            </p>
-          )}
-        </div>
-      </section>
+      <NowSlot columns={data.columns} tz={tz} now={now} />
 
       <section className="panel">
         <div className="panel-head">
