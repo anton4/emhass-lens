@@ -7,6 +7,7 @@ import { ErrorNotice, PageHead } from '../components/PageHead'
 import { downloadText } from '../lib/download'
 
 const MAX_LINES = 2000
+const POLL_MS = 5000
 const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR'] as const
 const LEVEL_RANK: Record<string, number> = { DEBUG: 10, INFO: 20, WARNING: 30, ERROR: 40, CRITICAL: 50 }
 
@@ -69,6 +70,30 @@ export function LogsPage() {
       buffer.current.push(entry)
     })
   }, [subscribeLogs])
+
+  // Without the live stream (it is reconnecting, or a proxy buffers it) ask for the newest lines every few seconds.
+  // They join the same buffer as live lines, so pausing works the same way.
+  const streaming = state === 'live' || state === 'connecting'
+  useEffect(() => {
+    if (streaming) return
+    let cancelled = false
+    const poll = () => {
+      api
+        .get<LogEntry[]>(`/api/logs${query({ limit: 500, run_id: runFilter })}`)
+        .then((latest) => {
+          if (!cancelled) buffer.current = merge(buffer.current, latest)
+        })
+        .catch(() => {
+          /* the next poll tries again; the header shows the connection state */
+        })
+    }
+    poll()
+    const id = window.setInterval(poll, POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [streaming, runFilter])
 
   // Flush live lines a few times a second (cheap re-render), unless paused.
   useEffect(() => {
@@ -188,7 +213,13 @@ export function LogsPage() {
         )}
         <span className="muted" aria-live="polite" style={{ marginLeft: 'auto' }}>
           {visible.length} of {lines.length} lines
-          {paused ? ', paused' : state === 'live' ? ', live' : ''}
+          {paused
+            ? ', paused'
+            : state === 'live'
+              ? ', live'
+              : streaming
+                ? ''
+                : `, refreshed every ${POLL_MS / 1000} s`}
         </span>
       </div>
       <ErrorNotice error={error} />

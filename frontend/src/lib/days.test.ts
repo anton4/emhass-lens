@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayBounds, localInputToIso, shiftDay, todayKey, zonedTime } from './days'
+import { dayBounds, isClosedRange, localInputToIso, shiftDay, todayKey, zonedTime } from './days'
 
 const tz = 'Europe/Tallinn'
 const hours = (b: { since: string; until: string }) => (Date.parse(b.until) - Date.parse(b.since)) / 3_600_000
@@ -45,5 +45,19 @@ describe('days', () => {
     expect(localInputToIso('2026-10-10T14:30', tz)).toBe('2026-10-10T11:30:00.000Z')
     expect(localInputToIso('', tz)).toBe('')
     expect(localInputToIso('garbage', tz)).toBe('')
+  })
+})
+
+describe('isClosedRange', () => {
+  const now = Date.parse('2026-10-11T08:00:00Z')
+  it('closes a range ten minutes after its end', () => {
+    expect(isClosedRange('2026-10-10T21:00:00.000Z', now)).toBe(true)
+    expect(isClosedRange('2026-10-11T07:55:00.000Z', now)).toBe(false)
+    expect(isClosedRange('2026-10-11T07:49:00.000Z', now)).toBe(true)
+  })
+  it('keeps open ranges, the future and broken values open', () => {
+    expect(isClosedRange(undefined, now)).toBe(false)
+    expect(isClosedRange('2026-10-11T21:00:00.000Z', now)).toBe(false)
+    expect(isClosedRange('garbage', now)).toBe(false)
   })
 })

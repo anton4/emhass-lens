@@ -231,6 +231,10 @@ When Home Assistant can install a newer EMHASS Lens, the header shows **Update t
   - The choices live in the page address, so a filtered view survives a reload and can be bookmarked.
 - **Times carry their date** everywhere a list can span several days, for example "Sat, Oct 10, 18:15", with the year added when it isn't the current one.
 - The same log lines appear in the App's **Log** tab in Home Assistant.
+- **Pages refresh by themselves.** The header lamp **Live updates** is one connection that delivers log lines and says when each job starts and finishes, and every page reloads what that job changed. Each page also reloads on a timer of 10 seconds to 5 minutes.
+  - When the lamp is amber ("Polling every 10 s"), the live connection isn't getting through, often because a proxy buffers it. Pages keep refreshing on their timers, and the Logs page asks for new lines every 5 seconds.
+  - An open run that is still running is followed every 3 seconds, with its log lines.
+  - A list showing a day that has ended doesn't reload, because that day no longer changes.
 
 ## Security
 

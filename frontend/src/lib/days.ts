@@ -53,3 +53,11 @@ export function localInputToIso(value: string, timeZone?: string): string {
   if (!match) return ''
   return zonedTime(match[1]!, Number(match[2]), Number(match[3]), timeZone).toISOString()
 }
+
+/** Whether a range ended more than `marginMs` ago, so its runs no longer change (one that started just before the
+ * end has finished by then). Lists of such a range need no reloading. */
+export function isClosedRange(until: string | undefined, now: number = Date.now(), marginMs = 10 * 60_000): boolean {
+  if (!until) return false
+  const end = Date.parse(until)
+  return Number.isFinite(end) && end < now - marginMs
+}

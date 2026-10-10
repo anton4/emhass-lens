@@ -27,12 +27,14 @@ import type {
   VersionInfo,
 } from './types'
 import type { SchemaNode } from '../lib/schema'
+import { isClosedRange } from '../lib/days'
 
 export const keys = {
   status: ['status'] as const,
   version: ['version'] as const,
   jobs: ['jobs'] as const,
   runs: (filters: Record<string, unknown>) => ['runs', filters] as const,
+  closedRuns: (filters: Record<string, unknown>) => ['runs-closed', filters] as const,
   run: (id: number) => ['run', id] as const,
   settings: ['settings'] as const,
   schema: ['settings-schema'] as const,
@@ -86,15 +88,24 @@ export type RunFilters = {
   order?: 'asc' | 'desc'
 }
 
+/** Runs matching `filters`. A range that ended a while ago no longer changes, so it sits under its own key that run
+ * events don't reload (pinning a run reloads it). */
 export function useRuns(filters: RunFilters) {
+  const closed = isClosedRange(filters.until)
   return useQuery({
-    queryKey: keys.runs(filters),
+    queryKey: closed ? keys.closedRuns(filters) : keys.runs(filters),
     queryFn: () => api.get<RunSummary[]>(`/api/runs${query(filters)}`),
+    ...(closed ? { staleTime: Infinity } : {}),
   })
 }
 
+/** One run; a running one is followed every 3 s, so it finishes on screen even without the live stream. */
 export function useRun(id: number) {
-  return useQuery({ queryKey: keys.run(id), queryFn: () => api.get<RunDetail>(`/api/runs/${id}`) })
+  return useQuery({
+    queryKey: keys.run(id),
+    queryFn: () => api.get<RunDetail>(`/api/runs/${id}`),
+    refetchInterval: (q) => (q.state.data?.outcome === 'running' ? 3000 : false),
+  })
 }
 
 export function useSettings() {
@@ -231,13 +242,15 @@ export function useMarket() {
   return useQuery({ queryKey: keys.market, queryFn: () => api.get<MarketStatus>('/api/market'), refetchInterval: 10_000 })
 }
 
-/** Market sessions newest first: the latest 50, or those started within [since, until). */
+/** Market sessions newest first: the latest 50, or those started within [since, until). A past range stops
+ * polling once none of its sessions is still open. */
 export function useMarketSessions(range: { since?: string; until?: string } = {}) {
   const filters = range.since ? { ...range, limit: 500 } : { limit: 50 }
+  const closed = isClosedRange(range.until)
   return useQuery({
     queryKey: [...keys.marketSessions, filters],
     queryFn: () => api.get<MarketSession[]>(`/api/market/sessions${query(filters)}`),
-    refetchInterval: 30_000,
+    refetchInterval: (q) => (closed && !q.state.data?.some((s) => !s.ended_at) ? false : 30_000),
   })
 }
 

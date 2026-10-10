@@ -30,12 +30,17 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 ## Open questions to verify on the real Home Assistant
 These come from docs/PLAN.md §10:
 1. The deployed EMHASS version (need ≥ 0.17.9 for `/api/v1/plan`, ≥ 0.18.2 avoids the grid-boundary waits, 0.18.5 recommended), and the address the App can reach it on.
-2. Whether Server-Sent Events stream through Ingress without buffering. The Logs page falls back to polling if they don't.
+2. Whether Server-Sent Events stream through Ingress without buffering (the header lamp says "Live updates" when they do). If they don't, every page keeps its timers and the Logs page polls `/api/logs` every 5 s (since 0.3.20).
 3. Whether Mosquitto is installed (needed for Phase 3).
 4. Your live tariff values: Võrk 4? Is excise 0.21 c or 0.307 c?
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-10 (evening): auto-refresh gaps closed (0.3.20)
+- Logs page: without the live stream (`useEvents().state` is `polling` or `reconnecting`) it polls `/api/logs?limit=500` every 5 s into the same buffer as live lines.
+- Run details: `useRun` and the run's log query refetch every 3 s while the outcome is `running`.
+- `useRuns` with an `until` more than 10 minutes in the past uses the key `['runs-closed', …]` with `staleTime: Infinity`, so run events don't reload past days (`isClosedRange` in `lib/days.ts`); pinning a run invalidates it. Market sessions of a past day stop polling once none is open.
 
 ### 2026-10-10 (evening): filter, sort and dates on every recent list; a time range on Runs (0.3.19)
 - `GET /api/runs` takes `since`/`until` (UTC ISO, `started_at` in `[since, until)`), `order=asc|desc` and an `after` id cursor; `/api/market/sessions` takes `since`/`until`. Tests in `backend/tests/test_runs_range.py`.

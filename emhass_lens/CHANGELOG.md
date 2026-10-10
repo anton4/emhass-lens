@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The Logs page keeps showing new lines when the live connection isn't getting through (the amber "Polling" lamp in the header). It asks for them every 5 seconds.
+- An open run that is still running shows its log lines as they arrive, and its outcome as soon as it finishes.
+- Lists showing a day that has ended no longer reload on every job, which saves the App up to 2000 rows of work several times a minute.
+
 ## 0.3.19
 
 - Recent decisions and slots on the EV charger, Inverter and Market pages, and the Market sessions, can be filtered and sorted. Pick a day (or step day by day), search, narrow to one rule or branch, keep only the mismatches with the automation, and click a column header to sort.

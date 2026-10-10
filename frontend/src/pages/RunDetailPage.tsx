@@ -22,12 +22,15 @@ export function RunDetailPage() {
     queryKey: ['run-logs', id, run.data?.outcome],
     queryFn: () => api.get<LogEntry[]>(`/api/runs/${id}/logs`),
     enabled: Number.isFinite(id),
+    // a running run's lines arrive as it goes
+    refetchInterval: run.data?.outcome === 'running' ? 3000 : false,
   })
   const pin = useMutation({
     mutationFn: (pinned: boolean) => api.post(`/api/runs/${id}/pin?pinned=${pinned}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.run(id) })
       void queryClient.invalidateQueries({ queryKey: ['runs'] })
+      void queryClient.invalidateQueries({ queryKey: ['runs-closed'] })
     },
   })
 
