@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): plan vs now on the Plan page, variant B (unreleased)
+### 2026-10-10 (evening): plan vs now on the Plan page, variant B (0.3.13)
 - Design canvas "Plan page: plan vs inverter now" (variants A/B); the owner chose B. `domain/plan_now.py` (`row_for` = the newest stored plan holding the slot, i.e. the one published at its start; `power_differs` 300 W and 15 %; `soc_expected` interpolated through the slot; `compare`), `services/plan_now.py` (measured from the watched Measurements entities with scale/invert, inverter registers + `preconditions`, charger observed), `GET /api/plan/now` (`PlanNow`). Frontend `pages/plan/NowSlot.tsx` replaces the old "This slot" card: tiles with a "now" line and amber edge (`ThisSlot` `now` prop), "Inverter set to" strip, Next slot toggle; `lib/planNow.ts`. Tests `test_plan_now.py`, `lib/planNow.test.ts`.
 
 ### 2026-10-10 (evening): solver time budget and retry; MPC at :11 (0.3.12)

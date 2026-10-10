@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.13
 
 - Plan page: **This slot** now shows the plan row in force for the current quarter-hour (not the next one in the last minutes of a quarter), with a **Next slot** button. Each tile shows what is measured now next to the plan, with an amber edge when they differ, and a strip below shows what the inverter is set to (mode, grid target, battery window, feed-in limit, when it was written) or why EMHASS Lens isn't in control.
 
