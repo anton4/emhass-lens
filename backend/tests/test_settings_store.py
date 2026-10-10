@@ -1,7 +1,9 @@
+import json
+
 import pytest
 
 from emhass_lens.core.redact import MASK, redactor
-from emhass_lens.settings.model import Settings
+from emhass_lens.settings.model import SCHEMA_VERSION, Settings
 from emhass_lens.settings.store import SettingsInvalid, SettingsStore, StaleRevision
 
 
@@ -87,8 +89,8 @@ def test_reload_reads_newest_revision(app_db, bus, clock) -> None:
     first.load()
     app_db.execute(
         "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
-        "VALUES ('x', 'ui', 1, ?, '[]')",
-        (Settings(emhass={"mode": "live"}).model_dump_json(),),  # type: ignore[arg-type]
+        "VALUES ('x', 'ui', ?, ?, '[]')",
+        (SCHEMA_VERSION, Settings(emhass={"mode": "live"}).model_dump_json()),  # type: ignore[arg-type]
     )
     second = SettingsStore(db=app_db, bus=bus, clock=clock)
     second.load()
@@ -105,3 +107,20 @@ def test_invalid_stored_settings_fall_back_to_defaults_with_errors(app_db, bus, 
     store.load()
     assert store.load_errors and store.load_errors[0]["loc"] == "emhass.mode"
     assert store.current == Settings()
+
+
+def test_schema_1_settings_with_the_fusebox_helper_migrate_to_schema_2(app_db, bus, clock) -> None:
+    doc = Settings(emhass={"mode": "dry_run"}).model_dump(mode="json")  # type: ignore[arg-type]
+    doc["market"]["entities"]["fusebox_sell_helper"] = "input_number.fusebox_sell_power_helper"
+    app_db.execute(
+        "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
+        "VALUES ('x', 'ui', 1, ?, '[]')",
+        (json.dumps(doc),),
+    )
+    store = SettingsStore(db=app_db, bus=bus, clock=clock)
+    store.load()
+    assert store.load_errors == []
+    assert store.current.emhass.mode == "dry_run"
+    assert "fusebox_sell_helper" not in store.current.market.entities.model_dump()
+    newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
+    assert newest == {"schema_version": 2, "source": "migration"}

@@ -125,7 +125,6 @@ class MarketService:
             e.pv_sensor,
             e.enable_boolean,
             e.session_select,
-            e.fusebox_sell_helper,
             e.ha_automation,
         } - {""}
         return ids | self.c.extras["sofar"].entities()
@@ -253,7 +252,6 @@ class MarketService:
             cur_feedin_w=regs.feedin_max_w,
             since_commit_s=writer.last_commit_age_s("passive", now),
             since_feedin_commit_s=writer.last_commit_age_s("feedin", now),
-            fusebox_sell_helper_w=num(self._state(e.fusebox_sell_helper)),
             trigger_kind=kind,
             trigger_entity=trigger_entity,
             force_end=force_end,

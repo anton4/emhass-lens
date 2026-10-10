@@ -3460,7 +3460,6 @@
             "$ref": "#/components/schemas/MarketEntities",
             "default": {
               "enable_boolean": "input_boolean.qilowatt_automation",
-              "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
               "ha_automation": "",
               "mode_sensor": "sensor.qw_mode",
               "powerlimit_sensor": "sensor.qw_powerlimit",
@@ -3564,16 +3563,6 @@
                 "input_boolean",
                 "switch"
               ],
-              "widget": "entity"
-            }
-          },
-          "fusebox_sell_helper": {
-            "default": "input_number.fusebox_sell_power_helper",
-            "pattern": "^$|^[a-z_]+\\.[a-z0-9_]+$",
-            "title": "Fusebox sell power helper",
-            "type": "string",
-            "ui": {
-              "domain": "input_number",
               "widget": "entity"
             }
           },
@@ -6810,7 +6799,6 @@
               "compare_delay_s": 12,
               "entities": {
                 "enable_boolean": "input_boolean.qilowatt_automation",
-                "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
                 "ha_automation": "",
                 "mode_sensor": "sensor.qw_mode",
                 "powerlimit_sensor": "sensor.qw_powerlimit",

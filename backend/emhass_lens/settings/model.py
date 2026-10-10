@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -980,11 +980,6 @@ class MarketEntities(Section):
         description="Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation "
         "kept as a fallback; followed in shadow mode.",
         json_schema_extra=ui(widget="entity", domain="input_select"),
-    )
-    fusebox_sell_helper: EntityId = Field(
-        default="input_number.fusebox_sell_power_helper",
-        title="Fusebox sell power helper",
-        json_schema_extra=ui(widget="entity", domain="input_number"),
     )
     ha_automation: EntityId = Field(
         default="",

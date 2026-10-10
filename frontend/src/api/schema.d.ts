@@ -2317,7 +2317,6 @@ export interface components {
              * Market entities
              * @default {
              *       "enable_boolean": "input_boolean.qilowatt_automation",
-             *       "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
              *       "ha_automation": "",
              *       "mode_sensor": "sensor.qw_mode",
              *       "powerlimit_sensor": "sensor.qw_powerlimit",
@@ -2386,11 +2385,6 @@ export interface components {
              * @default input_boolean.qilowatt_automation
              */
             enable_boolean: string;
-            /**
-             * Fusebox sell power helper
-             * @default input_number.fusebox_sell_power_helper
-             */
-            fusebox_sell_helper: string;
             /**
              * Home Assistant automation (interlock)
              * @description Live mode refuses to act while this automation is on, so the two never both drive the inverter.
@@ -3683,7 +3677,6 @@ export interface components {
              *       "compare_delay_s": 12,
              *       "entities": {
              *         "enable_boolean": "input_boolean.qilowatt_automation",
-             *         "fusebox_sell_helper": "input_number.fusebox_sell_power_helper",
              *         "ha_automation": "",
              *         "mode_sensor": "sensor.qw_mode",
              *         "powerlimit_sensor": "sensor.qw_powerlimit",

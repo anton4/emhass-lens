@@ -5,6 +5,7 @@
 - After a restart the price forecast is restored from the database together with its last poll time, so it is shown at once, no "forecast isn't available" warning appears, and eupowerprices.com is only asked again when the poll interval is due.
 - Start-up no longer records a skipped EMHASS configuration check next to the one already running.
 - Settings: long section titles wrap inside the navigation instead of running into the form; "Measurements" lost its parenthetical.
+- Qilowatt market control: the *Fusebox sell power helper* is gone. It was a manual export override copied from the automation that nothing ever set; Fusebox sells now follow the commanded power like Kratt sells. Stored settings are migrated (schema 2).
 
 ## 0.3.0
 

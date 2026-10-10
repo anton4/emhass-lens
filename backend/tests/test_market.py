@@ -22,7 +22,6 @@ def inp(**kw) -> MarketInputs:
         "cur_feedin_w": 15500.0,
         "since_commit_s": None,
         "since_feedin_commit_s": None,
-        "fusebox_sell_helper_w": None,
         "trigger_kind": "reconcile",
         "trigger_entity": "reconcile",
     }
@@ -66,9 +65,7 @@ def test_a_buy_and_the_grid_caps() -> None:
     assert capped.targets.grid_power_w == -15500 and capped.feedin_w == 15500  # type: ignore[union-attr]
 
 
-def test_the_fusebox_sell_helper_and_feedin_targets() -> None:
-    helped = decide(inp(source="fusebox", mode="mfrrup", powerlimit_w=5000, fusebox_sell_helper_w=-12000), T, L)
-    assert helped.targets.grid_power_w == -12000 and helped.feedin_w == 12000  # type: ignore[union-attr]
+def test_fusebox_sell_follows_the_command_and_feedin_targets() -> None:
     plain = decide(inp(source="fusebox", mode="mfrrup", powerlimit_w=5000), T, L)
     assert plain.targets.grid_power_w == -5000 and plain.feedin_w == 15500  # type: ignore[union-attr]
     assert decide(sell(pv_power_w=3000), T, L).feedin_w == 5000

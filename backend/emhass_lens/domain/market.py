@@ -37,7 +37,6 @@ class MarketInputs:
     cur_feedin_w: float | None
     since_commit_s: float | None  # seconds since the passive registers were last written; None -> unknown
     since_feedin_commit_s: float | None
-    fusebox_sell_helper_w: float | None  # input_number.fusebox_sell_power_helper; None -> -15000
     trigger_kind: str  # qw | soc | reconcile | manual | startup | reconnect | settings | promoted
     trigger_entity: str
     force_end: bool = False  # the kill switch: end the session whatever the command
@@ -161,18 +160,14 @@ def decide(
 
     state = STATES["buy"] if action == "buy" else STATES["sell"] if action == "sell" else end_label
     bmax, bmin = limits.battery_max_w, limits.battery_min_w
-    helper = int(i.fusebox_sell_helper_w) if i.fusebox_sell_helper_w is not None else -15000
-    helper_case = action == "sell" and source == "fusebox" and helper > -14999
     if action == "buy":
         grid = t.buy_cap_w if source == "fusebox" else min(qw_power, t.buy_cap_w)
     elif action == "sell":
-        grid = helper if helper_case else -min(qw_power, t.sell_cap_w)
+        grid = -min(qw_power, t.sell_cap_w)
     else:
         grid = 0
     if action == "sell":
-        if helper_case:
-            feedin, feedin_why = abs(helper), f"the Fusebox sell helper says {helper} W"
-        elif pv < t.low_pv_w:
+        if pv < t.low_pv_w:
             feedin, feedin_why = t.sell_cap_w, f"PV {pv:.0f} W is below {t.low_pv_w} W: the export maximum"
         else:
             feedin, feedin_why = min(qw_power, t.sell_cap_w), "the commanded power, capped at the export maximum"
