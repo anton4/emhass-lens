@@ -165,51 +165,56 @@ export function WearFacts({ day, week }: { day: WearStats | undefined; week: Wea
   )
 }
 
+/** The guards that keep inverter writes rare; how sessions run folds away. */
 export function MarketExplainer({ thresholds }: { thresholds: MarketSettings['thresholds'] | undefined }) {
   return (
-    <details className="explain-details rules-explainer">
-      <summary>
-        <h3 className="sub-head" style={{ display: 'inline' }}>
-          How sessions are run
-        </h3>
-      </summary>
-      <p>
-        A Kratt or Fusebox activation arrives through Qilowatt as a source, a command and a power limit. On every change
-        (after a short settle time), every minute and at start-up, the wanted inverter state is derived from the current
-        values and reconciled with the registers, exactly like the Home Assistant automation "Qilowatt: Master Market
-        Controller". Every press of the inverter's apply button wears its EEPROM, so three guards suppress writes that
-        aren't worth it:
-      </p>
-      <ol className="rules-list">
-        {marketGuards(thresholds).map((g) => (
-          <li key={g.title}>
-            <div className="cell-title">{g.title}</div>
-            <div>{g.text}</div>
-          </li>
-        ))}
-      </ol>
-      <h3 className="sub-head">Modes</h3>
-      <ul>
-        <li>
-          <strong>Off</strong>: nothing is watched. "Reconcile now" still shows what it would do.
-        </li>
-        <li>
-          <strong>Shadow</strong>: every decision is recorded with its reasoning, and a few seconds later the session
-          select, the EMHASS automation switch and the inverter registers are read to see whether the automation did the
-          same. The App's session follows the automation's select. Nothing is written.
-        </li>
-        <li>
-          <strong>Live</strong>: the App runs the sessions: it keeps the session select and the EMHASS automation switch
-          like the automation does, writes feed-in first and the passive-mode registers after, and when a session ends
-          it hands the inverter straight back to the plan with one write (the automation's safe state only when no fresh
-          plan exists). Sessions survive a restart. "End session now" is the kill switch.
-        </li>
-      </ul>
-      <p className="cell-sub">
-        Moving over: run Shadow for at least a week with real sessions and an agreement of 99 % or more, then, with no
-        session open, turn the Home Assistant automation off (set it as the interlock) and switch to Live. Going back:
-        mode Off, automation on; the mirrored select and switch let it carry on.
-      </p>
-    </details>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>How sessions are run</h2>
+        <span className="muted">Three guards keep inverter writes rare</span>
+      </div>
+      <div className="panel-body">
+        <ol className="rule-steps">
+          {marketGuards(thresholds).map((g) => (
+            <li key={g.title}>
+              <div className="cell-title">{g.title}</div>
+              <div>{g.text}</div>
+            </li>
+          ))}
+        </ol>
+        <details className="more rules-more">
+          <summary>More about decisions</summary>
+          <p>
+            A Kratt or Fusebox activation arrives through Qilowatt as a source, a command and a power limit. On every
+            change (after a short settle time), every minute and at start-up, the wanted inverter state is derived from
+            the current values and reconciled with the registers, exactly like the Home Assistant automation "Qilowatt:
+            Master Market Controller". Every press of the inverter's apply button wears its EEPROM, so the three guards
+            above suppress writes that aren't worth it.
+          </p>
+          <h3 className="sub-head">Modes</h3>
+          <ul>
+            <li>
+              <strong>Off</strong>: nothing is watched. "Reconcile now" still shows what it would do.
+            </li>
+            <li>
+              <strong>Shadow</strong>: every decision is recorded with its reasoning, and a few seconds later the
+              session select, the EMHASS automation switch and the inverter registers are read to see whether the
+              automation did the same. The App's session follows the automation's select. Nothing is written.
+            </li>
+            <li>
+              <strong>Live</strong>: the App runs the sessions: it keeps the session select and the EMHASS automation
+              switch like the automation does, writes feed-in first and the passive-mode registers after, and when a
+              session ends it hands the inverter straight back to the plan with one write (the automation's safe state
+              only when no fresh plan exists). Sessions survive a restart. "End session now" is the kill switch.
+            </li>
+          </ul>
+          <p className="cell-sub">
+            Moving over: run Shadow for at least a week with real sessions and an agreement of 99 % or more, then, with
+            no session open, turn the Home Assistant automation off (set it as the interlock) and switch to Live. Going
+            back: mode Off, automation on; the mirrored select and switch let it carry on.
+          </p>
+        </details>
+      </div>
+    </section>
   )
 }

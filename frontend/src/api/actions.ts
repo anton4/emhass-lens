@@ -58,6 +58,25 @@ export function useSetMode() {
   })
 }
 
+export type ControllerSection = 'inverter' | 'charger' | 'market'
+
+/** Change an experimental controller's mode (inverter, charger: off | dry_run | live; market: off | shadow | live). */
+export function useSetControllerMode(section: ControllerSection) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (mode: string) =>
+      api.post<SaveResponse>('/api/settings/change', {
+        base_revision: await baseRevision(queryClient),
+        changes: { [section]: { mode } },
+        comment: `${section === 'charger' ? 'EV charger' : section === 'market' ? 'Market' : 'Inverter'} mode ${mode.replace('_', ' ')} from its page`,
+      }),
+    onSettled: () => {
+      refreshAfterChange(queryClient)
+      void queryClient.invalidateQueries({ queryKey: keys[section] })
+    },
+  })
+}
+
 export type MlAction = 'fit' | 'tune' | 'predict'
 
 /** Start an EMHASS ML job; answers with its run id. */

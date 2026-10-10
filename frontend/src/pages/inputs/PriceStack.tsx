@@ -3,13 +3,16 @@ import type { PriceSlot } from '../../api/types'
 import { importComponents, localTime, periodLabel, PRICE_PARTS, stackExtent, stackSegments, type PricePart } from '../../lib/prices'
 import { formatPrice, priceFactor, type PriceUnit } from '../../lib/units'
 
-const PARTS: readonly { key: PricePart; label: string; color: string }[] = [
-  { key: 'spot', label: 'Spot', color: 'var(--series-1)' },
-  { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: 'var(--series-2)' },
-  { key: 'network', label: 'Network', color: 'var(--series-3)' },
-  { key: 'vat', label: 'VAT', color: 'var(--series-4)' },
+// Spot in its own colour (as on every chart); what is added on top of it in greys, from light to dark to light so
+// neighbours always differ in lightness. VAT is nearly white, so it gets an outline.
+const PARTS: readonly { key: PricePart; label: string; color: string; line?: string }[] = [
+  { key: 'spot', label: 'Spot', color: 'var(--q-spot)' },
+  { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: 'var(--stack-fees)' },
+  { key: 'network', label: 'Network', color: 'var(--stack-network)' },
+  { key: 'vat', label: 'VAT', color: 'var(--stack-vat)', line: 'var(--stack-vat-line)' },
 ]
 const COLORS = Object.fromEntries(PARTS.map((p) => [p.key, p.color])) as Record<PricePart, string>
+const LINES = Object.fromEntries(PARTS.map((p) => [p.key, p.line])) as Record<PricePart, string | undefined>
 
 // The parts shown are remembered in this browser only; blocked storage just means all four.
 const STORAGE_KEY = 'emhass-lens.price-breakdown.parts'
@@ -133,7 +136,18 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
                 const bottom = y(Math.min(s.from, s.to))
                 const h = bottom - top - 2 // 2 px surface gap between segments
                 if (h <= 0.5) return null
-                return <rect key={s.key} x={x} y={top + 1} width={barW} height={h} fill={COLORS[s.key]} rx={barW >= 6 ? 1 : 0} />
+                const line = LINES[s.key]
+                return (
+                  <rect
+                    key={s.key}
+                    x={x + (line ? 0.5 : 0)}
+                    y={top + (line ? 1.5 : 1)}
+                    width={line ? Math.max(0.5, barW - 1) : barW}
+                    height={line ? Math.max(0.5, h - 1) : h}
+                    style={{ fill: COLORS[s.key], stroke: line, strokeWidth: line ? 1 : undefined }}
+                    rx={barW >= 6 ? 1 : 0}
+                  />
+                )
               })}
               {current && <line x1={x + barW / 2} x2={x + barW / 2} y1={PAD.top} y2={PAD.top + plotH} className="stack-now" />}
             </g>
@@ -163,7 +177,10 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
               title={shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}
               onClick={() => toggle(p.key)}
             >
-              <span className="legend-swatch" style={{ background: p.color, color: p.color }} />
+              <span
+                className="legend-swatch"
+                style={{ background: p.color, color: p.line ?? p.color, boxShadow: p.line ? `inset 0 0 0 1px ${p.line}` : undefined }}
+              />
               {p.label}
             </button>
           </li>

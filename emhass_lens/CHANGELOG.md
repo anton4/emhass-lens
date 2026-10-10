@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Inverter, EV charger and Market share one layout:
+  - The mode switch sits at the top of the page (Off / Dry run / Live; Market: Off / Shadow / Live). It asks before changing anything, and switching to Live names the Home Assistant automation to turn off first. Each change is a settings revision, so it can be reverted.
+  - Under the switch, one line says what the mode does, then a facts row: who is in control, the agreement over 24 hours and 7 days (with a bar), and the page's own facts.
+  - **Today, slot by slot** (decision by decision for the charger and the market): green where the automation did the same, amber where it differed, grey where nothing was compared, with the rule named where it changes. Click a mark to open the decision.
+  - **How a rule is chosen** lists the rules, branches or guards in the order they are tried and tags the current one. The details (thresholds, arithmetic, modes) fold away under "More about decisions".
+- Price breakdown: spot keeps its own colour (grey, as on the price charts) and what is added on top of it is in greys, so no part borrows the battery, grid, EV or PV colour. The parts' switches are pills.
+
 ## 0.4.3
 
 - The EMHASS plan can avoid exporting below a price. Settings → EMHASS → MPC optimization → **No export at or below** (€/kWh) sends EMHASS a per-slot export limit of 0 W in slots whose export price is at or below it. EMHASS then charges the battery or curtails PV instead of exporting, and doesn't discharge the battery to the grid. This works with every cost function and needs EMHASS 0.16 or newer with `compute_curtailment` on. Health → EMHASS checks both.

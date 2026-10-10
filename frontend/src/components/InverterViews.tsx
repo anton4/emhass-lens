@@ -227,74 +227,90 @@ export function CallsList({ calls, nothing = 'No calls: the inverter already sho
   )
 }
 
-/** The rules in plain words, in the automation's order, with the configured thresholds. */
+/** The rules in plain words, in the automation's order, with the configured thresholds; the one chosen for this
+ *  slot is tagged, and the details fold away. */
 export function RulesExplainer({
   limits,
   noExportAtOrBelow,
+  current,
 }: {
   limits: InverterSettings['limits'] | undefined
   /** Settings → EMHASS → MPC "No export at or below"; null when empty. */
   noExportAtOrBelow: number | null
+  /** The rule of this slot's decision. */
+  current?: string | null
 }) {
   return (
-    <details className="explain-details rules-explainer">
-      <summary>
-        <h3 className="sub-head" style={{ display: 'inline' }}>
-          How decisions are made
-        </h3>
-      </summary>
-      <p>
-        Each slot, the plan's values pick one of these modes: <strong>P_grid</strong> picks the branch (importing above
-        100 W, exporting below −100 W, otherwise neutral), <strong>P_batt</strong> picks the mode (charging below −100 W,
-        discharging above 100 W, otherwise idle), and when exporting with an idle battery the export price breaks the tie.
-        They are the same rules and thresholds as the Home Assistant automation "EMHASS: Consolidated Inverter Control", so
-        dry-run decisions can be compared with it slot by slot. The export price threshold is Settings → EMHASS → MPC "No
-        export at or below", which also keeps EMHASS from planning exports in those slots. Signs follow EMHASS: P_batt +
-        discharges / − charges the battery; P_grid + imports / − exports.
-      </p>
-      <ol className="rules-list">
-        {rules(limits, noExportAtOrBelow).map((r, i) => (
-          <li key={`${r.id}-${i}`}>
-            <div className="cell-title">
-              <span className="rule-badge small word">{r.id}</span> {r.label}
-            </div>
-            <div>
-              <span className="muted">When</span> {r.when}
-            </div>
-            <div>
-              <span className="muted">Sets</span> {r.sets}
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p className="cell-sub">Every combination of grid and battery power matches one of these, so a decision is made every slot.</p>
-      <h3 className="sub-head">Feed-in limit</h3>
-      <ul>
-        {feedinRules(limits, noExportAtOrBelow).map((text) => (
-          <li key={text}>{text}</li>
-        ))}
-      </ul>
-      <h3 className="sub-head">Modes</h3>
-      <ul>
-        <li>
-          <strong>Off</strong>: nothing is decided.
-        </li>
-        <li>
-          <strong>Dry run</strong>: at mm:00:05 of each slot (right after the plan is published) the decision is recorded; at
-          mm:00:45 the inverter entities are read and compared with it, which shows whether the automation did the same.
-          The inverter is never touched.
-        </li>
-        <li>
-          <strong>Live</strong>: EMHASS Lens applies the decision itself: the passive-state select, the three passive-mode
-          numbers and their apply button, the feed-in limit and its button, then reads them back. Turn the Home Assistant
-          automation off first, or both will write. It refuses to act with a stale plan or targets outside the configured
-          limits.
-        </li>
-      </ul>
-      <p className="cell-sub">
-        Nothing is decided while the inverter isn't in passive mode or the automation switch (input_boolean.emhass_automation)
-        is off, for example during an mFRR session.
-      </p>
-    </details>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>How a rule is chosen</h2>
+        <span className="muted">The first match wins, top to bottom</span>
+      </div>
+      <div className="panel-body">
+        <ol className="rule-steps">
+          {rules(limits, noExportAtOrBelow).map((r, i) => (
+            <li key={`${r.id}-${i}`}>
+              <div className="cell-title">
+                <span className="rule-badge small word">{r.id}</span> {r.label}
+                {r.id === current && (
+                  <span className="chip" data-color="blue">
+                    chosen now
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="muted">When</span> {r.when}
+              </div>
+              <div>
+                <span className="muted">Sets</span> {r.sets}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <details className="more rules-more">
+          <summary>More about decisions</summary>
+          <p>
+            Each slot, the plan's values pick one of these modes: <strong>P_grid</strong> picks the branch (importing
+            above 100 W, exporting below −100 W, otherwise neutral), <strong>P_batt</strong> picks the mode (charging
+            below −100 W, discharging above 100 W, otherwise idle), and when exporting with an idle battery the export
+            price breaks the tie. They are the same rules and thresholds as the Home Assistant automation "EMHASS:
+            Consolidated Inverter Control", so dry-run decisions can be compared with it slot by slot. The export price
+            threshold is Settings → EMHASS → MPC "No export at or below", which also keeps EMHASS from planning exports
+            in those slots. Signs follow EMHASS: P_batt + discharges / − charges the battery; P_grid + imports / −
+            exports.
+          </p>
+          <p className="cell-sub">
+            Every combination of grid and battery power matches one of these, so a decision is made every slot.
+          </p>
+          <h3 className="sub-head">Feed-in limit</h3>
+          <ul>
+            {feedinRules(limits, noExportAtOrBelow).map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+          <h3 className="sub-head">Modes</h3>
+          <ul>
+            <li>
+              <strong>Off</strong>: nothing is decided.
+            </li>
+            <li>
+              <strong>Dry run</strong>: at mm:00:05 of each slot (right after the plan is published) the decision is
+              recorded; at mm:00:45 the inverter entities are read and compared with it, which shows whether the
+              automation did the same. The inverter is never touched.
+            </li>
+            <li>
+              <strong>Live</strong>: EMHASS Lens applies the decision itself: the passive-state select, the three
+              passive-mode numbers and their apply button, the feed-in limit and its button, then reads them back. Turn
+              the Home Assistant automation off first, or both will write. It refuses to act with a stale plan or
+              targets outside the configured limits.
+            </li>
+          </ul>
+          <p className="cell-sub">
+            Nothing is decided while the inverter isn't in passive mode or the automation switch
+            (input_boolean.emhass_automation) is off, for example during an mFRR session.
+          </p>
+        </details>
+      </div>
+    </section>
   )
 }

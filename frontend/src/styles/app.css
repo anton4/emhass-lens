@@ -2668,11 +2668,6 @@ dialog.confirm h2 {
   padding: 0 6px;
 }
 
-.agreement-value {
-  font-size: var(--step-2);
-  font-weight: 600;
-}
-
 .rules-list {
   padding-left: 1.6em;
   margin: 8px 0;
@@ -3264,4 +3259,251 @@ button.icon-button {
     font-size: 12.5px;
     color: var(--ink-2);
   }
+}
+
+/* ---------- controller pages (Inverter, EV charger, Market) ---------- */
+
+.controller-head {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.controller-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: auto;
+}
+
+.controller-title .nav-tag {
+  font-size: 12px;
+  line-height: 20px;
+  padding: 0 8px;
+}
+
+/* Live is the mode that writes: its selected position is red */
+.mode-segmented[data-mode='live'] button[aria-pressed='true'] {
+  background: var(--tint-red);
+  color: var(--on-red);
+}
+
+.mode-segmented button:disabled[aria-pressed='true'] {
+  opacity: 1;
+  cursor: default;
+}
+
+.controller-explain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 22px;
+  max-width: 90ch;
+}
+
+.controller-facts {
+  margin-top: 0;
+  row-gap: 18px;
+}
+
+.controller-facts > div {
+  min-width: 150px;
+  max-width: 36ch;
+}
+
+.agreement-fact dd {
+  display: grid;
+  gap: 4px;
+}
+
+.agreement-value {
+  font-family: var(--font-code);
+  font-size: var(--step-2);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.agreement-bar {
+  display: block;
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--divider);
+  overflow: hidden;
+}
+
+.agreement-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--lamp-green);
+}
+
+.agreement-bar[data-color='amber'] > span {
+  background: var(--lamp-amber);
+}
+
+.agreement-bar[data-color='red'] > span {
+  background: var(--lamp-red);
+}
+
+.day-strip-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.day-strip-chart {
+  position: relative;
+}
+
+.day-strip-labels {
+  position: relative;
+  height: 18px;
+  font-family: var(--font-code);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.day-strip-labels > span {
+  position: absolute;
+  bottom: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--frame-strong);
+  white-space: nowrap;
+}
+
+.day-strip-chart svg {
+  display: block;
+  width: 100%;
+  height: 28px;
+}
+
+.day-strip-mark {
+  cursor: pointer;
+}
+
+.day-strip-mark:hover {
+  stroke: var(--ink);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.day-strip-now {
+  stroke: var(--chart-now);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.day-strip-axis {
+  position: relative;
+  height: 16px;
+  font-family: var(--font-code);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.day-strip-axis > span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.day-strip-axis > span:first-child {
+  transform: none;
+}
+
+.day-strip-axis > span:last-child {
+  transform: translateX(-100%);
+}
+
+/* the rules, branches or guards in the order they are tried */
+.rule-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.rule-steps > li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 10px 0 10px 36px;
+  border-bottom: 1px solid var(--divider);
+  counter-increment: step;
+}
+
+.rule-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  color: var(--ink-2);
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.rule-steps .cell-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.rules-more {
+  margin-top: 14px;
+}
+
+.rules-more > p:first-of-type {
+  margin-top: 8px;
+}
+
+/* Price breakdown: the parts as pills that switch on and off */
+.price-stack .legend {
+  gap: 6px;
+}
+
+.price-stack .legend-toggle {
+  min-height: 28px;
+  padding: 2px 10px;
+  border: 1px solid var(--frame);
+  border-radius: 999px;
+  color: var(--ink-2);
+}
+
+.price-stack .legend-toggle[aria-pressed='true'] {
+  border-color: var(--selected);
+  background: var(--selected);
+  color: var(--on-selected);
+}
+
+.price-stack .legend-toggle:hover:not(:disabled) {
+  border-color: var(--frame-strong);
+}
+
+/* names near the end of the day hang to the left of their mark */
+.day-strip-labels > span.day-strip-label-end {
+  padding: 0 4px 0 0;
+  border-left: 0;
+  border-right: 1px solid var(--frame-strong);
+}
+
+.toolbar-label {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.facts-inline dd .labelled-lamp {
+  align-items: center;
 }

@@ -128,61 +128,81 @@ export function SolarFacts({ derived }: { derived: ChargerDerived }) {
 }
 
 /** The branches in plain words, in the automation's order, with the configured limits. */
-export function ChargerRulesExplainer({ limits }: { limits: ChargerSettings['limits'] | undefined }) {
+/** The branches in the automation's order; the one of the last decision is tagged, and the details fold away. */
+export function ChargerRulesExplainer({
+  limits,
+  current,
+}: {
+  limits: ChargerSettings['limits'] | undefined
+  /** The branch of the last decision. */
+  current?: string | null
+}) {
   return (
-    <details className="explain-details rules-explainer">
-      <summary>
-        <h3 className="sub-head" style={{ display: 'inline' }}>
-          How decisions are made
-        </h3>
-      </summary>
-      <p>
-        The first branch that matches is taken, exactly like the Home Assistant automation "EV Charging: Combined EMHASS
-        &amp; Excess Solar". Your charge-mode helper picks EMHASS mode (follow the plan's EV power) or Excess Solar mode
-        (follow the PV surplus); Manual means EMHASS Lens does nothing. The target-SoC stop comes first in any mode.
-      </p>
-      <ol className="rules-list">
-        {chargerRules(limits).map((r) => (
-          <li key={r.id}>
-            <div className="cell-title">
-              <span className="rule-badge small word">{r.id}</span> {r.label}
-            </div>
-            <div>
-              <span className="muted">When</span> {r.when}
-            </div>
-            <div>
-              <span className="muted">Does</span> {r.sets}
-            </div>
-          </li>
-        ))}
-      </ol>
-      <h3 className="sub-head">The arithmetic</h3>
-      <ul>
-        {chargerFormulas(limits).map((text) => (
-          <li key={text}>{text}</li>
-        ))}
-      </ul>
-      <h3 className="sub-head">When it decides</h3>
-      <ul>
-        <li>Right after each publish (and whenever EMHASS's EV power sensor changes): EMHASS mode.</li>
-        <li>Every minute: Excess Solar mode, the target-SoC clock, and EMHASS mode when the charger's state changed.</li>
-        <li>When the car's SoC has held at the target long enough: the stop.</li>
-      </ul>
-      <h3 className="sub-head">Modes</h3>
-      <ul>
-        <li>
-          <strong>Off</strong>: nothing is scheduled; "Decide now" still shows what it would do.
-        </li>
-        <li>
-          <strong>Dry run</strong>: each decision is recorded with the calls it would make, and a few seconds later the
-          charger is read to see whether the automation did the same. The charger is never touched.
-        </li>
-        <li>
-          <strong>Live</strong>: EMHASS Lens presses start/stop, sets the current limit and the target SoC, sends the
-          phone message, and reads the charger back. It refuses to act while the automation set as the interlock is on,
-          without a Home Assistant connection, or above the maximum current.
-        </li>
-      </ul>
-    </details>
+    <section className="panel">
+      <div className="panel-head">
+        <h2>How a branch is chosen</h2>
+        <span className="muted">The first match wins, top to bottom</span>
+      </div>
+      <div className="panel-body">
+        <ol className="rule-steps">
+          {chargerRules(limits).map((r) => (
+            <li key={r.id}>
+              <div className="cell-title">
+                <span className="rule-badge small word">{r.id}</span> {r.label}
+                {r.id === current && (
+                  <span className="chip" data-color="blue">
+                    chosen last
+                  </span>
+                )}
+              </div>
+              <div>
+                <span className="muted">When</span> {r.when}
+              </div>
+              <div>
+                <span className="muted">Does</span> {r.sets}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <details className="more rules-more">
+          <summary>More about decisions</summary>
+          <p>
+            The first branch that matches is taken, exactly like the Home Assistant automation "EV Charging: Combined
+            EMHASS &amp; Excess Solar". Your charge-mode helper picks EMHASS mode (follow the plan's EV power) or Excess
+            Solar mode (follow the PV surplus); Manual means EMHASS Lens does nothing. The target-SoC stop comes first
+            in any mode.
+          </p>
+          <h3 className="sub-head">The arithmetic</h3>
+          <ul>
+            {chargerFormulas(limits).map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+          <h3 className="sub-head">When it decides</h3>
+          <ul>
+            <li>Right after each publish (and whenever EMHASS's EV power sensor changes): EMHASS mode.</li>
+            <li>
+              Every minute: Excess Solar mode, the target-SoC clock, and EMHASS mode when the charger's state changed.
+            </li>
+            <li>When the car's SoC has held at the target long enough: the stop.</li>
+          </ul>
+          <h3 className="sub-head">Modes</h3>
+          <ul>
+            <li>
+              <strong>Off</strong>: nothing is scheduled; "Decide now" still shows what it would do.
+            </li>
+            <li>
+              <strong>Dry run</strong>: each decision is recorded with the calls it would make, and a few seconds later
+              the charger is read to see whether the automation did the same. The charger is never touched.
+            </li>
+            <li>
+              <strong>Live</strong>: EMHASS Lens presses start/stop, sets the current limit and the target SoC, sends
+              the phone message, and reads the charger back. It refuses to act while the automation set as the interlock
+              is on, without a Home Assistant connection, or above the maximum current.
+            </li>
+          </ul>
+        </details>
+      </div>
+    </section>
   )
 }

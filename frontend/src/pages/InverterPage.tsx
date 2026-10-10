@@ -1,10 +1,18 @@
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useInverterDecide } from '../api/actions'
 import { useInverter, useRuns, useSettings, useStatus } from '../api/queries'
 import { AgreeHeadline, CompareTable, DecisionView, RulesExplainer } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
-import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
+import { AgreementFact } from '../components/controller/AgreementFact'
+import { CompareChip } from '../components/controller/CompareChip'
+import { ControllerHead } from '../components/controller/ControllerHead'
+import { DayStrip } from '../components/controller/DayStrip'
+import { Empty, ErrorNotice } from '../components/PageHead'
+import { useNow } from '../components/useNow'
+import { todayKey } from '../lib/days'
+import type { StripInput } from '../lib/dayStrip'
 import { driftText } from '../lib/drift'
 import { formatSlotDate } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -12,7 +20,6 @@ import { matchesSearch, nextSort, sortRows } from '../lib/sort'
 import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
 import {
-  formatAgreement,
   inverterModeSpec,
   decideChip,
   mergeBySlot,
@@ -20,7 +27,13 @@ import {
   type InverterComparison,
   type InverterLast,
 } from '../lib/inverter'
-import type { Agreement, RunSummary } from '../api/types'
+import type { RunSummary } from '../api/types'
+
+const MODES = [
+  { id: 'off', text: 'Off' },
+  { id: 'dry_run', text: 'Dry run' },
+  { id: 'live', text: 'Live' },
+]
 
 /** Inverter control (experimental): what EMHASS Lens decides for the Sofar inverter each slot, and whether the
  * Home Assistant automation did the same. */
@@ -30,87 +43,105 @@ export function InverterPage() {
   const settings = useSettings()
   const decide = useInverterDecide()
   const navigate = useNavigate()
+  const now = useNow(60_000)
   const data = inverter.data
   const tz = status.data?.timezone
-  const drift = driftText(data?.drift, new Date(), tz)
+  const drift = driftText(data?.drift, now, tz)
   const writable = status.data?.writable ?? false
-  const mode = inverterModeSpec(data?.mode)
   const last = (data?.last ?? null) as InverterLast | null
   const lastCompare = (data?.last_compare ?? null) as InverterComparison | null
   const limits = settings.data?.settings.inverter.limits
 
+  const today = todayKey(tz, now)
+  const todayDecides = useRuns(runFilters('inverter.decide', today, tz, 0))
+  const todayCompares = useRuns(runFilters('inverter.compare', today, tz, 0))
+  const strip = useMemo<StripInput[]>(
+    () =>
+      mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? []).map((row) => ({
+        t: row.slot / 1000,
+        compare: row.compare?.outcome,
+        label: parseDecisionSummary(row.decide?.summary)?.rule,
+        runId: row.decide?.id ?? row.compare?.id,
+      })),
+    [todayDecides.data, todayCompares.data],
+  )
+
   return (
     <>
-      <PageHead
+      <ControllerHead
         title="Inverter"
-        intro={
+        section="inverter"
+        mode={data?.mode}
+        modes={MODES}
+        spec={inverterModeSpec}
+        automation="EMHASS: Consolidated Inverter Control"
+        liveNotice={
           <>
-            Experimental. What EMHASS Lens would set on the Sofar inverter for each slot, and how often that matches what your
-            Home Assistant automation does. Agreement is the number to watch before letting EMHASS Lens drive the inverter.
+            <strong>EMHASS Lens controls the inverter.</strong> Make sure the automation "EMHASS: Consolidated Inverter
+            Control" is off, or both will write to the inverter.
+          </>
+        }
+        writable={writable}
+        actions={
+          <>
+            <button
+              type="button"
+              className="primary"
+              disabled={!writable || decide.isPending}
+              onClick={() =>
+                decide.mutate(undefined, {
+                  onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`),
+                })
+              }
+              title={
+                data?.mode === 'live'
+                  ? 'Decides and applies for the current slot'
+                  : 'Decides for the current slot without touching the inverter'
+              }
+            >
+              {decide.isPending ? 'Deciding…' : 'Decide now'}
+            </button>
+            <Link className="button" to="/settings?section=inverter">
+              Settings
+            </Link>
           </>
         }
       >
-        <div className="action-row" style={{ margin: 0 }}>
-          <button
-            type="button"
-            className="primary"
-            disabled={!writable || decide.isPending}
-            onClick={() =>
-              decide.mutate(undefined, { onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`) })
-            }
-            title={data?.mode === 'live' ? 'Decides and applies for the current slot' : 'Decides for the current slot without touching the inverter'}
-          >
-            {decide.isPending ? 'Deciding…' : 'Decide now'}
-          </button>
-          <Link className="button" to="/settings?section=inverter">
-            Settings
-          </Link>
+        <div>
+          <dt>In control</dt>
+          <dd>
+            {!data || data.mode === 'off' ? (
+              <span className="faint">—</span>
+            ) : data.preconditions ? (
+              <LabelledLamp color="amber" text="Not now" />
+            ) : (
+              <LabelledLamp color="green" text="EMHASS Lens is in control" />
+            )}
+            {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
+          </dd>
         </div>
-      </PageHead>
+        <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} />
+        <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} />
+        <div>
+          <dt>Kept in sync</dt>
+          <dd>
+            <LabelledLamp color={drift.color} text={drift.text} />
+            {drift.detail && <div className="cell-sub">{drift.detail}</div>}
+          </dd>
+        </div>
+      </ControllerHead>
       <ErrorNotice error={inverter.error ?? decide.error} />
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Status</h2>
-          <LabelledLamp color={mode.color} text={mode.text} />
-        </div>
-        <div className="panel-body">
-          <p style={{ marginTop: 0 }}>
-            {mode.explain} Change the mode under <Link to="/settings?section=inverter">Settings → Inverter control</Link>
-            {data?.mode !== 'live' && '; Live needs the Home Assistant automation turned off first'}.
-          </p>
-          {data?.mode === 'live' && (
-            <div className="notice" data-color="amber" role="note">
-              <strong>EMHASS Lens controls the inverter.</strong> Make sure the automation "EMHASS: Consolidated Inverter
-              Control" is off, or both will write to the inverter.
-            </div>
-          )}
-          <dl className="facts">
-            <div>
-              <dt>In control</dt>
-              <dd>
-                {!data || data.mode === 'off' ? (
-                  <span className="faint">—</span>
-                ) : data.preconditions ? (
-                  <LabelledLamp color="amber" text="Not now" />
-                ) : (
-                  <LabelledLamp color="green" text="EMHASS Lens is in control" />
-                )}
-                {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
-              </dd>
-            </div>
-            <div>
-              <dt>Kept in sync</dt>
-              <dd>
-                <LabelledLamp color={drift.color} text={drift.text} />
-                {drift.detail && <div className="cell-sub">{drift.detail}</div>}
-              </dd>
-            </div>
-            <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} />
-            <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} />
-          </dl>
-        </div>
-      </section>
+      <DayStrip
+        inputs={strip}
+        span={900}
+        timeZone={tz}
+        empty={
+          data?.mode === 'off'
+            ? 'Inverter control is off, so nothing is decided. Switch to Dry run to compare with the automation slot by slot.'
+            : 'No decisions yet today.'
+        }
+      />
 
       <div className="two-col">
         <section className="panel">
@@ -154,7 +185,8 @@ export function InverterPage() {
                 {lastCompare.decision_run_id !== undefined && (
                   <>
                     {' '}
-                    · <Link to={`/runs/${lastCompare.decision_run_id}`}>decision run {lastCompare.decision_run_id}</Link>
+                    ·{' '}
+                    <Link to={`/runs/${lastCompare.decision_run_id}`}>decision run {lastCompare.decision_run_id}</Link>
                   </>
                 )}
               </span>
@@ -177,32 +209,14 @@ export function InverterPage() {
         </section>
       </div>
 
-      <section className="panel">
-        <div className="panel-body">
-          <RulesExplainer
-            limits={limits}
-            noExportAtOrBelow={settings.data?.settings.emhass.mpc.no_export_at_or_below ?? null}
-          />
-        </div>
-      </section>
+      <RulesExplainer
+        limits={limits}
+        noExportAtOrBelow={settings.data?.settings.emhass.mpc.no_export_at_or_below ?? null}
+        current={last?.decision.rule}
+      />
 
       <InverterHistory timeZone={tz} />
     </>
-  )
-}
-
-function AgreementFact({ title, agreement }: { title: string; agreement: Agreement | undefined }) {
-  const a = formatAgreement(agreement)
-  return (
-    <div>
-      <dt>{title}</dt>
-      <dd>
-        <span className="readout agreement-value">{a.percent}</span>
-        <div className="cell-sub">
-          {agreement && agreement.compared > 0 ? <LabelledLamp color={a.color} text={a.text} /> : a.text}
-        </div>
-      </dd>
-    </div>
   )
 }
 
@@ -305,20 +319,6 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
       <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
   )
-}
-
-/** The automation-comparison outcome of a slot, in words. */
-function CompareChip({ outcome }: { outcome: string }) {
-  if (outcome === 'ok' || outcome === 'mismatch') {
-    const same = outcome === 'ok'
-    return (
-      <span className="chip" data-color={same ? 'green' : 'amber'}>
-        <Lamp color={same ? 'green' : 'amber'} />
-        {same ? 'Same' : 'Differs'}
-      </span>
-    )
-  }
-  return <OutcomeChip outcome={outcome} />
 }
 
 function DecideChip({ run }: { run: RunSummary }) {

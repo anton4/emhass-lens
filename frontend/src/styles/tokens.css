@@ -72,6 +72,11 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
+  /* The parts of the import price on top of spot (price breakdown): greys, so spot keeps its own colour */
+  --stack-fees: #c9cbd1;
+  --stack-network: #44474e;
+  --stack-vat: #eceef2;
+  --stack-vat-line: #b9bcc4;
   --chart-grid: #eceef2;
   --chart-axis: #c4c7cf;
   --chart-wash: rgba(27, 28, 31, 0.045);
@@ -161,6 +166,10 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
+    --stack-fees: #5d6069;
+    --stack-network: #c4c6cc;
+    --stack-vat: #2e3036;
+    --stack-vat-line: #5d6069;
     --chart-grid: #26282d;
     --chart-axis: #44474e;
     --chart-wash: rgba(227, 228, 232, 0.06);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMarketReconcile } from '../api/actions'
 import { useMarket, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
@@ -7,14 +7,19 @@ import { AgreeHeadline, CompareTable } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { ActionChip, CommandFacts, MarketDecisionView, MarketExplainer, WearFacts } from '../components/MarketViews'
 import { OutcomeChip } from '../components/Outcome'
-import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
-import { dayBounds } from '../lib/days'
+import { AgreementFact } from '../components/controller/AgreementFact'
+import { CompareChip } from '../components/controller/CompareChip'
+import { ControllerHead } from '../components/controller/ControllerHead'
+import { DayStrip } from '../components/controller/DayStrip'
+import { Empty, ErrorNotice } from '../components/PageHead'
+import { useNow } from '../components/useNow'
+import { dayBounds, todayKey } from '../lib/days'
+import { holdUntilNext, type StripInput } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
 import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
-import { formatAgreement } from '../lib/inverter'
 import {
   MARKET_FIELD_LABELS,
   marketFieldValue,
@@ -26,7 +31,23 @@ import {
   type MarketLast,
   type MarketSensors,
 } from '../lib/market'
-import type { Agreement, RunSummary } from '../api/types'
+import type { RunSummary } from '../api/types'
+
+const MODES = [
+  { id: 'off', text: 'Off' },
+  { id: 'shadow', text: 'Shadow' },
+  { id: 'live', text: 'Live' },
+]
+
+/** A reconcile run's gist, short enough to name above the day strip. */
+function stripLabel(summary: string | null | undefined): string | null {
+  const parsed = parseReconcileSummary(summary)
+  if (!parsed) return null
+  if (parsed.kind === 'command') return parsed.text
+  if (parsed.kind === 'none') return 'no action'
+  if (parsed.kind === 'end') return 'session end'
+  return null
+}
 
 /** Qilowatt market control (experimental): the current command and session, what EMHASS Lens decides, whether the
  * Home Assistant automation did the same, and how often the inverter gets written. */
@@ -36,50 +57,95 @@ export function MarketPage() {
   const settings = useSettings()
   const reconcile = useMarketReconcile()
   const navigate = useNavigate()
+  const now = useNow(60_000)
   const [confirmEnd, setConfirmEnd] = useState(false)
   const data = market.data
   const tz = status.data?.timezone
   const writable = status.data?.writable ?? false
-  const mode = marketModeSpec(data?.mode)
   const last = (data?.last ?? null) as MarketLast | null
   const lastCompare = (data?.last_compare ?? null) as MarketComparison | null
   const sensors = data?.sensors as MarketSensors | undefined
   const thresholds = settings.data?.settings.market.thresholds
 
+  const today = todayKey(tz, now)
+  const todayReconciles = useRuns(runFilters('market.reconcile', today, tz, 0))
+  const todayCompares = useRuns(runFilters('market.compare', today, tz, 0))
+  const strip = useMemo<StripInput[]>(
+    () =>
+      holdUntilNext(
+        pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? []).map((row) => ({
+          t: Date.parse(row.at) / 1000,
+          compare: row.compare?.outcome,
+          label: stripLabel(row.reconcile?.summary),
+          runId: row.reconcile?.id ?? row.compare?.id,
+        })),
+        900,
+      ),
+    [todayReconciles.data, todayCompares.data],
+  )
+
   return (
     <>
-      <PageHead
+      <ControllerHead
         title="Market"
-        intro={
+        section="market"
+        mode={data?.mode}
+        modes={MODES}
+        spec={marketModeSpec}
+        automation="Qilowatt: Master Market Controller"
+        liveNotice={
           <>
-            Experimental. Kratt and Fusebox activations (through Qilowatt) run as sessions on the inverter. Shadow mode
-            shows what EMHASS Lens would do and how often that matches your Home Assistant automation; live mode runs
-            the sessions itself and hands the inverter straight back to the plan when they end.
+            <strong>EMHASS Lens runs the market sessions.</strong> Make sure the automation "Qilowatt: Master Market
+            Controller" is off, or both will write to the inverter.
+          </>
+        }
+        writable={writable}
+        actions={
+          <>
+            <button
+              type="button"
+              className="primary"
+              disabled={!writable || reconcile.isPending}
+              onClick={() =>
+                reconcile.mutate({}, { onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`) })
+              }
+              title={data?.mode === 'live' ? 'Reconciles now and acts' : 'Shows what it would do now'}
+            >
+              {reconcile.isPending ? 'Reconciling…' : 'Reconcile now'}
+            </button>
+            {data?.mode === 'live' && data.session && (
+              <button
+                type="button"
+                className="danger"
+                disabled={!writable || reconcile.isPending}
+                onClick={() => setConfirmEnd(true)}
+              >
+                End session now
+              </button>
+            )}
+            <Link className="button" to="/settings?section=market">
+              Settings
+            </Link>
           </>
         }
       >
-        <div className="action-row" style={{ margin: 0 }}>
-          <button
-            type="button"
-            className="primary"
-            disabled={!writable || reconcile.isPending}
-            onClick={() =>
-              reconcile.mutate({}, { onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`) })
-            }
-            title={data?.mode === 'live' ? 'Reconciles now and acts' : 'Shows what it would do now'}
-          >
-            {reconcile.isPending ? 'Reconciling…' : 'Reconcile now'}
-          </button>
-          {data?.mode === 'live' && data.session && (
-            <button type="button" className="danger" disabled={!writable || reconcile.isPending} onClick={() => setConfirmEnd(true)}>
-              End session now
-            </button>
-          )}
-          <Link className="button" to="/settings?section=market">
-            Settings
-          </Link>
+        <div>
+          <dt>In control</dt>
+          <dd>
+            {!data || data.mode !== 'live' ? (
+              <span className="faint">—</span>
+            ) : data.preconditions ? (
+              <LabelledLamp color="amber" text="Not now" />
+            ) : (
+              <LabelledLamp color="green" text="EMHASS Lens is in control" />
+            )}
+            {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
+          </dd>
         </div>
-      </PageHead>
+        <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} per="decision" />
+        <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} per="decision" />
+        <WearFacts day={data?.wear_24h} week={data?.wear_7d} />
+      </ControllerHead>
       <ErrorNotice error={market.error ?? reconcile.error} />
       {data?.notice && (
         <div className="notice" data-color="amber" role="note">
@@ -87,41 +153,17 @@ export function MarketPage() {
         </div>
       )}
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Status</h2>
-          <LabelledLamp color={mode.color} text={mode.text} />
-        </div>
-        <div className="panel-body">
-          <p style={{ marginTop: 0 }}>
-            {mode.explain} Change the mode under <Link to="/settings?section=market">Settings → Qilowatt market control</Link>.
-          </p>
-          {data?.mode === 'live' && (
-            <div className="notice" data-color="amber" role="note">
-              <strong>EMHASS Lens runs the market sessions.</strong> Make sure the automation "Qilowatt: Master Market
-              Controller" is off, or both will write to the inverter.
-            </div>
-          )}
-          <dl className="facts">
-            <div>
-              <dt>In control</dt>
-              <dd>
-                {!data || data.mode !== 'live' ? (
-                  <span className="faint">—</span>
-                ) : data.preconditions ? (
-                  <LabelledLamp color="amber" text="Not now" />
-                ) : (
-                  <LabelledLamp color="green" text="EMHASS Lens is in control" />
-                )}
-                {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
-              </dd>
-            </div>
-            <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} />
-            <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} />
-            <WearFacts day={data?.wear_24h} week={data?.wear_7d} />
-          </dl>
-        </div>
-      </section>
+      <DayStrip
+        inputs={strip}
+        span={900}
+        timeZone={tz}
+        what="decision"
+        empty={
+          data?.mode === 'off'
+            ? 'Market control is off, so nothing is decided. Switch to Shadow to compare with the automation.'
+            : 'No decisions yet today.'
+        }
+      />
 
       <section className="panel">
         <div className="panel-head">
@@ -151,7 +193,9 @@ export function MarketPage() {
           <div className="panel-body">
             {!last ? (
               <Empty title="No decision yet">
-                {data?.mode === 'off' ? 'Market control is off. Use Reconcile now to see what it would do.' : 'The next decision comes with the next command change or minute tick.'}
+                {data?.mode === 'off'
+                  ? 'Market control is off. Use Reconcile now to see what it would do.'
+                  : 'The next decision comes with the next command change or minute tick.'}
               </Empty>
             ) : (
               <>
@@ -178,25 +222,27 @@ export function MarketPage() {
           <div className="panel-body">
             {!lastCompare ? (
               <Empty title="Nothing compared yet">
-                In shadow mode, each decision is compared a few seconds later with what the Home Assistant automation did.
+                In shadow mode, each decision is compared a few seconds later with what the Home Assistant automation
+                did.
               </Empty>
             ) : (
               <>
                 <p style={{ marginTop: 0 }}>
                   <AgreeHeadline comparison={lastCompare} what="Automation vs EMHASS Lens" />
                 </p>
-                <CompareTable comparison={lastCompare} observedLabel="Home Assistant shows" labels={MARKET_FIELD_LABELS} format={marketFieldValue} />
+                <CompareTable
+                  comparison={lastCompare}
+                  observedLabel="Home Assistant shows"
+                  labels={MARKET_FIELD_LABELS}
+                  format={marketFieldValue}
+                />
               </>
             )}
           </div>
         </section>
       </div>
 
-      <section className="panel">
-        <div className="panel-body">
-          <MarketExplainer thresholds={thresholds} />
-        </div>
-      </section>
+      <MarketExplainer thresholds={thresholds} />
 
       <SessionsTable tz={tz} />
       <MarketHistory timeZone={tz} />
@@ -213,7 +259,10 @@ export function MarketPage() {
             onClick: () =>
               reconcile.mutate(
                 { force_end: true },
-                { onSettled: () => setConfirmEnd(false), onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`) },
+                {
+                  onSettled: () => setConfirmEnd(false),
+                  onSuccess: (started) => started.run_id && navigate(`/runs/${started.run_id}`),
+                },
               ),
           },
         ]}
@@ -224,21 +273,6 @@ export function MarketPage() {
         </p>
       </ConfirmDialog>
     </>
-  )
-}
-
-function AgreementFact({ title, agreement }: { title: string; agreement: Agreement | undefined }) {
-  const a = formatAgreement(agreement)
-  return (
-    <div>
-      <dt>{title}</dt>
-      <dd>
-        <span className="readout agreement-value">{a.percent}</span>
-        <div className="cell-sub">
-          {agreement && agreement.compared > 0 ? <LabelledLamp color={a.color} text={a.text.replace('slots', 'decisions').replace('slot ', 'decision ')} /> : a.text}
-        </div>
-      </dd>
-    </div>
   )
 }
 
@@ -420,19 +454,6 @@ function MarketHistory({ timeZone }: { timeZone?: string }) {
       <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
   )
-}
-
-function CompareChip({ outcome }: { outcome: string }) {
-  if (outcome === 'ok' || outcome === 'mismatch') {
-    const same = outcome === 'ok'
-    return (
-      <span className="chip" data-color={same ? 'green' : 'amber'}>
-        <Lamp color={same ? 'green' : 'amber'} />
-        {same ? 'Same' : 'Differs'}
-      </span>
-    )
-  }
-  return <OutcomeChip outcome={outcome} />
 }
 
 function ReconcileChip({ run }: { run: RunSummary }) {

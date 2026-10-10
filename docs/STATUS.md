@@ -37,6 +37,14 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (night): redesign "D", step 3: controller pages and price breakdown (0.4.4)
+- Inverter, EV charger and Market share the D controller layout:
+  - `components/controller/ControllerHead.tsx`: title, experimental tag, an on-page mode switch that writes `inverter|charger|market.mode` through `useSetControllerMode` with a confirmation (Live names the HA automation), the explanation line and the facts row.
+  - `AgreementFact` (with a bar), `CompareChip`, and `DayStrip` (built by `lib/dayStrip.ts`: `stripItems`, `stripLabels`, `holdUntilNext`) for "Today, slot by slot" (decision by decision for the charger and the market).
+  - The explainers in `components/*Views.tsx` are now sections with a visible numbered list (the current rule or branch tagged) and the prose under "More about decisions".
+- Price breakdown: spot in `--q-spot`, fees/network/VAT in greys (`--stack-*` tokens), VAT outlined; the legend toggles are pills.
+- Dark mode of the redesign is still unchecked (the owner asked to skip it for now).
+
 ### 2026-10-10 (night): no export at or below a price, in the plan (0.4.3)
 - `EmhassMpc.no_export_at_or_below` (schema 5; `_v4_to_v5` moves `inverter.limits.low_export_price`, default 0.03 when absent). Used by `domain/mpc/payload.py` (per-slot `maximum_power_to_grid`, via `domain/mpc/export_limit.py`) and `domain/inverter.py decide(…, no_export_at_or_below)`; None never blocks.
 - Sent only to EMHASS ≥ 0.16 (`_parse_power_limit`, vector limits) with `compute_curtailment` true, otherwise an `export_limit_unsupported` warning and a `no_export` check under Health → EMHASS. Not in compat builds (parity). `validate` checks the list length (EMHASS falls back to the first value on a mismatch).
