@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - A new look: Home Assistant's blue and cool greys on a white page, the Geist typeface (bundled with the App, nothing loads from the internet) and sections without boxes. Dark mode follows the system as before.
 - The pages sit in a sidebar, grouped into Operate, Control, Diagnose and Configure. On a phone the sidebar opens from the menu button.
