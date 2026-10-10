@@ -8,6 +8,7 @@
 - Run details are capped at 512 KiB each (bigger ones are kept as a note with a preview); the cost-function comparison no longer stores each plan twice.
 - Shutdown: the UI's live event stream ends by itself when the App stops, so uvicorn no longer waits five seconds and logs a cancelled task on every restart.
 - Settings → Measurements says which unit each sensor is expected in (W, or % for the state of charge) and how to convert a kW sensor.
+- Settings: in the review before saving, long field titles wrap instead of running over the change text.
 
 ## 0.3.1
 

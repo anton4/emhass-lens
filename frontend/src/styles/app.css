@@ -1178,6 +1178,9 @@ button.diff-locate {
   padding: 0;
   text-align: left;
   font-weight: 500;
+  white-space: normal; /* long field titles wrap instead of running into the change text */
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .diff-label {
@@ -1204,6 +1207,7 @@ button.diff-locate {
 }
 
 .diff-change {
+  min-width: 0;
   word-break: break-word;
 }
 
