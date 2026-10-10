@@ -229,7 +229,7 @@ export function SettingsForm({ schema, server }: Props) {
                 aria-current={key === active?.[0]}
                 onClick={() => setSection(key)}
               >
-                {info.title}
+                <span className="section-title">{info.title}</span>
                 {sectionErrors ? (
                   <Lamp color="red" label="has errors" />
                 ) : sectionModified ? (

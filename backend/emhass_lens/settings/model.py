@@ -1118,7 +1118,7 @@ class Settings(Section):
     prices: Prices = Field(default=Prices(), title="Prices")
     forecast: Forecast = Field(default=Forecast(), title="Price forecast")
     pv: Pv = Field(default=Pv(), title="PV forecast")
-    measurements: Measurements = Field(default=Measurements(), title="Measurements (plan history and accuracy)")
+    measurements: Measurements = Field(default=Measurements(), title="Measurements")
     outputs: Outputs = Field(default=Outputs(), title="Home Assistant outputs")
     health: Health = Field(default=Health(), title="Health")
     notifications: Notifications = Field(default=Notifications(), title="Notifications")

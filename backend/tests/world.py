@@ -40,6 +40,7 @@ class World:
     )
     nordpool_calls: list[str] = field(default_factory=list)
     ee_forecast: dict[str, Any] | None = None
+    ee_calls: int = 0
     ee_status: int = 200
     emhass_config: dict[str, Any] = field(
         default_factory=lambda: {
@@ -74,6 +75,7 @@ class World:
             body = self.nordpool_days.get(day)
             return httpx.Response(200, json=body) if body else httpx.Response(204)
         if host == "api.eupowerprices.com":
+            self.ee_calls += 1
             if self.ee_status != 200:
                 return httpx.Response(self.ee_status, json={"detail": "nope"})
             return httpx.Response(200, json=self.ee_forecast or {"series": []})

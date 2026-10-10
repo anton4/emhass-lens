@@ -66,6 +66,7 @@ def build(c: Container) -> None:
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
     x["prices"].load()
+    x["forecasts"].load()
     x["problems"].load()
     x["sofar"].load()
     x["market"].load()

@@ -200,7 +200,9 @@ class EmhassService:
         if restarted or self.config is None:
             if restarted:
                 log.info("EMHASS restarted; re-reading its configuration")
-            self.c.scheduler.run_now("emhass.config_check")
+            check = self.c.scheduler.jobs.get("emhass.config_check")
+            if check is None or not check.running:  # at start the configuration check is already on its way
+                self.c.scheduler.run_now("emhass.config_check")
 
     def _unreachable(self, error: str) -> None:
         if self.reachable is not False or error != self.last_error:

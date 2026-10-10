@@ -3727,7 +3727,6 @@ export interface components {
              */
             market: components["schemas"]["Market"];
             /**
-             * Measurements (plan history and accuracy)
              * @default {
              *       "backfill_days": 10,
              *       "battery": {

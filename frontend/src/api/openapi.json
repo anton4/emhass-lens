@@ -6883,8 +6883,7 @@
                 "invert": false,
                 "scale": 0.01
               }
-            },
-            "title": "Measurements (plan history and accuracy)"
+            }
           },
           "notifications": {
             "$ref": "#/components/schemas/Notifications",

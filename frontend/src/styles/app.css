@@ -906,6 +906,14 @@ td.wrap {
   font-size: var(--step-0);
   color: var(--ink-muted);
   text-align: left;
+  white-space: normal; /* long section titles wrap inside the column instead of riding into the form */
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.section-nav .section-title {
+  flex: 1;
+  min-width: 0;
 }
 
 .section-nav button[aria-current='true'] {

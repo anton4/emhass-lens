@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- After a restart the price forecast is restored from the database together with its last poll time, so it is shown at once, no "forecast isn't available" warning appears, and eupowerprices.com is only asked again when the poll interval is due.
+- Start-up no longer records a skipped EMHASS configuration check next to the one already running.
+- Settings: long section titles wrap inside the navigation instead of running into the form; "Measurements" lost its parenthetical.
+
 ## 0.3.0
 
 - Plan page: the charts now reach back in time. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); **History** picks 6 h to 7 days, **Compare with** picks the plan in force or the one made 1, 6 or 24 h earlier. A new **How accurate the plan has been** card gives the error and bias per quantity over 24 h and 7 d, plus the price forecast's error against Nord Pool.
