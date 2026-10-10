@@ -14,14 +14,14 @@ import {
   plannedAtTheTime,
   timeGrid,
 } from '../../lib/planHistory'
-import { formatPower } from '../../lib/units'
+import { eurTick, formatPower, formatPrice } from '../../lib/units'
 
 const SYNC = 'plan'
 
 // Each y-axis hugs its own data; the minimum spans keep near-flat lines from turning into noise.
 const POWER_FIT = { minSpan: 500 }
 const SOC_FIT = { minSpan: 5, clamp: [0, 100] as [number, number] }
-const PRICE_FIT = { minSpan: 1 }
+const PRICE_FIT = { minSpan: 0.01 } // €/kWh
 
 const windowFormats = new Map<string, Intl.DateTimeFormat>()
 function windowLabel([a, b]: [number, number], timeZone?: string): string {
@@ -174,15 +174,15 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
     const slots = mergePrices(history?.prices ?? [], data.prices)
     if (slots.length === 0) return null
     const px = slots.map((p) => Date.parse(p.start) / 1000)
-    const imp: (number | null)[] = slots.map((p) => p.import_price * 100)
-    const exp: (number | null)[] = slots.map((p) => p.export_price * 100)
+    const imp: (number | null)[] = slots.map((p) => p.import_price)
+    const exp: (number | null)[] = slots.map((p) => p.export_price)
     const last = px[px.length - 1]
     if (last !== undefined) {
       px.push(last + 900)
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
-    const fmt = (v: number) => `${v.toFixed(2)} c/kWh`
+    const fmt = (v: number) => formatPrice(v)
     const series: ChartSeries[] = [
       { label: 'Import', color: '--series-1', values: imp, format: fmt },
       { label: 'Export', color: '--series-2', values: exp, format: fmt },
@@ -255,7 +255,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
             series={prices.series}
             ariaLabel="Import and export price per quarter-hour; shaded where the price is a forecast"
             syncKey={SYNC}
-            yFormat={(v) => `${v.toFixed(0)} c`}
+            yFormat={eurTick}
             fit={PRICE_FIT}
             xRange={zoom}
             onZoom={zoomTo}

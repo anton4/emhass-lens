@@ -24,9 +24,10 @@ function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : `${v.toFixed(0)} %`
 }
 
-function cents(v: number | null | undefined, signed = false): string {
+/** The price forecast's error, which the API gives in c/kWh, as €/kWh like the rest of the Plan page. */
+function eurFromCents(v: number | null | undefined, signed = false): string {
   if (v === null || v === undefined) return '—'
-  return `${signed && v > 0 ? '+' : ''}${v.toFixed(2)} c/kWh`
+  return `${signed && v > 0 ? '+' : ''}${(v / 100).toFixed(4)} €/kWh`
 }
 
 /** How far the plan has been from what happened: MAE and bias per quantity over 24 h and 7 d. */
@@ -88,10 +89,10 @@ export function AccuracyCard({ history }: { history: PlanHistoryResponse | undef
                   —
                 </td>
                 <td className="num r">
-                  {cents(pf.mae)}
+                  {eurFromCents(pf.mae)}
                   {pf.mape !== null && pf.mape !== undefined && <div className="cell-sub">{pct(pf.mape)} MAPE</div>}
                 </td>
-                <td className="num r">{cents(pf.bias, true)}</td>
+                <td className="num r">{eurFromCents(pf.bias, true)}</td>
                 <td className="num r">{pf.n}</td>
               </tr>
             )}

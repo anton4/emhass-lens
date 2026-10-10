@@ -1,6 +1,6 @@
 import type { PlanRow } from '../../api/types'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
-import { batteryDirection, formatFraction, formatPower, gridDirection } from '../../lib/units'
+import { batteryDirection, formatFraction, formatPower, formatPrice, gridDirection } from '../../lib/units'
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -44,8 +44,8 @@ export function ThisSlot({ row, columns }: { row: PlanRow; columns: string[] }) 
       {loadCost !== null && (
         <Tile
           label="Import price"
-          value={`${(loadCost * 100).toFixed(2)} c/kWh`}
-          sub={prodPrice !== null ? `export ${(prodPrice * 100).toFixed(2)} c/kWh` : undefined}
+          value={formatPrice(loadCost)}
+          sub={prodPrice !== null ? `export ${formatPrice(prodPrice)}` : undefined}
         />
       )}
     </div>

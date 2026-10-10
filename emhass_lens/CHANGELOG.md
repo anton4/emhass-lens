@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Plan page shows prices in €/kWh instead of cents: the price chart, the import and export price of this slot, and the price forecast's error on the accuracy card.
+
 ## 0.3.10
 
 - When Home Assistant comes back (a restart, a host reboot or a lost connection), EMHASS Lens catches up the current quarter-hour in live mode: it publishes again, which restores EMHASS's `sensor.p_*`, and sets the EV charger and the inverter for the slot it missed instead of waiting for the next one. It waits for the inverter's entities while Home Assistant is still starting.

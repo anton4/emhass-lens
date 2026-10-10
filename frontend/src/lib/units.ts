@@ -23,6 +23,11 @@ export function formatPrice(eurPerKwh: unknown, unit: PriceUnit = 'eur', withUni
   return withUnit ? `${text} ${unit === 'cents' ? 'c/kWh' : '€/kWh'}` : text
 }
 
+/** A price axis tick in €/kWh: "0.05", "0.1", "0.125" (no trailing zeros, at most 3 decimals). */
+export function eurTick(value: number): string {
+  return `${Number(value.toFixed(3))} €`
+}
+
 export function priceFactor(unit: PriceUnit): number {
   return unit === 'cents' ? 100 : 1
 }
