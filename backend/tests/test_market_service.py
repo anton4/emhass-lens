@@ -96,14 +96,22 @@ def manual_run(client: TestClient, job: str) -> dict:
 
 
 def wait_for_run(client: TestClient, job: str, after_id: int, trigger: str = "event", summary: str = "") -> dict:
-    """The newest finished run of `job` after `after_id` with this trigger (and a summary starting with `summary`).
-    Two pushes in a row make two runs: the second, queued one usually finds nothing left to do."""
+    """The run of `job` after `after_id` with this trigger (and a summary starting with `summary`) that did
+    something. Two pushes in a row make two runs, and a write can trigger a queued rerun: those extra runs find
+    nothing left to do (noop), so the newest run that acted wins, and a noop only when nothing else is there."""
     for _ in range(600):
+        # the job's lock is held through any queued rerun, so wait for the lock, not just for the first record
+        info = next(j for j in client.get("/api/jobs").json() if j["id"] == job)
+        if info["running"]:
+            continue
         runs = client.get("/api/runs", params={"job": job}).json()
         new = [r for r in runs if r["id"] > after_id and r["trigger"] == trigger]
         if any(r["outcome"] == "running" for r in new):
             continue
         done = [r for r in new if r["outcome"] != "skipped" and (r["summary"] or "").startswith(summary)]
+        acted = [r for r in done if r["outcome"] != "noop"]
+        if acted:
+            return acted[0]
         if done:
             return done[0]
     raise AssertionError(f"no new {job} run")
