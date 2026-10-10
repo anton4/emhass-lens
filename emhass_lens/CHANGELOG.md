@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2
 
 - Inputs: the price breakdown table (96 rows a day) is folded away under its chart; open it with "Every quarter-hour as a table".
 - Runs on a phone: each run is a compact card (run, job, outcome, when, how long, summary) instead of a six-column row.
