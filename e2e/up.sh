@@ -37,6 +37,14 @@ docker run -d --name el-emhass --network el-net -p 15000:5000 -e TZ=Europe/Talli
     -v "$RUNTIME/emhass/secrets_emhass.yaml:/app/secrets_emhass.yaml" \
     -v "$RUNTIME/emhass/data:/data" "$EMHASS_IMAGE" >/dev/null
 
+# EMHASS installs itself on first start; wait until its web server answers so check.sh doesn't hit a closed port.
+i=0
+until curl -sf -o /dev/null --max-time 2 http://localhost:15000/; do
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && { echo "EMHASS did not come up within 120 s" >&2; exit 1; }
+    sleep 1
+done
+
 (cd ../backend && uv run python ../e2e/seed.py "$TOKEN")
 echo "Home Assistant: http://localhost:18123 (tester / tester-pass-123)"
 echo "EMHASS:         http://localhost:15000"
