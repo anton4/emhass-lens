@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): a tuned load model cuts the horizon instead of stopping MPC (unreleased)
+### 2026-10-10 (evening): a tuned load model cuts the horizon instead of stopping MPC (0.3.8)
 - **Why:** after the owner pressed Tune, every run with tomorrow's prices and the forecast day (~233 slots) failed: EMHASS's tuner picks `lags_opt` from 6 h…3 days (`get_lags_list_from_frequency`) and a tuned model predicts only `lags_opt` steps (144 here). The plan went stale, Health raised `mpc.stale`, live inverter control refused. The tune also kept EMHASS from answering `/healthz` for ~3 min ("unreachable").
 - **Done:** `domain/mpc/model_steps.short_model(body)`; `EmhassClient` splits EMHASS's JSON-list error bodies into lines (the error is the last ERROR line); `MlService.learn_steps/model_steps/forget_steps` (kv `ml.model_steps`, 24 h expiry, cleared by an App fit or tune); `build(..., model_steps=)` cuts the horizon with a `horizon_capped` warning (never in the compat build); `MpcService.on_short_model` ends the run with a clear error and re-plans once after the job lock frees (`_replan_after`); the cost-function comparison stops on it too; health `ml.model_short`; `EmhassService.act()` records `busy`, and a health timeout while busy is logged once instead of marking EMHASS unreachable; `EmhassStatusOut.busy_with/busy_since` on the EMHASS card; the Tune text explains the cut; the SSE stream cancels its pending `queue.get()` on disconnect. Docs: DOCS.md "The ML load forecast".
 - **Verified:** 292 backend tests (`test_model_steps.py`, SSE leak test in `test_api.py`, which fails without the fix), 85 frontend tests.
