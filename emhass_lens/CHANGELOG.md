@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2
 
 - **Storage.** Settings → Storage replaces Settings → Logging → Retention and adds a size budget per database (runs.db 300 MB, app.db 200 MB by default), compaction (VACUUM after cleanup when at least 20 % and 16 MiB of a file are free, or with *Compact now*) and retention for what never expired before: problem history (90 days), market sessions (180 days) and settings versions (newest 100, the current one always). Pinned runs keep their log lines. The nightly cleanup cuts in day-sized steps, checkpoints after deleting, and reports per table.
 - Health → **Storage** card: both files with size, data in use, free pages and budget, the biggest tables, the last cleanup, free disk space, the newest Home Assistant backup that contains the App, and *Clean up now* / *Compact now*. New Health warnings: a file over its budget, less than 200 MiB free on the data disk, no recent backup with EMHASS Lens (Settings → Storage → "Warn when no backup for").
