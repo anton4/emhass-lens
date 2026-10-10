@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.4
 
 - Inverter, EV charger and Market share one layout:
   - The mode switch sits at the top of the page (Off / Dry run / Live; Market: Off / Shadow / Live). It asks before changing anything, and switching to Live names the Home Assistant automation to turn off first. Each change is a settings revision, so it can be reverted.
