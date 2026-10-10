@@ -3013,15 +3013,53 @@ details.more[open] > summary {
   height: 20px;
 }
 
-.run-mark {
+/* the timeline over the Runs list: a bar per bucket, close together (design B), with a window switch (design A) */
+.run-timeline-panel {
+  margin-bottom: 28px;
+}
+
+.run-timeline-panel .panel-head h2 {
+  margin-right: 0;
+}
+
+.run-timeline-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-right: auto;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.run-timeline-panel .run-timeline {
+  margin: 12px 0 0;
+}
+
+.run-timeline-empty {
+  margin: 12px 0 0;
+}
+
+.run-lane-bars {
+  position: relative;
+}
+
+.run-bar {
   cursor: pointer;
 }
 
-.run-mark:hover,
-.run-mark[data-selected] {
+.run-bar:hover {
   stroke: var(--ink);
   stroke-width: 1.5px;
   vector-effect: non-scaling-stroke;
+}
+
+.run-lane-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px solid var(--chart-now);
+  pointer-events: none;
 }
 
 .run-axis {

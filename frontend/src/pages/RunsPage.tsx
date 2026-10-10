@@ -6,7 +6,6 @@ import type { RunSummary } from '../api/types'
 import { OutcomeChip } from '../components/Outcome'
 import { RunTimeline } from '../components/RunTimeline'
 import { useMediaQuery } from '../components/useMediaQuery'
-import { useNow } from '../components/useNow'
 import { RunPreview } from './RunPreview'
 import { OUTCOME_NAMES, outcomeLabel } from '../lib/outcomes'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
@@ -14,6 +13,7 @@ import { SortableTh } from '../components/SortableTh'
 import { localInputToIso, shiftDay, todayKey } from '../lib/days'
 import { formatDateTime, formatDuration } from '../lib/format'
 import { nextSort, sortRows, type SortDir } from '../lib/sort'
+import { isTimelineWindow, type TimelineWindow } from '../lib/runLanes'
 
 const PAGE = 100
 /** Columns the server orders by (run id, which follows the start time); the rest sort the loaded rows. */
@@ -32,7 +32,9 @@ export function RunsPage() {
   const wide = useMediaQuery('(min-width: 1180px)')
   const picked = Number(params.get('run')) || null
   const previewed = wide ? picked : null
-  const now = useNow(60_000)
+  const timelineWindow: TimelineWindow = isTimelineWindow(params.get('window'))
+    ? (params.get('window') as TimelineWindow)
+    : '6h'
   const order: SortDir = SERVER_SORTED.has(sortKey) ? sortDir : 'desc'
 
   const tz = useStatus().data?.timezone
@@ -115,15 +117,17 @@ export function RunsPage() {
 
   const ranged = Boolean(from || to)
   const pick = (id: number) => (wide ? setFilters({ run: String(id) }) : navigate(`/runs/${id}`))
-  const nowS = now.getTime() / 1000
-  const oldest = loaded.reduce((min, r) => Math.min(min, Date.parse(r.started_at) / 1000), nowS)
-  const windowFrom = since ? Date.parse(since) / 1000 : oldest
-  const windowTo = Math.min(until ? Date.parse(until) / 1000 : nowS, nowS)
   return (
     <>
       <PageHead
         title="Runs"
         intro="Every job execution, including the ones that were skipped, refused or missed. Open a run to see its inputs, what it sent, what came back and its logs."
+      />
+      <RunTimeline
+        window={timelineWindow}
+        onWindow={(w) => setFilters({ window: w === '6h' ? '' : w })}
+        timeZone={tz}
+        onPick={pick}
       />
       <div className="toolbar list-controls" style={{ marginBottom: 12 }}>
         <label>
@@ -191,15 +195,6 @@ export function RunsPage() {
       <ErrorNotice error={runs.error} />
       <div className="runs-split" data-preview={previewed !== null || undefined}>
         <section className="panel">
-          <RunTimeline
-            runs={loaded}
-            from={windowFrom}
-            to={windowTo}
-            timeZone={tz}
-            jobTitle={jobTitle}
-            selected={previewed}
-            onPick={(run) => pick(run.id)}
-          />
           <div className="table-wrap">
             <table className="runs-table">
               <thead>

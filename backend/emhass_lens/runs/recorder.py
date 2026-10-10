@@ -190,6 +190,16 @@ class RunRecorder:
             (job, job, outcome, outcome, before, before, after, after, since, since, until, until, limit),
         )
 
+    async def histogram(self, since: str, until: str, bucket_s: int) -> list[dict[str, Any]]:
+        """How many runs of each job ended with each outcome, per `bucket_s`-second bucket of [since, until) counted
+        from `since` (bucket 0), with the newest run id of each. `since`/`until` are UTC ISO like started_at."""
+        return await self.db.aquery(
+            "SELECT job, CAST((julianday(started_at) - julianday(?)) * 86400 / ? AS INTEGER) AS bucket, outcome, "
+            "COUNT(*) AS count, MAX(id) AS last_id FROM run WHERE started_at >= ? AND started_at < ? "
+            "GROUP BY job, bucket, outcome ORDER BY bucket, job, outcome",
+            (since, bucket_s, since, until),
+        )
+
     async def get(self, run_id: int) -> dict[str, Any] | None:
         run = await self.db.aquery_one("SELECT * FROM run WHERE id = ?", (run_id,))
         if run is None:

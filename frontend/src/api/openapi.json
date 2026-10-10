@@ -7635,6 +7635,71 @@
         "title": "RunSummary",
         "type": "object"
       },
+      "RunTimeline": {
+        "description": "Run counts per job, outcome and time bucket (bucket 0 starts at `since`), for the Runs page timeline.",
+        "properties": {
+          "bucket_s": {
+            "title": "Bucket S",
+            "type": "integer"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/RunTimelineCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "since": {
+            "title": "Since",
+            "type": "string"
+          },
+          "until": {
+            "title": "Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "until",
+          "bucket_s",
+          "cells"
+        ],
+        "title": "RunTimeline",
+        "type": "object"
+      },
+      "RunTimelineCell": {
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "last_id": {
+            "title": "Last Id",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job",
+          "bucket",
+          "outcome",
+          "count",
+          "last_id"
+        ],
+        "title": "RunTimelineCell",
+        "type": "object"
+      },
       "SaveResponse": {
         "properties": {
           "diff": {
@@ -10352,6 +10417,70 @@
           }
         },
         "summary": "List Runs",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/timeline": {
+      "get": {
+        "description": "Run counts per job, outcome and `bucket_s`-second bucket of [since, until), for the Runs page timeline: a\nday can hold more runs than one page of the list.",
+        "operationId": "run_timeline_api_runs_timeline_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": true,
+            "schema": {
+              "title": "Until",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket_s",
+            "required": false,
+            "schema": {
+              "default": 900,
+              "maximum": 86400,
+              "minimum": 60,
+              "title": "Bucket S",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunTimeline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Timeline",
         "tags": [
           "runs"
         ]

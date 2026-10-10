@@ -662,6 +662,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run Timeline
+         * @description Run counts per job, outcome and `bucket_s`-second bucket of [since, until), for the Runs page timeline: a
+         *     day can hold more runs than one page of the list.
+         */
+        get: operations["run_timeline_api_runs_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -3942,6 +3963,33 @@ export interface components {
             /** Trigger */
             trigger: string;
         };
+        /**
+         * RunTimeline
+         * @description Run counts per job, outcome and time bucket (bucket 0 starts at `since`), for the Runs page timeline.
+         */
+        RunTimeline: {
+            /** Bucket S */
+            bucket_s: number;
+            /** Cells */
+            cells: components["schemas"]["RunTimelineCell"][];
+            /** Since */
+            since: string;
+            /** Until */
+            until: string;
+        };
+        /** RunTimelineCell */
+        RunTimelineCell: {
+            /** Bucket */
+            bucket: number;
+            /** Count */
+            count: number;
+            /** Job */
+            job: string;
+            /** Last Id */
+            last_id: number;
+            /** Outcome */
+            outcome: string;
+        };
         /** SaveResponse */
         SaveResponse: {
             /** Diff */
@@ -5554,6 +5602,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_timeline_api_runs_timeline_get: {
+        parameters: {
+            query: {
+                since: string;
+                until: string;
+                bucket_s?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunTimeline"];
                 };
             };
             /** @description Validation Error */

@@ -20,6 +20,7 @@ import type {
   Revision,
   RunDetail,
   RunSummary,
+  RunTimeline,
   SettingsResponse,
   SetupChecklist,
   StatusInfo,
@@ -96,6 +97,16 @@ export function useRuns(filters: RunFilters) {
     queryKey: closed ? keys.closedRuns(filters) : keys.runs(filters),
     queryFn: () => api.get<RunSummary[]>(`/api/runs${query(filters)}`),
     ...(closed ? { staleTime: Infinity } : {}),
+  })
+}
+
+/** Run counts per job, outcome and time bucket for the Runs timeline. Its key starts with "runs", so every run event
+ * refreshes it like the list. */
+export function useRunTimeline(since: string, until: string, bucketS: number) {
+  return useQuery({
+    queryKey: ['runs', 'timeline', since, until, bucketS] as const,
+    queryFn: () => api.get<RunTimeline>(`/api/runs/timeline${query({ since, until, bucket_s: bucketS })}`),
+    placeholderData: keepPreviousData,
   })
 }
 

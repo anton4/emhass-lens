@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from emhass_lens.api.deps import ContainerDep, Writable
-from emhass_lens.api.schemas import LogEntry, RunDetail, RunSummary
+from emhass_lens.api.schemas import LogEntry, RunDetail, RunSummary, RunTimeline, RunTimelineCell
 from emhass_lens.core.clock import iso, parse_iso
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -50,6 +50,29 @@ async def list_runs(
         ascending=order == "asc",
     )
     return [RunSummary(**row) for row in rows]
+
+
+@router.get("/timeline")
+async def run_timeline(
+    c: ContainerDep,
+    since: str,
+    until: str,
+    bucket_s: Annotated[int, Query(ge=60, le=86400)] = 900,
+) -> RunTimeline:
+    """Run counts per job, outcome and `bucket_s`-second bucket of [since, until), for the Runs page timeline: a
+    day can hold more runs than one page of the list."""
+    start = utc_bound(since, "since")
+    end = utc_bound(until, "until")
+    if start is None or end is None:
+        raise HTTPException(400, "since and until are required")
+    first, last = parse_iso(start), parse_iso(end)
+    span = (last - first).total_seconds() if first and last else 0
+    if span <= 0:
+        raise HTTPException(400, "until must be after since")
+    if span / bucket_s > 2000:
+        raise HTTPException(400, "Too many buckets: pick a larger bucket_s or a shorter range")
+    cells = await c.recorder.histogram(start, end, bucket_s)
+    return RunTimeline(since=start, until=end, bucket_s=bucket_s, cells=[RunTimelineCell(**cell) for cell in cells])
 
 
 @router.get("/{run_id}")

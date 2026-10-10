@@ -104,6 +104,23 @@ class RunSummary(BaseModel):
     pinned: int = 0
 
 
+class RunTimelineCell(BaseModel):
+    job: str
+    bucket: int
+    outcome: str
+    count: int
+    last_id: int
+
+
+class RunTimeline(BaseModel):
+    """Run counts per job, outcome and time bucket (bucket 0 starts at `since`), for the Runs page timeline."""
+
+    since: str
+    until: str
+    bucket_s: int
+    cells: list[RunTimelineCell]
+
+
 class ArtifactInfo(BaseModel):
     id: int
     kind: str

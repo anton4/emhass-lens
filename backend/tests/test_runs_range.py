@@ -60,3 +60,54 @@ def test_market_sessions_in_a_time_range(tmp_path: Path) -> None:
         )
         assert [s["started_at"][11:13] for s in got.json()] == ["11"]
         assert len(client.get("/api/market/sessions").json()) == 3
+
+
+def test_run_timeline_counts_per_bucket(tmp_path: Path) -> None:
+    clock = FakeClock(T0)
+    with make_client(tmp_path, World(), clock) as client:
+        c = client.app.state.container  # type: ignore[attr-defined]
+
+        async def make(job: str, outcome: str) -> None:
+            async with c.recorder.start(job) as run:
+                run.outcome = outcome
+
+        runs = [
+            (0, "test.a", "ok"),
+            (3, "test.a", "error"),
+            (7, "test.a", "ok"),
+            (14, "test.b", "noop"),
+            (16, "test.a", "ok"),  # the next quarter-hour
+            (70, "test.a", "ok"),  # after the window
+        ]
+        for minute, job, outcome in runs:
+            clock.set(T0 + timedelta(minutes=minute))
+            client.portal.call(make, job, outcome)  # type: ignore[union-attr]
+
+        resp = client.get(
+            "/api/runs/timeline",
+            params={"since": "2026-10-10T14:00:00+03:00", "until": "2026-10-10T15:00:00+03:00", "bucket_s": 900},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["since"].startswith("2026-10-10T11:00:00") and body["bucket_s"] == 900
+        # the App's own start-up runs land in the window too; only the test jobs matter here
+        cells = {
+            (cell["bucket"], cell["job"], cell["outcome"]): cell
+            for cell in body["cells"]
+            if cell["job"].startswith("test.")
+        }
+        assert cells[(0, "test.a", "ok")]["count"] == 2
+        assert cells[(0, "test.a", "error")]["count"] == 1
+        assert cells[(0, "test.b", "noop")]["count"] == 1
+        assert cells[(1, "test.a", "ok")]["count"] == 1
+        assert len(cells) == 4  # the run after the window is left out
+        newest_ok = cells[(0, "test.a", "ok")]["last_id"]
+        assert newest_ok > cells[(0, "test.a", "error")]["last_id"]  # the 14:07 run came after the 14:03 error
+
+        def status(**params: object) -> int:
+            return client.get("/api/runs/timeline", params=params).status_code
+
+        assert status(since="2026-10-10T11:00:00Z", until="2026-10-10T12:00:00Z", bucket_s=30) == 422
+        assert status(since="2026-10-10T11:00:00Z", until="2026-10-10T10:00:00Z") == 400
+        assert status(since="2026-10-01T00:00:00Z", until="2026-10-10T00:00:00Z", bucket_s=60) == 400
+        assert status(since="yesterday", until="2026-10-10T00:00:00Z") == 400

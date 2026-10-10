@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Runs: the timeline is easier to read. It shows bars side by side, one per minute, 5 minutes or 15 minutes, each coloured by the most notable outcome in it (an error before a refusal before a dry run before OK), instead of a hairline per run.
+- Runs: a **1 h / 6 h / 24 h** switch picks how far back the timeline reaches. It sits above the filters, counts the runs per outcome, and no longer depends on how much of the list is loaded.
+
 ## 0.4.4
 
 - Inverter, EV charger and Market share one layout:

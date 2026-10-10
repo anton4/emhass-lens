@@ -37,6 +37,11 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (night): Runs timeline with dense bars and a window switch (0.4.5)
+- The owner asked for design B's bars (equal buckets, side by side) and design A's 1 h / 6 h / 24 h switch on the Runs timeline.
+- Backend: `GET /api/runs/timeline?since&until&bucket_s` (`recorder.histogram`, one GROUP BY over the indexed started_at) gives counts per job, outcome and bucket with the newest run id, so a busy day isn't cut at the list's 1000-run cap. Test in `tests/test_runs_range.py`.
+- Frontend: `lib/runLanes.ts` (`TIMELINE_WINDOWS`, `timelineBounds`, `timelineCells`), `components/RunTimeline.tsx` rewritten; the window is `?window=1h|24h` (6 h by default).
+
 ### 2026-10-10 (night): redesign "D", step 3: controller pages and price breakdown (0.4.4)
 - Inverter, EV charger and Market share the D controller layout:
   - `components/controller/ControllerHead.tsx`: title, experimental tag, an on-page mode switch that writes `inverter|charger|market.mode` through `useSetControllerMode` with a confirmation (Live names the HA automation), the explanation line and the facts row.
