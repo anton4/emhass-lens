@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
 
 - Settings → Prices → **Compare with your price sensors**: the parity check now also compares the App's import and export prices with your own Nord Pool template sensors (`raw_today` / `raw_tomorrow` / `raw_all`), slot by slot, and explains a constant difference, for example a template still on Elektrilevi Võrk 2 network rates while the App uses Võrk 4. The Health card is now called *Parity checks* and runs with or without the HACS integration.
 
