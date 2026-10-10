@@ -122,7 +122,8 @@ class PublishService:
             self.c.scheduler.run_now("inverter.decide", {"after_publish": True})
         charger = self.c.extras.get("charger")
         if charger is not None and charger.active() and ctx.params.get("chain_charger", True):
-            self.c.scheduler.run_now("charger.decide", {"trigger": "emhass_update", "after_publish": True})
+            ev = row.get("P_deferrable0") if row is not None else None
+            charger.ask_emhass_decision(float(ev) if isinstance(ev, int | float) else None, after_publish=True)
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         """The row publish-data shows now: chosen exactly the way EMHASS chooses it, so the event matches

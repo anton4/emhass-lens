@@ -65,6 +65,7 @@ class ChargerService:
         self.last_tick: dict[str, Any] | None = None
         self.last_emhass_slot: str | None = None  # the slot whose publish already triggered a decision
         self.last_deferrable_seen: str | None = None  # last_updated of the EV power sensor we reacted to
+        self.emhass_asked: tuple[str | None, int | None] | None = None  # (slot, EV power W) last asked for
         self.soc = SocTracker()
         self.expect: dict[str, Any] | None = None  # a dry-run decision waiting to be compared
         self._last_limit: float | None = None  # the current limit as last seen (dry run: spotting the automation)
@@ -478,7 +479,17 @@ class ChargerService:
         slot = iso(slot_floor(self.c.clock.now()))
         if self.last_emhass_slot == slot and self.last and self.last["inputs"].get("p_deferrable0_w") == num(state):
             return  # the decision right after the publish already used this value
-        self.c.scheduler.run_now("charger.decide", {"trigger": "emhass_update"})
+        self.ask_emhass_decision(num(state))
+
+    def ask_emhass_decision(self, ev_power_w: float | None, **params: Any) -> None:
+        """Decide on a new EV power from EMHASS, once per slot and value. The news comes twice around each publish:
+        the publish asks right after it, and EMHASS updating its EV power sensor fires a state change (sometimes
+        twice, with new timestamps), in either order; whichever comes second must not decide again."""
+        key = (iso(slot_floor(self.c.clock.now())), None if ev_power_w is None else round(ev_power_w))
+        if key == self.emhass_asked:
+            return
+        self.emhass_asked = key
+        self.c.scheduler.run_now("charger.decide", {"trigger": "emhass_update", **params})
 
     async def on_soc_state(self, entity_id: str, state: dict[str, Any] | None) -> None:
         """Start (or reset) the target-SoC clock when HA's own trigger would."""

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- EV charger: a decision no longer appears twice around each publish. Both the publish and EMHASS updating its EV power sensor asked for one, about a second apart. Now a slot gets one decision per EV power value, whichever of them arrives first; a new value still decides again at once.
 - Runs: the timeline is easier to read. It shows bars side by side, one per minute, 5 minutes or 15 minutes, each coloured by the most notable outcome in it (an error before a refusal before a dry run before OK), instead of a hairline per run.
 - Runs: a **1 h / 6 h / 24 h** switch picks how far back the timeline reaches. It sits above the filters, counts the runs per outcome, and no longer depends on how much of the list is loaded.
 

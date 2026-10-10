@@ -40,6 +40,7 @@ These come from docs/PLAN.md §10:
 ### 2026-10-10 (night): Runs timeline with dense bars and a window switch (0.4.5)
 - The owner asked for design B's bars (equal buckets, side by side) and design A's 1 h / 6 h / 24 h switch on the Runs timeline.
 - Backend: `GET /api/runs/timeline?since&until&bucket_s` (`recorder.histogram`, one GROUP BY over the indexed started_at) gives counts per job, outcome and bucket with the newest run id, so a busy day isn't cut at the list's 1000-run cap. Test in `tests/test_runs_range.py`.
+- Fix: the EV charger decided twice around a publish (the owner saw pairs of "Nothing to do" at :00:02 and :30:02). The publish chain and `on_deferrable_state` both asked, and the existing guard only worked when the publish's decision had finished first. Both now go through `ChargerService.ask_emhass_decision`, which asks once per (slot, EV power W). Test `test_one_decision_per_slot_and_ev_power_however_the_news_arrives`.
 - Frontend: `lib/runLanes.ts` (`TIMELINE_WINDOWS`, `timelineBounds`, `timelineCells`), `components/RunTimeline.tsx` rewritten; the window is `?window=1h|24h` (6 h by default).
 
 ### 2026-10-10 (night): redesign "D", step 3: controller pages and price breakdown (0.4.4)

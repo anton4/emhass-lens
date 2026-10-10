@@ -441,3 +441,28 @@ def test_something_that_keeps_changing_the_limit_stops_the_corrections(tmp_path:
         assert "charger.fighting" in {p["key"] for p in client.get("/api/problems").json()["active"]}
     finally:
         client.__exit__(None, None, None)
+
+
+def test_one_decision_per_slot_and_ev_power_however_the_news_arrives(tmp_path: Path, world: World) -> None:
+    """Around a publish the EV power arrives twice, from the publish and from EMHASS updating its sensor, in
+    either order and sometimes with a second state change; only a new value decides again."""
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock)
+    try:
+        charger = container(client).extras["charger"]
+        before = newest_id(client, "charger.decide")
+        state = {"state": "5520", "last_updated": "2026-10-09T11:13:01+00:00"}
+        client.portal.call(charger.on_deferrable_state, P_DEF, state)  # type: ignore[union-attr]
+        wait_for_run(client, "charger.decide", before)
+        # the same value again: a second state change with a new timestamp, then the publish's own request
+        client.portal.call(charger.on_deferrable_state, P_DEF, {**state, "last_updated": "2026-10-09T11:13:02+00:00"})  # type: ignore[union-attr]
+        client.portal.call(lambda: charger.ask_emhass_decision(5520.0, after_publish=True))  # type: ignore[union-attr]
+        for _ in ticks(timeout=1):
+            pass
+        runs = [r for r in client.get("/api/runs", params={"job": "charger.decide"}).json() if r["id"] > before]
+        assert len(runs) == 1, runs
+        # a different value is news
+        client.portal.call(lambda: charger.ask_emhass_decision(0.0, after_publish=True))  # type: ignore[union-attr]
+        wait_for_run(client, "charger.decide", runs[0]["id"])
+    finally:
+        client.__exit__(None, None, None)
