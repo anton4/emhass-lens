@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Plan page: the charts now reach back in time. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); **History** picks 6 h to 7 days, **Compare with** picks the plan in force or the one made 1, 6 or 24 h earlier. A new **How accurate the plan has been** card gives the error and bias per quantity over 24 h and 7 d, plus the price forecast's error against Nord Pool.
 - Settings → **Measurements**: the sensors for grid, battery, PV, house load and SOC, with a sign switch and a scale each. Measured quarter-hour means are read from Home Assistant's recorder every quarter-hour (run *Measurements*) and backfilled after a start or a change (run *Measurement history*); Health warns when a sensor is missing or nothing has been read for an hour.
