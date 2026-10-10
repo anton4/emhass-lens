@@ -15,7 +15,9 @@ from tests.test_phase2 import live_client
 from tests.world import World
 
 PLANNED = datetime(2026, 10, 9, 11, 13, 0, tzinfo=UTC)
-MISSED = datetime(2026, 10, 9, 11, 15, 5, tzinfo=UTC)  # the 14:15 slot's decision, while Home Assistant restarts
+# Home Assistant came back late in the 14:15 slot: past the grace of the slot's own publish and decision, so the
+# scheduler records those as missed instead of running them alongside the catch-up
+MISSED = datetime(2026, 10, 9, 11, 21, 5, tzinfo=UTC)
 MODE = "select.sofar_charger_use_mode"
 P_BATT = "sensor.p_batt_forecast"
 
