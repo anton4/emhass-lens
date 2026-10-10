@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from emhass_lens.core.clock import FakeClock
-from tests.test_phase1 import prime, run_job
+from tests.test_phase1 import prime, run_job, ticks
 from tests.test_phase2 import live_client
 from tests.world import TZ, World
 
@@ -120,5 +120,94 @@ def test_live_refuses_with_a_stale_plan(tmp_path: Path, world: World) -> None:
         assert run["outcome"] == "refused"
         assert "stale" in run["summary"]
         assert not [s for s in world.ha_services if s[0].startswith("number")]
+    finally:
+        client.__exit__(None, None, None)
+
+
+# --- the minute drift check ---------------------------------------------------------------------------------------
+
+SLOT_START = datetime(2026, 10, 9, 11, 15, 10, tzinfo=UTC)
+GRID = "number.sofar_passive_mode_grid_power"
+
+
+def applied(tmp_path: Path, world: World) -> tuple[TestClient, FakeClock, int]:
+    """Live, with this slot's targets written; returns the grid target."""
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+    set_mode(client, world, "live")
+    clock.set(SLOT_START)
+    assert run_job(client, "inverter.decide")["outcome"] == "ok"
+    prime(client, world)
+    inverter = client.app.state.container.extras["inverter"]  # type: ignore[attr-defined]
+    return client, clock, inverter.last_decision.targets.grid_power_w
+
+
+def drift_runs(client: TestClient) -> list[dict]:
+    """The decisions the drift check started, once none of them is still running."""
+    for _ in ticks():
+        runs = [r for r in client.get("/api/runs", params={"job": "inverter.decide"}).json() if r["trigger"] == "event"]
+        if all(r["outcome"] != "running" for r in runs):
+            return runs
+    raise AssertionError("a drift correction never finished")
+
+
+def drift_to(client: TestClient, world: World, value: float) -> None:
+    world.set_state(GRID, value)
+    prime(client, world)
+
+
+def test_a_changed_register_is_set_back_after_it_is_seen_twice(tmp_path: Path, world: World) -> None:
+    client, clock, target = applied(tmp_path, world)
+    try:
+        drift_to(client, world, target - 2600)
+        run_job(client, "inverter.verify")
+        assert drift_runs(client) == []  # just written: Home Assistant may still show the old value
+        clock.advance(150)
+        run_job(client, "inverter.verify")
+        assert drift_runs(client) == []  # seen once
+        clock.advance(60)
+        run_job(client, "inverter.verify")
+        [fixed] = drift_runs(client)
+        assert fixed["outcome"] == "ok", fixed
+        expected = f"Drift: grid power {target - 2600:g} W, expected {target} W; set back · Set "
+        assert fixed["summary"].startswith(expected)
+        assert float(world.ha_states[GRID]["state"]) == target
+        status = client.get("/api/inverter").json()["drift"]
+        assert status["enabled"] is True and status["corrections_1h"] == 1 and status["fighting"] is None
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_the_check_leaves_the_inverter_alone_when_it_isnt_ours(tmp_path: Path, world: World) -> None:
+    client, clock, target = applied(tmp_path, world)
+    try:
+        world.set_state("input_boolean.emhass_automation", "off")  # e.g. an mFRR session took the inverter
+        drift_to(client, world, target - 2600)
+        for _ in range(3):
+            clock.advance(130)
+            run_job(client, "inverter.verify")
+        assert drift_runs(client) == []
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_something_that_keeps_changing_the_inverter_stops_the_corrections(tmp_path: Path, world: World) -> None:
+    client, clock, target = applied(tmp_path, world)
+    try:
+        for _ in range(4):
+            drift_to(client, world, target - 2600)
+            clock.advance(125)
+            run_job(client, "inverter.verify")
+            clock.advance(60)
+            run_job(client, "inverter.verify")
+            drift_runs(client)  # let a correction finish before the register changes again
+            prime(client, world)
+        assert len(drift_runs(client)) == 3
+        assert float(world.ha_states[GRID]["state"]) == target - 2600  # the fourth time it was left alone
+        status = client.get("/api/inverter").json()["drift"]
+        assert status["fighting"]["field"] == "grid power" and status["fighting"]["count"] == 3
+        run_job(client, "health.evaluate")
+        assert "inverter.fighting" in {p["key"] for p in client.get("/api/problems").json()["active"]}
     finally:
         client.__exit__(None, None, None)

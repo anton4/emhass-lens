@@ -37,6 +37,10 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): kept in sync every minute (unreleased)
+- `domain/drift.py` (`DriftTracker`, `assess` → ok/settling/watch/correct/fighting: settle after own write, seen twice ≥ 30 s apart, 3 corrections per field per hour then a 1 h pause; `describe`). Inverter: job `inverter.verify` (`Periodic(60, 30)`, unrecorded) compares `sofar.observed()` with this slot's applied targets and starts `inverter.decide {"drift": …}`; also re-decides a slot refused for a transient reason. Charger: `tick_job` → `_drift_handled` when the decision targets the limit EMHASS Lens last set (`last_applied`) but the charger shows another; settle 90 s. Settings `inverter.drift_check`, `charger.drift_check` (on). Health `inverter.fighting`, `charger.fighting`; `DriftStatus` on both status endpoints and a "Kept in sync" fact on both pages.
+- **Verified:** `test_drift.py`, drift tests in `test_inverter_service.py` and `test_charger_service.py` (40 clean repeats).
+
 ### 2026-10-10 (evening): catch-up after Home Assistant comes back; header problem link (unreleased)
 - **Why:** with Home Assistant down at :15 the publish fails, the inverter decision is refused ("not connected") and nothing retried the slot, so the inverter kept the previous slot's settings for up to 15 min; a restart also drops `sensor.p_*`. A host reboot gave the same result (first fire after start is the next quarter).
 - **Done:** `services/catchup.CatchUpService` on `ha.on_connect` (live MPC, App driving, no market hold): publish with `chain_inverter/chain_charger=False` when this slot wasn't published or `sensor.p_batt_forecast` is gone, then `charger.decide` and `inverter.decide` with `catch_up`; retries every 20 s (≤ 15 tries, within the slot) while `InverterService.refusal_this_slot()` is `transient_block` (entity missing/unavailable/unknown, not connected). `InverterService.last_refusal`, `applied_this_slot()`. Header "N problems" links to `/health?focus=problems` (scrolls to `#card-problems`, titles on hover).

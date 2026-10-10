@@ -4,6 +4,7 @@
 
 - When Home Assistant comes back (a restart, a host reboot or a lost connection), EMHASS Lens catches up the current quarter-hour in live mode: it publishes again, which restores EMHASS's `sensor.p_*`, and sets the EV charger and the inverter for the slot it missed instead of waiting for the next one. It waits for the inverter's entities while Home Assistant is still starting.
 - The red problem count in the header links to Health → Problems and lists the problems on hover.
+- Kept in sync every minute (live mode): the inverter's passive-mode settings and feed-in limit, and the EV charger's current limit, are set back when something else changed them. Never right after EMHASS Lens's own write, only when the difference is seen twice, and after 3 corrections of the same setting within an hour EMHASS Lens stops for an hour and Health says something else keeps changing it. The Inverter and EV charger pages show *Kept in sync*; both can be turned off in Settings.
 
 ## 0.3.9
 

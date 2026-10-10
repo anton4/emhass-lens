@@ -252,6 +252,17 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="inverter.verify",
+            title="Inverter drift check",
+            description="Live: every minute, sets back what something else changed since this slot's write.",
+            trigger=Periodic(60, 30),
+            func=x["inverter"].verify_job,
+            record=False,
+            grace=timedelta(seconds=50),
+        )
+    )
+    s.add(
+        Job(
             id="inverter.compare",
             title="Inverter comparison",
             description="Dry run: compares the decision with what the HA automation set on the inverter.",

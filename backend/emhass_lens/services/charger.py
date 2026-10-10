@@ -31,6 +31,8 @@ from emhass_lens.domain.charger import (
     soc_stop_due,
     track_soc,
 )
+from emhass_lens.domain.drift import DriftTracker, assess
+from emhass_lens.domain.drift import describe as describe_drift
 from emhass_lens.domain.ev_reserve import (
     EvReserve,
     blocker,
@@ -66,6 +68,10 @@ class ChargerService:
         self.soc = SocTracker()
         self.expect: dict[str, Any] | None = None  # a dry-run decision waiting to be compared
         self._last_limit: float | None = None  # the current limit as last seen (dry run: spotting the automation)
+        self.last_applied: dict[str, Any] | None = None  # {target_a, at}: the limit EMHASS Lens last set (live)
+        self.drift = DriftTracker()
+        self.drift_checked_at: datetime | None = None
+        self._fight_logged = False
         self._load_profile: dict[datetime, float] = {}  # EMHASS's house load forecast, from the newest plan
         self._profile_plan: str | None = None  # generated_at of the plan the profile came from
 
@@ -219,10 +225,53 @@ class ChargerService:
             "derived": decision.derived.__dict__,
             "source": source,
         }
+        if self._drift_handled(decision, now, due):
+            return
         if decision.action == "none" or self._already_shown(decision, inputs):
             return
         trigger = "soc_limit" if decision.action == "stop_soc" else "solar_update"
         self.c.scheduler.run_now("charger.decide", {"trigger": trigger, "soc_due": due})
+
+    def _drift_handled(self, decision: ChargerDecision, now: datetime, due: bool) -> bool:
+        """Live: the minute's decision asks for the limit EMHASS Lens already set while the charger shows another,
+        so something else changed it (the car's or the charger's app, an OCPP backend). Set it back only with the
+        guards in domain/drift.py. True when this minute is handled here (corrected, or waiting)."""
+        self.drift_checked_at = now
+        last, target = self.last_applied, decision.target_current_a
+        live = self.mode == "live" and self.c.settings.current.charger.drift_check
+        if not live or last is None or target is None or target != last["target_a"]:
+            if decision.action == "none":
+                self.drift, _ = assess(self.drift, now, {}, None)  # in sync
+            return False  # nothing to judge, or a new target: the plan or the sun changed
+        observed = self.observed().current_limit_a
+        differing = {} if observed is None or abs(observed - target) < 0.5 else {"current_limit_a": (observed, target)}
+        self.drift, action = assess(self.drift, now, differing, last["at"], settle_s=90)
+        if action == "ok":
+            return False  # the limit is right; anything else (a start) goes the usual way
+        if action == "correct":
+            what = describe_drift(differing, {"current_limit_a": ("limit", "A")})
+            log.info("The charger's current limit drifted (%s); setting it back", what)
+            self.c.scheduler.run_now("charger.decide", {"trigger": "drift", "drift": what, "soc_due": due})
+        elif action == "fighting" and not self._fight_logged:
+            self._fight_logged = True
+            log.warning("Something else keeps changing the charger's current limit; EMHASS Lens stops for an hour")
+        if self.drift.fighting is None:
+            self._fight_logged = False
+        return True
+
+    def drift_status(self) -> dict[str, Any]:
+        now = self.c.clock.now()
+        fighting = self.drift.fighting
+        return {
+            "enabled": self.mode == "live" and self.c.settings.current.charger.drift_check,
+            "checked_at": iso(self.drift_checked_at),
+            "corrections_1h": self.drift.corrections_since(now - timedelta(hours=1)),
+            "fighting": (
+                {"field": "current limit", "since": iso(fighting["since"]), "count": fighting["count"]}
+                if fighting
+                else None
+            ),
+        }
 
     def _already_shown(self, decision: ChargerDecision, inputs: ChargerInputs) -> bool:
         """Don't repeat a pause every minute while the charger already shows 0 A (the automation would)."""
@@ -282,6 +331,8 @@ class ChargerService:
                 ctx.run.outcome, ctx.run.summary = "noop", f"Not in control ({blocked}); would: {what} · {facts}"
                 return
             await self.apply(ctx, decision, calls, facts)
+            if ctx.params.get("drift"):
+                ctx.run.summary = f"Drift: {ctx.params['drift']}; set back · {ctx.run.summary}"
             return
         ctx.run.artifact("charger_calls", [{**call, "ok": None, "dry_run": True} for call in calls])
         ctx.run.outcome = "dry_run"
@@ -334,6 +385,9 @@ class ChargerService:
                 done.append({**call, "ok": False, "error": str(exc)})
                 log.error("Charger call %s failed: %s", call["service"], exc)
         ctx.run.artifact("charger_calls", done)
+        limit_set = any(c["ok"] for c in done if c.get("service") == "number.set_value")
+        if limit_set and decision.target_current_a is not None:
+            self.last_applied = {"target_a": decision.target_current_a, "at": self.c.clock.now()}
         result = await self._read_back(decision)
         ctx.run.artifact("charger_readback", result)
         failed = [c for c in done if c["ok"] is False and not str(c["service"]).startswith("notify")]
@@ -554,6 +608,7 @@ class ChargerService:
         await self.refresh_load_profile()
         reserve = self.pv_reserve(self.c.clock.now(), self.c.extras["pv"].current())
         return {
+            "drift": self.drift_status(),
             "mode": self.mode,
             "charge_mode": self.charge_mode_info(),
             "pv_reserve": reserve.summary() if reserve is not None else None,

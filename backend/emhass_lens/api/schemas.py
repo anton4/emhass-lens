@@ -783,7 +783,17 @@ class Agreement(BaseModel):
     rate: float | None
 
 
+class DriftStatus(BaseModel):
+    """The minute check that sets back what something else changed."""
+
+    enabled: bool
+    checked_at: str | None = None
+    corrections_1h: int = 0
+    fighting: dict[str, Any] | None = None  # {field, since, count} while corrections are paused
+
+
 class InverterStatus(BaseModel):
+    drift: DriftStatus | None = None
     mode: str
     last: dict[str, Any] | None
     last_compare: dict[str, Any] | None
@@ -854,6 +864,7 @@ class ChargeModeRequest(BaseModel):
 
 
 class ChargerStatus(BaseModel):
+    drift: DriftStatus | None = None
     mode: str
     charge_mode: ChargeModeInfo | None = None
     pv_reserve: EvReserveOut | None = None

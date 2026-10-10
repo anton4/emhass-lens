@@ -905,6 +905,14 @@ class Inverter(Section):
         title="Compare with the automation at",
         json_schema_extra=ui(unit="s", widget="quarter_offset"),
     )
+    drift_check: bool = Field(
+        default=True,
+        title="Check every minute and set back what drifted",
+        description="Live mode: every minute, compare the inverter's passive-mode settings and feed-in limit with "
+        "what EMHASS Lens set for this slot, and set back what something else changed. Not within 2 minutes after "
+        "EMHASS Lens's own write, only when the difference is seen twice in a row, and after 3 corrections of the same "
+        "setting within an hour it stops for an hour and Health says something else keeps changing it.",
+    )
     entities: InverterEntities = Field(
         default=InverterEntities(), title="Inverter entities", json_schema_extra=ui(advanced=True)
     )
@@ -1093,6 +1101,14 @@ class Charger(Section):
         title="EMHASS mode fallback at (seconds into each quarter)",
         description="Normally the decision follows the publish; this is the fallback.",
         json_schema_extra=ui(unit="s", widget="quarter_offset", advanced=True),
+    )
+    drift_check: bool = Field(
+        default=True,
+        title="Set back a current limit something else changed",
+        description="Live mode: when the charger shows another current limit than EMHASS Lens set and nothing new "
+        "was decided (the car's or the charger's app, an OCPP backend), set it back. Not within 90 s after EMHASS "
+        "Lens's own write, only when seen twice in a row, and after 3 corrections within an hour it stops for an hour "
+        "and Health says something else keeps changing it.",
     )
     entities: ChargerEntities = Field(
         default=ChargerEntities(), title="Charger entities", json_schema_extra=ui(advanced=True)

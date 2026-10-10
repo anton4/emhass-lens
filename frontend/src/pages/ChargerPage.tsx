@@ -18,6 +18,7 @@ import {
   type ChargerTick,
   type SocClock,
 } from '../lib/charger'
+import { driftText } from '../lib/drift'
 import { evReserveText } from '../lib/evReserve'
 import { formatTime } from '../lib/format'
 import { formatAgreement } from '../lib/inverter'
@@ -34,6 +35,7 @@ export function ChargerPage() {
   const navigate = useNavigate()
   const data = charger.data
   const tz = status.data?.timezone
+  const drift = driftText(data?.drift, new Date(), tz)
   const writable = status.data?.writable ?? false
   const mode = chargerModeSpec(data?.mode)
   const last = (data?.last ?? null) as ChargerLast | null
@@ -122,6 +124,13 @@ export function ChargerPage() {
                   <LabelledLamp color="green" text="EMHASS Lens is in control" />
                 )}
                 {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
+              </dd>
+            </div>
+            <div>
+              <dt>Kept in sync</dt>
+              <dd>
+                <LabelledLamp color={drift.color} text={drift.text} />
+                {drift.detail && <div className="cell-sub">{drift.detail}</div>}
               </dd>
             </div>
             <div>

@@ -5,6 +5,7 @@ import { AgreeHeadline, CompareTable, DecisionView, RulesExplainer } from '../co
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
+import { driftText } from '../lib/drift'
 import { formatSlot } from '../lib/format'
 import {
   formatAgreement,
@@ -27,6 +28,7 @@ export function InverterPage() {
   const navigate = useNavigate()
   const data = inverter.data
   const tz = status.data?.timezone
+  const drift = driftText(data?.drift, new Date(), tz)
   const writable = status.data?.writable ?? false
   const mode = inverterModeSpec(data?.mode)
   const last = (data?.last ?? null) as InverterLast | null
@@ -91,6 +93,13 @@ export function InverterPage() {
                   <LabelledLamp color="green" text="EMHASS Lens is in control" />
                 )}
                 {data?.preconditions && <div className="cell-sub">{data.preconditions}</div>}
+              </dd>
+            </div>
+            <div>
+              <dt>Kept in sync</dt>
+              <dd>
+                <LabelledLamp color={drift.color} text={drift.text} />
+                {drift.detail && <div className="cell-sub">{drift.detail}</div>}
               </dd>
             </div>
             <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} />

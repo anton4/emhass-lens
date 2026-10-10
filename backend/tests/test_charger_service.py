@@ -360,3 +360,84 @@ def test_without_the_setting_nothing_is_reserved_or_reported(tmp_path: Path, wor
         assert client.post("/api/mpc/preview").json()["ev_reserve"] is None
     finally:
         client.__exit__(None, None, None)
+
+
+# --- a current limit something else changed --------------------------------------------------------------------
+
+EARLY = datetime(2026, 10, 9, 11, 0, 30, tzinfo=UTC)  # early in the slot whose EV power was published
+
+
+def charging_at_plan(tmp_path: Path, world: World) -> tuple[TestClient, FakeClock]:
+    """Live, EMHASS mode: EMHASS Lens started the car at the planned 8 A and it is charging."""
+    clock = FakeClock(EARLY)
+    client = client_for(tmp_path, world, clock, mode="live")
+    started = run_job(client, "charger.decide")
+    assert started["outcome"] == "ok" and "limit 8 A" in started["summary"], started
+    world.set_state(STATE, 4)
+    prime(client, world)
+    return client, clock
+
+
+def decisions(client: TestClient, after_id: int) -> list[dict]:
+    for _ in ticks():
+        runs = [r for r in client.get("/api/runs", params={"job": "charger.decide"}).json() if r["id"] > after_id]
+        if all(r["outcome"] != "running" for r in runs):
+            return runs
+    raise AssertionError("a charger decision never finished")
+
+
+def test_a_limit_changed_by_someone_else_is_set_back_after_it_is_seen_twice(tmp_path: Path, world: World) -> None:
+    client, clock = charging_at_plan(tmp_path, world)
+    try:
+        before = newest_id(client, "charger.decide")
+        world.set_state(LIMIT, 16)  # the car's app
+        prime(client, world)
+        run_job(client, "charger.tick")
+        assert decisions(client, before) == []  # 90 s settle after our own write
+        clock.advance(100)
+        run_job(client, "charger.tick")
+        assert decisions(client, before) == []  # seen once
+        clock.advance(60)
+        run_job(client, "charger.tick")
+        [fixed] = decisions(client, before)
+        assert fixed["outcome"] == "ok", fixed
+        assert fixed["summary"].startswith("Drift: limit 16 A, expected 8 A; set back · Did 'EMHASS: adjust")
+        assert float(world.ha_states[LIMIT]["state"]) == 8
+        assert client.get("/api/charger").json()["drift"]["corrections_1h"] == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_new_plan_value_applies_at_once_without_the_drift_guard(tmp_path: Path, world: World) -> None:
+    client, _clock = charging_at_plan(tmp_path, world)
+    try:
+        before = newest_id(client, "charger.decide")
+        world.set_state(P_DEF, 7590, updated=EARLY)  # the plan now asks 11 A
+        prime(client, world)
+        run_job(client, "charger.tick")
+        [adjusted] = decisions(client, before)
+        assert adjusted["summary"].startswith("Did 'EMHASS: adjust the current' (emhass_adjust): limit 11 A")
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_something_that_keeps_changing_the_limit_stops_the_corrections(tmp_path: Path, world: World) -> None:
+    client, clock = charging_at_plan(tmp_path, world)
+    try:
+        before = newest_id(client, "charger.decide")
+        for _ in range(4):
+            world.set_state(LIMIT, 16)
+            prime(client, world)
+            clock.advance(95)
+            run_job(client, "charger.tick")
+            clock.advance(60)
+            run_job(client, "charger.tick")
+            decisions(client, before)
+            prime(client, world)
+        assert len(decisions(client, before)) == 3
+        assert float(world.ha_states[LIMIT]["state"]) == 16
+        assert client.get("/api/charger").json()["drift"]["fighting"]["field"] == "current limit"
+        run_job(client, "health.evaluate")
+        assert "charger.fighting" in {p["key"] for p in client.get("/api/problems").json()["active"]}
+    finally:
+        client.__exit__(None, None, None)

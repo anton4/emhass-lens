@@ -301,6 +301,12 @@
               "widget": "quarter_offset"
             }
           },
+          "drift_check": {
+            "default": true,
+            "description": "Live mode: when the charger shows another current limit than EMHASS Lens set and nothing new was decided (the car's or the charger's app, an OCPP backend), set it back. Not within 90 s after EMHASS Lens's own write, only when seen twice in a row, and after 3 corrections within an hour it stops for an hour and Health says something else keeps changing it.",
+            "title": "Set back a current limit something else changed",
+            "type": "boolean"
+          },
           "entities": {
             "$ref": "#/components/schemas/ChargerEntities",
             "default": {
@@ -655,6 +661,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ChargeModeInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DriftStatus"
               },
               {
                 "type": "null"
@@ -1525,6 +1541,48 @@
           "ok"
         ],
         "title": "DiscoveryAttempt",
+        "type": "object"
+      },
+      "DriftStatus": {
+        "description": "The minute check that sets back what something else changed.",
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "corrections_1h": {
+            "default": 0,
+            "title": "Corrections 1H",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fighting": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fighting"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "DriftStatus",
         "type": "object"
       },
       "DriverRequest": {
@@ -3232,6 +3290,12 @@
               "widget": "quarter_offset"
             }
           },
+          "drift_check": {
+            "default": true,
+            "description": "Live mode: every minute, compare the inverter's passive-mode settings and feed-in limit with what EMHASS Lens set for this slot, and set back what something else changed. Not within 2 minutes after EMHASS Lens's own write, only when the difference is seen twice in a row, and after 3 corrections of the same setting within an hour it stops for an hour and Health says something else keeps changing it.",
+            "title": "Check every minute and set back what drifted",
+            "type": "boolean"
+          },
           "entities": {
             "$ref": "#/components/schemas/InverterEntities",
             "default": {
@@ -3498,6 +3562,16 @@
           },
           "agreement_7d": {
             "$ref": "#/components/schemas/Agreement"
+          },
+          "drift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DriftStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "last": {
             "anyOf": [
@@ -7236,6 +7310,7 @@
             "$ref": "#/components/schemas/Charger",
             "default": {
               "decide_offset_s": 8,
+              "drift_check": true,
               "entities": {
                 "automation": "",
                 "car_soc_sensor": "sensor.model_3_usable_battery_level",
@@ -7388,6 +7463,7 @@
             "default": {
               "compare_offset_s": 45,
               "decide_offset_s": 5,
+              "drift_check": true,
               "entities": {
                 "apply_button": "button.sofar_passive_mode_battery_charge_discharge",
                 "battery_max_number": "number.sofar_passive_mode_battery_power_max",

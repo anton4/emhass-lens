@@ -1121,6 +1121,12 @@ export interface components {
              */
             decide_offset_s: number;
             /**
+             * Set back a current limit something else changed
+             * @description Live mode: when the charger shows another current limit than EMHASS Lens set and nothing new was decided (the car's or the charger's app, an OCPP backend), set it back. Not within 90 s after EMHASS Lens's own write, only when seen twice in a row, and after 3 corrections within an hour it stops for an hour and Health says something else keeps changing it.
+             * @default true
+             */
+            drift_check: boolean;
+            /**
              * Charger entities
              * @default {
              *       "automation": "",
@@ -1320,6 +1326,7 @@ export interface components {
             agreement_24h: components["schemas"]["Agreement"];
             agreement_7d: components["schemas"]["Agreement"];
             charge_mode?: components["schemas"]["ChargeModeInfo"] | null;
+            drift?: components["schemas"]["DriftStatus"] | null;
             /** Last */
             last: {
                 [key: string]: unknown;
@@ -1604,6 +1611,25 @@ export interface components {
             url: string;
             /** Version */
             version?: string | null;
+        };
+        /**
+         * DriftStatus
+         * @description The minute check that sets back what something else changed.
+         */
+        DriftStatus: {
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Corrections 1H
+             * @default 0
+             */
+            corrections_1h: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Fighting */
+            fighting?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** DriverRequest */
         DriverRequest: {
@@ -2274,6 +2300,12 @@ export interface components {
              */
             decide_offset_s: number;
             /**
+             * Check every minute and set back what drifted
+             * @description Live mode: every minute, compare the inverter's passive-mode settings and feed-in limit with what EMHASS Lens set for this slot, and set back what something else changed. Not within 2 minutes after EMHASS Lens's own write, only when the difference is seen twice in a row, and after 3 corrections of the same setting within an hour it stops for an hour and Health says something else keeps changing it.
+             * @default true
+             */
+            drift_check: boolean;
+            /**
              * Inverter entities
              * @default {
              *       "apply_button": "button.sofar_passive_mode_battery_charge_discharge",
@@ -2420,6 +2452,7 @@ export interface components {
         InverterStatus: {
             agreement_24h: components["schemas"]["Agreement"];
             agreement_7d: components["schemas"]["Agreement"];
+            drift?: components["schemas"]["DriftStatus"] | null;
             /** Last */
             last: {
                 [key: string]: unknown;
@@ -3809,6 +3842,7 @@ export interface components {
              * EV charger control (experimental)
              * @default {
              *       "decide_offset_s": 8,
+             *       "drift_check": true,
              *       "entities": {
              *         "automation": "",
              *         "car_soc_sensor": "sensor.model_3_usable_battery_level",
@@ -3961,6 +3995,7 @@ export interface components {
              * @default {
              *       "compare_offset_s": 45,
              *       "decide_offset_s": 5,
+             *       "drift_check": true,
              *       "entities": {
              *         "apply_button": "button.sofar_passive_mode_battery_charge_discharge",
              *         "battery_max_number": "number.sofar_passive_mode_battery_power_max",

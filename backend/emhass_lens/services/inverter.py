@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.inverter import Decision, Observed, PlanValues, compare, decide
+from emhass_lens.domain.drift import DriftTracker, assess
+from emhass_lens.domain.drift import describe as describe_drift
+from emhass_lens.domain.inverter import Decision, Observed, PlanValues, compare, compare_targets, decide
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.ha_values import num as _num
@@ -42,6 +44,9 @@ class InverterService:
         self.last_compare: dict[str, Any] | None = None
         self.last_apply: dict[str, Any] | None = None  # {slot, run_id, ok, wrote}: the newest live write
         self.last_refusal: dict[str, Any] | None = None  # {slot, why}: the newest live decision that wasn't applied
+        self.drift = DriftTracker()
+        self.drift_checked_at: datetime | None = None
+        self._fight_logged = False
 
     @property
     def mode(self) -> str:
@@ -164,6 +169,8 @@ class InverterService:
             raise RunRefused(f"{exc}{catch_up}") from exc
         if catch_up and ctx.run.summary:
             ctx.run.summary += catch_up
+        if ctx.params.get("drift"):
+            ctx.run.summary = f"Drift: {ctx.params['drift']}; set back · {ctx.run.summary}"
 
     async def apply(self, ctx: JobContext, decision: Decision, now: datetime) -> None:
         assert ctx.run is not None
@@ -234,8 +241,59 @@ class InverterService:
             "rate": (counts.get("ok", 0) / total) if total else None,
         }
 
+    # --- every minute: what drifted since this slot's write ---------------------------------------------------
+    async def verify_job(self, ctx: JobContext) -> None:
+        """Compare the registers with this slot's applied targets and set back what something else changed (with the
+        guards in domain/drift.py); re-decide a slot whose decision was refused for a passing reason."""
+        if self.mode != "live" or not self.c.settings.current.inverter.drift_check:
+            return
+        now = self.c.clock.now()
+        self.drift_checked_at = now
+        if not self.c.extras["ha"].connected or self.preconditions():
+            return  # not ours to correct: a market session, another inverter mode, the enable switch off
+        if self.applied_this_slot() and self.last_decision is not None:
+            result = compare_targets(self.last_decision.targets, self.last_decision.feedin_max_w, self.observed())
+            differing = {
+                r["field"]: (r["observed"], r["decided"])
+                for r in result["fields"]
+                if not r["same"] and r["observed"] is not None  # an entity that can't be read isn't drift
+            }
+            writer = self.c.extras["sofar"]
+            last_write = max(writer.last_commit.values(), default=None)
+            self.drift, action = assess(self.drift, now, differing, last_write)
+            if action == "correct":
+                what = describe_drift(differing, DRIFT_LABELS)
+                log.info("The inverter drifted (%s); setting it back", what)
+                self.c.scheduler.run_now("inverter.decide", {"drift": what}, trigger="event")
+            elif action == "fighting" and not self._fight_logged:
+                self._fight_logged = True
+                log.warning(
+                    "Something else keeps changing the inverter's %s; EMHASS Lens stops correcting it for an hour",
+                    _field_name((self.drift.fighting or {}).get("field")),
+                )
+            if self.drift.fighting is None:
+                self._fight_logged = False
+            return
+        if transient_block(self.refusal_this_slot()):
+            self.c.scheduler.run_now("inverter.decide", {"catch_up": True}, trigger="event")
+
+    def drift_status(self) -> dict[str, Any]:
+        now = self.c.clock.now()
+        fighting = self.drift.fighting
+        return {
+            "enabled": self.mode == "live" and self.c.settings.current.inverter.drift_check,
+            "checked_at": iso(self.drift_checked_at),
+            "corrections_1h": self.drift.corrections_since(now - timedelta(hours=1)),
+            "fighting": (
+                {"field": _field_name(fighting["field"]), "since": iso(fighting["since"]), "count": fighting["count"]}
+                if fighting
+                else None
+            ),
+        }
+
     async def status(self) -> dict[str, Any]:
         return {
+            "drift": self.drift_status(),
             "mode": self.mode,
             "last": self.last,
             "last_compare": self.last_compare,
@@ -254,6 +312,19 @@ def describe(decision: Decision) -> str:
         f"'{t.state}' (rule {decision.rule}): grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W, "
         f"{feed}"
     )
+
+
+DRIFT_LABELS = {
+    "state": ("passive state", ""),
+    "grid_power_w": ("grid power", "W"),
+    "battery_max_w": ("battery max", "W"),
+    "battery_min_w": ("battery min", "W"),
+    "feedin_max_w": ("feed-in limit", "W"),
+}
+
+
+def _field_name(field: str | None) -> str:
+    return DRIFT_LABELS.get(field or "", (field or "settings", ""))[0]
 
 
 TRANSIENT = ("not found", "'unavailable'", "'unknown'", "Not connected to Home Assistant")

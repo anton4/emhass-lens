@@ -312,6 +312,29 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 "#/health",
             )
         )
+    for key, service, what, causes in (
+        ("inverter.fighting", x.get("inverter"), "the inverter's", "an automation, the Sofar app or a script"),
+        (
+            "charger.fighting",
+            x.get("charger"),
+            "the EV charger's",
+            "the car's or the charger's app, or an OCPP backend",
+        ),
+    ):
+        fight = service.drift_status().get("fighting") if service is not None else None
+        if fight:
+            out.append(
+                Problem(
+                    key,
+                    "warning",
+                    f"Something else keeps changing {what} {fight['field']}",
+                    f"EMHASS Lens set it back {fight['count']} times within an hour, and it changed again each time "
+                    f"({causes}?). It stops correcting for an hour, so the two don't keep wearing the device.",
+                    "Find what else writes it and turn that off; the inverter page lists button presses not made by "
+                    "EMHASS Lens.",
+                    "#/inverter" if key.startswith("inverter") else "#/charger",
+                )
+            )
     costfun = x.get("costfun")
     left = costfun.leftover if costfun is not None else None
     if left:
