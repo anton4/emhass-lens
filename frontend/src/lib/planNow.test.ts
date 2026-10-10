@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NowQuantity } from '../api/types'
-import { byKey, chargerText, inverterParts, measuredText, measuredTitle } from './planNow'
+import { byKey, chargerText, expectedText, inverterParts, measuredText, measuredTitle } from './planNow'
 
-const q = (key: string, measured: number | null, extra: Partial<NowQuantity> = {}): NowQuantity => ({ key, measured, ...extra })
+const q = (key: string, measured: number | null, extra: Partial<NowQuantity> = {}): NowQuantity => ({ key, measured, sign_hint: false, ...extra })
 
 describe('this slot, measured now', () => {
   it('words the measured value like the plan tile', () => {
@@ -15,6 +15,10 @@ describe('this slot, measured now', () => {
     expect(measuredText(undefined)).toBeNull()
     expect(measuredTitle(q('batt', 1, { entity: 'sensor.batt', age_s: 20 }))).toBe('sensor.batt, 20 s old')
     expect(byKey([q('grid', 1), q('soc', 0.5)]).soc?.measured).toBe(0.5)
+    const batt = q('batt', 720, { expected: 744, entity: 'sensor.batt', age_s: 20 })
+    expect(expectedText(batt)).toBe('expected 744 W discharging with the house load and PV now')
+    expect(measuredTitle(batt)).toBe('expected 744 W discharging with the house load and PV now · sensor.batt, 20 s old')
+    expect(expectedText(q('grid', 1, { expected: 5 }))).toBeNull()
   })
 
   it('lists what the inverter is set to and what the charger does', () => {

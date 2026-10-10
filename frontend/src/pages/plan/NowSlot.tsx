@@ -78,13 +78,21 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
             )}
           </div>
         )}
+        {!next && measured.batt?.sign_hint && (
+          <div className="notice" data-color="amber" role="note">
+            The battery runs the other way than expected. If your battery sensor counts charging as positive, tick{' '}
+            <strong>Opposite sign</strong> under{' '}
+            <Link to="/settings?section=measurements">Settings → Measurements → Battery power</Link>.
+          </div>
+        )}
         {!next && row && (
           <p className="chart-note">
             {anyMeasured ? (
               <>
                 “now” comes from the sensors under <Link to="/settings?section=measurements">Settings → Measurements</Link>
-                . An amber mark means it differs from the plan by more than 300 W and 15 % (SoC: 2 points from where the
-                plan expects it now).
+                . House load and PV are forecasts and aren't judged. The battery is compared with what the plan means for
+                the load and PV now, the grid with the plan; an amber mark means a difference of more than 300 W and 15 %
+                (SoC: 2 points from where the plan expects it now).
               </>
             ) : (
               <>

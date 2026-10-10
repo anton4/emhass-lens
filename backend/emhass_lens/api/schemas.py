@@ -412,11 +412,12 @@ class PlanResponse(BaseModel):
 class NowQuantity(BaseModel):
     key: str  # batt | grid | pv | load | soc
     plan: float | None = None
-    expected: float | None = None  # soc: where the plan expects it at this moment of the slot
+    expected: float | None = None  # battery: the plan for the load and PV now; soc: where it should be now
     measured: float | None = None
     entity: str | None = None
     age_s: float | None = None
-    differs: bool | None = None  # None when either side is unknown
+    differs: bool | None = None  # None when either side is unknown, or for a forecast (house load, PV)
+    sign_hint: bool = False  # battery: measured and expected run opposite ways (a sensor with the other sign?)
 
 
 class InverterNow(BaseModel):

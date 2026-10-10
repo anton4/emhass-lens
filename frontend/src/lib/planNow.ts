@@ -21,11 +21,18 @@ export function measuredText(q: NowQuantity | undefined): string | null {
   return `now ${formatPower(v)}`
 }
 
-/** Hover text: which sensor and how old its value is. */
+/** "expected 744 W discharging with the house load and PV now" for the battery; null otherwise. */
+export function expectedText(q: NowQuantity | undefined): string | null {
+  if (!q || q.key !== 'batt' || !isNumber(q.expected)) return null
+  return `expected ${formatPower(Math.abs(q.expected))} ${batteryDirection(q.expected).toLowerCase()} with the house load and PV now`
+}
+
+/** Hover text: what the battery is expected to do, which sensor, and how old its value is. */
 export function measuredTitle(q: NowQuantity | undefined): string | undefined {
   if (!q?.entity) return undefined
   const age = isNumber(q.age_s) ? `, ${q.age_s < 90 ? `${Math.round(q.age_s)} s` : `${Math.round(q.age_s / 60)} min`} old` : ''
-  return `${q.entity}${age}`
+  const expected = expectedText(q)
+  return `${expected ? `${expected} · ` : ''}${q.entity}${age}`
 }
 
 /** The pieces of the "Inverter set to" strip. */

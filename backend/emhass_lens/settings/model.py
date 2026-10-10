@@ -592,7 +592,8 @@ class Measurements(Section):
     battery: MeasuredPower = Field(
         default=MeasuredPower(),
         title="Battery power, W (+ discharge, − charge, like EMHASS's P_batt)",
-        description="The battery's power in watts; for a sensor that counts charging as positive, tick Opposite sign.",
+        description="The battery's power in watts. EMHASS counts discharging as positive; most inverter sensors count "
+        "charging as positive (Sofar's too), so tick Opposite sign for those.",
     )
     pv: MeasuredPower = Field(
         default=MeasuredPower(entity="sensor.sofar_pv_power_total_watt"),

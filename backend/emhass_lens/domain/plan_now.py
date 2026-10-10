@@ -69,25 +69,73 @@ def soc_expected(start: float | None, end: float | None, fraction: float) -> flo
     return start + (end - start) * min(1.0, max(0.0, fraction))
 
 
+def deferrable_of(row: dict[str, Any]) -> float | None:
+    """The plan's deferrable loads together (P_deferrable0, P_deferrable1, ...)."""
+    values = [_num(v) for k, v in row.items() if k.startswith("P_deferrable")]
+    known = [v for v in values if v is not None]
+    return sum(known) if known else None
+
+
+def battery_expected(row: dict[str, Any], measured: dict[str, Reading], deferrable_now: float | None) -> float | None:
+    """What the plan means for the battery with the house load, PV and deferrable loads as they are now. With a grid
+    target the inverter holds the grid and the battery covers the rest (P_PV + P_batt + P_grid = P_Load + P_def), so
+    the battery follows every difference between the forecasts and reality."""
+    planned = _num(row.get(COLUMNS["batt"]))
+    if planned is None:
+        return None
+    expected = planned
+    load_now = (measured.get("load") or Reading(None, None, None)).value
+    pv_now = (measured.get("pv") or Reading(None, None, None)).value
+    load_plan, pv_plan, def_plan = _num(row.get(COLUMNS["load"])), _num(row.get(COLUMNS["pv"])), deferrable_of(row)
+    if load_now is not None and load_plan is not None:
+        expected += load_now - load_plan
+    if pv_now is not None and pv_plan is not None:
+        expected -= pv_now - pv_plan
+    if deferrable_now is not None and def_plan is not None:
+        expected += deferrable_now - def_plan
+    return expected
+
+
 def compare(
-    row: dict[str, Any], prev_row: dict[str, Any] | None, measured: dict[str, Reading], fraction: float
+    row: dict[str, Any],
+    prev_row: dict[str, Any] | None,
+    measured: dict[str, Reading],
+    fraction: float,
+    deferrable_now: float | None = None,
 ) -> list[dict[str, Any]]:
-    """Plan against measured, per quantity: {key, plan, measured, entity, age_s, differs}. `differs` is None when
-    either side is unknown; EMHASS's signs (battery + discharge, grid + import)."""
+    """Plan against measured, per quantity: {key, plan, expected, measured, entity, age_s, differs, sign_hint}.
+
+    Only what the inverter controls is judged: the grid against the plan, the battery against what the plan means
+    for the load and PV now, the SoC against where the plan expects it. House load and PV are forecasts: shown, never
+    judged (`differs` None). EMHASS's signs (battery + discharge, grid + import)."""
     out: list[dict[str, Any]] = []
     for key, column in COLUMNS.items():
         plan = _num(row.get(column))
         reading = measured.get(key) or Reading(None, None, None)
-        out.append(
-            {
-                "key": key,
-                "plan": plan,
-                "measured": reading.value,
-                "entity": reading.entity,
-                "age_s": reading.age_s,
-                "differs": power_differs(plan, reading.value),
-            }
-        )
+        entry: dict[str, Any] = {
+            "key": key,
+            "plan": plan,
+            "expected": None,
+            "measured": reading.value,
+            "entity": reading.entity,
+            "age_s": reading.age_s,
+            "differs": None,
+            "sign_hint": False,
+        }
+        if key == "grid":
+            entry["differs"] = power_differs(plan, reading.value)
+        elif key == "batt":
+            expected = battery_expected(row, measured, deferrable_now)
+            entry["expected"] = expected
+            entry["differs"] = power_differs(expected, reading.value)
+            entry["sign_hint"] = bool(
+                expected is not None
+                and reading.value is not None
+                and abs(expected) >= POWER_W
+                and abs(reading.value) >= POWER_W
+                and (expected > 0) != (reading.value > 0)
+            )
+        out.append(entry)
     end = soc_of(row)
     reading = measured.get("soc") or Reading(None, None, None)
     expected = soc_expected(soc_of(prev_row), end, fraction)
@@ -101,6 +149,7 @@ def compare(
             "entity": reading.entity,
             "age_s": reading.age_s,
             "differs": differs,
+            "sign_hint": False,
         }
     )
     return out

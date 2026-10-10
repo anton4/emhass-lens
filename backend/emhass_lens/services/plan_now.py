@@ -70,6 +70,19 @@ def charger_now(c: Container) -> dict[str, Any] | None:
     return {"current_limit_a": observed.current_limit_a, "state_raw": observed.state_raw}
 
 
+def deferrable_now(c: Container) -> float | None:
+    """The EV charger's power now (its current limit while charging), or None when the controller is off."""
+    charger = c.extras.get("charger")
+    if charger is None or charger.mode == "off":
+        return None
+    observed = charger.observed()
+    if observed.state_raw is None or observed.state_raw < 0:
+        return None
+    if observed.state_raw != 4:
+        return 0.0
+    return (observed.current_limit_a or 0.0) * charger.limits.w_per_amp
+
+
 async def plan_now(c: Container) -> dict[str, Any]:
     now = c.clock.now()
     slot = slot_floor(now)
@@ -100,6 +113,6 @@ async def plan_now(c: Container) -> dict[str, Any]:
         row=row,
         plan_generated_at=plan.get("generated_at"),
         plan_run_id=plan.get("run_id"),
-        quantities=compare(row, prev_row, measured_now(c), fraction),
+        quantities=compare(row, prev_row, measured_now(c), fraction, deferrable_now(c)),
     )
     return out

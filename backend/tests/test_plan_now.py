@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from emhass_lens.core.clock import FakeClock
-from emhass_lens.domain.plan_now import Reading, compare, power_differs, row_for, soc_expected
+from emhass_lens.domain.plan_now import Reading, battery_expected, compare, power_differs, row_for, soc_expected
 from tests.test_inverter_service import set_mode
 from tests.test_inverter_service import world as inverter_world  # noqa: F401  (fixture)
 from tests.test_phase1 import prime, run_job
@@ -62,9 +62,34 @@ def test_compare_lists_every_quantity_with_its_reading() -> None:
         "soc": Reading(0.923, "sensor.soc", 60.0),
     }
     got = {q["key"]: q for q in compare(row, prev, measured, fraction=0.1)}
-    assert [got[k]["differs"] for k in ("batt", "grid", "pv", "load", "soc")] == [True, True, False, None, False]
+    # house load and PV are forecasts: shown, not judged
+    assert [got[k]["differs"] for k in ("batt", "grid", "pv", "load", "soc")] == [True, True, None, None, False]
     assert got["batt"]["entity"] == "sensor.batt" and got["batt"]["age_s"] == 20.0
     assert got["soc"]["plan"] == 0.92 and round(got["soc"]["expected"], 4) == 0.9236
+
+
+def test_the_battery_is_judged_against_the_plan_for_the_load_and_pv_now() -> None:
+    """The owner's 18:15 slot: plan 1.57 kW discharge for a 1.54 kW house load; the house used 698 W."""
+    row = {"P_batt": 1570.0, "P_grid": 0.0, "P_PV": 16.0, "P_Load": 1540.0, "P_deferrable0": 0.0, "SOC_opt": 0.904}
+
+    def measured(batt: float) -> dict[str, Reading]:
+        return {
+            "batt": Reading(batt, "sensor.batt", 20.0),
+            "grid": Reading(34.0, "sensor.grid", 20.0),
+            "pv": Reading(0.0, "sensor.pv", 8.0),
+            "load": Reading(698.0, "sensor.load", 8.0),
+            "soc": Reading(0.91, "sensor.soc", 60.0),
+        }
+
+    right = {q["key"]: q for q in compare(row, None, measured(720.0), 0.5)}
+    assert right["batt"]["expected"] == 1570 - (1540 - 698) + 16  # 744 W
+    assert right["batt"]["differs"] is False and right["batt"]["sign_hint"] is False
+    assert right["load"]["differs"] is None and right["pv"]["differs"] is None
+    wrong_sign = {q["key"]: q for q in compare(row, None, measured(-720.0), 0.5)}
+    assert wrong_sign["batt"]["differs"] is True and wrong_sign["batt"]["sign_hint"] is True
+    # the EV charges 5.5 kW the plan didn't have: the battery is expected to cover that too
+    assert battery_expected(row, measured(0.0), deferrable_now=5520.0) == 744 + 5520
+    assert battery_expected(row, {}, None) == 1570  # nothing measured: the plan as it is
 
 
 def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(

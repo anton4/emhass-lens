@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Plan page, This slot: house load and PV are shown but no longer judged (they are forecasts). The battery is judged against what the plan means for the house load, PV and EV charging now, so a house using less than forecast no longer marks the battery amber. When the battery runs the other way than expected, the card points to *Opposite sign* for the battery sensor.
+
 ## 0.3.14
 
 - MQTT: Health no longer warns while the first connection is being made (after a start or after switching MQTT entities on); after 2 minutes without a broker it says why (no Mosquitto broker App, login refused, broker unreachable), and the log line carries that reason too.

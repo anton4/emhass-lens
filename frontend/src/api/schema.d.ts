@@ -2939,7 +2939,7 @@ export interface components {
             backfill_days: number;
             /**
              * Battery power, W (+ discharge, − charge, like EMHASS's P_batt)
-             * @description The battery's power in watts; for a sensor that counts charging as positive, tick Opposite sign.
+             * @description The battery's power in watts. EMHASS counts discharging as positive; most inverter sensors count charging as positive (Sofar's too), so tick Opposite sign for those.
              * @default {
              *       "entity": "",
              *       "invert": false,
@@ -3222,6 +3222,11 @@ export interface components {
             measured?: number | null;
             /** Plan */
             plan?: number | null;
+            /**
+             * Sign Hint
+             * @default false
+             */
+            sign_hint: boolean;
         };
         /** Outputs */
         Outputs: {

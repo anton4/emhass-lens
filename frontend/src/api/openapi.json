@@ -4851,7 +4851,7 @@
               "invert": false,
               "scale": 1.0
             },
-            "description": "The battery's power in watts; for a sensor that counts charging as positive, tick Opposite sign.",
+            "description": "The battery's power in watts. EMHASS counts discharging as positive; most inverter sensors count charging as positive (Sofar's too), so tick Opposite sign for those.",
             "title": "Battery power, W (+ discharge, − charge, like EMHASS's P_batt)"
           },
           "grid": {
@@ -5541,6 +5541,11 @@
               }
             ],
             "title": "Plan"
+          },
+          "sign_hint": {
+            "default": false,
+            "title": "Sign Hint",
+            "type": "boolean"
           }
         },
         "required": [
