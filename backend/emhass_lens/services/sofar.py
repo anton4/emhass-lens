@@ -305,7 +305,7 @@ class SofarWriter:
         }
 
     def prune(self, now: datetime) -> int:
-        cut = iso(now - timedelta(days=self.c.settings.current.logging.retention.runs_days))
+        cut = iso(now - timedelta(days=self.c.settings.current.storage.retention.runs_days))
         n = self.c.app_db.execute("DELETE FROM sofar_press WHERE at < ?", (cut,)).rowcount
         n += self.c.app_db.execute("DELETE FROM sofar_commit WHERE at < ?", (cut,)).rowcount
         return n

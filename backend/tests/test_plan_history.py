@@ -178,7 +178,8 @@ def test_health_reports_a_missing_measurement_entity_and_retention_prunes(tmp_pa
         assert missing["link"] == "#/settings?section=measurements"
 
         run = run_job(client, "maintenance.retention")
-        assert "measurements" in run["summary"]
+        assert run["outcome"] == "ok"
+        assert "measurement" in client.get("/api/storage").json()["last_cleanup"]["removed"]
 
 
 def test_a_missing_history_integration_is_explained_and_backed_off(tmp_path: Path, world: World) -> None:

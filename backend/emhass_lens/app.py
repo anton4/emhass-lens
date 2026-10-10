@@ -91,6 +91,7 @@ def create_app(
             log.warning("%d run(s) were interrupted by the previous shutdown", interrupted)
 
         system_jobs.register(c)
+        c.extras["storage"].detect_restore()
         c.extras["http_transport"] = http_transport
         wiring.build(c)
         wiring.register_jobs(c)

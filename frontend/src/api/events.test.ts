@@ -13,6 +13,10 @@ describe('familiesForJob', () => {
     expect(familiesForJob('ml.fit')).toEqual(['problems'])
     expect(familiesForJob('nordpool.poll')).toEqual(['prices'])
   })
+  it('refreshes the storage overview after cleanup and compaction', () => {
+    expect(familiesForJob('maintenance.retention')).toEqual(['storage'])
+    expect(familiesForJob('maintenance.compact')).toEqual(['storage'])
+  })
   it('refreshes the plan (and its history) after measurement runs', () => {
     expect(familiesForJob('measure.sample')).toEqual(['plan'])
     expect(familiesForJob('measure.backfill')).toEqual(['plan'])

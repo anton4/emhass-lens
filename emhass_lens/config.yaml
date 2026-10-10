@@ -14,11 +14,16 @@ panel_icon: mdi:chart-timeline-variant-shimmer
 panel_title: EMHASS Lens
 # REST + WebSocket access to Home Assistant through the Supervisor proxy
 homeassistant_api: true
-# Supervisor API: find the EMHASS App's address, read the MQTT broker credentials
+# Supervisor API: find the EMHASS App's address, read the MQTT broker credentials, list backups (Health → Storage)
 hassio_api: true
+hassio_role: backup
 services:
   - mqtt:want
-# Run details and logs are bulky and rebuilt over time; settings and prices (app.db) are backed up
+# Backups: app.db (settings, prices, plans, measurements) is copied live after a WAL checkpoint and an integrity
+# check (backup_pre); run details and logs are bulky and rebuilt over time, so runs.db stays out
+backup: hot
+backup_pre: python -m emhass_lens.backup_pre
+backup_post: python -m emhass_lens.backup_post
 backup_exclude:
   - "runs.db*"
 # Direct access without the Home Assistant login is off by default and read-only when enabled

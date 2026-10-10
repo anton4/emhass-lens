@@ -48,3 +48,17 @@ async def test_refused_and_failed_runs(recorder: RunRecorder) -> None:
     assert by_id[run.id]["summary"] == "SOC sensor unavailable"
     assert by_id[run2.id]["outcome"] == "error"
     assert by_id[run2.id]["error"] == "ValueError: bad payload"
+
+
+async def test_an_artifact_over_the_cap_is_stored_as_a_truncated_note(recorder: RunRecorder, runs_db) -> None:
+    async with recorder.start("demo") as run:
+        run.artifact("big", {"blob": "x" * 700_000})
+        run.artifact("small", {"n": 1})
+    big = await recorder.artifact(run.id, "big")
+    assert big["truncated"] is True and big["original_bytes"] > 700_000 and big["limit_bytes"] == 512 * 1024
+    assert big["preview"].startswith('{"blob": "xxx')
+    assert await recorder.artifact(run.id, "small") == {"n": 1}
+    sizes = {
+        r["kind"]: r["size"] for r in runs_db.query("SELECT kind, size FROM run_artifact WHERE run_id = ?", (run.id,))
+    }
+    assert sizes["big"] > 700_000 and sizes["small"] < 100  # size keeps the original byte count

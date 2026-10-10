@@ -36,6 +36,9 @@ describe('formatBytes / formatValue', () => {
   it('formats', () => {
     expect(formatBytes(512)).toBe('512 B')
     expect(formatBytes(14_540)).toBe('14.2 KiB')
+    expect(formatBytes(3 * 1024 * 1024)).toBe('3.0 MiB')
+    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1.50 GiB')
+    expect(formatBytes(null)).toBe('—')
     expect(formatValue(null)).toBe('empty')
     expect(formatValue('')).toBe('""')
     expect(formatValue({ a: 1 })).toBe('{"a":1}')

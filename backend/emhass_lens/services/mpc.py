@@ -225,7 +225,7 @@ class MpcService:
                 "http_status": response.http_status,
                 "duration_ms": response.duration_ms,
                 "error": response.error,
-                "error_lines": response.error_lines,
+                "error_lines": response.error_lines[-50:],
                 "body": response.body[:20000],
             },
         )

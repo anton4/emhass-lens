@@ -1,7 +1,7 @@
 """Health rules: looks at every service once a minute and lists what needs attention."""
 
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from emhass_lens.services.prices import area_tz, utc_day_start
 from emhass_lens.services.problems import Problem
@@ -388,7 +388,74 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 )
             )
 
+    # Storage: budgets, disk, backups, restores
+    storage = x.get("storage")
+    if storage is not None:
+        for name in storage.over_budget():
+            out.append(
+                Problem(
+                    f"storage.over_budget.{name}",
+                    "warning",
+                    f"{name} is over its size budget",
+                    "The last cleanup cut what it may and the data is still bigger than the budget: a day's worth "
+                    "is larger than the budget allows within the floors.",
+                    "Raise the budget under Settings → Storage, shorten the retention, or lower the log level.",
+                    "#/health?card=storage",
+                )
+            )
+        free, _total = storage.disk()
+        if free < storage.disk_low_bytes():
+            out.append(
+                Problem(
+                    "storage.disk_low",
+                    "error",
+                    "The data disk is nearly full",
+                    f"{free // (1024 * 1024)} MiB free where the App keeps its databases",
+                    "Free space on the Home Assistant data disk; compaction is skipped until then.",
+                    "#/health?card=storage",
+                )
+            )
+        backup = storage.last_backup
+        warn_days = settings.storage.backup_warn_days
+        if warn_days and backup is not None and backup.get("available") and backup.get("stale"):
+            newest = backup.get("newest_at")
+            out.append(
+                Problem(
+                    "backup.stale",
+                    "warning",
+                    "No recent backup contains EMHASS Lens",
+                    f"the newest one is from {newest}" if newest else "no Home Assistant backup includes the App",
+                    "Check the Home Assistant Google Drive Backup add-on (full backups, or a partial backup that "
+                    "includes EMHASS Lens).",
+                    "#/health?card=storage",
+                )
+            )
+        restored = storage.restored()
+        if restored is not None and not restored.get("acknowledged"):
+            detected = parse_iso_safe(restored.get("detected_at"))
+            if detected is not None and now - detected < timedelta(days=7):
+                out.append(
+                    Problem(
+                        "restore.recent",
+                        "warning",
+                        "Restored from a backup",
+                        f"Run history up to #{restored.get('last_run_id')} was not in the backup; agreement "
+                        "figures and measured history start from scratch.",
+                        "Check the Health page once, then dismiss this on the Storage card.",
+                        "#/health?card=storage",
+                    )
+                )
+
     if not c.scheduler.started and not c.boot.safe_mode:
         out.append(Problem("scheduler.stopped", "error", "The scheduler is not running", link="#/health"))
 
     return out
+
+
+def parse_iso_safe(value: Any) -> datetime | None:
+    from emhass_lens.core.clock import parse_iso
+
+    try:
+        return parse_iso(str(value)) if value else None
+    except ValueError:
+        return None

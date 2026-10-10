@@ -57,7 +57,7 @@ class MlService:
                 "http_status": result.http_status,
                 "duration_ms": result.duration_ms,
                 "error": result.error,
-                "error_lines": result.error_lines,
+                "error_lines": result.error_lines[-50:],
                 "body": result.body[:20000],
             },
         )

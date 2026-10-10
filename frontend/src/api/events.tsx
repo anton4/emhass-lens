@@ -33,6 +33,7 @@ export function familiesForJob(job: string): string[] {
   if (job === 'emhass.mpc' || job === 'emhass.costfun_compare') return ['plan', 'costfun', 'emhass', 'outputs']
   if (job === 'emhass.publish') return ['plan', 'outputs']
   if (job.startsWith('measure.')) return ['plan']
+  if (job.startsWith('maintenance.')) return ['storage']
   if (job === 'nordpool.poll' || job.startsWith('forecast.')) return ['prices']
   if (job.startsWith('emhass.')) return ['emhass']
   if (job.startsWith('driver.')) return ['settings', 'emhass', 'outputs']
@@ -94,6 +95,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: ['plan-history'] })
           } else if (name === 'costfun') {
             void queryClient.invalidateQueries({ queryKey: keys.costfun })
+          } else if (name === 'storage') {
+            void queryClient.invalidateQueries({ queryKey: keys.storage })
+            void queryClient.invalidateQueries({ queryKey: keys.latestRun('maintenance.retention') })
+            void queryClient.invalidateQueries({ queryKey: keys.latestRun('maintenance.compact') })
             void queryClient.invalidateQueries({ queryKey: keys.outputs })
           } else if (name === 'outputs') {
             void queryClient.invalidateQueries({ queryKey: keys.outputs })

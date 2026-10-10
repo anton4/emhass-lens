@@ -138,8 +138,13 @@ def test_retention_also_prunes_prices_forecasts_and_plans(tmp_path: Path) -> Non
             if run["outcome"] != "running":
                 break
         assert run["outcome"] == "ok", run
-        assert "old price slots" in run["summary"]
-        assert "plans" in run["summary"]
+        storage = client.get("/api/storage").json()
+        last = storage["last_cleanup"]
+        assert last["summary"] == run["summary"]
+        assert {"price_slot", "forecast_snapshot", "plan_snapshot", "log", "run", "settings_revision"} <= set(
+            last["removed"]
+        )
+        assert [d["name"] for d in storage["databases"]] == ["app.db", "runs.db"]
 
 
 def test_a_stored_secret_is_shown_only_on_request_through_ingress(tmp_path: Path) -> None:
@@ -162,3 +167,35 @@ def test_a_stored_secret_is_shown_only_on_request_through_ingress(tmp_path: Path
     # the direct port (not through Ingress) may not see it
     with TestClient(create_app(boot(tmp_path / "b", supervisor_token="t", ingress_ip="10.9.9.9"))) as client:
         assert client.post("/api/settings/secret", json={"path": "forecast.ee.api_key"}).status_code == 403
+
+
+async def test_the_event_stream_ends_when_the_bus_announces_the_shutdown() -> None:
+    """uvicorn drains open responses before the app's shutdown hook, so the stream must end by itself."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from emhass_lens.api.routes.logs import events
+    from emhass_lens.core.bus import EventBus
+
+    bus = EventBus()
+    bus.bind(asyncio.get_running_loop())
+    c = SimpleNamespace(bus=bus)
+
+    async def never_disconnected() -> bool:
+        return False
+
+    request = SimpleNamespace(is_disconnected=never_disconnected)
+    response = await events(c, request, "log")  # type: ignore[arg-type]
+    iterator = response.body_iterator.__aiter__()
+    assert str(await iterator.__anext__()).startswith("retry: 3000")
+    # the subscription exists only once the generator runs past its first yield: ask for the next chunk first
+    waiting = asyncio.ensure_future(iterator.__anext__())
+    await asyncio.sleep(0.05)
+    bus.publish("log", {"msg": "hello"})
+    assert str(await asyncio.wait_for(waiting, 5)).startswith("event: log")
+    waiting = asyncio.ensure_future(iterator.__anext__())
+    await asyncio.sleep(0.05)
+    bus.close()
+    assert str(await asyncio.wait_for(waiting, 5)).startswith("event: shutdown")
+    with pytest.raises(StopAsyncIteration):
+        await asyncio.wait_for(iterator.__anext__(), 5)

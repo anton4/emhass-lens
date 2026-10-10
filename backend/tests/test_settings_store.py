@@ -123,4 +123,4 @@ def test_schema_1_settings_with_the_fusebox_helper_migrate_to_schema_2(app_db, b
     assert store.current.emhass.mode == "dry_run"
     assert "fusebox_sell_helper" not in store.current.market.entities.model_dump()
     newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
-    assert newest == {"schema_version": 2, "source": "migration"}
+    assert newest == {"schema_version": SCHEMA_VERSION, "source": "migration"}

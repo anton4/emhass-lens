@@ -2191,3 +2191,50 @@ dialog.confirm h2 {
   color: var(--ok, #1baf7a);
   font-weight: 600;
 }
+
+/* ---------- Storage card ---------- */
+
+.budget-bar {
+  position: relative;
+  height: 8px;
+  margin: 6px 0 2px;
+  border-radius: 4px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+
+.budget-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--series-1);
+}
+
+.budget-bar[data-color='amber'] > span {
+  background: var(--series-4);
+}
+
+.budget-bar[data-color='red'] > span {
+  background: var(--chart-now);
+}
+
+.storage-db {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--frame);
+}
+
+.storage-db:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.storage-db h3 {
+  margin: 0;
+  font-size: var(--step-0);
+}
+
+.storage-db .muted {
+  font-size: var(--step--1);
+}

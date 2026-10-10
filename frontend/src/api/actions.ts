@@ -4,7 +4,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import { keys } from './queries'
-import type { DriverResult, MlRequest, RunStarted, SaveResponse, SettingsResponse } from './types'
+import type { DriverResult, MlRequest, RunStarted, SaveResponse, SettingsResponse, StorageOverview } from './types'
 
 async function baseRevision(queryClient: QueryClient): Promise<number> {
   const settings = await queryClient.fetchQuery({
@@ -107,5 +107,29 @@ export function useInverterDecide() {
       void queryClient.invalidateQueries({ queryKey: keys.inverter })
       void queryClient.invalidateQueries({ queryKey: ['runs'] })
     },
+  })
+}
+
+/** Run the storage cleanup (retention, budgets, compaction when worthwhile) or a forced compaction now. */
+export function useStorageAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (what: 'cleanup' | 'compact') =>
+      api.post<RunStarted>(`/api/jobs/${what === 'cleanup' ? 'maintenance.retention' : 'maintenance.compact'}/run`, {}),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.storage })
+      void queryClient.invalidateQueries({ queryKey: keys.jobs })
+      void queryClient.invalidateQueries({ queryKey: ['runs'] })
+    },
+  })
+}
+
+/** Dismiss the "restored from a backup" note. */
+export function useRestoreAck() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<StorageOverview>('/api/storage/restore-ack', {}),
+    onSuccess: (data) => queryClient.setQueryData(keys.storage, data),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.problems }),
   })
 }

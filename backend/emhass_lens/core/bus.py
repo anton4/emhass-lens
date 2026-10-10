@@ -43,10 +43,29 @@ class EventBus:
         self._subscribers: set[_Subscriber] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._lock = threading.Lock()
+        self._closing = asyncio.Event()
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
         """Remember the event loop, so other threads can hand events over to it."""
         self._loop = loop
+
+    @property
+    def closing(self) -> asyncio.Event:
+        """Set when the process is shutting down, so long-lived streams end before uvicorn waits for them."""
+        return self._closing
+
+    @property
+    def is_closing(self) -> bool:
+        return self._closing.is_set()
+
+    def close(self) -> None:
+        """Announce the shutdown; safe from a signal handler or another thread."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            self._closing.set()
+            return
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(self._closing.set)
 
     def publish(self, topic: str, data: Any = None) -> None:
         event = Event(topic, data)

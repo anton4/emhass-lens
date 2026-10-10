@@ -937,6 +937,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storage
+         * @description Both databases: file sizes, pages in use and free, budgets, the biggest tables, the last cleanup and
+         *     compaction, the newest Home Assistant backup that contains the App, and whether this is a restored copy.
+         */
+        get: operations["storage_api_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/storage/restore-ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Storage Restore Ack
+         * @description Dismiss the "restored from a backup" note.
+         */
+        post: operations["storage_restore_ack_api_storage_restore_ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/version": {
         parameters: {
             query?: never;
@@ -1007,6 +1048,31 @@ export interface components {
             kind: string;
             /** Size */
             size: number;
+        };
+        /** BackupStatus */
+        BackupStatus: {
+            /** Available */
+            available: boolean;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Newest At */
+            newest_at?: string | null;
+            /** Newest Name */
+            newest_name?: string | null;
+            /** Newest Size Mb */
+            newest_size_mb?: number | null;
+            /** Newest Type */
+            newest_type?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
         };
         /** Charger */
         Charger: {
@@ -1225,6 +1291,42 @@ export interface components {
             preconditions: string | null;
             soc: components["schemas"]["SocTracking"];
         };
+        /** CleanupResult */
+        CleanupResult: {
+            /** At */
+            at: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Over Budget */
+            over_budget: string[];
+            /** Removed */
+            removed: {
+                [key: string]: number;
+            };
+            /** Summary */
+            summary: string;
+            /** Trigger */
+            trigger: string;
+            /** Trimmed */
+            trimmed: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** Vacuum */
+            vacuum: {
+                [key: string]: components["schemas"]["VacuumResult"];
+            };
+        };
+        /** CompactResult */
+        CompactResult: {
+            /** At */
+            at: string;
+            /** Databases */
+            databases: {
+                [key: string]: components["schemas"]["VacuumResult"];
+            };
+        };
         /** ComponentStatus */
         ComponentStatus: {
             /** Detail */
@@ -1337,6 +1439,33 @@ export interface components {
             slots: number;
             /** Soc End */
             soc_end?: number | null;
+        };
+        /** DatabaseStorage */
+        DatabaseStorage: {
+            /** Backed Up */
+            backed_up: boolean;
+            /** Budget Bytes */
+            budget_bytes: number;
+            /** Data Bytes */
+            data_bytes: number;
+            /** File Bytes */
+            file_bytes: number;
+            /** Free Bytes */
+            free_bytes: number;
+            /** Freelist Pages */
+            freelist_pages: number;
+            /** Name */
+            name: string;
+            /** Over Budget */
+            over_budget: boolean;
+            /** Page Count */
+            page_count: number;
+            /** Page Size */
+            page_size: number;
+            /** Tables */
+            tables: components["schemas"]["TableStorage"][];
+            /** Wal Bytes */
+            wal_bytes: number;
         };
         /** DeferrableDescription */
         DeferrableDescription: {
@@ -2297,14 +2426,6 @@ export interface components {
              * @enum {string}
              */
             level: "default" | "debug" | "info" | "warning" | "error";
-            /**
-             * @default {
-             *       "artifacts_days": 7,
-             *       "logs_days": 7,
-             *       "runs_days": 30
-             *     }
-             */
-            retention: components["schemas"]["Retention"];
         };
         /** Market */
         Market: {
@@ -3345,6 +3466,20 @@ export interface components {
             /** Value */
             value: number | boolean | null;
         };
+        /** RestoreInfo */
+        RestoreInfo: {
+            /**
+             * Acknowledged
+             * @default false
+             */
+            acknowledged: boolean;
+            /** Backup Taken At */
+            backup_taken_at?: string | null;
+            /** Detected At */
+            detected_at: string;
+            /** Last Run Id */
+            last_run_id: number;
+        };
         /** Retention */
         Retention: {
             /**
@@ -3358,10 +3493,26 @@ export interface components {
              */
             logs_days: number;
             /**
+             * Keep problem history
+             * @default 90
+             */
+            problems_days: number;
+            /**
              * Keep run summaries
              * @default 30
              */
             runs_days: number;
+            /**
+             * Keep market sessions
+             * @default 180
+             */
+            sessions_days: number;
+            /**
+             * Keep settings versions
+             * @description Older versions go only when there are more than this and they are over 30 days old. The current version always stays.
+             * @default 100
+             */
+            settings_revisions: number;
         };
         /** RevertRequest */
         RevertRequest: {
@@ -3662,12 +3813,7 @@ export interface components {
             /**
              * @default {
              *       "component_levels": {},
-             *       "level": "default",
-             *       "retention": {
-             *         "artifacts_days": 7,
-             *         "logs_days": 7,
-             *         "runs_days": 30
-             *       }
+             *       "level": "default"
              *     }
              */
             logging: components["schemas"]["Logging"];
@@ -3830,6 +3976,23 @@ export interface components {
              *     }
              */
             pv: components["schemas"]["Pv"];
+            /**
+             * @default {
+             *       "app_db_max_mb": 200,
+             *       "backup_warn_days": 3,
+             *       "compact": "auto",
+             *       "retention": {
+             *         "artifacts_days": 7,
+             *         "logs_days": 7,
+             *         "problems_days": 90,
+             *         "runs_days": 30,
+             *         "sessions_days": 180,
+             *         "settings_revisions": 100
+             *       },
+             *       "runs_db_max_mb": 300
+             *     }
+             */
+            storage: components["schemas"]["Storage"];
         };
         /** SettingsPatchRequest */
         SettingsPatchRequest: {
@@ -3943,6 +4106,75 @@ export interface components {
             /** Write Block Reason */
             write_block_reason: string | null;
         };
+        /** Storage */
+        Storage: {
+            /**
+             * app.db size budget
+             * @description Prices, forecasts, plans, measurements, cost-function plans and settings history. Backed up by Home Assistant. Oldest first too, but never the last days the planner needs.
+             * @default 200
+             */
+            app_db_max_mb: number;
+            /**
+             * Warn when no backup for
+             * @description Health warns when the newest Home Assistant backup that contains EMHASS Lens is older than this. 0 turns the check off.
+             * @default 3
+             */
+            backup_warn_days: number;
+            /**
+             * Compact databases
+             * @description VACUUM rebuilds a file without its free pages. It needs free disk space of about the file's size and pauses the App for seconds to tens of seconds.
+             * @default auto
+             * @enum {string}
+             */
+            compact: "auto" | "manual";
+            /**
+             * @default {
+             *       "artifacts_days": 7,
+             *       "logs_days": 7,
+             *       "problems_days": 90,
+             *       "runs_days": 30,
+             *       "sessions_days": 180,
+             *       "settings_revisions": 100
+             *     }
+             */
+            retention: components["schemas"]["Retention"];
+            /**
+             * runs.db size budget
+             * @description Run details and logs. When the data exceeds this, the oldest days go first, whatever the retention below says (pinned runs stay).
+             * @default 300
+             */
+            runs_db_max_mb: number;
+        };
+        /** StorageOverview */
+        StorageOverview: {
+            backup?: components["schemas"]["BackupStatus"] | null;
+            /** Data Dir */
+            data_dir: string;
+            /** Databases */
+            databases: components["schemas"]["DatabaseStorage"][];
+            /** Dbstat */
+            dbstat: boolean;
+            /** Disk Free Bytes */
+            disk_free_bytes: number;
+            /** Disk Total Bytes */
+            disk_total_bytes: number;
+            last_cleanup?: components["schemas"]["CleanupResult"] | null;
+            last_compact?: components["schemas"]["CompactResult"] | null;
+            /** Measured At */
+            measured_at: string;
+            restored?: components["schemas"]["RestoreInfo"] | null;
+        };
+        /** TableStorage */
+        TableStorage: {
+            /** Bytes */
+            bytes?: number | null;
+            /** Name */
+            name: string;
+            /** Oldest */
+            oldest?: string | null;
+            /** Rows */
+            rows: number;
+        };
         /** Tariff */
         Tariff: {
             /**
@@ -4009,6 +4241,19 @@ export interface components {
              * @default 24
              */
             vat_pct: number;
+        };
+        /** VacuumResult */
+        VacuumResult: {
+            /** After Bytes */
+            after_bytes?: number | null;
+            /** Before Bytes */
+            before_bytes?: number | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Ran */
+            ran: boolean;
+            /** Reason */
+            reason?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -5489,6 +5734,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusInfo"];
+                };
+            };
+        };
+    };
+    storage_api_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageOverview"];
+                };
+            };
+        };
+    };
+    storage_restore_ack_api_storage_restore_ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageOverview"];
                 };
             };
         };

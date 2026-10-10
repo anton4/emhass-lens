@@ -24,8 +24,19 @@ def _v1_to_v2(doc: Doc) -> Doc:
     return _drop(doc, "market", "entities", "fusebox_sell_helper")
 
 
+def _v2_to_v3(doc: Doc) -> Doc:
+    """0.3.2: retention moved from Logging to the new Storage section (size budgets, compaction)."""
+    logging = doc.get("logging")
+    if isinstance(logging, dict) and "retention" in logging:
+        retention = logging.pop("retention")
+        storage = doc.setdefault("storage", {})
+        if isinstance(storage, dict) and isinstance(retention, dict):
+            storage.setdefault("retention", retention)
+    return doc
+
+
 # MIGRATIONS[n] upgrades a version-n document to version n+1.
-MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2}
+MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3}
 
 
 def migrate(doc: Doc, from_version: int) -> tuple[Doc, int]:

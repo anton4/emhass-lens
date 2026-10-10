@@ -22,6 +22,7 @@ import type {
   SettingsResponse,
   SetupChecklist,
   StatusInfo,
+  StorageOverview,
   VersionInfo,
 } from './types'
 import type { SchemaNode } from '../lib/schema'
@@ -38,6 +39,7 @@ export const keys = {
   plan: ['plan'] as const,
   planHistory: (hours: number, horizon: number) => ['plan-history', hours, horizon] as const,
   costfun: ['costfun'] as const,
+  storage: ['storage'] as const,
   prices: (daysBack: number) => ['prices', daysBack] as const,
   inputs: ['inputs'] as const,
   emhass: ['emhass'] as const,
@@ -100,6 +102,11 @@ export function useRevisions() {
 
 export function usePlan() {
   return useQuery({ queryKey: keys.plan, queryFn: () => api.get<PlanResponse>('/api/plan'), refetchInterval: 60_000 })
+}
+
+/** Both databases: sizes, budgets, tables, the last cleanup and compaction, backups and restores. */
+export function useStorage() {
+  return useQuery({ queryKey: keys.storage, queryFn: () => api.get<StorageOverview>('/api/storage'), refetchInterval: 60_000 })
 }
 
 /** The newest comparison of EMHASS's three cost functions, and a week of their totals. */

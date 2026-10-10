@@ -152,6 +152,84 @@
         "title": "ArtifactInfo",
         "type": "object"
       },
+      "BackupStatus": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "newest_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest Name"
+          },
+          "newest_size_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest Size Mb"
+          },
+          "newest_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest Type"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "BackupStatus",
+        "type": "object"
+      },
       "Charger": {
         "additionalProperties": false,
         "properties": {
@@ -578,6 +656,90 @@
         "title": "ChargerStatus",
         "type": "object"
       },
+      "CleanupResult": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "over_budget": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Over Budget",
+            "type": "array"
+          },
+          "removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Removed",
+            "type": "object"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "trimmed": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Trimmed",
+            "type": "object"
+          },
+          "vacuum": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VacuumResult"
+            },
+            "title": "Vacuum",
+            "type": "object"
+          }
+        },
+        "required": [
+          "at",
+          "trigger",
+          "duration_ms",
+          "removed",
+          "trimmed",
+          "vacuum",
+          "over_budget",
+          "summary"
+        ],
+        "title": "CleanupResult",
+        "type": "object"
+      },
+      "CompactResult": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "databases": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VacuumResult"
+            },
+            "title": "Databases",
+            "type": "object"
+          }
+        },
+        "required": [
+          "at",
+          "databases"
+        ],
+        "title": "CompactResult",
+        "type": "object"
+      },
       "ComponentStatus": {
         "properties": {
           "detail": {
@@ -967,6 +1129,77 @@
           "battery_discharge_kwh"
         ],
         "title": "CostfunTotals",
+        "type": "object"
+      },
+      "DatabaseStorage": {
+        "properties": {
+          "backed_up": {
+            "title": "Backed Up",
+            "type": "boolean"
+          },
+          "budget_bytes": {
+            "title": "Budget Bytes",
+            "type": "integer"
+          },
+          "data_bytes": {
+            "title": "Data Bytes",
+            "type": "integer"
+          },
+          "file_bytes": {
+            "title": "File Bytes",
+            "type": "integer"
+          },
+          "free_bytes": {
+            "title": "Free Bytes",
+            "type": "integer"
+          },
+          "freelist_pages": {
+            "title": "Freelist Pages",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "over_budget": {
+            "title": "Over Budget",
+            "type": "boolean"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/TableStorage"
+            },
+            "title": "Tables",
+            "type": "array"
+          },
+          "wal_bytes": {
+            "title": "Wal Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "backed_up",
+          "file_bytes",
+          "wal_bytes",
+          "page_size",
+          "page_count",
+          "freelist_pages",
+          "data_bytes",
+          "free_bytes",
+          "budget_bytes",
+          "over_budget",
+          "tables"
+        ],
+        "title": "DatabaseStorage",
         "type": "object"
       },
       "DeferrableDescription": {
@@ -3429,14 +3662,6 @@
             ],
             "title": "Log level",
             "type": "string"
-          },
-          "retention": {
-            "$ref": "#/components/schemas/Retention",
-            "default": {
-              "artifacts_days": 7,
-              "logs_days": 7,
-              "runs_days": 30
-            }
           }
         },
         "title": "Logging",
@@ -6162,6 +6387,40 @@
         "title": "Reading",
         "type": "object"
       },
+      "RestoreInfo": {
+        "properties": {
+          "acknowledged": {
+            "default": false,
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "backup_taken_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Taken At"
+          },
+          "detected_at": {
+            "title": "Detected At",
+            "type": "string"
+          },
+          "last_run_id": {
+            "title": "Last Run Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "detected_at",
+          "last_run_id"
+        ],
+        "title": "RestoreInfo",
+        "type": "object"
+      },
       "Retention": {
         "additionalProperties": false,
         "properties": {
@@ -6185,6 +6444,16 @@
               "unit": "days"
             }
           },
+          "problems_days": {
+            "default": 90,
+            "maximum": 365.0,
+            "minimum": 7.0,
+            "title": "Keep problem history",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
           "runs_days": {
             "default": 30,
             "maximum": 365.0,
@@ -6194,6 +6463,24 @@
             "ui": {
               "unit": "days"
             }
+          },
+          "sessions_days": {
+            "default": 180,
+            "maximum": 730.0,
+            "minimum": 7.0,
+            "title": "Keep market sessions",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "settings_revisions": {
+            "default": 100,
+            "description": "Older versions go only when there are more than this and they are over 30 days old. The current version always stays.",
+            "maximum": 5000.0,
+            "minimum": 20.0,
+            "title": "Keep settings versions",
+            "type": "integer"
           }
         },
         "title": "Retention",
@@ -6785,12 +7072,7 @@
             "$ref": "#/components/schemas/Logging",
             "default": {
               "component_levels": {},
-              "level": "default",
-              "retention": {
-                "artifacts_days": 7,
-                "logs_days": 7,
-                "runs_days": 30
-              }
+              "level": "default"
             }
           },
           "market": {
@@ -6951,6 +7233,23 @@
               "source": "solcast"
             },
             "title": "PV forecast"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/Storage",
+            "default": {
+              "app_db_max_mb": 200,
+              "backup_warn_days": 3,
+              "compact": "auto",
+              "retention": {
+                "artifacts_days": 7,
+                "logs_days": 7,
+                "problems_days": 90,
+                "runs_days": 30,
+                "sessions_days": 180,
+                "settings_revisions": 100
+              },
+              "runs_db_max_mb": 300
+            }
           }
         },
         "title": "Settings",
@@ -7282,6 +7581,194 @@
         "title": "StatusInfo",
         "type": "object"
       },
+      "Storage": {
+        "additionalProperties": false,
+        "properties": {
+          "app_db_max_mb": {
+            "default": 200,
+            "description": "Prices, forecasts, plans, measurements, cost-function plans and settings history. Backed up by Home Assistant. Oldest first too, but never the last days the planner needs.",
+            "maximum": 10000.0,
+            "minimum": 50.0,
+            "title": "app.db size budget",
+            "type": "integer",
+            "ui": {
+              "unit": "MB"
+            }
+          },
+          "backup_warn_days": {
+            "default": 3,
+            "description": "Health warns when the newest Home Assistant backup that contains EMHASS Lens is older than this. 0 turns the check off.",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Warn when no backup for",
+            "type": "integer",
+            "ui": {
+              "unit": "days"
+            }
+          },
+          "compact": {
+            "default": "auto",
+            "description": "VACUUM rebuilds a file without its free pages. It needs free disk space of about the file's size and pauses the App for seconds to tens of seconds.",
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "title": "Compact databases",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "auto": "After cleanup, when at least 20 % and 16 MiB are free",
+                "manual": "Only with Compact now"
+              }
+            }
+          },
+          "retention": {
+            "$ref": "#/components/schemas/Retention",
+            "default": {
+              "artifacts_days": 7,
+              "logs_days": 7,
+              "problems_days": 90,
+              "runs_days": 30,
+              "sessions_days": 180,
+              "settings_revisions": 100
+            }
+          },
+          "runs_db_max_mb": {
+            "default": 300,
+            "description": "Run details and logs. When the data exceeds this, the oldest days go first, whatever the retention below says (pinned runs stay).",
+            "maximum": 10000.0,
+            "minimum": 50.0,
+            "title": "runs.db size budget",
+            "type": "integer",
+            "ui": {
+              "unit": "MB"
+            }
+          }
+        },
+        "title": "Storage",
+        "type": "object"
+      },
+      "StorageOverview": {
+        "properties": {
+          "backup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackupStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_dir": {
+            "title": "Data Dir",
+            "type": "string"
+          },
+          "databases": {
+            "items": {
+              "$ref": "#/components/schemas/DatabaseStorage"
+            },
+            "title": "Databases",
+            "type": "array"
+          },
+          "dbstat": {
+            "title": "Dbstat",
+            "type": "boolean"
+          },
+          "disk_free_bytes": {
+            "title": "Disk Free Bytes",
+            "type": "integer"
+          },
+          "disk_total_bytes": {
+            "title": "Disk Total Bytes",
+            "type": "integer"
+          },
+          "last_cleanup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanupResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_compact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompactResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measured_at": {
+            "title": "Measured At",
+            "type": "string"
+          },
+          "restored": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RestoreInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data_dir",
+          "disk_free_bytes",
+          "disk_total_bytes",
+          "measured_at",
+          "dbstat",
+          "databases"
+        ],
+        "title": "StorageOverview",
+        "type": "object"
+      },
+      "TableStorage": {
+        "properties": {
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oldest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "rows"
+        ],
+        "title": "TableStorage",
+        "type": "object"
+      },
       "Tariff": {
         "additionalProperties": false,
         "properties": {
@@ -7399,6 +7886,63 @@
           }
         },
         "title": "Tariff",
+        "type": "object"
+      },
+      "VacuumResult": {
+        "properties": {
+          "after_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Bytes"
+          },
+          "before_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Bytes"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "ran": {
+            "title": "Ran",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ran"
+        ],
+        "title": "VacuumResult",
         "type": "object"
       },
       "ValidationError": {
@@ -9493,6 +10037,50 @@
         "summary": "Status",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/storage": {
+      "get": {
+        "description": "Both databases: file sizes, pages in use and free, budgets, the biggest tables, the last cleanup and\ncompaction, the newest Home Assistant backup that contains the App, and whether this is a restored copy.",
+        "operationId": "storage_api_storage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Storage",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/storage/restore-ack": {
+      "post": {
+        "description": "Dismiss the \"restored from a backup\" note.",
+        "operationId": "storage_restore_ack_api_storage_restore_ack_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Storage Restore Ack",
+        "tags": [
+          "system"
         ]
       }
     },

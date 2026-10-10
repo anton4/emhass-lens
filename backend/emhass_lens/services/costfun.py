@@ -114,7 +114,7 @@ class CostfunCompareService:
             if response.error:
                 entry["problem"] = response.error
                 out.append(entry)
-                ctx.run.artifact(f"costfun:{method}", entry)
+                ctx.run.artifact(f"costfun:{method}", {**entry, "rows": None, "rows_count": len(entry["rows"])})
                 continue
             try:
                 last_run = await emhass.client.last_run()
@@ -148,7 +148,7 @@ class CostfunCompareService:
                         load_cost=payload.get("load_cost_forecast"),
                         prod_price=payload.get("prod_price_forecast"),
                     ).as_dict()
-            ctx.run.artifact(f"costfun:{method}", entry)
+            ctx.run.artifact(f"costfun:{method}", {**entry, "rows": None, "rows_count": len(entry["rows"])})
             out.append(entry)
             if entry["problem"] and self.ignored:
                 break  # no point asking for the third one

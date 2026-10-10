@@ -1,6 +1,7 @@
 """Entry point: python -m emhass_lens"""
 
 import logging
+from typing import Any
 
 import uvicorn
 
@@ -23,7 +24,23 @@ def main() -> None:
         ", SAFE MODE" if boot.safe_mode else "",
     )
     app = create_app(boot, bus=bus, logging_handles=handles)
-    uvicorn.run(app, host="0.0.0.0", port=boot.port, log_config=None, access_log=False, timeout_graceful_shutdown=5)
+    config = uvicorn.Config(
+        app, host="0.0.0.0", port=boot.port, log_config=None, access_log=False, timeout_graceful_shutdown=5
+    )
+    _Server(config, bus).run()
+
+
+class _Server(uvicorn.Server):
+    """uvicorn drains open responses (the UI's event stream) before the application's shutdown hook runs, so
+    the stop signal is announced on the bus first: the stream ends itself and the drain completes at once."""
+
+    def __init__(self, config: uvicorn.Config, bus: EventBus) -> None:
+        super().__init__(config)
+        self._bus = bus
+
+    def handle_exit(self, sig: int, frame: Any) -> None:
+        self._bus.close()
+        super().handle_exit(sig, frame)
 
 
 if __name__ == "__main__":

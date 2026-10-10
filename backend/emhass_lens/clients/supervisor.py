@@ -45,6 +45,13 @@ class SupervisorClient:
     async def mqtt_service(self) -> dict[str, Any]:
         return await self._call("GET", "/services/mqtt")
 
+    async def self_info(self) -> dict[str, Any]:
+        return await self._call("GET", "/addons/self/info")
+
+    async def backups(self) -> list[dict[str, Any]]:
+        """Every backup the Supervisor knows (needs hassio_role: backup)."""
+        return (await self._call("GET", "/backups")).get("backups") or []
+
     async def close(self) -> None:
         await self.client.aclose()
 

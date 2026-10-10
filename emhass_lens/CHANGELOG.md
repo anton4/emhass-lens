@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Storage.** Settings → Storage replaces Settings → Logging → Retention and adds a size budget per database (runs.db 300 MB, app.db 200 MB by default), compaction (VACUUM after cleanup when at least 20 % and 16 MiB of a file are free, or with *Compact now*) and retention for what never expired before: problem history (90 days), market sessions (180 days) and settings versions (newest 100, the current one always). Pinned runs keep their log lines. The nightly cleanup cuts in day-sized steps, checkpoints after deleting, and reports per table.
+- Health → **Storage** card: both files with size, data in use, free pages and budget, the biggest tables, the last cleanup, free disk space, the newest Home Assistant backup that contains the App, and *Clean up now* / *Compact now*. New Health warnings: a file over its budget, less than 200 MiB free on the data disk, no recent backup with EMHASS Lens (Settings → Storage → "Warn when no backup for").
+- **Backups.** Before a Home Assistant backup the App checkpoints `app.db` and checks its integrity (a damaged file aborts the backup); the add-on now has the Supervisor's `backup` role to list backups. After a restore the App notices the empty `runs.db`, continues run numbers after the ones `app.db` remembers and shows a "Restored from a backup" note. `docs/BACKUP.md` is the runbook; `scripts/restore-drill.sh` rehearses a restore from a backup file without Home Assistant.
+- Run details are capped at 512 KiB each (bigger ones are kept as a note with a preview); the cost-function comparison no longer stores each plan twice.
+- Shutdown: the UI's live event stream ends by itself when the App stops, so uvicorn no longer waits five seconds and logs a cancelled task on every restart.
+
 ## 0.3.1
 
 - After a restart the price forecast is restored from the database together with its last poll time, so it is shown at once, no "forecast isn't available" warning appears, and eupowerprices.com is only asked again when the poll interval is due.

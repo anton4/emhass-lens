@@ -17,6 +17,7 @@ import { LegacyImportCard } from './health/LegacyImportCard'
 import { MlCard } from './health/MlCard'
 import { OutputsCard } from './health/OutputsCard'
 import { SetupCard } from './health/SetupCard'
+import { StorageCard } from './health/StorageCard'
 import { ParityCard } from './health/ParityCard'
 
 export function HealthPage() {
@@ -46,6 +47,8 @@ export function HealthPage() {
       <OutputsCard />
 
       <MlCard writable={s?.writable ?? false} />
+
+      <StorageCard writable={s?.writable ?? false} />
 
       <section className="panel">
         <div className="panel-head">

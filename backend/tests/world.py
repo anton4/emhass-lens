@@ -64,6 +64,8 @@ class World:
     ha_history_status: int = 200  # 404 when the history integration isn't loaded
     clock_now: Any = None  # callable returning "now" for EMHASS timestamps
     supervisor_lists_addons: bool = False  # the default App role may not list Apps
+    supervisor_lists_backups: bool = True  # hassio_role: backup
+    supervisor_backups: list[dict[str, Any]] = field(default_factory=list)
     emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -86,6 +88,14 @@ class World:
                 if not self.supervisor_lists_addons:
                     return httpx.Response(403, json={"result": "error", "message": "Access not allowed for this App"})
                 return httpx.Response(200, json={"result": "ok", "data": {"addons": [{"slug": "5b918bf2_emhass"}]}})
+            if path == "/addons/self/info":
+                return httpx.Response(
+                    200, json={"result": "ok", "data": {"slug": "local_emhass_lens", "state": "started"}}
+                )
+            if path == "/backups":
+                if not self.supervisor_lists_backups:
+                    return httpx.Response(403, json={"result": "error", "message": "Access not allowed for this App"})
+                return httpx.Response(200, json={"result": "ok", "data": {"backups": self.supervisor_backups}})
             if path == "/addons/5b918bf2_emhass/info":
                 return httpx.Response(
                     200,

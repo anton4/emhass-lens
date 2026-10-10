@@ -532,6 +532,83 @@ class CostfunCompareResponse(BaseModel):
     history: list[CostfunHistoryPoint]
 
 
+class TableStorage(BaseModel):
+    name: str
+    rows: int
+    bytes: int | None = None  # from SQLite's dbstat; None when unavailable
+    oldest: str | None = None
+
+
+class VacuumResult(BaseModel):
+    ran: bool
+    reason: str | None = None
+    duration_ms: int | None = None
+    before_bytes: int | None = None
+    after_bytes: int | None = None
+
+
+class CleanupResult(BaseModel):
+    at: str
+    trigger: str
+    duration_ms: int
+    removed: dict[str, int]
+    trimmed: dict[str, dict[str, int]]  # database → table → rows cut by the size budget
+    vacuum: dict[str, VacuumResult]
+    over_budget: list[str]
+    summary: str
+
+
+class CompactResult(BaseModel):
+    at: str
+    databases: dict[str, VacuumResult]
+
+
+class DatabaseStorage(BaseModel):
+    name: str
+    backed_up: bool
+    file_bytes: int
+    wal_bytes: int
+    page_size: int
+    page_count: int
+    freelist_pages: int
+    data_bytes: int  # pages in use
+    free_bytes: int  # free pages (reused by new writes; VACUUM gives them back to the disk)
+    budget_bytes: int
+    over_budget: bool
+    tables: list[TableStorage]
+
+
+class BackupStatus(BaseModel):
+    available: bool  # the Supervisor let us list backups
+    reason: str | None = None
+    newest_at: str | None = None  # the newest backup that contains EMHASS Lens
+    newest_name: str | None = None
+    newest_type: str | None = None
+    newest_size_mb: float | None = None
+    count: int = 0
+    stale: bool = False
+
+
+class RestoreInfo(BaseModel):
+    detected_at: str
+    last_run_id: int
+    backup_taken_at: str | None = None
+    acknowledged: bool = False
+
+
+class StorageOverview(BaseModel):
+    data_dir: str
+    disk_free_bytes: int
+    disk_total_bytes: int
+    measured_at: str
+    dbstat: bool
+    databases: list[DatabaseStorage]
+    last_cleanup: CleanupResult | None = None
+    last_compact: CompactResult | None = None
+    backup: BackupStatus | None = None
+    restored: RestoreInfo | None = None
+
+
 class EmhassCheck(BaseModel):
     key: str
     title: str

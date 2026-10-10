@@ -28,6 +28,8 @@ from emhass_lens.logs.context import job_var, run_id_var
 
 log = logging.getLogger("emhass_lens.runs")
 
+ARTIFACT_MAX_BYTES = 512 * 1024  # an artifact bigger than this is stored as a truncated note
+
 FINAL_OUTCOMES = {
     "ok",
     "error",
@@ -144,10 +146,24 @@ class RunRecorder:
 
     async def add_artifact(self, run_id: int, kind: str, data: Any) -> None:
         raw = json.dumps(redactor.data(data), ensure_ascii=False, default=str).encode()
+        if len(raw) > ARTIFACT_MAX_BYTES:
+            # keep runs.db bounded: a huge artifact becomes a note with its head (still valid JSON for the viewer)
+            kept = json.dumps(
+                {
+                    "truncated": True,
+                    "original_bytes": len(raw),
+                    "limit_bytes": ARTIFACT_MAX_BYTES,
+                    "preview": raw[:8192].decode("utf-8", "ignore"),
+                },
+                ensure_ascii=False,
+            ).encode()
+            size, raw = len(raw), kept
+        else:
+            size = len(raw)
         blob = gzip.compress(raw, compresslevel=6)
         await self.db.aexecute(
             "INSERT INTO run_artifact (run_id, kind, created_at, size, gz) VALUES (?,?,?,?,?)",
-            (run_id, kind, iso(self.clock.now()), len(raw), blob),
+            (run_id, kind, iso(self.clock.now()), size, blob),
         )
 
     # --- reading -----------------------------------------------------------------------------------

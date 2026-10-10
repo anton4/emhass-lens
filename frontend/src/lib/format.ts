@@ -108,12 +108,13 @@ export function formatQuarterOffset(seconds: number | null | undefined): string 
     .join(', ')
 }
 
-/** Bytes as "512 B", "14.2 KiB", "3.1 MiB". */
+/** Bytes as "512 B", "14.2 KiB", "3.1 MiB", "1.2 GiB". */
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return '—'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GiB`
 }
 
 /** Display value for diffs and previews. */

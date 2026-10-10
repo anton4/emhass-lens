@@ -73,18 +73,28 @@ async def events(c: ContainerDep, request: Request, topics: str | None = None) -
 
     async def stream() -> AsyncIterator[str]:
         yield "retry: 3000\n\n"
-        async with c.bus.subscribe(wanted) as queue:
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    async with asyncio.timeout(15):
-                        event = await queue.get()
-                except TimeoutError:
-                    yield ": keep-alive\n\n"
-                    continue
-                payload = json.dumps(event.data, ensure_ascii=False, default=str)
-                yield f"event: {event.topic}\ndata: {payload}\n\n"
+        closing = asyncio.ensure_future(c.bus.closing.wait())
+        try:
+            async with c.bus.subscribe(wanted) as queue:
+                while not c.bus.is_closing:
+                    if await request.is_disconnected():
+                        break
+                    getter = asyncio.ensure_future(queue.get())
+                    done, _pending = await asyncio.wait(
+                        {getter, closing}, timeout=15, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    if getter not in done:
+                        getter.cancel()
+                        if closing in done:
+                            yield "event: shutdown\ndata: {}\n\n"  # the browser reconnects after `retry`
+                            break
+                        yield ": keep-alive\n\n"
+                        continue
+                    event = getter.result()
+                    payload = json.dumps(event.data, ensure_ascii=False, default=str)
+                    yield f"event: {event.topic}\ndata: {payload}\n\n"
+        finally:
+            closing.cancel()
 
     return StreamingResponse(
         stream(),

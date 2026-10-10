@@ -29,6 +29,7 @@ from emhass_lens.api.schemas import (
     SaveResponse,
     SetupChecklist,
     SetupStep,
+    StorageOverview,
 )
 from emhass_lens.core.clock import iso
 from emhass_lens.domain.entity_search import search_entities
@@ -37,6 +38,28 @@ from emhass_lens.settings.model import Settings
 from emhass_lens.settings.store import SettingsInvalid, StaleRevision, _errors, deep_merge, diff_docs, mask_diff
 
 router = APIRouter(prefix="/api", tags=["system"])
+
+
+@router.get("/storage")
+async def storage(c: ContainerDep) -> StorageOverview:
+    """Both databases: file sizes, pages in use and free, budgets, the biggest tables, the last cleanup and
+    compaction, the newest Home Assistant backup that contains the App, and whether this is a restored copy."""
+    svc = c.extras["storage"]
+    data = await c.app_db.run(svc.overview)
+    data["backup"] = await svc.backup_status()
+    data["restored"] = svc.restored()
+    return StorageOverview(**data)
+
+
+@router.post("/storage/restore-ack", dependencies=[Writable])
+async def storage_restore_ack(c: ContainerDep) -> StorageOverview:
+    """Dismiss the "restored from a backup" note."""
+    svc = c.extras["storage"]
+    await c.app_db.run(svc.acknowledge_restore)
+    data = await c.app_db.run(svc.overview)
+    data["backup"] = await svc.backup_status()
+    data["restored"] = svc.restored()
+    return StorageOverview(**data)
 
 
 @router.get("/emhass")

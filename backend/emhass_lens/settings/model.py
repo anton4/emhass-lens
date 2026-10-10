@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -606,12 +606,6 @@ class Notifications(Section):
     )
 
 
-class Retention(Section):
-    logs_days: int = Field(default=7, ge=1, le=90, title="Keep logs", json_schema_extra=ui(unit="days"))
-    artifacts_days: int = Field(default=7, ge=1, le=90, title="Keep run details", json_schema_extra=ui(unit="days"))
-    runs_days: int = Field(default=30, ge=1, le=365, title="Keep run summaries", json_schema_extra=ui(unit="days"))
-
-
 class Logging(Section):
     level: Literal["default", "debug", "info", "warning", "error"] = Field(
         default="default",
@@ -623,6 +617,71 @@ class Logging(Section):
         title="Per-component levels",
         description='e.g. {"emhass": "debug"} for more detail from one part only.',
         json_schema_extra=ui(widget="json", advanced=True),
+    )
+
+
+class Retention(Section):
+    logs_days: int = Field(default=7, ge=1, le=90, title="Keep logs", json_schema_extra=ui(unit="days"))
+    artifacts_days: int = Field(default=7, ge=1, le=90, title="Keep run details", json_schema_extra=ui(unit="days"))
+    runs_days: int = Field(default=30, ge=1, le=365, title="Keep run summaries", json_schema_extra=ui(unit="days"))
+    problems_days: int = Field(
+        default=90, ge=7, le=365, title="Keep problem history", json_schema_extra=ui(unit="days")
+    )
+    sessions_days: int = Field(
+        default=180, ge=7, le=730, title="Keep market sessions", json_schema_extra=ui(unit="days")
+    )
+    settings_revisions: int = Field(
+        default=100,
+        ge=20,
+        le=5000,
+        title="Keep settings versions",
+        description="Older versions go only when there are more than this and they are over 30 days old. "
+        "The current version always stays.",
+    )
+
+    @model_validator(mode="after")
+    def _details_within_summaries(self) -> Retention:
+        if self.artifacts_days > self.runs_days:
+            raise ValueError("Keep run details must not be longer than Keep run summaries")
+        return self
+
+
+class Storage(Section):
+    runs_db_max_mb: int = Field(
+        default=300,
+        ge=50,
+        le=10000,
+        title="runs.db size budget",
+        description="Run details and logs. When the data exceeds this, the oldest days go first, whatever the "
+        "retention below says (pinned runs stay).",
+        json_schema_extra=ui(unit="MB"),
+    )
+    app_db_max_mb: int = Field(
+        default=200,
+        ge=50,
+        le=10000,
+        title="app.db size budget",
+        description="Prices, forecasts, plans, measurements, cost-function plans and settings history. Backed up "
+        "by Home Assistant. Oldest first too, but never the last days the planner needs.",
+        json_schema_extra=ui(unit="MB"),
+    )
+    compact: Literal["auto", "manual"] = Field(
+        default="auto",
+        title="Compact databases",
+        description="VACUUM rebuilds a file without its free pages. It needs free disk space of about the file's "
+        "size and pauses the App for seconds to tens of seconds.",
+        json_schema_extra=ui(
+            labels={"auto": "After cleanup, when at least 20 % and 16 MiB are free", "manual": "Only with Compact now"}
+        ),
+    )
+    backup_warn_days: int = Field(
+        default=3,
+        ge=0,
+        le=60,
+        title="Warn when no backup for",
+        description="Health warns when the newest Home Assistant backup that contains EMHASS Lens is older than "
+        "this. 0 turns the check off.",
+        json_schema_extra=ui(unit="days"),
     )
     retention: Retention = Field(default=Retention(), title="Retention")
 
@@ -1118,6 +1177,7 @@ class Settings(Section):
     health: Health = Field(default=Health(), title="Health")
     notifications: Notifications = Field(default=Notifications(), title="Notifications")
     logging: Logging = Field(default=Logging(), title="Logging")
+    storage: Storage = Field(default=Storage(), title="Storage")
     parity: Parity = Field(default=Parity(), title="Parity with the HACS integration")
     inverter: Inverter = Field(default=Inverter(), title="Inverter control (experimental)")
     charger: Charger = Field(default=Charger(), title="EV charger control (experimental)")

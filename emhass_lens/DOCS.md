@@ -188,7 +188,19 @@ All other settings live in the App: every save is kept as a revision, with who c
 - **Changes need the Home Assistant login.** Settings can only be changed through the sidebar (Ingress).
 - **The direct port is off by default.** If you enable it (`8099/tcp`), it has no login and is read-only, with secrets masked.
 
-## Data and backups
+## Data, storage and backups
 
-- **`app.db`** holds settings, their history, prices and forecasts, stored plans, measurements and cost-function comparisons. It is part of Home Assistant backups.
-- **`runs.db`** holds run details and logs. It is excluded from backups and pruned by the retention settings (Settings → Logging → Retention).
+EMHASS Lens keeps two SQLite files in its `/data` folder.
+
+- **`app.db`** holds the settings and their history, Nord Pool prices, price forecasts, every EMHASS plan, the measured history, the cost-function comparisons and a few remembered facts. It is part of every Home Assistant backup. Right before a backup the App checkpoints the file and runs an integrity check (`backup_pre`), so the copy is complete and a damaged file stops the backup instead of being saved.
+- **`runs.db`** holds run details, their inputs and responses, and the log. It is bulky, rebuilt over time, and left out of backups.
+
+**Retention** (Settings → Storage → Retention) says how long things stay: logs and run details 7 days, run summaries 30 days, problem history 90 days, market sessions 180 days, and the newest 100 settings versions (older ones go only after 30 days; the current one always stays). Prices stay 120 days, forecasts and cost-function plans 30, measurements as set under Measurements, plans the newest 2000. Pinned runs keep their details and log lines for ever.
+
+**Size budgets** (Settings → Storage) cap each file: `runs.db` 300 MB and `app.db` 200 MB by default. When the data in a file exceeds its budget, the nightly cleanup (03:30) cuts the oldest calendar day of one table at a time, in a fixed order: for `runs.db` log lines, then run details, then run summaries; for `app.db` cost-function plans, plans, measurements, forecasts, prices, inverter write records, problem history, market sessions and finally settings history. It never cuts pinned runs, open problems or sessions, the current settings version, or the last one to seven days each table needs for the planner and the accuracy card. When even that leaves a file over budget, Health says so.
+
+**Compaction.** Deleting rows frees pages inside the file; SQLite reuses them, so the file stops growing, but it only shrinks with `VACUUM`. After each cleanup the App compacts a file that has at least 20 % and 16 MiB of free pages, provided the disk has free space of about twice the file (set Settings → Storage → Compact databases to "Only with Compact now" to stop that). Compaction pauses the App for seconds to tens of seconds.
+
+The Health page's **Storage** card shows both files (size, data in use, free pages, budget), the biggest tables, the last cleanup, the free disk space and the newest Home Assistant backup that contains the App, with **Clean up now** and **Compact now**. Health warns when no backup containing EMHASS Lens is newer than Settings → Storage → "Warn when no backup for" (3 days by default), when a file stays over budget, and when the data disk has less than 200 MiB free.
+
+**Restoring.** A restored Home Assistant brings `app.db` back with everything above, secrets included. Run history starts afresh: the App notices an empty `runs.db` next to an `app.db` that remembers run numbers, keeps one placeholder run so new numbers continue after the old ones, and shows a "Restored from a backup" note on the Storage card until dismissed. The agreement figures (inverter, EV charger, market) and the measured history start from scratch. The step-by-step runbook, including a rehearsal that restores a backup into a scratch copy without touching Home Assistant, is in the repository's `docs/BACKUP.md`.

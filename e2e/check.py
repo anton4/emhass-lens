@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -333,6 +334,68 @@ def main() -> int:
             )
             ha.post("/api/states/sensor.qw_mode", json={"state": "none"})
             patch(http, {"market": {"mode": "off"}}, "e2e: market off")
+
+            cleaned = run_job(http, "maintenance.retention")
+            storage = http.get("/api/storage").json()
+            check(
+                "cleans up storage and reports both databases",
+                cleaned["outcome"] == "ok"
+                and [d["name"] for d in storage["databases"]] == ["app.db", "runs.db"]
+                and storage["last_cleanup"]["summary"] == cleaned["summary"]
+                and storage["dbstat"] is True,
+                cleaned["summary"],
+            )
+
+            pre = subprocess.run(
+                [sys.executable, "-m", "emhass_lens.backup_pre"],
+                env={**env, "EMHASS_LENS_VERSION": "e2e"},
+                capture_output=True,
+                text=True,
+                cwd=HERE.parent / "backend",
+            )
+            marker_path = data / "backup-marker.json"
+            marker = json.loads(marker_path.read_text()) if marker_path.exists() else {}
+            check(
+                "prepares app.db for a backup (checkpoint, integrity check, marker)",
+                pre.returncode == 0 and marker.get("quick_check") == "ok" and marker.get("revision"),
+                (pre.stdout + pre.stderr).strip(),
+            )
+
+            # a Supervisor-style backup tar of the App, then the restore drill on it
+            drill_dir = RUNTIME / "drill"
+            drill_dir.mkdir(exist_ok=True)
+            inner = drill_dir / "local_emhass_lens.tar.gz"
+            with tarfile.open(inner, "w:gz") as tar:
+                tar.add(data / "app.db", arcname="data/app.db")
+                tar.add(marker_path, arcname="data/backup-marker.json")
+            (drill_dir / "backup.json").write_text(
+                json.dumps(
+                    {
+                        "slug": "e2e0001",
+                        "name": "e2e backup",
+                        "date": "2026-10-10T10:00:00+00:00",
+                        "type": "partial",
+                        "protected": False,
+                        "addons": [{"slug": "local_emhass_lens", "name": "EMHASS Lens", "version": "e2e", "size": 1}],
+                    }
+                )
+            )
+            backup_tar = drill_dir / "backup.tar"
+            with tarfile.open(backup_tar, "w") as tar:
+                tar.add(drill_dir / "backup.json", arcname="./backup.json")
+                tar.add(inner, arcname="./local_emhass_lens.tar.gz")
+            drill = subprocess.run(
+                ["bash", str(HERE.parent / "scripts" / "restore-drill.sh"), str(backup_tar)],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PATH": os.environ.get("PATH", "")},
+                timeout=180,
+            )
+            check(
+                "the restore drill brings the App up on a backup copy of app.db",
+                drill.returncode == 0 and "drill ok" in drill.stdout and "settings: revision" in drill.stdout,
+                (drill.stdout.strip().splitlines() or [drill.stderr.strip()[-300:]])[-2:],
+            )
 
             patch(
                 http, {"outputs": {"mqtt_enabled": True, "broker": {"host": "localhost", "port": 11883}}}, "e2e: MQTT"
