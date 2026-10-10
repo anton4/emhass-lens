@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/charger/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Charger Mode
+         * @description Switch the charge-mode helper (Manual / EMHASS / Excess Solar) through Home Assistant.
+         */
+        post: operations["charger_mode_api_charger_mode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/driver/hand-back": {
         parameters: {
             query?: never;
@@ -1074,6 +1094,24 @@ export interface components {
              */
             stale: boolean;
         };
+        /** ChargeModeInfo */
+        ChargeModeInfo: {
+            /** Current */
+            current?: string | null;
+            /** Emhass Option */
+            emhass_option: string;
+            /** Entity */
+            entity: string;
+            /** Options */
+            options: string[];
+            /** Solar Option */
+            solar_option: string;
+        };
+        /** ChargeModeRequest */
+        ChargeModeRequest: {
+            /** Option */
+            option: string;
+        };
         /** Charger */
         Charger: {
             /**
@@ -1273,6 +1311,7 @@ export interface components {
         ChargerStatus: {
             agreement_24h: components["schemas"]["Agreement"];
             agreement_7d: components["schemas"]["Agreement"];
+            charge_mode?: components["schemas"]["ChargeModeInfo"] | null;
             /** Last */
             last: {
                 [key: string]: unknown;
@@ -4380,6 +4419,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunStarted"];
+                };
+            };
+        };
+    };
+    charger_mode_api_charger_mode_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeModeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargerStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

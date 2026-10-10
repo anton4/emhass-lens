@@ -442,9 +442,43 @@ class ChargerService:
             "rate": (counts.get("ok", 0) / total) if total else None,
         }
 
+    # --- the charge-mode helper (the automation's and the App's shared control) ------------------------
+    def charge_mode_info(self) -> dict[str, Any] | None:
+        """The helper's current option and its options, from the watched state; None without a helper."""
+        e = self.c.settings.current.charger.entities
+        if not e.charge_mode_select:
+            return None
+        state = self._state(e.charge_mode_select)
+        options = list(((state or {}).get("attributes") or {}).get("options") or [])
+        if not options:
+            options = ["Manual", e.emhass_option, e.solar_option]
+        current = (state or {}).get("state")
+        return {
+            "entity": e.charge_mode_select,
+            "current": str(current) if current not in (None, "unknown", "unavailable") else None,
+            "options": options,
+            "emhass_option": e.emhass_option,
+            "solar_option": e.solar_option,
+        }
+
+    async def set_charge_mode(self, option: str, actor: str) -> None:
+        """Set the helper through Home Assistant, like a dashboard would; the helper stays the source of truth."""
+        info = self.charge_mode_info()
+        if info is None:
+            raise ValueError("No charge mode helper is set (Settings → EV charger control → Entities)")
+        if option not in info["options"]:
+            raise ValueError(f"{option!r} is not one of the helper's options ({', '.join(info['options'])})")
+        await self.c.extras["ha"].call_service(
+            "input_select", "select_option", {"entity_id": info["entity"], "option": option}
+        )
+        log.info("Charge mode set to %s by %s", option, actor)
+        if self.mode != "off":  # let the new mode take effect at once (dry run records, live acts)
+            self.c.scheduler.run_now("charger.decide", {"trigger": "manual"})
+
     async def status(self) -> dict[str, Any]:
         return {
             "mode": self.mode,
+            "charge_mode": self.charge_mode_info(),
             "last": self.last,
             "last_compare": self.last_compare,
             "last_tick": self.last_tick,

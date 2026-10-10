@@ -822,8 +822,21 @@ class SocTracking(BaseModel):
     due_at: str | None
 
 
+class ChargeModeInfo(BaseModel):
+    entity: str
+    current: str | None = None
+    options: list[str]
+    emhass_option: str
+    solar_option: str
+
+
+class ChargeModeRequest(BaseModel):
+    option: str
+
+
 class ChargerStatus(BaseModel):
     mode: str
+    charge_mode: ChargeModeInfo | None = None
     last: dict[str, Any] | None
     last_compare: dict[str, Any] | None
     last_tick: dict[str, Any] | None

@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (afternoon): charge mode switch on the EV charger page (unreleased)
+- `POST /api/charger/mode {option}` sets `input_select.ev_charge_mode` through HA (`ChargerService.set_charge_mode`, validated against the helper's options, then `charger.decide` when the controller isn't Off); `ChargerStatus.charge_mode` carries entity, current option and options; the page shows a segmented control in the header. Test in `test_charger_service.py`.
+
 ### 2026-10-10 (afternoon): the owner took over; a premature health error fixed (unreleased)
 - The owner pressed Take over at 13:56 with parity 8/8. Six seconds later `mpc.stale` fired because its grace counted from the process start; `MpcService.live_since` (set when live + Auto MPC come on, via a settings subscription) is now the reference. Test in `test_phase2.py`.
 

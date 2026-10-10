@@ -126,7 +126,7 @@ Each resume is recorded as a run of *Resume after a market session*.
 
 ## EV charger control (experimental)
 
-EMHASS Lens can drive an EV charger the way the automation "EV Charging: Combined EMHASS & Excess Solar" does, branch for branch. Your charge-mode helper stays the control:
+EMHASS Lens can drive an EV charger the way the automation "EV Charging: Combined EMHASS & Excess Solar" does, branch for branch. Your charge-mode helper stays the control, and the EV charger page can switch it (the buttons set the helper through Home Assistant, so the automation sees the same mode):
 
 - **EMHASS**: follow the plan's EV power (`P_deferrable0`): start charging when the car is plugged in and the plan asks for power, adjust the current while charging, pause when the plan asks for none. The current is the planned power ÷ 690 W/A, at least 6 A and at most your maximum current.
 - **Excess Solar**: every minute, charge with what the PV leaves over after the house load (the potential PV when the inverter is curtailing), rounded down to whole amps; never raise the current on PV data older than 10 minutes.

@@ -230,6 +230,61 @@
         "title": "BackupStatus",
         "type": "object"
       },
+      "ChargeModeInfo": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "emhass_option": {
+            "title": "Emhass Option",
+            "type": "string"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "solar_option": {
+            "title": "Solar Option",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "options",
+          "emhass_option",
+          "solar_option"
+        ],
+        "title": "ChargeModeInfo",
+        "type": "object"
+      },
+      "ChargeModeRequest": {
+        "properties": {
+          "option": {
+            "title": "Option",
+            "type": "string"
+          }
+        },
+        "required": [
+          "option"
+        ],
+        "title": "ChargeModeRequest",
+        "type": "object"
+      },
       "Charger": {
         "additionalProperties": false,
         "properties": {
@@ -587,6 +642,16 @@
           },
           "agreement_7d": {
             "$ref": "#/components/schemas/Agreement"
+          },
+          "charge_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChargeModeInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "last": {
             "anyOf": [
@@ -8164,6 +8229,48 @@
           }
         },
         "summary": "Charger Decide",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/charger/mode": {
+      "post": {
+        "description": "Switch the charge-mode helper (Manual / EMHASS / Excess Solar) through Home Assistant.",
+        "operationId": "charger_mode_api_charger_mode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargeModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargerStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Charger Mode",
         "tags": [
           "system"
         ]

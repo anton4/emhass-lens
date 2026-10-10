@@ -4,7 +4,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import { keys } from './queries'
-import type { DriverResult, MlRequest, RunStarted, SaveResponse, SettingsResponse, StorageOverview } from './types'
+import type { ChargerStatus, DriverResult, MlRequest, RunStarted, SaveResponse, SettingsResponse, StorageOverview } from './types'
 
 async function baseRevision(queryClient: QueryClient): Promise<number> {
   const settings = await queryClient.fetchQuery({
@@ -131,5 +131,15 @@ export function useRestoreAck() {
     mutationFn: () => api.post<StorageOverview>('/api/storage/restore-ack', {}),
     onSuccess: (data) => queryClient.setQueryData(keys.storage, data),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.problems }),
+  })
+}
+
+/** Switch the EV charge-mode helper (Manual / EMHASS / Excess Solar) through Home Assistant. */
+export function useChargeMode() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (option: string) => api.post<ChargerStatus>('/api/charger/mode', { option }),
+    onSuccess: (data) => queryClient.setQueryData(keys.charger, data),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['runs'] }),
   })
 }

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router'
-import { useChargerDecide } from '../api/actions'
+import { useChargeMode, useChargerDecide } from '../api/actions'
 import { useCharger, useRuns, useSettings, useStatus } from '../api/queries'
 import { ChargerDecisionView, ChargerRulesExplainer, SolarFacts } from '../components/ChargerViews'
 import { AgreeHeadline, CompareTable } from '../components/InverterViews'
@@ -29,6 +29,7 @@ export function ChargerPage() {
   const status = useStatus()
   const settings = useSettings()
   const decide = useChargerDecide()
+  const chargeMode = useChargeMode()
   const navigate = useNavigate()
   const data = charger.data
   const tz = status.data?.timezone
@@ -48,11 +49,32 @@ export function ChargerPage() {
           <>
             Experimental. What EMHASS Lens would do with the EV charger, following the plan's EV power or the excess
             solar, and how often that matches what your Home Assistant automation does. Agreement is the number to watch
-            before letting EMHASS Lens drive the charger.
+            before letting EMHASS Lens drive the charger. The charge mode buttons set your Home Assistant helper, which
+            the automation reads as well.
           </>
         }
       >
         <div className="action-row" style={{ margin: 0 }}>
+          {data?.charge_mode && (
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Charge mode"
+              title={data.charge_mode.current ? `${data.charge_mode.entity}: the helper your automation reads too` : 'The charge mode helper has no state yet'}
+            >
+              {data.charge_mode.options.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={option === data.charge_mode?.current}
+                  disabled={!writable || chargeMode.isPending || !data.charge_mode?.current}
+                  onClick={() => chargeMode.mutate(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             className="primary"
@@ -69,7 +91,7 @@ export function ChargerPage() {
           </Link>
         </div>
       </PageHead>
-      <ErrorNotice error={charger.error ?? decide.error} />
+      <ErrorNotice error={charger.error ?? decide.error ?? chargeMode.error} />
 
       <section className="panel">
         <div className="panel-head">

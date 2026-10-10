@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- EV charger page: the charge mode (Manual / EMHASS / Excess Solar) can be switched from the page. The buttons set your Home Assistant helper, the same one the automation reads, and a decision follows at once while the controller is in dry run or live.
+
 ## 0.3.5
 
 - Health no longer raises "No successful MPC run recently" the moment you take over: the grace for the first live run now counts from the take-over, not from when the App started.

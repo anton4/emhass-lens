@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
 from emhass_lens.api.schemas import (
+    ChargeModeRequest,
     ChargerStatus,
     DiffEntry,
     DriverRequest,
@@ -225,6 +226,16 @@ async def charger_decide(c: ContainerDep) -> RunStarted:
     """Decide for the charger now (applies only in live mode)."""
     run_id = await c.scheduler.start_now("charger.decide", {"trigger": "manual"})
     return RunStarted(job=JobInfo(**c.scheduler.jobs["charger.decide"].info()), run_id=run_id)
+
+
+@router.post("/charger/mode", dependencies=[Writable])
+async def charger_mode(c: ContainerDep, request: Request, body: ChargeModeRequest) -> ChargerStatus:
+    """Switch the charge-mode helper (Manual / EMHASS / Excess Solar) through Home Assistant."""
+    try:
+        await c.extras["charger"].set_charge_mode(body.option, actor(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ChargerStatus(**await c.extras["charger"].status())
 
 
 @router.get("/market")

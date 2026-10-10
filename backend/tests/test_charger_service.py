@@ -247,3 +247,27 @@ def test_the_publish_triggers_a_decision_and_a_failed_notification_keeps_the_out
         assert [c["ok"] for c in calls] == [True, True, False]
     finally:
         client.__exit__(None, None, None)
+
+
+def test_the_charge_mode_can_be_switched_from_the_app_through_the_helper(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, "dry_run")
+    try:
+        status = client.get("/api/charger").json()
+        assert status["charge_mode"]["entity"] == MODE and status["charge_mode"]["current"] == "EMHASS"
+        assert status["charge_mode"]["options"] == ["Manual", "EMHASS", "Excess Solar"]
+        before = newest_id(client, "charger.decide")
+        m = len(world.ha_services)
+        resp = client.post("/api/charger/mode", json={"option": "Excess Solar"})
+        assert resp.status_code == 200, resp.text
+        assert world.ha_services[m][0] == "input_select/select_option"
+        assert world.ha_services[m][1] == {"entity_id": MODE, "option": "Excess Solar"}
+        assert world.ha_states[MODE]["state"] == "Excess Solar"
+        prime(client, world)
+        decided = wait_for_run(client, "charger.decide", before)
+        assert decided["outcome"] in ("dry_run", "noop", "ok"), decided
+        bad = client.post("/api/charger/mode", json={"option": "Turbo"})
+        assert bad.status_code == 400 and "not one of the helper's options" in bad.json()["detail"]
+        assert len([s for s in world.ha_services if s[0] == "input_select/select_option"]) == 1
+    finally:
+        client.__exit__(None, None, None)
