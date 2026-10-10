@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { deepEqual } from '../../lib/diff'
-import { formatQuarterOffset } from '../../lib/format'
+import { formatQuarterOffset, formatValue } from '../../lib/format'
 import { defaultFor, fieldInfo, getPath, hasErrorsUnder, idFor, type FieldInfo, type SchemaNode } from '../../lib/schema'
 import { EmhassUrlStatus, EntityPicker } from './EntityPicker'
 
@@ -68,6 +68,7 @@ export function Field({ name, node, path, ctx, depth }: FieldProps) {
       </label>
       <div className="field-input">
         <Input id={id} info={info} path={path} value={value} ctx={ctx} invalid={ownErrors.length > 0} />
+        {modified && <SavedValue info={info} original={original} />}
         {modified && <RevertButton disabled={ctx.disabled} onClick={() => ctx.onChange(path, original)} />}
       </div>
       {info.description && <p className="field-help">{info.description}</p>}
@@ -321,6 +322,24 @@ function EyeIcon({ crossed }: { crossed: boolean }) {
 }
 
 /** Puts one changed field back to its saved value. */
+/** The saved value next to a changed field ("was 45 s"); secrets never show theirs. */
+function SavedValue({ info, original }: { info: FieldInfo; original: unknown }) {
+  if (info.ui.widget === 'secret') return null
+  const text =
+    typeof original === 'boolean'
+      ? original
+        ? 'On'
+        : 'Off'
+      : typeof original === 'string' && info.ui.labels?.[original]
+        ? info.ui.labels[original]
+        : formatValue(original)
+  return (
+    <span className="field-was">
+      was <s>{info.ui.unit && original !== null && original !== undefined ? `${text} ${info.ui.unit}` : text}</s>
+    </span>
+  )
+}
+
 function RevertButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
   return (
     <button type="button" className="quiet field-revert" disabled={disabled} onClick={onClick} title="Back to the saved value">

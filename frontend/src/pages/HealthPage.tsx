@@ -36,6 +36,8 @@ export function HealthPage() {
       />
       <ErrorNotice error={status.error ?? jobs.error} />
 
+      <SectionLinks problems={s?.problems.length ?? 0} />
+
       <SetupCard />
 
       <ProblemsPanel />
@@ -53,7 +55,7 @@ export function HealthPage() {
 
       <StorageCard writable={s?.writable ?? false} />
 
-      <section className="panel">
+      <section id="card-jobs" className="panel">
         <div className="panel-head">
           <h2>Jobs</h2>
           <span className="muted">Times in your browser's timezone</span>
@@ -84,6 +86,38 @@ export function HealthPage() {
       <ParityCard />
       <LegacyImportCard writable={s?.writable ?? false} />
     </>
+  )
+}
+
+const SECTIONS = [
+  ['card-setup', 'Getting started'],
+  ['card-problems', 'Problems'],
+  ['card-driver', 'Driving EMHASS'],
+  ['card-components', 'Components'],
+  ['card-emhass', 'EMHASS'],
+  ['card-outputs', 'Outputs'],
+  ['card-ml', 'ML forecast'],
+  ['card-storage', 'Storage'],
+  ['card-jobs', 'Jobs'],
+  ['card-parity', 'Parity'],
+  ['card-import', 'Import'],
+] as const
+
+/** Jump links to the page's sections (the address hash belongs to the router, so these scroll instead). */
+function SectionLinks({ problems }: { problems: number }) {
+  return (
+    <nav className="page-anchors" aria-label="On this page">
+      {SECTIONS.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          {label}
+          {id === 'card-problems' && problems > 0 && <span className="tab-count">{problems}</span>}
+        </button>
+      ))}
+    </nav>
   )
 }
 

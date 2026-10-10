@@ -99,6 +99,10 @@ The Plan page says why when EMHASS's last run didn't end "ok" (EMHASS's own erro
 
 ## Plan history and accuracy
 
+The Plan page opens with the plan in one line, for example "Discharging the battery until 21:30, then idle · SOC 94 % → 38 %": what the battery does from now until that changes, and where its charge goes meanwhile. **Chart** and **Table** switch the whole plan between the timeline and a table with one row per quarter-hour (columns in words, with EMHASS's own names under them; power in kW, SOC in %, prices in c/kWh).
+
+The **Timeline** stacks power, state of charge and prices on one time axis, and under them the **MPC runs** of the same window, coloured by outcome; point at a mark to see the run, click it to open it. A line under the strip counts the runs per outcome and says when the next one is due.
+
 The Plan page's charts reach back in time as well as forward. Left of the now line they show what was measured (solid) next to what the plan said at the time (dashed); right of it, the current plan. **History** picks how far back (6 h to 7 days) and **Compare with** which earlier plan a past slot is held against: *Plan in force* is the plan that was current when the slot came (what the inverter followed), *1 h / 6 h / 24 h ahead* the plan made that long before it, which shows how good the forecasts were at a distance.
 
 Measured values come from Home Assistant's recorder. **Settings → Measurements** names the sensors for grid power, battery power, PV power, house load and battery SOC; leave one empty to skip it. Signs follow EMHASS: grid positive when importing, battery positive when discharging. If a sensor counts the other way round, tick **Opposite sign**; **Multiply by** turns kW into W or a percentage SOC into 0–1. The House load sensor should be the load *without* deferrable loads (what EMHASS forecasts as `P_Load`), usually the same sensor EMHASS learns from.
@@ -229,8 +233,8 @@ When Home Assistant can install a newer EMHASS Lens, the foot of the sidebar sho
 
 ## Logs and runs
 
-- **Logs** shows the App's log live. Every line belongs to a component, and lines written during a job carry that run's number.
-- **Runs** lists every job execution with its outcome. Open one to see its inputs, the request it sent, the response it got and its log lines. You can also download it all as one JSON file for a bug report.
+- **Logs** shows the App's log live. Every line belongs to a component, and lines written during a job carry that run's number. A strip above the lines counts them per 5 minutes over the last 3 hours, with the warnings and errors marked.
+- **Runs** lists every job execution with its outcome. Above the list, a timeline draws the listed runs in a lane per kind of job (EMHASS, prices, inverter, …), each as wide as it took. On a wide screen a click shows the run beside the list; **Open run** opens it in full. Its page has three tabs: **Summary** (what happened and what the run looked at), **Artifacts** (everything it stored, as JSON) and **Logs**. You can also download it all as one JSON file for a bug report.
   - **Filter** by job and outcome, and by a time range: **From** and **To** are read in Home Assistant's time zone, and **Today**, **Yesterday** and **Any time** set the range in one click. The range includes From but not To.
   - **Sort** by clicking a column header; click it again to flip the direction. Run and Started sort on the server, so "Load more" continues in that order. Job, Took and Outcome sort the runs loaded so far.
 - **Recent decisions and slots** on the EV charger, Inverter and Market pages, and the Market sessions, have the same tools:

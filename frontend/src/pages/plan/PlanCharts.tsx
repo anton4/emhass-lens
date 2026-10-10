@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react'
-import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow } from '../../api/types'
-import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
+import { Link, useNavigate } from 'react-router'
+import { useJobs, useRuns } from '../../api/queries'
+import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
+import { TimeChart, type ChartSeries, type ChartTick } from '../../components/charts/TimeChart'
+import { Lamp } from '../../components/Lamp'
+import { useNow } from '../../components/useNow'
+import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
+import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { snapWindow } from '../../lib/chartRange'
 import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
 import {
@@ -14,7 +20,7 @@ import {
   plannedAtTheTime,
   timeGrid,
 } from '../../lib/planHistory'
-import { eurTick, formatPower, formatPrice } from '../../lib/units'
+import { centsTick, formatCents, formatPower } from '../../lib/units'
 
 const SYNC = 'plan'
 
@@ -28,7 +34,13 @@ function windowLabel([a, b]: [number, number], timeZone?: string): string {
   const key = timeZone ?? ''
   let fmt = windowFormats.get(key)
   if (!fmt) {
-    fmt = new Intl.DateTimeFormat(undefined, { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+    fmt = new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
     windowFormats.set(key, fmt)
   }
   return `${fmt.format(new Date(a * 1000))} – ${fmt.format(new Date(b * 1000))}`
@@ -53,8 +65,22 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
 
 // Power quantities, each in its own colour on every chart: battery, grid, PV (an area), load; the deferrable loads follow.
 const POWER = [
-  { column: 'P_batt', measured: 'batt', planned: 'P_batt', label: 'Battery (+ discharge)', color: '--q-batt', fill: undefined },
-  { column: 'P_grid', measured: 'grid', planned: 'P_grid', label: 'Grid (+ import)', color: '--q-grid', fill: undefined },
+  {
+    column: 'P_batt',
+    measured: 'batt',
+    planned: 'P_batt',
+    label: 'Battery (+ discharge)',
+    color: '--q-batt',
+    fill: undefined,
+  },
+  {
+    column: 'P_grid',
+    measured: 'grid',
+    planned: 'P_grid',
+    label: 'Grid (+ import)',
+    color: '--q-grid',
+    fill: undefined,
+  },
   { column: 'P_PV', measured: 'pv', planned: 'P_PV', label: 'PV', color: '--q-pv', fill: 0.16 },
   { column: 'P_Load', measured: 'load', planned: 'P_Load', label: 'House load', color: '--q-load', fill: undefined },
 ] as const
@@ -63,7 +89,15 @@ const DASHED = { width: 1.5, dash: [4, 4] as number[] }
 
 /** Power, state of charge and prices on one synced time axis: measured history (solid) with what the plan
  *  said at the time (dashed) left of the now line, the current plan right of it. */
-export function PlanCharts({ data, history, nowS }: { data: PlanResponse; history?: PlanHistoryResponse; nowS: number }) {
+export function PlanCharts({
+  data,
+  history,
+  nowS,
+}: {
+  data: PlanResponse
+  history?: PlanHistoryResponse
+  nowS: number
+}) {
   // One zoom window for all three charts (unix seconds); null shows the whole range
   const [zoom, setZoom] = useState<[number, number] | null>(null)
   const zoomTo = (range: [number, number] | null) => setZoom(range && snapWindow(range, 900))
@@ -183,7 +217,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
-    const fmt = (v: number) => formatPrice(v)
+    const fmt = (v: number) => formatCents(v)
     const series: ChartSeries[] = [
       { label: 'Import', color: '--q-import', values: imp, format: fmt },
       { label: 'Export', color: '--q-export', dash: [6, 4], values: exp, format: fmt },
@@ -256,7 +290,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
             series={prices.series}
             ariaLabel="Import and export price per quarter-hour; shaded where the price is a forecast"
             syncKey={SYNC}
-            yFormat={eurTick}
+            yFormat={centsTick}
             fit={PRICE_FIT}
             legendValueWidth="13ch"
             xRange={zoom}
@@ -267,9 +301,114 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
             timeZone={data.timezone}
             height={170}
           />
-          {prices.bands.length > 0 && <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>}
+          {prices.bands.length > 0 && (
+            <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>
+          )}
         </section>
       )}
+      <MpcRunStrip x={x} zoom={zoom} onZoom={zoomTo} shade={shade} nowS={nowS} timeZone={data.timezone} />
     </div>
+  )
+}
+
+/** The MPC runs on the same time axis as the charts, coloured by outcome; a click opens the run. */
+function MpcRunStrip({
+  x,
+  zoom,
+  onZoom,
+  shade,
+  nowS,
+  timeZone,
+}: {
+  x: number[]
+  zoom: [number, number] | null
+  onZoom: (range: [number, number] | null) => void
+  shade: [number, number][]
+  nowS: number
+  timeZone: string
+}) {
+  const navigate = useNavigate()
+  // Whole hours keep the query key steady while the chart's first slot moves on
+  const first = x[0]
+  const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : undefined
+  const runs = useRuns({ job: 'emhass.mpc', since, limit: 1000 })
+  const list = useMemo(() => runs.data ?? [], [runs.data])
+  const ticks = useMemo<ChartTick[]>(
+    () =>
+      list.map((r) => ({
+        t: Date.parse(r.started_at) / 1000,
+        color: `--lamp-${OUTCOMES[r.outcome]?.color ?? 'neutral'}`,
+        label: `Run ${r.id} · ${formatClock(r.started_at, timeZone)} · ${outcomeLabel(r.outcome)}${r.summary ? `\n${r.summary}` : ''}`,
+        id: r.id,
+      })),
+    [list, timeZone],
+  )
+  const empty = useMemo(() => [{ label: 'MPC runs', color: 'transparent', values: x.map(() => null) }], [x])
+  if (x.length === 0) return null
+  return (
+    <section className="chart-block run-strip">
+      <h3>MPC runs</h3>
+      <TimeChart
+        x={x}
+        series={empty}
+        ariaLabel="The MPC runs in this window on the same time axis, coloured by outcome"
+        syncKey={SYNC}
+        compact
+        yRange={[0, 1]}
+        xRange={zoom}
+        onZoom={onZoom}
+        shade={shade}
+        now={nowS}
+        timeZone={timeZone}
+        height={78}
+        ticks={ticks}
+        onTick={(tick) => tick.id && navigate(`/runs/${tick.id}`)}
+      />
+      <RunCounts runs={list} timeZone={timeZone} />
+    </section>
+  )
+}
+
+/** "38 OK · 2 Shadow build · 1 Error (run 985, 17:13) · Next MPC 17:28 · in 12:41". */
+function RunCounts({ runs, timeZone }: { runs: RunSummary[]; timeZone: string }) {
+  const jobs = useJobs()
+  const now = useNow(1000)
+  const mpc = jobs.data?.find((j) => j.id === 'emhass.mpc')
+  const groups = new Map<string, RunSummary[]>()
+  for (const r of runs) groups.set(r.outcome, [...(groups.get(r.outcome) ?? []), r])
+  const order = Object.keys(OUTCOMES)
+  const outcomes = [...groups.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b))
+  return (
+    <p className="run-counts">
+      {outcomes.map((outcome) => {
+        const these = groups.get(outcome) ?? []
+        const color = OUTCOMES[outcome]?.color ?? 'neutral'
+        const notable = color === 'red' || color === 'amber'
+        return (
+          <span key={outcome} className="labelled-lamp">
+            <Lamp color={color} />
+            {these.length} {outcomeLabel(outcome)}
+            {notable && these.length <= 3 && (
+              <span className="muted">
+                {' ('}
+                {these.map((r, i) => (
+                  <span key={r.id}>
+                    {i > 0 && ', '}
+                    <Link to={`/runs/${r.id}`}>run {r.id}</Link> {formatClock(r.started_at, timeZone).slice(0, 5)}
+                  </span>
+                ))}
+                {')'}
+              </span>
+            )}
+          </span>
+        )
+      })}
+      {runs.length === 0 && <span className="muted">No MPC runs in this window.</span>}
+      {mpc?.next_run && !mpc.paused && (
+        <span className="muted run-counts-next">
+          Next MPC {formatSlot(mpc.next_run, now, timeZone)} · {formatCountdown(mpc.next_run, now)}
+        </span>
+      )}
+    </p>
   )
 }

@@ -69,7 +69,7 @@ export function SetupCard() {
   const data = setup.data
   const complete = data ? data.done >= data.total : false
   return (
-    <section className="panel">
+    <section id="card-setup" className="panel">
       <details open={!complete}>
         <summary className="panel-head setup-summary">
           <h2>Getting started</h2>

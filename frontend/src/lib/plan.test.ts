@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { alignTo, deferrableColumns, lastRunNote, planChanges, rowAt, socColumns, socOf, stepSeries } from './plan'
+import {
+  alignTo,
+  deferrableColumns,
+  formatPlanCell,
+  lastRunNote,
+  planChanges,
+  planColumnLabel,
+  planColumnUnit,
+  rowAt,
+  socColumns,
+  socOf,
+  stepSeries,
+} from './plan'
 
 const t0 = Date.parse('2026-10-09T11:15:00Z') / 1000
 const row = (i: number, batt: number, grid: number, soc = 0.5) => ({
@@ -72,5 +84,22 @@ describe('lastRunNote', () => {
     expect(lastRunNote({ status: 'infeasible' }, null, now, 'Europe/Tallinn')).toBe(
       'EMHASS\'s last run (optimisation) ended with "infeasible": EMHASS gave no reason.',
     )
+  })
+})
+
+describe('plan columns in words', () => {
+  it('names the EMHASS columns', () => {
+    expect(planColumnLabel('P_batt')).toBe('Battery')
+    expect(planColumnLabel('P_deferrable0')).toBe('Deferrable 1')
+    expect(planColumnLabel('SOC_opt_1')).toBe('SOC battery 2')
+    expect(planColumnLabel('something_new')).toBe('something_new')
+  })
+
+  it('formats cells in the column unit', () => {
+    expect(formatPlanCell('P_grid', -2104)).toBe('-2.10')
+    expect(formatPlanCell('SOC_opt', 0.9412)).toBe('94.1')
+    expect(formatPlanCell('unit_load_cost', 0.15452)).toBe('15.5')
+    expect(formatPlanCell('optim_status', 'Optimal')).toBe('Optimal')
+    expect(planColumnUnit('unit_prod_price')).toBe('c/kWh')
   })
 })

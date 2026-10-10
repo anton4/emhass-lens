@@ -33,9 +33,19 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
           )}
         </div>
         {d && (
-          <button type="button" className="quiet" style={{ marginLeft: 'auto' }} onClick={() => setNext((n) => !n)}>
-            {next ? '← This slot' : `Next slot from ${formatSlot(d.next_start, now, tz)} →`}
-          </button>
+          <div className="segmented" role="group" aria-label="Which slot">
+            <button type="button" aria-pressed={!next} onClick={() => setNext(false)}>
+              This slot
+            </button>
+            <button
+              type="button"
+              aria-pressed={next}
+              onClick={() => setNext(true)}
+              title={`From ${formatSlot(d.next_start, now, tz)}`}
+            >
+              Next slot
+            </button>
+          </div>
         )}
       </div>
       <div className="panel-body">
@@ -85,24 +95,24 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
             <Link to="/settings?section=measurements">Settings → Measurements → Battery power</Link>.
           </div>
         )}
-        {!next && row && (
-          <p className="chart-note">
-            {anyMeasured ? (
-              <>
-                “now” comes from the sensors under <Link to="/settings?section=measurements">Settings → Measurements</Link>
-                . House load and PV are forecasts and aren't judged. The battery is compared with what the plan means for
-                the load and PV now, the grid with the plan; an amber mark means a difference of more than 300 W and 15 %
-                (SoC: 2 points from where the plan expects it now).
-              </>
-            ) : (
-              <>
-                Name your battery, grid, PV and load sensors under{' '}
-                <Link to="/settings?section=measurements">Settings → Measurements</Link> to see what happens now next to
-                the plan.
-              </>
-            )}
-          </p>
-        )}
+        {!next &&
+          row &&
+          (anyMeasured ? (
+            <details className="chart-note more">
+              <summary>How “now” is judged</summary>
+              “now” comes from the sensors under{' '}
+              <Link to="/settings?section=measurements">Settings → Measurements</Link>. House load and PV are forecasts
+              and aren't judged. The battery is compared with what the plan means for the load and PV now, the grid with
+              the plan; an amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from where the plan
+              expects it now).
+            </details>
+          ) : (
+            <p className="chart-note">
+              Name your battery, grid, PV and load sensors under{' '}
+              <Link to="/settings?section=measurements">Settings → Measurements</Link> to see what happens now next to
+              the plan.
+            </p>
+          ))}
       </div>
     </section>
   )

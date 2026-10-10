@@ -4,7 +4,9 @@ import { api, query } from '../api/client'
 import { useEvents } from '../api/events'
 import type { LogEntry } from '../api/types'
 import { ErrorNotice, PageHead } from '../components/PageHead'
+import { useNow } from '../components/useNow'
 import { downloadText } from '../lib/download'
+import { logVolume } from '../lib/logVolume'
 
 const MAX_LINES = 2000
 const POLL_MS = 5000
@@ -223,6 +225,7 @@ export function LogsPage() {
         </span>
       </div>
       <ErrorNotice error={error} />
+      <LogVolume lines={visible} />
       <div className="log-list" ref={listRef} onScroll={onScroll} role="log" aria-label="Log lines">
         <div style={{ padding: '2px 14px 8px' }}>
           <button type="button" className="quiet" onClick={loadOlder} disabled={loadingOlder || noOlder}>
@@ -235,6 +238,63 @@ export function LogsPage() {
         {visible.length === 0 && <div className="empty">No lines match these filters.</div>}
       </div>
     </>
+  )
+}
+
+const VOLUME_W = 960
+const VOLUME_H = 44
+
+/** Lines per 5 minutes over the last 3 hours (of the lines shown), with warnings and errors marked on top. */
+function LogVolume({ lines }: { lines: LogEntry[] }) {
+  const now = useNow(60_000)
+  const buckets = useMemo(() => logVolume(lines, now.getTime() / 1000), [lines, now])
+  const max = Math.max(1, ...buckets.map((b) => b.total))
+  const w = VOLUME_W / buckets.length
+  const bar = (i: number, top: number, height: number) =>
+    `M${(i * w + 2).toFixed(1)} ${top.toFixed(1)}h${(w - 4).toFixed(1)}v${height.toFixed(1)}h-${(w - 4).toFixed(1)}Z`
+  let all = ''
+  let warn = ''
+  let err = ''
+  buckets.forEach((b, i) => {
+    const h = (b.total / max) * (VOLUME_H - 8)
+    if (b.total > 0) all += bar(i, VOLUME_H - h, h)
+    if (b.warnings > 0) warn += bar(i, VOLUME_H - h - 6, 3)
+    if (b.errors > 0) err += bar(i, VOLUME_H - h - (b.warnings > 0 ? 10 : 6), 3)
+  })
+  const first = buckets[0]
+  const last = buckets[buckets.length - 1]
+  const clock = (s: number) => tsFmt.format(new Date(s * 1000)).slice(0, 5)
+  const warnings = buckets.reduce((n, b) => n + b.warnings, 0)
+  const errors = buckets.reduce((n, b) => n + b.errors, 0)
+  return (
+    <figure className="log-volume">
+      <figcaption>
+        <span>Lines per 5 minutes, last 3 hours</span>
+        <span className="legend-inline">
+          <span className="labelled-lamp">
+            <span className="swatch" style={{ background: 'var(--lamp-amber)' }} aria-hidden="true" />
+            {warnings} {warnings === 1 ? 'warning' : 'warnings'}
+          </span>
+          <span className="labelled-lamp">
+            <span className="swatch" style={{ background: 'var(--lamp-red)' }} aria-hidden="true" />
+            {errors} {errors === 1 ? 'error' : 'errors'}
+          </span>
+        </span>
+      </figcaption>
+      <svg viewBox={`0 0 ${VOLUME_W} ${VOLUME_H}`} preserveAspectRatio="none" aria-hidden="true">
+        <path d={all} style={{ fill: 'var(--chart-axis)' }} />
+        <path d={warn} style={{ fill: 'var(--lamp-amber)' }} />
+        <path d={err} style={{ fill: 'var(--lamp-red)' }} />
+      </svg>
+      {first && last && (
+        <div className="log-volume-axis" aria-hidden="true">
+          <span>{clock(first.start)}</span>
+          <span>{clock(first.start + 3600)}</span>
+          <span>{clock(first.start + 7200)}</span>
+          <span>{clock(last.start + 300)}</span>
+        </div>
+      )}
+    </figure>
   )
 }
 

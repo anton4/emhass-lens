@@ -2,7 +2,7 @@ import type { PlanRow } from '../../api/types'
 import { Lamp } from '../../components/Lamp'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
 import { measuredText, measuredTitle, type NowByKey } from '../../lib/planNow'
-import { batteryDirection, formatFraction, formatPower, formatPrice, gridDirection } from '../../lib/units'
+import { batteryDirection, formatCents, formatFraction, formatPower, gridDirection } from '../../lib/units'
 
 function Tile({
   label,
@@ -11,6 +11,7 @@ function Tile({
   now,
   differs,
   nowTitle,
+  quantity,
 }: {
   label: string
   value: string
@@ -18,11 +19,16 @@ function Tile({
   now?: string | null
   differs?: boolean | null
   nowTitle?: string
+  /** The quantity's chart colour ("--q-batt"), shown as a swatch next to the label. */
+  quantity?: string
 }) {
   return (
     <div className="tile" data-differs={differs || undefined}>
       <div className="tile-label">
-        <span>{label}</span>
+        <span className="tile-name">
+          {quantity && <span className="swatch" style={{ background: `var(${quantity})` }} aria-hidden="true" />}
+          {label}
+        </span>
         {differs === true && <Lamp color="amber" label="differs from the plan" />}
         {differs === false && <Lamp color="green" label="as planned" />}
       </div>
@@ -63,37 +69,66 @@ export function ThisSlot({
   return (
     <div className="tiles">
       {batt !== null && (
-        <Tile label="Battery" value={formatPower(Math.abs(batt))} sub={batteryDirection(batt)} {...m('batt')} />
+        <Tile
+          label="Battery"
+          quantity="--q-batt"
+          value={formatPower(Math.abs(batt))}
+          sub={batteryDirection(batt)}
+          {...m('batt')}
+        />
       )}
-      {grid !== null && <Tile label="Grid" value={formatPower(Math.abs(grid))} sub={gridDirection(grid)} {...m('grid')} />}
+      {grid !== null && (
+        <Tile
+          label="Grid"
+          quantity="--q-grid"
+          value={formatPower(Math.abs(grid))}
+          sub={gridDirection(grid)}
+          {...m('grid')}
+        />
+      )}
       {num(row, 'P_PV') !== null && (
         <Tile
           label="PV"
+          quantity="--q-pv"
           value={formatPower(num(row, 'P_PV'))}
           sub={curtail !== null && curtail > 0 ? `${formatPower(curtail)} curtailed` : 'No curtailment'}
           {...m('pv')}
         />
       )}
       {num(row, 'P_Load') !== null && (
-        <Tile label="House load" value={formatPower(num(row, 'P_Load'))} sub="forecast" {...m('load')} />
+        <Tile
+          label="House load"
+          quantity="--q-load"
+          value={formatPower(num(row, 'P_Load'))}
+          sub="forecast"
+          {...m('load')}
+        />
       )}
       {deferrables.map((c, i) => (
         <Tile
           key={c}
           label={deferrables.length === 1 ? 'Deferrable load' : `Deferrable load ${i + 1}`}
+          quantity="--q-ev"
           value={formatPower(num(row, c))}
           sub={(num(row, c) ?? 0) > 0 ? 'Running' : 'Off'}
           now={i === 0 ? charger : null}
         />
       ))}
       {socOf(row) !== null && (
-        <Tile label="SOC at slot end" value={formatFraction(socOf(row))} sub="planned" {...m('soc')} />
+        <Tile
+          label="SOC at slot end"
+          quantity="--q-batt"
+          value={formatFraction(socOf(row), 0)}
+          sub="planned"
+          {...m('soc')}
+        />
       )}
       {loadCost !== null && (
         <Tile
           label="Import price"
-          value={formatPrice(loadCost)}
-          sub={prodPrice !== null ? `export ${formatPrice(prodPrice)}` : undefined}
+          quantity="--q-import"
+          value={formatCents(loadCost)}
+          sub={prodPrice !== null ? `export ${formatCents(prodPrice)}` : undefined}
         />
       )}
     </div>

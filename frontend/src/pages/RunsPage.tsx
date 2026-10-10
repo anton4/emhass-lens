@@ -4,6 +4,10 @@ import { api, query } from '../api/client'
 import { useJobs, useRuns, useStatus } from '../api/queries'
 import type { RunSummary } from '../api/types'
 import { OutcomeChip } from '../components/Outcome'
+import { RunTimeline } from '../components/RunTimeline'
+import { useMediaQuery } from '../components/useMediaQuery'
+import { useNow } from '../components/useNow'
+import { RunPreview } from './RunPreview'
 import { OUTCOME_NAMES, outcomeLabel } from '../lib/outcomes'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { SortableTh } from '../components/SortableTh'
@@ -24,6 +28,11 @@ export function RunsPage() {
   const sortKey = params.get('sort') ?? 'started'
   const sortDir: SortDir = params.get('dir') === 'asc' ? 'asc' : 'desc'
   const sort = { key: sortKey, dir: sortDir }
+  // Wide screens show a picked run beside the list; narrow ones open it
+  const wide = useMediaQuery('(min-width: 1180px)')
+  const picked = Number(params.get('run')) || null
+  const previewed = wide ? picked : null
+  const now = useNow(60_000)
   const order: SortDir = SERVER_SORTED.has(sortKey) ? sortDir : 'desc'
 
   const tz = useStatus().data?.timezone
@@ -105,6 +114,11 @@ export function RunsPage() {
   }
 
   const ranged = Boolean(from || to)
+  const pick = (id: number) => (wide ? setFilters({ run: String(id) }) : navigate(`/runs/${id}`))
+  const nowS = now.getTime() / 1000
+  const oldest = loaded.reduce((min, r) => Math.min(min, Date.parse(r.started_at) / 1000), nowS)
+  const windowFrom = since ? Date.parse(since) / 1000 : oldest
+  const windowTo = Math.min(until ? Date.parse(until) / 1000 : nowS, nowS)
   return (
     <>
       <PageHead
@@ -175,82 +189,101 @@ export function RunsPage() {
         </div>
       </div>
       <ErrorNotice error={runs.error} />
-      <section className="panel">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <SortableTh label="Run" sortKey="id" sort={sort} onSort={onSort} />
-                <SortableTh label="Job" sortKey="job" sort={sort} onSort={onSort} />
-                <SortableTh label="Started" sortKey="started" sort={sort} onSort={onSort} />
-                <SortableTh label="Took" sortKey="took" sort={sort} onSort={onSort} />
-                <SortableTh label="Outcome" sortKey="outcome" sort={sort} onSort={onSort} />
-                <th>Summary</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((run) => (
-                <tr key={run.id} className="clickable" onClick={() => navigate(`/runs/${run.id}`)}>
-                  <td className="num">
-                    <Link to={`/runs/${run.id}`} onClick={(e) => e.stopPropagation()}>
-                      {run.id}
-                    </Link>
-                    {run.pinned ? <span className="faint"> pinned</span> : null}
-                  </td>
-                  <td>
-                    <div className="cell-title">{jobTitle(run.job)}</div>
-                    <div className="cell-sub">
-                      {run.trigger}
-                      {run.mode ? `, ${run.mode.replace('_', ' ')}` : ''}
-                    </div>
-                  </td>
-                  <td className="num">
-                    <time dateTime={run.started_at}>{formatDateTime(run.started_at, tz)}</time>
-                  </td>
-                  <td className="num">{run.outcome === 'running' ? '…' : formatDuration(run.duration_ms)}</td>
-                  <td>
-                    <OutcomeChip outcome={run.outcome} />
-                  </td>
-                  <td className="wrap">{run.error ?? run.summary ?? <span className="faint">—</span>}</td>
+      <div className="runs-split" data-preview={previewed !== null || undefined}>
+        <section className="panel">
+          <RunTimeline
+            runs={loaded}
+            from={windowFrom}
+            to={windowTo}
+            timeZone={tz}
+            jobTitle={jobTitle}
+            selected={previewed}
+            onPick={(run) => pick(run.id)}
+          />
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <SortableTh label="Run" sortKey="id" sort={sort} onSort={onSort} />
+                  <SortableTh label="Job" sortKey="job" sort={sort} onSort={onSort} />
+                  <SortableTh label="Started" sortKey="started" sort={sort} onSort={onSort} />
+                  <SortableTh label="Took" sortKey="took" sort={sort} onSort={onSort} />
+                  <SortableTh label="Outcome" sortKey="outcome" sort={sort} onSort={onSort} />
+                  <th>Summary</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {runs.isSuccess && loaded.length === 0 && (
-          <Empty title={ranged || job || outcome ? 'No runs match the filters' : 'No runs yet'}>
-            {ranged || job || outcome ? (
-              'Widen the time range or pick another job or outcome.'
-            ) : (
-              <>
-                Jobs run on their schedule; you can also start one from <Link to="/health">Health</Link>.
-              </>
-            )}
-          </Empty>
-        )}
-        <div className="panel-body cell-sub">
-          {!SERVER_SORTED.has(sortKey) && loaded.length > 0 && (
-            <>Sorted within the {loaded.length} runs loaded so far. </>
-          )}
-          Times in {tz ?? "your browser's timezone"}
-          {ranged ? ', and the range includes From but not To.' : '.'}
-        </div>
-        {loaded.length >= PAGE && (
-          <div className="panel-body">
-            <button type="button" onClick={loadMore} disabled={loadingMore || noMore}>
-              {noMore
-                ? order === 'asc'
-                  ? 'No newer runs'
-                  : 'No older runs'
-                : loadingMore
-                  ? 'Loading…'
-                  : order === 'asc'
-                    ? 'Load newer runs'
-                    : 'Load older runs'}
-            </button>
+              </thead>
+              <tbody>
+                {shown.map((run) => (
+                  <tr
+                    key={run.id}
+                    className="clickable"
+                    aria-selected={run.id === previewed || undefined}
+                    onClick={() => pick(run.id)}
+                  >
+                    <td className="num">
+                      <Link to={`/runs/${run.id}`} onClick={(e) => e.stopPropagation()}>
+                        {run.id}
+                      </Link>
+                      {run.pinned ? <span className="faint"> pinned</span> : null}
+                    </td>
+                    <td>
+                      <div className="cell-title">{jobTitle(run.job)}</div>
+                      <div className="cell-sub">
+                        {run.trigger}
+                        {run.mode ? `, ${run.mode.replace('_', ' ')}` : ''}
+                      </div>
+                    </td>
+                    <td className="num">
+                      <time dateTime={run.started_at}>{formatDateTime(run.started_at, tz)}</time>
+                    </td>
+                    <td className="num">{run.outcome === 'running' ? '…' : formatDuration(run.duration_ms)}</td>
+                    <td>
+                      <OutcomeChip outcome={run.outcome} />
+                    </td>
+                    <td className="wrap">{run.error ?? run.summary ?? <span className="faint">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          {runs.isSuccess && loaded.length === 0 && (
+            <Empty title={ranged || job || outcome ? 'No runs match the filters' : 'No runs yet'}>
+              {ranged || job || outcome ? (
+                'Widen the time range or pick another job or outcome.'
+              ) : (
+                <>
+                  Jobs run on their schedule; you can also start one from <Link to="/health">Health</Link>.
+                </>
+              )}
+            </Empty>
+          )}
+          <div className="panel-body cell-sub">
+            {!SERVER_SORTED.has(sortKey) && loaded.length > 0 && (
+              <>Sorted within the {loaded.length} runs loaded so far. </>
+            )}
+            Times in {tz ?? "your browser's timezone"}
+            {ranged ? ', and the range includes From but not To.' : '.'}
+          </div>
+          {loaded.length >= PAGE && (
+            <div className="panel-body">
+              <button type="button" onClick={loadMore} disabled={loadingMore || noMore}>
+                {noMore
+                  ? order === 'asc'
+                    ? 'No newer runs'
+                    : 'No older runs'
+                  : loadingMore
+                    ? 'Loading…'
+                    : order === 'asc'
+                      ? 'Load newer runs'
+                      : 'Load older runs'}
+              </button>
+            </div>
+          )}
+        </section>
+        {previewed !== null && (
+          <RunPreview id={previewed} jobTitle={jobTitle} timeZone={tz} onClose={() => setFilters({ run: '' })} />
         )}
-      </section>
+      </div>
     </>
   )
 }

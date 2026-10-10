@@ -37,6 +37,13 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (night): redesign "D", step 2: page layouts (0.4.1)
+- Plan: `lib/planSummary.ts` (the one-line summary), facts row, Chart/Table toggle, `TimeChart` got `ticks`/`onTick`/`compact` for the MPC run strip (`PlanCharts` → `MpcRunStrip`), prices in c/kWh (`formatCents`, `centsTick`), plan table column names (`planColumnLabel`/`formatPlanCell` in `lib/plan.ts`).
+- Runs: `components/RunTimeline.tsx` (lanes from `lib/runLanes.ts`), `pages/RunPreview.tsx` beside the list at ≥ 1180 px (`?run=` in the address).
+- Run detail: tabs Summary / Artifacts / Logs (`?tab=`); artifact names moved to `lib/artifacts.ts`.
+- Health: sticky section links. Settings: "was …" next to changed fields. Logs: `lib/logVolume.ts` strip.
+- Checked against the e2e stack (real HA 2026.10, EMHASS 0.18.5) with a local App in live mode; the Inputs page, the controller pages (Inverter, EV charger, Market) and the phone layouts only got the shared look so far.
+
 ### 2026-10-10 (night): redesign "D", step 1: look and shell (0.4.0)
 - The owner picked design **D** from the canvas https://claude.ai/artifact/1rEYmoWQuv6B9U7cMq1eKo: row C's "Workbench" layout (text sidebar, ⌘K, frameless sections, hairlines) in row B's Home Assistant colours (cool greys, HA blue for actions and selection), Geist kept.
 - Step 1 (this release) changes every page at once through the shell and the shared CSS:

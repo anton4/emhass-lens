@@ -29,7 +29,15 @@ function matches(text: string, query: string): boolean {
 }
 
 /** ⌘K / Ctrl+K: jump to a page, a run or a settings section, or run an action, by typing. */
-export function CommandPalette({ open, onClose, actions }: { open: boolean; onClose: () => void; actions: PaletteAction[] }) {
+export function CommandPalette({
+  open,
+  onClose,
+  actions,
+}: {
+  open: boolean
+  onClose: () => void
+  actions: PaletteAction[]
+}) {
   const ref = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const listId = useId()
@@ -153,7 +161,11 @@ export function CommandPalette({ open, onClose, actions }: { open: boolean; onCl
                   onClick={() => choose(command)}
                 >
                   <span>{command.label}</span>
-                  {command.hint ? <kbd>{command.hint}</kbd> : i === active ? <Icon name="arrowRight" size={14} /> : null}
+                  {command.hint ? (
+                    <kbd>{command.hint}</kbd>
+                  ) : i === active ? (
+                    <Icon name="arrowRight" size={14} />
+                  ) : null}
                 </div>
               </li>
             )

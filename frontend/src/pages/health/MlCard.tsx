@@ -58,7 +58,7 @@ export function MlCard({ writable }: { writable: boolean }) {
   }
 
   return (
-    <section className="panel">
+    <section id="card-ml" className="panel">
       <div className="panel-head">
         <h2>ML load forecast</h2>
         {current && <span className="muted">model {current.ml.sklearn_model}, load sensor {current.ml.var_model}</span>}

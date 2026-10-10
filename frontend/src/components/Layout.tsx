@@ -42,7 +42,12 @@ function BannerSlot({ banners }: { banners: Banner[] }) {
           <Lamp color={b.color} />
           <div className="banner-text">{b.content}</div>
           {i === 0 && banners.length > 1 && (
-            <button type="button" className="banner-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+            <button
+              type="button"
+              className="banner-more"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+            >
               {expanded ? 'Show fewer' : `+${banners.length - 1} more`}
             </button>
           )}
@@ -85,7 +90,15 @@ function UpdateLink({ status }: { status: StatusInfo | undefined }) {
   return null
 }
 
-function Sidebar({ status, open, onNavigate }: { status: StatusInfo | undefined; open: boolean; onNavigate: () => void }) {
+function Sidebar({
+  status,
+  open,
+  onNavigate,
+}: {
+  status: StatusInfo | undefined
+  open: boolean
+  onNavigate: () => void
+}) {
   const problems = status?.problems ?? []
   const severe = problems.some((p) => p.severity === 'error')
   const version = status?.version ?? UI_VERSION
@@ -107,7 +120,11 @@ function Sidebar({ status, open, onNavigate }: { status: StatusInfo | undefined;
                 <span className="nav-label">{page.label}</span>
                 {page.experimental && <span className="nav-tag">exp</span>}
                 {page.to === '/health' && problems.length > 0 && (
-                  <span className="nav-count" data-color={severe ? 'red' : 'amber'} title={problems.map((p) => p.title).join('\n')}>
+                  <span
+                    className="nav-count"
+                    data-color={severe ? 'red' : 'amber'}
+                    title={problems.map((p) => p.title).join('\n')}
+                  >
                     <Lamp color={severe ? 'red' : 'amber'} />
                     {problems.length}
                     <span className="visually-hidden">{problems.length === 1 ? ' problem' : ' problems'}</span>
@@ -205,7 +222,7 @@ export function Layout() {
     setRunError(null)
     runJob.mutate('emhass.mpc', {
       onSuccess: (result) => {
-        if (result.run_id) navigate(`/runs/${result.run_id}`)
+        navigate(result.run_id ? `/runs/${result.run_id}` : '/runs?job=emhass.mpc')
       },
       onError: (error) => setRunError((error as Error).message),
     })
@@ -220,7 +237,14 @@ export function Layout() {
         return
       }
       if (event.key === 'Escape') setMenuOpen(false)
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || document.querySelector('dialog[open]')) return
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isTyping(event.target) ||
+        document.querySelector('dialog[open]')
+      )
+        return
       if (pendingG.current !== null) {
         window.clearTimeout(pendingG.current)
         pendingG.current = null

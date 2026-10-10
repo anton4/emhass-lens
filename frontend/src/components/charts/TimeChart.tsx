@@ -24,6 +24,17 @@ export interface ChartSeries {
   format?: (value: number) => string
 }
 
+/** A mark at one moment, drawn as a short bar (MPC runs on the plan's time axis). */
+export interface ChartTick {
+  t: number
+  /** CSS custom property or colour. */
+  color: string
+  /** Shown as the tooltip when the pointer is near it. */
+  label: string
+  /** What the tick stands for (a run id), for onTick. */
+  id?: number
+}
+
 interface TimeChartProps {
   x: number[]
   series: ChartSeries[]
@@ -46,6 +57,12 @@ interface TimeChartProps {
   now?: number
   /** Width every legend value takes, so rows don't reflow as values change ("0 W" vs "−20.00 kW"); default 10ch. */
   legendValueWidth?: string
+  /** Marks drawn as bars across the plot; a strip of ticks needs no series. */
+  ticks?: ChartTick[]
+  /** Called with the tick nearest a click (within a few pixels). */
+  onTick?: (tick: ChartTick) => void
+  /** No legend and no y-axis labels (the y-axis keeps its width so the time axis lines up with the charts above). */
+  compact?: boolean
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -90,21 +107,21 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
-  shade = [], markers = [], now, legendValueWidth,
+  shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks read comes from this ref, so data and zoom updates don't need a rebuild.
-  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom })
+  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick })
   useEffect(() => {
-    extras.current = { bands, shade, markers, now, x, xRange, onZoom }
+    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick }
   })
 
   const zoomable = Boolean(onZoom)
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill]), height, yRange, fit, zoomable, syncKey, timeZone,
-    theme,
+    theme, compact,
   ])
 
   useEffect(() => {
@@ -125,7 +142,7 @@ export function TimeChart({
         // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
         bind: zoomable ? { dblclick: () => null } : undefined,
       },
-      legend: { live: true },
+      legend: { show: !compact, live: true },
       scales: {
         x: { time: true },
         y: yRange
@@ -144,10 +161,14 @@ export function TimeChart({
         },
         {
           stroke: ink,
-          grid: { stroke: grid, width: 1 },
-          ticks: { stroke: grid, width: 1 },
+          grid: { stroke: grid, width: 1, show: !compact },
+          ticks: { stroke: grid, width: 1, show: !compact },
           size: 64,
-          values: yFormat ? (_u, splits) => splits.map((v) => (v === null ? '' : yFormat(v))) : undefined,
+          values: compact
+            ? () => []
+            : yFormat
+              ? (_u, splits) => splits.map((v) => (v === null ? '' : yFormat(v)))
+              : undefined,
         },
       ],
       series: [
@@ -169,6 +190,29 @@ export function TimeChart({
         ready: [
           (u) => {
             u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
+            // The tick nearest the pointer, within 6 px: its label as the tooltip, a click opens it
+            const nearest = (event: MouseEvent): ChartTick | undefined => {
+              const px = event.offsetX
+              let best: ChartTick | undefined
+              let bestD = 6
+              for (const tick of extras.current.ticks) {
+                const d = Math.abs(u.valToPos(tick.t, 'x') - px)
+                if (d <= bestD) {
+                  best = tick
+                  bestD = d
+                }
+              }
+              return best
+            }
+            u.over.addEventListener('mousemove', (event) => {
+              const tick = nearest(event)
+              u.over.title = tick?.label ?? ''
+              u.over.style.cursor = tick && extras.current.onTick ? 'pointer' : ''
+            })
+            u.over.addEventListener('click', (event) => {
+              const tick = nearest(event)
+              if (tick) extras.current.onTick?.(tick)
+            })
           },
         ],
         setSelect: [
@@ -214,6 +258,15 @@ export function TimeChart({
             }
             for (const m of extras.current.markers) line(m, cssColor('--chart-axis'), [])
             if (extras.current.now !== undefined) line(extras.current.now, cssColor('--chart-now'), [])
+            const dpr = window.devicePixelRatio
+            ctx.save()
+            for (const tick of extras.current.ticks) {
+              const px = u.valToPos(tick.t, 'x', true)
+              if (px < bbox.left || px > bbox.left + bbox.width) continue
+              ctx.fillStyle = cssColor(tick.color)
+              ctx.fillRect(Math.round(px - 1.5 * dpr), bbox.top + bbox.height * 0.2, Math.round(3 * dpr), bbox.height * 0.6)
+            }
+            ctx.restore()
           },
         ],
       },
@@ -248,7 +301,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, shade, markers, now])
+  }, [bands, shade, markers, now, ticks])
 
   return (
     <div

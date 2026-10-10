@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Plan: the plan in one line at the top ("Discharging the battery until 21:30, then idle · SOC 94 % → 38 %"), the facts in one row, **Chart / Table** for the whole plan, This slot / Next slot as a switch, and each tile marked with its chart colour.
+- Plan: the **MPC runs** sit under the charts on the same time axis, coloured by outcome; click one to open it. The line under them counts the runs per outcome and shows when the next is due.
+- Plan: prices in c/kWh with one decimal (tiles, chart and table). The table names its columns in words (Battery, Grid, Import price, …) with EMHASS's names under them, and shows power in kW and SOC in %.
+- Plan: How accurate the plan has been and Changes vs the previous plan sit side by side.
+- Runs: a timeline above the list shows the listed runs in a lane per kind of job. On a wide screen a click shows the run beside the list instead of leaving the page.
+- Run pages have tabs: Summary, Artifacts and Logs (the tab is part of the address).
+- Health: links at the top jump to each section and stay in view while you scroll.
+- Settings: a changed field shows its saved value next to it ("was 45 s"); secrets never do.
+- Logs: a strip counts the lines per 5 minutes over the last 3 hours, with warnings and errors marked.
+
 ## 0.4.0
 
 - A new look: Home Assistant's blue and cool greys on a white page, the Geist typeface (bundled with the App, nothing loads from the internet) and sections without boxes. Dark mode follows the system as before.

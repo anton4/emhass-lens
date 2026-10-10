@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { api, apiUrl } from '../api/client'
 import { keys, useJobs, useRun, useStatus } from '../api/queries'
 import type { ArtifactInfo, LogEntry } from '../api/types'
@@ -9,11 +9,17 @@ import { OutcomeChip } from '../components/Outcome'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { copyText, downloadText } from '../lib/download'
 import { formatBytes, formatDuration, formatTime } from '../lib/format'
+import { ARTIFACT_NAMES } from '../lib/artifacts'
 import { RunInsights } from './RunInsights'
 import { LabelledLamp } from '../components/Lamp'
 
+type Tab = 'summary' | 'artifacts' | 'logs'
+
 export function RunDetailPage() {
   const id = Number(useParams().id)
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = params.get('tab') === 'artifacts' ? 'artifacts' : params.get('tab') === 'logs' ? 'logs' : 'summary'
+  const setTab = (next: Tab) => setParams(next === 'summary' ? {} : { tab: next }, { replace: true })
   const run = useRun(id)
   const jobs = useJobs()
   const status = useStatus()
@@ -36,14 +42,13 @@ export function RunDetailPage() {
 
   if (!Number.isFinite(id)) return <Empty title="No such run" />
   const r = run.data
-  const jobTitle = jobs.data?.find((j) => j.id === r?.job)?.title ?? (r ? (EXTRA_JOB_TITLES[r.job] ?? r.job) : undefined)
+  const jobTitle =
+    jobs.data?.find((j) => j.id === r?.job)?.title ?? (r ? (EXTRA_JOB_TITLES[r.job] ?? r.job) : undefined)
   const writable = status.data?.writable ?? false
 
+  const logCount = logs.data?.length
   return (
     <>
-      <p style={{ margin: '0 0 8px' }}>
-        <Link to="/runs">All runs</Link>
-      </p>
       <PageHead title={r ? `Run ${r.id}: ${jobTitle}` : `Run ${id}`}>
         {r && (
           <div className="toolbar">
@@ -59,6 +64,19 @@ export function RunDetailPage() {
       </PageHead>
       <ErrorNotice error={run.error ?? pin.error} />
       {r && (
+        <div className="tabs" role="tablist" aria-label="Run views">
+          <button type="button" role="tab" aria-selected={tab === 'summary'} onClick={() => setTab('summary')}>
+            Summary
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'artifacts'} onClick={() => setTab('artifacts')}>
+            Artifacts <span className="tab-count">{r.artifacts.length}</span>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'logs'} onClick={() => setTab('logs')}>
+            Logs {logCount !== undefined && <span className="tab-count">{logCount}</span>}
+          </button>
+        </div>
+      )}
+      {r && tab === 'summary' && (
         <>
           <section className="panel">
             <div className="panel-body">
@@ -99,7 +117,10 @@ export function RunDetailPage() {
               {r.summary &&
                 (r.job.startsWith('driver.') ? (
                   <p className="run-headline" style={{ margin: '16px 0 0' }}>
-                    <LabelledLamp color={r.outcome === 'ok' ? 'green' : r.outcome === 'running' ? 'neutral' : 'red'} text={r.summary} />
+                    <LabelledLamp
+                      color={r.outcome === 'ok' ? 'green' : r.outcome === 'running' ? 'neutral' : 'red'}
+                      text={r.summary}
+                    />
                   </p>
                 ) : (
                   <p style={{ margin: '16px 0 0' }}>{r.summary}</p>
@@ -109,47 +130,49 @@ export function RunDetailPage() {
           </section>
 
           <RunInsights runId={id} job={r.job} kinds={r.artifacts.map((a) => a.kind)} />
-
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Details</h2>
-              <span className="muted">What the run looked at and produced</span>
-            </div>
-            {r.artifacts.length === 0 ? (
-              <Empty title="Nothing stored for this run">This job doesn't record inputs or payloads.</Empty>
-            ) : (
-              r.artifacts.map((a) => <Artifact key={a.id} runId={id} artifact={a} />)
-            )}
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Logs</h2>
-              <Link to={`/logs?run=${id}`}>Open in Logs</Link>
-            </div>
-            <div className="log-list" style={{ maxHeight: 420, minHeight: 0, border: 0 }}>
-              {(logs.data ?? []).map((l) => (
-                <div key={l.id} className="log-line" data-level={l.level}>
-                  <time className="log-ts" dateTime={l.ts}>
-                    {new Date(l.ts).toLocaleTimeString(undefined, { hour12: false })}
-                  </time>
-                  <span className="log-level" data-level={l.level}>
-                    {l.level === 'WARNING' ? 'WARN' : l.level}
-                  </span>
-                  <span className="log-comp">{l.component}</span>
-                  <span className="log-msg">{l.msg}</span>
-                  {l.exc && (
-                    <details className="log-exc">
-                      <summary>Traceback</summary>
-                      {l.exc}
-                    </details>
-                  )}
-                </div>
-              ))}
-              {logs.isSuccess && logs.data.length === 0 && <div className="empty">This run wrote no log lines.</div>}
-            </div>
-          </section>
         </>
+      )}
+      {r && tab === 'artifacts' && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Artifacts</h2>
+            <span className="muted">What the run looked at and produced, as stored</span>
+          </div>
+          {r.artifacts.length === 0 ? (
+            <Empty title="Nothing stored for this run">This job doesn't record inputs or payloads.</Empty>
+          ) : (
+            r.artifacts.map((a) => <Artifact key={a.id} runId={id} artifact={a} />)
+          )}
+        </section>
+      )}
+      {r && tab === 'logs' && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Logs</h2>
+            <Link to={`/logs?run=${id}`}>Open in Logs</Link>
+          </div>
+          <div className="log-list" style={{ maxHeight: 'none', minHeight: 0, marginTop: 12 }}>
+            {(logs.data ?? []).map((l) => (
+              <div key={l.id} className="log-line" data-level={l.level}>
+                <time className="log-ts" dateTime={l.ts}>
+                  {new Date(l.ts).toLocaleTimeString(undefined, { hour12: false })}
+                </time>
+                <span className="log-level" data-level={l.level}>
+                  {l.level === 'WARNING' ? 'WARN' : l.level}
+                </span>
+                <span className="log-comp">{l.component}</span>
+                <span className="log-msg">{l.msg}</span>
+                {l.exc && (
+                  <details className="log-exc">
+                    <summary>Traceback</summary>
+                    {l.exc}
+                  </details>
+                )}
+              </div>
+            ))}
+            {logs.isSuccess && logs.data.length === 0 && <div className="empty">This run wrote no log lines.</div>}
+          </div>
+        </section>
       )}
     </>
   )
@@ -166,36 +189,6 @@ const EXTRA_JOB_TITLES: Record<string, string> = {
   'market.compare': 'Market comparison',
   'driver.take_over': 'Take over from the HACS integration',
   'driver.hand_back': 'Hand back to the HACS integration',
-}
-
-const ARTIFACT_NAMES: Record<string, string> = {
-  event: 'Event sent to Home Assistant',
-  inputs: 'Inputs',
-  request: 'Request sent',
-  explain: 'Explain',
-  validation: 'Validation',
-  response: 'Response',
-  emhass_last_run: 'EMHASS last run',
-  plan: 'Plan',
-  checks: 'Configuration checks',
-  emhass_config: 'EMHASS configuration',
-  parity: 'Parity report',
-  forecast: 'Forecast',
-  next: 'Next fetches',
-  last_run: 'EMHASS last run',
-  decision: 'Inverter decision',
-  calls: 'Service calls',
-  readback: 'Read back',
-  comparison: 'Compared with the automation',
-  charger_decision: 'Charger decision',
-  charger_calls: 'Service calls',
-  charger_readback: 'Read back',
-  charger_comparison: 'Compared with the automation',
-  resume: 'Resume steps',
-  market_decision: 'Market decision',
-  market_comparison: 'Compared with the automation',
-  notification: 'Phone message',
-  handback_calls: 'Hand-back calls',
 }
 
 function Artifact({ runId, artifact }: { runId: number; artifact: ArtifactInfo }) {

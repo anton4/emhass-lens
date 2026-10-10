@@ -31,9 +31,7 @@ export function num(row: PlanRow | null | undefined, column: string): number | n
 
 /** Deferrable-load power columns present in the plan, in order (P_deferrable0, P_deferrable1, …). */
 export function deferrableColumns(columns: string[]): string[] {
-  return columns
-    .filter((c) => /^P_deferrable\d+$/.test(c))
-    .sort((a, b) => Number(a.slice(12)) - Number(b.slice(12)))
+  return columns.filter((c) => /^P_deferrable\d+$/.test(c)).sort((a, b) => Number(a.slice(12)) - Number(b.slice(12)))
 }
 
 export function hasColumn(rows: PlanRow[], column: string): boolean {
@@ -52,6 +50,56 @@ export function socOf(row: PlanRow | null | undefined): number | null {
   if (!row) return null
   const column = socColumns(Object.keys(row))[0]
   return column ? num(row, column) : null
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  P_PV: 'PV',
+  P_Load: 'House load',
+  P_batt: 'Battery',
+  P_grid: 'Grid',
+  P_grid_pos: 'Grid import',
+  P_grid_neg: 'Grid export',
+  P_PV_curtailment: 'PV curtailed',
+  P_hybrid_inverter: 'Hybrid inverter',
+  SOC_opt: 'SOC',
+  unit_load_cost: 'Import price',
+  unit_prod_price: 'Export price',
+  optim_status: 'Solver status',
+  cost_profit: 'Cost or profit',
+}
+
+/** A plan column in words ("P_batt" → "Battery"); unknown columns keep EMHASS's name. */
+export function planColumnLabel(column: string): string {
+  const known = COLUMN_LABELS[column]
+  if (known) return known
+  const deferrable = /^P_deferrable(\d+)$/.exec(column)
+  if (deferrable) return `Deferrable ${Number(deferrable[1]) + 1}`
+  const soc = /^SOC_opt_(\d+)$/.exec(column)
+  if (soc) return `SOC battery ${Number(soc[1]) + 1}`
+  return column
+}
+
+/** The unit a plan column is shown in. */
+export function planColumnUnit(column: string): string {
+  if (/^P_/.test(column)) return 'kW'
+  if (/^SOC_opt/.test(column)) return '%'
+  if (column === 'unit_load_cost' || column === 'unit_prod_price') return 'c/kWh'
+  return ''
+}
+
+/** A plan cell in its column's unit: W as kW, SOC as %, prices in c/kWh. */
+export function formatPlanCell(column: string, value: unknown): string {
+  if (!isNumber(value)) return value === null || value === undefined ? '—' : String(value)
+  switch (planColumnUnit(column)) {
+    case 'kW':
+      return (value / 1000).toFixed(2)
+    case '%':
+      return (value * 100).toFixed(1)
+    case 'c/kWh':
+      return (value * 100).toFixed(1)
+    default:
+      return Math.abs(value) >= 10 ? String(Math.round(value)) : value.toFixed(4)
+  }
 }
 
 export interface PlanChange {

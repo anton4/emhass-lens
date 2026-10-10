@@ -2,11 +2,20 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { usePlan, usePlanHistory, useStatus } from '../api/queries'
 import type { PlanRow } from '../api/types'
-import { LabelledLamp } from '../components/Lamp'
+import { Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { formatDuration, formatSlotDate, formatTime } from '../lib/format'
-import { EXTERNAL_PLAN_NOTE, lastRunNote, planChanges, rowAt } from '../lib/plan'
+import { formatDuration, formatSlot, formatSlotDate, formatTime } from '../lib/format'
+import {
+  EXTERNAL_PLAN_NOTE,
+  formatPlanCell,
+  lastRunNote,
+  planChanges,
+  planColumnLabel,
+  planColumnUnit,
+  rowAt,
+} from '../lib/plan'
+import { planSummary } from '../lib/planSummary'
 import {
   HISTORY_WINDOWS,
   HORIZON_KEY,
@@ -79,14 +88,22 @@ export function PlanPage() {
   const first = rows[0]?.timestamp
   const last = rows[rows.length - 1]?.timestamp
 
+  const summary = planSummary(rows, nowS, tz)
+  const viewToggle = (
+    <div className="segmented" role="group" aria-label="Show the plan as">
+      <button type="button" aria-pressed={!table} onClick={() => setTable(false)}>
+        Chart
+      </button>
+      <button type="button" aria-pressed={table} onClick={() => setTable(true)}>
+        Table
+      </button>
+    </div>
+  )
+
   return (
     <>
-      <PageHead title="Plan" intro="What EMHASS wants the battery, grid and loads to do in each quarter-hour.">
-        <div className="toolbar">
-          <span title={runNote ?? undefined}>
-            <LabelledLamp color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'} text={`EMHASS ${status ?? '—'}`} />
-          </span>
-        </div>
+      <PageHead title="Plan" intro={summary ? <span className="plan-summary">{summary}</span> : undefined}>
+        {viewToggle}
       </PageHead>
       <ErrorNotice error={plan.error} />
       {leftover && (
@@ -100,91 +117,131 @@ export function PlanPage() {
         </div>
       )}
 
-      <section className="panel">
-        <div className="panel-body">
-          <dl className="facts">
-            <div>
-              <dt>Planned at</dt>
-              <dd>
-                <time dateTime={current.generated_at}>{formatTime(current.generated_at, now, tz)}</time>
-              </dd>
-            </div>
-            <div>
-              <dt>Made for</dt>
-              <dd>
-                {DRIVERS[current.driver] ?? current.driver}
-                {current.driver === 'external' && (
-                  <div className="cell-sub">
-                    {EXTERNAL_PLAN_NOTE} <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it
-                    was picked up.
-                  </div>
-                )}
-              </dd>
-            </div>
-            {duration !== null && (
-              <div>
-                <dt>Solve took</dt>
-                <dd>{formatDuration(duration)}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Horizon</dt>
-              <dd>
-                {rows.length} slots
-                <div className="cell-sub">
-                  {formatTime(first, now, tz)} → {formatTime(last, now, tz)}
-                </div>
-              </dd>
-            </div>
-            <div>
-              <dt>Times in</dt>
-              <dd>{tz}</dd>
-            </div>
+      <dl className="facts facts-inline">
+        <div>
+          <dt>Planned at</dt>
+          <dd>
+            <span title={runNote ?? `EMHASS said: ${status ?? 'nothing'}`}>
+              <Lamp
+                color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'}
+                label={`EMHASS said: ${status ?? 'nothing'}`}
+              />
+            </span>{' '}
+            <time dateTime={current.generated_at}>{formatTime(current.generated_at, now, tz)}</time>
             {current.run_id && (
-              <div>
-                <dt>Run</dt>
-                <dd>
-                  <Link to={`/runs/${current.run_id}`}>#{current.run_id}</Link>
-                </dd>
+              <>
+                {' · '}
+                <Link to={`/runs/${current.run_id}`}>run {current.run_id}</Link>
+              </>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Made for</dt>
+          <dd>
+            {DRIVERS[current.driver] ?? current.driver}
+            {current.driver === 'external' && (
+              <div className="cell-sub">
+                {EXTERNAL_PLAN_NOTE} <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it was
+                picked up.
               </div>
             )}
-          </dl>
+          </dd>
         </div>
-      </section>
+        {duration !== null && (
+          <div>
+            <dt>Solve took</dt>
+            <dd>{formatDuration(duration)}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Horizon</dt>
+          <dd>
+            {rows.length} slots, {formatSlot(first ? String(first) : null, now, tz)} →{' '}
+            {formatSlot(last ? String(last) : null, now, tz)}
+          </dd>
+        </div>
+        <div>
+          <dt>Times in</dt>
+          <dd>{tz}</dd>
+        </div>
+      </dl>
 
       <NowSlot columns={data.columns} tz={tz} now={now} />
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Plan</h2>
-          <button type="button" className="quiet" aria-pressed={table} onClick={() => setTable((t) => !t)}>
-            {table ? 'Show charts' : 'Show as a table'}
-          </button>
+          <h2>{table ? 'The plan as a table' : 'Timeline'}</h2>
+          {!table && (
+            <HistoryControls hours={hours} horizon={horizon} onHours={chooseHours} onHorizon={chooseHorizon} />
+          )}
         </div>
         <div className="panel-body">
           {table ? (
             <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
           ) : (
-            <>
-              <HistoryControls hours={hours} horizon={horizon} onHours={chooseHours} onHorizon={chooseHorizon} />
-              <PlanCharts data={data} history={history.data} nowS={nowS} />
-            </>
+            <PlanCharts data={data} history={history.data} nowS={nowS} />
           )}
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>How accurate the plan has been</h2>
-          {history.data?.measurements.last_sample_at && (
-            <span className="muted">measured until {formatTime(history.data.measurements.last_sample_at, now, tz)}</span>
+      <div className="two-col">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>How accurate the plan has been</h2>
+            {history.data?.measurements.last_sample_at && (
+              <span className="muted">
+                measured until {formatTime(history.data.measurements.last_sample_at, now, tz)}
+              </span>
+            )}
+          </div>
+          <div className="panel-body">
+            <ErrorNotice error={history.error} />
+            <AccuracyCard history={history.data} />
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Changes vs the previous plan</h2>
+            {data.previous && (
+              <span className="muted">previous: {formatTime(data.previous.generated_at, now, tz)}</span>
+            )}
+          </div>
+          {!data.previous ? (
+            <Empty title="No earlier plan stored yet" />
+          ) : changes.length === 0 ? (
+            <Empty title="No slot moved by more than 500 W">
+              Battery and grid power are the same as in the previous plan.
+            </Empty>
+          ) : (
+            <div className="table-wrap sticky-table">
+              <table className="num-table">
+                <thead>
+                  <tr>
+                    <th>Slot</th>
+                    <th className="r">Battery before</th>
+                    <th className="r">now</th>
+                    <th className="r">Grid before</th>
+                    <th className="r">now</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changes.slice(0, 96).map((c) => (
+                    <tr key={c.time}>
+                      <td className="num">{formatSlotDate(c.timestamp, tz, now)}</td>
+                      <td className="num r">{formatPower(c.battBefore)}</td>
+                      <td className="num r">{formatPower(c.battNow)}</td>
+                      <td className="num r">{formatPower(c.gridBefore)}</td>
+                      <td className="num r">{formatPower(c.gridNow)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
-        <div className="panel-body">
-          <ErrorNotice error={history.error} />
-          <AccuracyCard history={history.data} />
-        </div>
-      </section>
+        </section>
+      </div>
 
       <section className="panel">
         <div className="panel-head">
@@ -194,43 +251,6 @@ export function PlanPage() {
         <div className="panel-body">
           <CostfunPanel nowS={nowS} now={now} />
         </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Changes vs the previous plan</h2>
-          {data.previous && <span className="muted">previous: {formatTime(data.previous.generated_at, now, tz)}</span>}
-        </div>
-        {!data.previous ? (
-          <Empty title="No earlier plan stored yet" />
-        ) : changes.length === 0 ? (
-          <Empty title="No slot moved by more than 500 W">Battery and grid power are the same as in the previous plan.</Empty>
-        ) : (
-          <div className="table-wrap sticky-table">
-            <table className="num-table">
-              <thead>
-                <tr>
-                  <th>Slot</th>
-                  <th className="r">Battery before</th>
-                  <th className="r">Battery now</th>
-                  <th className="r">Grid before</th>
-                  <th className="r">Grid now</th>
-                </tr>
-              </thead>
-              <tbody>
-                {changes.slice(0, 96).map((c) => (
-                  <tr key={c.time}>
-                    <td className="num">{formatSlotDate(c.timestamp, tz, now)}</td>
-                    <td className="num r">{formatPower(c.battBefore)}</td>
-                    <td className="num r">{formatPower(c.battNow)}</td>
-                    <td className="num r">{formatPower(c.gridBefore)}</td>
-                    <td className="num r">{formatPower(c.gridNow)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
     </>
   )
@@ -251,13 +271,17 @@ function PlanTable({
   const current = rowAt(rows, nowS)
   return (
     <div className="table-wrap sticky-table">
-      <table className="num-table">
+      <table className="num-table plan-table">
         <thead>
           <tr>
             <th>Slot</th>
             {shown.map((c) => (
-              <th key={c} className="r">
-                {c}
+              <th key={c} className="r" title={`EMHASS column ${c}`}>
+                <div>{planColumnLabel(c)}</div>
+                <div className="th-sub">
+                  {planColumnUnit(c) && `${planColumnUnit(c)} · `}
+                  {c}
+                </div>
               </th>
             ))}
           </tr>
@@ -266,14 +290,11 @@ function PlanTable({
           {rows.map((row) => (
             <tr key={String(row.timestamp)} data-current={row === current || undefined}>
               <td className="num">{formatSlotDate(String(row.timestamp), timeZone, new Date(nowS * 1000))}</td>
-              {shown.map((c) => {
-                const v = row[c]
-                return (
-                  <td key={c} className="num r">
-                    {typeof v === 'number' ? (c.startsWith('SOC_opt') ? `${(v * 100).toFixed(1)} %` : Math.abs(v) >= 10 ? Math.round(v) : v.toFixed(4)) : String(v ?? '—')}
-                  </td>
-                )
-              })}
+              {shown.map((c) => (
+                <td key={c} className="num r">
+                  {formatPlanCell(c, row[c])}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
