@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - Plan: the plan in one line at the top ("Discharging the battery until 21:30, then idle · SOC 94 % → 38 %"), the facts in one row, **Chart / Table** for the whole plan, This slot / Next slot as a switch, and each tile marked with its chart colour.
 - Plan: the **MPC runs** sit under the charts on the same time axis, coloured by outcome; click one to open it. The line under them counts the runs per outcome and shows when the next is due.
