@@ -257,6 +257,7 @@ export function PlanCharts({ data, history, nowS }: { data: PlanResponse; histor
             syncKey={SYNC}
             yFormat={eurTick}
             fit={PRICE_FIT}
+            legendValueWidth="13ch"
             xRange={zoom}
             onZoom={zoomTo}
             bands={prices.bands}

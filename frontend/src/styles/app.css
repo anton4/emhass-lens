@@ -1389,6 +1389,10 @@ button.diff-locate {
   color: var(--ink);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  /* every value takes the same width ("0 W", "−20.00 kW", "—"), so the legend's rows never reflow as values change */
+  display: inline-block;
+  min-width: var(--legend-value-width, 10ch);
+  text-align: left;
 }
 
 .time-chart .u-legend .u-marker {

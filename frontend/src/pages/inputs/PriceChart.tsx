@@ -42,6 +42,7 @@ export function PriceChart({ data, unit, nowS }: { data: PricesResponse; unit: P
       markers={chart.markers}
       now={nowS}
       height={260}
+      legendValueWidth="13ch"
     />
   )
 }

@@ -3,7 +3,7 @@
 // plot is the readout: it lists every series' value at the crosshair. Optionally the y-axis hugs
 // the visible data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { fitRange, type FitOptions } from '../../lib/chartRange'
@@ -42,6 +42,8 @@ interface TimeChartProps {
   shade?: [number, number][]
   markers?: number[]
   now?: number
+  /** Width every legend value takes, so rows don't reflow as values change ("0 W" vs "−20.00 kW"); default 10ch. */
+  legendValueWidth?: string
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -86,7 +88,7 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
-  shade = [], markers = [], now,
+  shade = [], markers = [], now, legendValueWidth,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -244,5 +246,13 @@ export function TimeChart({
     plot.current?.redraw(false)
   }, [bands, shade, markers, now])
 
-  return <div ref={wrap} className="time-chart" role="img" aria-label={ariaLabel} />
+  return (
+    <div
+      ref={wrap}
+      className="time-chart"
+      role="img"
+      aria-label={ariaLabel}
+      style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
+    />
+  )
 }

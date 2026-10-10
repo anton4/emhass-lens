@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Chart legends keep their rows when the values change: every value takes the same width, so the charts below no longer jump up and down as the cursor moves.
+
 ## 0.3.17
 
 - The header also checks GitHub: once a new release's image for your machine is built, it shows **x.y.z released · Check for updates** until Home Assistant's App store picks it up.

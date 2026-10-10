@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): steady chart legends (unreleased)
+- `.time-chart .u-legend .u-value` is inline-block with `min-width: var(--legend-value-width, 10ch)`; `TimeChart` takes `legendValueWidth` (the price charts use 13ch). The owner's Power legend wrapped to a third row for "−5.00 kW … 1.04 kW" and back for "−4.85 kW … 866 W", moving the SoC chart.
+
 ### 2026-10-10 (evening): the update check also asks GitHub (0.3.17)
 - `UpdateService._github`: version from `raw.githubusercontent.com/anton4/emhass-lens/main/emhass_lens/config.yaml`; when newer than installed, an anonymous ghcr.io token + `HEAD /v2/anton4/emhass-lens-<arch>/manifests/<version>` (arch from `platform.machine()`); `UpdateInfo.released_version` / `store_path`; header chip "x.y.z released · Check for updates" (to `/hassio/store`) while the Supervisor hasn't picked it up. A ready release isn't looked up again. Tests in `test_updates.py`; the world fakes GitHub and the registry.
 
