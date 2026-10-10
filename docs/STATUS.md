@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): This slot judges only what the inverter controls (unreleased)
+### 2026-10-10 (evening): This slot judges only what the inverter controls (0.3.15)
 - Owner's 18:15 slot: plan battery 1.57 kW discharge for 1.54 kW forecast load; house used 698 W; battery sensor counts charging as positive (needs Opposite sign). `domain/plan_now.battery_expected` (plan + Δload − ΔPV + Δdeferrable; the EV from the charger's limit while charging), `compare` judges grid vs plan, battery vs expected (`sign_hint` when opposite and ≥ 300 W), SoC; load and PV never judged. UI: no lamp for forecasts, expected value in the battery tile's hover, Opposite-sign notice.
 
 ### 2026-10-10 (evening): MQTT problem waits for the first connection (0.3.14)
