@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.7
 
 - PV reserved for Excess Solar charging (Settings → EV charger control, off by default): while the car charges from excess solar, the PV forecast sent to EMHASS is reduced by what the charger is expected to take in each slot, until the car's charge to its target is covered, so EMHASS does not plan the home battery or exports with energy the car will use. The Explain table shows the reserved watts per slot; the EV charger page shows the current state.
 

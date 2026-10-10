@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): PV reserved for Excess Solar charging (unreleased)
+### 2026-10-10 (evening): PV reserved for Excess Solar charging (0.3.7)
 - **Why:** in Excess Solar mode the car eats the PV surplus behind EMHASS's back; EMHASS planned the battery and exports with it. EMHASS has no "reserved PV" input, so the App now sends a smaller `pv_power_forecast` (and `_p10`).
 - **Done:** `settings.charger.pv_reserve {enabled, car_battery_kwh}`; `domain/ev_reserve.py` (`blocker`, `load_by_slot`, `house_load_profile`, `plan_reserve` → `EvReserve`), `solar_amps` shared with the controller; `ChargerService.refresh_load_profile()` caches the newest plan's `P_Load`, `pv_reserve(now, pv)` builds the reserve from the watched states, and the car's entities are watched even when the controller is Off; `MpcInputs.ev_reserve` is subtracted in `payload.build` (never in the compat build); `ExplainSlot.ev_reserved_w`, `EvReserveOut` on the preview, the inputs and explain artifacts and `ChargerStatus.pv_reserve`; the UI shows an "EV reserve" column, a note above the Explain table and a fact on the EV charger page. Docs: DOCS.md "Reserving PV for Excess Solar".
 - **Verified:** 285 backend tests (`test_ev_reserve.py`, `test_mpc.py`, `test_charger_service.py`), 85 frontend tests.
