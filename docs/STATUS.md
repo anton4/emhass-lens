@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): filter, sort and dates on every recent list; a time range on Runs
+### 2026-10-10 (evening): filter, sort and dates on every recent list; a time range on Runs (0.3.19)
 - `GET /api/runs` takes `since`/`until` (UTC ISO, `started_at` in `[since, until)`), `order=asc|desc` and an `after` id cursor; `/api/market/sessions` takes `since`/`until`. Tests in `backend/tests/test_runs_range.py`.
 - Frontend: `lib/days.ts` (a day's bounds in the HA time zone, DST-safe), `lib/sort.ts`, `lib/listParams.ts` (list state in the URL with a per-list prefix), `components/ListControls.tsx` and `components/SortableTh.tsx`. `formatDateTime` and `formatSlotDate` in `lib/format.ts` always show the date.
 - Used on the Charger, Inverter and Market lists, Market sessions, Runs (From/To, Today/Yesterday, server-side order for Run and Started), cost-function comparisons and the problem history.
