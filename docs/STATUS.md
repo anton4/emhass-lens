@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): solver time budget and retry; MPC at :11 (unreleased)
+### 2026-10-10 (evening): solver time budget and retry; MPC at :11 (0.3.12)
 - **Why:** run 985 (14:13, 223 slots, comparison on): cost 44 s and self-consumption 8 s solved, the live profit solve ran 91 s and EMHASS recorded `error` with no message: HiGHS stopped at the owner's `lp_solver_timeout` 55 s (`user_limit`), EMHASS's relaxed retry under the same limit didn't reach "Optimal" either (`optimization.py`). EMHASS kept the self-consumption plan (0.3.9 leftover guard held it back), the plan went stale and the inverter followed the older plan's grid import.
 - **Done:** `domain/mpc/solver_budget.py` (deadline = next publish, or the one after when < 60 s; `limit_for` = (left − 10 s) × share / 2.2, capped 180, none under 15; live 0.6, comparison steps ≤ 30 s at 0.15; `timed_out`, `explain_error`, `http_timeout`); `MpcService.send` sends `lp_solver_timeout` and retries a timed-out solve once with `lp_solver_mip_rel_gap = retry_mip_gap` (artifacts `request_retry`, `response_retry`, `emhass_last_run_retry`); `_alternatives` sends short limits; settings `emhass.mpc.solver_budget` (auto/emhass), `retry_mip_gap` 0.05; `slot_offset_s` default 660 with migration v3→v4 (780 → 660). Both keys are runtime parameters in EMHASS (`data/associations.csv`, `runtime_solver_opts`). Plan page note explains an error without a message from `stage_times`. "Kept in sync" text no longer overflows (`.facts` cells may shrink, lamp labels wrap there).
 - **Verified:** `test_solver_budget.py`, `test_solver_retry.py`, migration test; 322 backend, 91 frontend tests.
