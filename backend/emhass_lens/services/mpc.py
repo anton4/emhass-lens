@@ -167,6 +167,7 @@ class MpcService:
             slot_floor(now),
             settings,
             emhass_version=emhass.version_tuple,
+            emhass_config=emhass.config,
             model_steps=self.c.extras["ml"].model_steps(now),
         )
         issues = validate(result, inputs, settings)

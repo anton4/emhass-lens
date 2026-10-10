@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The EMHASS plan can avoid exporting below a price. Settings → EMHASS → MPC optimization → **No export at or below** (€/kWh) sends EMHASS a per-slot export limit of 0 W in slots whose export price is at or below it. EMHASS then charges the battery or curtails PV instead of exporting, and doesn't discharge the battery to the grid. This works with every cost function and needs EMHASS 0.16 or newer with `compute_curtailment` on. Health → EMHASS checks both.
+- The setting replaces Inverter control's "Block export at or below this price" and keeps its value (0.03 €/kWh unless you changed it). **The plan stops planning exports at or below that price right after the update.** Clear the setting to go back to planning exports at every price; the inverter's feed-in limit then never blocks either.
+- The Explain table shows an *Export max* column when some slots are blocked.
+
 ## 0.4.2
 
 - Inputs: the price breakdown table (96 rows a day) is folded away under its chart; open it with "Every quarter-hour as a table".

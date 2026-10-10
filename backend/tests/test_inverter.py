@@ -6,6 +6,7 @@ from emhass_lens.domain.inverter import Observed, PlanValues, compare, decide
 from emhass_lens.settings.model import InverterLimits
 
 L = InverterLimits()
+LOW = 0.03  # Settings → EMHASS → MPC "No export at or below", the automation's threshold
 
 
 def v(g: float, b: float, pv: float = 0.0, c: float = 0.0, price: float | None = 0.05) -> PlanValues:
@@ -42,7 +43,7 @@ def v(g: float, b: float, pv: float = 0.0, c: float = 0.0, price: float | None =
     ],
 )
 def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> None:
-    d = decide(values, L)
+    d = decide(values, L, LOW)
     assert d.rule == rule, d.why
     assert d.targets is not None
     assert (d.targets.state, d.targets.grid_power_w, d.targets.battery_max_w, d.targets.battery_min_w) == (
@@ -54,23 +55,23 @@ def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> No
 
 
 def test_jinja_round_is_half_to_even() -> None:
-    assert decide(v(4450, -6000), L).targets.grid_power_w == 5400  # type: ignore[union-attr]  # 44.5 -> 44
-    assert decide(v(4550, -6000), L).targets.grid_power_w == 5600  # type: ignore[union-attr]  # 45.5 -> 46
-    assert decide(v(-4450, 6000), L).targets.grid_power_w == -4400  # type: ignore[union-attr]
-    assert decide(v(-4550, 6000), L).targets.grid_power_w == -4600  # type: ignore[union-attr]
+    assert decide(v(4450, -6000), L, LOW).targets.grid_power_w == 5400  # type: ignore[union-attr]  # 44.5 -> 44
+    assert decide(v(4550, -6000), L, LOW).targets.grid_power_w == 5600  # type: ignore[union-attr]  # 45.5 -> 46
+    assert decide(v(-4450, 6000), L, LOW).targets.grid_power_w == -4400  # type: ignore[union-attr]
+    assert decide(v(-4550, 6000), L, LOW).targets.grid_power_w == -4600  # type: ignore[union-attr]
 
 
 def test_every_combination_has_targets() -> None:
     for g in (-5000, -100, 0, 100, 5000):
         for b in (-5000, -100, 0, 100, 5000):
-            d = decide(v(g, b), L)
+            d = decide(v(g, b), L, LOW)
             assert d.rule != "none" and d.targets is not None, (g, b)
 
 
 def test_unknown_export_price_is_noted() -> None:
-    d = decide(v(-3000, 0, price=None), L)
+    d = decide(v(-3000, 0, price=None), L, LOW)
     assert d.notes == ["export price unknown; treated as 0 like the automation"]
-    assert decide(v(-3000, 0, price=0.05), L).notes == []
+    assert decide(v(-3000, 0, price=0.05), L, LOW).notes == []
 
 
 @pytest.mark.parametrize(
@@ -84,13 +85,21 @@ def test_unknown_export_price_is_noted() -> None:
     ],
 )
 def test_feedin_limit(values, feedin) -> None:
-    assert decide(values, L).feedin_max_w == feedin
+    assert decide(values, L, LOW).feedin_max_w == feedin
 
 
 def test_compare_reports_each_field() -> None:
-    d = decide(v(4560, -6000), L)
+    d = decide(v(4560, -6000), L, LOW)
     same = compare(d, Observed("Force charge", 5600.0, 20000.0, -3000.0, 15500.0))
     assert same["agree"] is True
     differs = compare(d, Observed("Force charge", 5500.0, 20000.0, -3000.0, 0.0))
     assert differs["agree"] is False
     assert [f["field"] for f in differs["fields"] if not f["same"]] == ["grid_power_w", "feedin_max_w"]
+
+
+def test_an_empty_threshold_never_blocks_export() -> None:
+    idle_export = decide(v(-3000, 0, pv=5000, price=0.0), L, None)
+    assert idle_export.rule == "self_use_pv_export"
+    assert idle_export.feedin_max_w == 15500
+    assert idle_export.notes == []
+    assert decide(v(-3000, 0, pv=5000, price=None), L, None).feedin_max_w == 15500  # unknown price: not blocked

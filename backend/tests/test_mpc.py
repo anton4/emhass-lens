@@ -291,3 +291,70 @@ def test_the_ev_reserve_comes_out_of_the_pv_forecast_but_not_of_the_compat_build
     off = replace(reserve, active=False)
     same = build(replace(inputs, ev_reserve=off), anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
     assert same.payload["pv_power_forecast"] == pv
+
+
+def test_no_export_at_or_below_sends_a_per_slot_export_limit_emhass_can_use() -> None:
+    now = utc(2026, 10, 9, 11, 13, 0)
+    inputs = inputs_at(now)
+    anchor = anchor_slot(now, "nearest")
+    plain = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    prices = plain.payload["prod_price_forecast"]
+    threshold = sorted(prices)[len(prices) // 2]  # about half the slots are at or below
+    settings = Settings.model_validate({"emhass": {"mpc": {"no_export_at_or_below": threshold}}})
+    config = {"compute_curtailment": True, "maximum_power_to_grid": 15500}
+
+    out = build(inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5), emhass_config=config)
+    limits = out.payload["maximum_power_to_grid"]
+    assert limits == [0 if p <= threshold else 15500 for p in prices]
+    assert 0 in limits and 15500 in limits
+    assert [r["export_max_w"] for r in out.explain] == limits
+    assert out.payload["prod_price_forecast"] == prices  # the prices EMHASS sees stay the real ones
+    assert not [i for i in validate(out, inputs, settings) if i.level == "error"]
+    assert not out.issues
+
+    listed = build(
+        inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5),
+        emhass_config={"compute_curtailment": True, "maximum_power_to_grid": [12000, 12000]},
+    )  # fmt: skip
+    assert max(listed.payload["maximum_power_to_grid"]) == 12000
+    unset = build(inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5), emhass_config={
+        "compute_curtailment": True})  # fmt: skip
+    assert max(unset.payload["maximum_power_to_grid"]) == 9000  # EMHASS's own default
+
+    for version, cfg, reason in (
+        ((0, 15, 6), config, "0.16"),
+        ((0, 18, 5), {"compute_curtailment": False}, "compute_curtailment"),
+        ((0, 18, 5), None, "configuration"),
+        (None, config, "version"),
+    ):
+        skipped = build(inputs, anchor, slot_floor(now), settings, emhass_version=version, emhass_config=cfg)
+        assert "maximum_power_to_grid" not in skipped.payload
+        assert [i.code for i in skipped.issues] == ["export_limit_unsupported"]
+        assert reason in skipped.issues[0].message
+        assert all(r["export_max_w"] is None for r in skipped.explain)
+
+    compat = build(inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5), emhass_config=config,
+                   compat=True)  # fmt: skip
+    assert "maximum_power_to_grid" not in compat.payload and not compat.issues  # parity mirrors the integration
+    assert "maximum_power_to_grid" not in plain.payload  # off by default
+
+    override = Settings.model_validate(
+        {
+            "emhass": {
+                "mpc": {"no_export_at_or_below": threshold},
+                "extra_runtime_params": {"maximum_power_to_grid": 5000},
+            }
+        }
+    )
+    mine = build(inputs, anchor, slot_floor(now), override, emhass_version=(0, 18, 5), emhass_config=config)
+    assert mine.payload["maximum_power_to_grid"] == 5000  # Extra runtime parameters win
+
+
+def test_an_export_limit_of_the_wrong_length_is_refused() -> None:
+    now = utc(2026, 10, 9, 11, 13, 0)
+    inputs = inputs_at(now)
+    anchor = anchor_slot(now, "nearest")
+    settings = Settings.model_validate({"emhass": {"extra_runtime_params": {"maximum_power_to_grid": [0, 0]}}})
+    result = build(inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5))
+    codes = [i.code for i in validate(result, inputs, settings) if i.level == "error"]
+    assert "length_mismatch" in codes

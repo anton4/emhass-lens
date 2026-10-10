@@ -179,7 +179,10 @@ export function InverterPage() {
 
       <section className="panel">
         <div className="panel-body">
-          <RulesExplainer limits={limits} />
+          <RulesExplainer
+            limits={limits}
+            noExportAtOrBelow={settings.data?.settings.emhass.mpc.no_export_at_or_below ?? null}
+          />
         </div>
       </section>
 

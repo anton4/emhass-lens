@@ -3,6 +3,7 @@
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from emhass_lens.domain.mpc import export_limit
 from emhass_lens.domain.mpc.anchor import parse_version
 from emhass_lens.domain.mpc.payload import P10_VERSION, derive
 from emhass_lens.settings.model import Settings
@@ -95,6 +96,24 @@ def run_checks(
 
     def get(key: str) -> Any:
         return config.get(key)
+
+    threshold = settings.emhass.mpc.no_export_at_or_below
+    if threshold is not None:
+        why_not = export_limit.blocker(config, ver)
+        checks.append(
+            Check(
+                "no_export",
+                "No export at or below",
+                "ok" if why_not is None else "warning",
+                "EMHASS ≥ 0.16, compute_curtailment true",
+                f"EMHASS {version or '?'}, compute_curtailment {get('compute_curtailment')}",
+                f"Each run sends maximum_power_to_grid with 0 W in slots whose export price is at or below "
+                f"{threshold} €/kWh (Settings → EMHASS → MPC)."
+                if why_not is None
+                else f'The plan ignores "No export at or below {threshold} €/kWh": {why_not}. Turn '
+                "compute_curtailment on in EMHASS, or clear the setting.",
+            )
+        )
 
     step = get("optimization_time_step")
     checks.append(

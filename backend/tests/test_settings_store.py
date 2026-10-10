@@ -140,3 +140,22 @@ def test_schema_3_settings_move_the_default_mpc_time_to_11_00(app_db, bus, clock
         store.load()
         assert store.load_errors == []
         assert store.current.emhass.mpc.slot_offset_s == expected
+
+
+def test_schema_4_settings_move_the_export_block_to_the_mpc_settings(app_db, bus, clock) -> None:
+    for stored, expected in ((0.05, 0.05), (None, 0.03), ("absent", 0.03)):
+        doc = Settings().model_dump(mode="json")
+        del doc["emhass"]["mpc"]["no_export_at_or_below"]  # a schema 4 document doesn't have it yet
+        if stored != "absent":
+            doc["inverter"]["limits"]["low_export_price"] = stored if stored is not None else 0.03
+        app_db.execute("DELETE FROM settings_revision")
+        app_db.execute(
+            "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
+            "VALUES ('x', 'ui', 4, ?, '[]')",
+            (json.dumps(doc),),
+        )
+        store = SettingsStore(db=app_db, bus=bus, clock=clock)
+        store.load()
+        assert store.load_errors == []
+        assert store.current.emhass.mpc.no_export_at_or_below == expected
+        assert "low_export_price" not in store.current.inverter.limits.model_dump()

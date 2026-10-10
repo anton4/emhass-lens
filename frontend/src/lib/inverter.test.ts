@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '../api/types'
-import { decideChip, fieldValue, formatAgreement, mergeBySlot, parseDecisionSummary, rules, runSlot } from './inverter'
+import {
+  decideChip,
+  feedinRules,
+  fieldValue,
+  formatAgreement,
+  mergeBySlot,
+  parseDecisionSummary,
+  rules,
+  runSlot,
+} from './inverter'
 
 function run(id: number, job: string, startedAt: string, outcome = 'ok', summary: string | null = null): RunSummary {
   return { id, job, trigger: 'schedule', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
@@ -72,7 +81,7 @@ describe('mergeBySlot', () => {
 
 describe('rules', () => {
   it('lists the rules in the automation order with the configured thresholds', () => {
-    const list = rules(undefined)
+    const list = rules(undefined, 0.03)
     expect(list.map((r) => r.id)).toEqual([
       'force_charge',
       'use_bat_import',
@@ -86,6 +95,14 @@ describe('rules', () => {
     ])
     expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('18800 W if P_grid > 9000 W')
     expect(list.find((r) => r.id === 'self_use_pv_export')?.when).toContain('above 0.03 €/kWh')
+  })
+
+  it('says export is never blocked when "No export at or below" is empty', () => {
+    expect(rules(undefined, null).find((r) => r.id === 'self_use_pv_export')?.when).toContain('never blocked')
+    expect(feedinRules(undefined, null)).toEqual([
+      '15500 W (the export maximum) in every slot: "No export at or below" is empty',
+    ])
+    expect(feedinRules(undefined, 0.03)[0]).toContain('at or below 0.03 €/kWh')
   })
 })
 

@@ -741,6 +741,7 @@ class ExplainSlot(BaseModel):
     pv_w: float
     pv_p10_w: float | None = None
     ev_reserved_w: float = 0
+    export_max_w: float | None = None
 
 
 class Derived(BaseModel):

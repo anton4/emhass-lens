@@ -61,6 +61,7 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
   const [shown, setShown] = useState(PAGE)
   const withP10 = slots.some((s) => s.pv_p10_w !== null && s.pv_p10_w !== undefined)
   const withReserve = slots.some((s) => (s.ev_reserved_w ?? 0) > 0)
+  const withExportLimit = slots.some((s) => s.export_max_w === 0)
   return (
     <>
       <div className="table-wrap sticky-table">
@@ -81,6 +82,17 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
                   EV reserve
                 </th>
               )}
+              {withExportLimit && (
+                <th
+                  className="r"
+                  title={
+                    'maximum_power_to_grid: 0 W where the export price is at or below "No export at or below" ' +
+                    '(Settings → EMHASS → MPC)'
+                  }
+                >
+                  Export max
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -98,6 +110,9 @@ export function ExplainTable({ slots }: { slots: ExplainSlot[] }) {
                 <td className="num r">{formatPower(s.pv_w)}</td>
                 {withP10 && <td className="num r">{s.pv_p10_w === null || s.pv_p10_w === undefined ? '—' : formatPower(s.pv_p10_w)}</td>}
                 {withReserve && <td className="num r">{(s.ev_reserved_w ?? 0) > 0 ? formatPower(s.ev_reserved_w) : '—'}</td>}
+                {withExportLimit && (
+                  <td className="num r">{s.export_max_w === 0 ? <strong>0 W</strong> : formatPower(s.export_max_w)}</td>
+                )}
               </tr>
             ))}
           </tbody>

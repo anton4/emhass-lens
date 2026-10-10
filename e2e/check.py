@@ -193,6 +193,29 @@ def main() -> int:
                 f"for {request['prediction_horizon']} slots",
             )
 
+            def exported_w(rows: list[dict[str, Any]]) -> float:
+                values = [float(r.get("P_grid_neg", min(0.0, float(r.get("P_grid") or 0)))) for r in rows]
+                return max(0.0, -min(values, default=0.0))
+
+            exported_before = exported_w(plan["current"]["rows"]) if plan.get("current") else 0.0
+            patch(http, {"emhass": {"mpc": {"no_export_at_or_below": 1.0}}}, "e2e: no export at all")
+            blocked = run_job(http, "emhass.mpc")
+            sent = http.get(f"/api/runs/{blocked['id']}/artifacts/request").json().get("maximum_power_to_grid")
+            no_export = http.get("/api/plan").json()
+            rows = no_export["current"]["rows"] if no_export.get("current") else []
+            check(
+                "plans no export where the price is at or below 'No export at or below' (per-slot limit, curtailment)",
+                blocked["outcome"] == "ok"
+                and isinstance(sent, list)
+                and set(sent) == {0}
+                and len(sent) == len(rows)
+                and exported_w(rows) < 1,
+                f"{blocked['summary']}; limit sent for {len(sent) if isinstance(sent, list) else 0} slots; "
+                f"largest export {exported_w(rows):.0f} W (before: {exported_before:.0f} W)",
+            )
+            patch(http, {"emhass": {"mpc": {"no_export_at_or_below": None}}}, "e2e: export allowed again")
+            live = run_job(http, "emhass.mpc")
+
             event, pub = asyncio.run(publish_and_catch_event(token, http))
             batt = ha.get("/api/states/sensor.p_batt_forecast").json().get("state")
             same = event is not None and abs(float(batt) - float(event["current"].get("p_batt_w", 0))) < 0.01

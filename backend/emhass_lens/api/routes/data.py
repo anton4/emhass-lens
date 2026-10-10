@@ -103,6 +103,7 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
         slot_floor(now),
         settings,
         emhass_version=emhass.version_tuple,
+        emhass_config=emhass.config,
         model_steps=c.extras["ml"].model_steps(now),
     )
     issues = validate(result, snapshot, settings)

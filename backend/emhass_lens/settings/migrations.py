@@ -43,8 +43,24 @@ def _v3_to_v4(doc: Doc) -> Doc:
     return doc
 
 
+def _v4_to_v5(doc: Doc) -> Doc:
+    """0.4.3: Inverter control's "Block export at or below" became EMHASS → MPC "No export at or below", which the
+    plan uses too. The old default (0.03) was in force when the key was absent."""
+    value: Any = 0.03
+    inverter = doc.get("inverter")
+    limits = inverter.get("limits") if isinstance(inverter, dict) else None
+    if isinstance(limits, dict) and "low_export_price" in limits:
+        value = limits.pop("low_export_price")
+    emhass = doc.setdefault("emhass", {})
+    if isinstance(emhass, dict):
+        mpc = emhass.setdefault("mpc", {})
+        if isinstance(mpc, dict):
+            mpc.setdefault("no_export_at_or_below", value)
+    return doc
+
+
 # MIGRATIONS[n] upgrades a version-n document to version n+1.
-MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
+MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5}
 
 
 def migrate(doc: Doc, from_version: int) -> tuple[Doc, int]:

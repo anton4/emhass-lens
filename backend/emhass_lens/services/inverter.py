@@ -139,7 +139,8 @@ class InverterService:
         if values is None:
             ctx.run.outcome, ctx.run.summary = "noop", f"Nothing to decide: {source}"
             return
-        decision = decide(values, self.c.settings.current.inverter.limits)
+        settings = self.c.settings.current
+        decision = decide(values, settings.inverter.limits, settings.emhass.mpc.no_export_at_or_below)
         blocked = self.preconditions()
         self.last_decision = decision
         self.last = {

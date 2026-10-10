@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -96,6 +96,17 @@ class EmhassMpc(Section):
                 "self-consumption": "Self-consumption",
             }
         ),
+    )
+    no_export_at_or_below: float | None = Field(
+        default=None,
+        ge=-1,
+        le=1,
+        title="No export at or below",
+        description="In every slot whose export price is at or below this, EMHASS plans no export: the PV it can't "
+        "use or store is curtailed, and the battery doesn't discharge to the grid. The inverter control's feed-in "
+        "limit is 0 W in those slots too. Empty turns both off. The plan needs EMHASS 0.16 or newer with "
+        "compute_curtailment on; Health → EMHASS says when it can't be used.",
+        json_schema_extra=ui(unit="€/kWh"),
     )
     compare_costfuns: bool = Field(
         default=False,
@@ -892,13 +903,6 @@ class InverterLimits(Section):
         le=10000,
         title="Force charge: grid target margin",
         json_schema_extra=ui(unit="W"),
-    )
-    low_export_price: float = Field(
-        default=0.03,
-        title="Block export at or below this price",
-        description="Feed-in 0 W and no PV-export mode when the slot's export price is at or below this "
-        "(an unknown price counts as 0).",
-        json_schema_extra=ui(unit="€/kWh"),
     )
 
 

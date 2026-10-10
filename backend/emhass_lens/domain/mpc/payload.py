@@ -12,6 +12,7 @@ from typing import Any
 
 from emhass_lens.domain.areas import area_zone
 from emhass_lens.domain.issues import Issue
+from emhass_lens.domain.mpc import export_limit
 from emhass_lens.domain.mpc.anchor import slot_offset
 from emhass_lens.domain.mpc.inputs import MpcInputs
 from emhass_lens.settings.model import Settings
@@ -69,12 +70,14 @@ def build(
     settings: Settings,
     *,
     emhass_version: tuple[int, ...] | None = None,
+    emhass_config: dict[str, Any] | None = None,
     compat: bool = False,
     model_steps: int | None = None,
 ) -> BuildResult:
-    """`emhass_version` gates keys older EMHASS versions don't know. `compat` builds what the HACS
-    integration sends (for the parity check): no P10 companion and no def_current_state. `model_steps` is how far
-    EMHASS's (tuned) load model forecasts, when it is known to be shorter than the horizon."""
+    """`emhass_version` gates keys older EMHASS versions don't know, and `emhass_config` (GET /get-config) says
+    whether EMHASS can take a per-slot export limit. `compat` builds what the HACS integration sends (for the parity
+    check): no P10 companion, no def_current_state and no export limit. `model_steps` is how far EMHASS's (tuned) load
+    model forecasts, when it is known to be shorter than the horizon."""
     issues: list[Issue] = []
     derived = derive(settings)
     mpc = settings.emhass.mpc
@@ -207,6 +210,23 @@ def build(
     if running_known and not compat:
         # a load that is on right now is planned as on, instead of getting a fresh start (EMHASS 0.18.2+)
         payload["def_current_state"] = running
+    export_max: list[float] | None = None
+    if mpc.no_export_at_or_below is not None and not compat:
+        why_not = export_limit.blocker(emhass_config, emhass_version)
+        if why_not is None:
+            export_max = export_limit.slot_limits(
+                payload["prod_price_forecast"], mpc.no_export_at_or_below, export_limit.configured_max_w(emhass_config)
+            )
+            payload["maximum_power_to_grid"] = [round(v) for v in export_max]
+        else:
+            issues.append(
+                Issue(
+                    "warning",
+                    "export_limit_unsupported",
+                    f"No export at or below {mpc.no_export_at_or_below} €/kWh isn't in this plan: {why_not}",
+                    hint="Settings → EMHASS → MPC, and the checks under Health → EMHASS.",
+                )
+            )
     if mpc.costfun != "default" and not compat:
         # a runtime parameter since EMHASS 0.18 (optim_conf.costfun); the plan's cost_fun_* column shows what was used
         payload["costfun"] = mpc.costfun
@@ -226,6 +246,7 @@ def build(
             "pv_w": payload["pv_power_forecast"][i],
             "pv_p10_w": payload["pv_power_forecast_p10"][i] if p10_values is not None else None,
             "ev_reserved_w": round(reserved[i]),
+            "export_max_w": round(export_max[i]) if export_max is not None else None,
         }
         for i, s in enumerate(slots)
     ]

@@ -66,16 +66,18 @@ def round100(value: float) -> int:
 _round100 = round100
 
 
-def decide(v: PlanValues, limits: InverterLimits) -> Decision:
+def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float | None) -> Decision:
+    """`no_export_at_or_below` (Settings → EMHASS → MPC) blocks export in cheap slots; None never blocks."""
     g, b, pv, c = v.p_grid, v.p_batt, v.p_pv, v.p_pv_curtailment
-    threshold = limits.low_export_price
+    threshold = no_export_at_or_below
     notes: list[str] = []
     if v.export_price is None:
         price = 0.0
-        notes.append("export price unknown; treated as 0 like the automation")
+        if threshold is not None:
+            notes.append("export price unknown; treated as 0 like the automation")
     else:
         price = v.export_price
-    cheap = price <= threshold
+    cheap = threshold is not None and price <= threshold
     vals = f"P_grid {g:.0f} W, P_batt {b:.0f} W, P_PV {pv:.0f} W, curtailment {c:.0f} W"
     bmax, bmin = limits.battery_max_w, limits.battery_min_w
 
@@ -101,7 +103,11 @@ def decide(v: PlanValues, limits: InverterLimits) -> Decision:
             rule, why = "force_discharge", f"exporting from the battery; grid target {grid} W"
         elif not cheap:
             rule, grid = "self_use_pv_export", 0
-            why = f"exporting, battery idle, price {price:.4f} €/kWh above {threshold}: export the PV"
+            why = (
+                "exporting, battery idle: export the PV"
+                if threshold is None
+                else f"exporting, battery idle, price {price:.4f} €/kWh above {threshold}: export the PV"
+            )
             bmax, bmin = 0, limits.export_only_battery_min_w
         else:
             rule, grid = "self_use", 0
@@ -114,7 +120,7 @@ def decide(v: PlanValues, limits: InverterLimits) -> Decision:
     if cheap:
         feedin, feedin_why = 0, f"export price {price:.4f} €/kWh is at or below {threshold}"
     else:
-        feedin, feedin_why = limits.export_max_w, "export allowed"
+        feedin, feedin_why = limits.export_max_w, "export allowed" if threshold is not None else "export never blocked"
     label = LABELS[rule]
     return Decision(rule, label, f"{why} ({vals})", Targets(label, grid, bmax, bmin), feedin, feedin_why, notes)
 

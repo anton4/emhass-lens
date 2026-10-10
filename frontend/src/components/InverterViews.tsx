@@ -228,7 +228,14 @@ export function CallsList({ calls, nothing = 'No calls: the inverter already sho
 }
 
 /** The rules in plain words, in the automation's order, with the configured thresholds. */
-export function RulesExplainer({ limits }: { limits: InverterSettings['limits'] | undefined }) {
+export function RulesExplainer({
+  limits,
+  noExportAtOrBelow,
+}: {
+  limits: InverterSettings['limits'] | undefined
+  /** Settings → EMHASS → MPC "No export at or below"; null when empty. */
+  noExportAtOrBelow: number | null
+}) {
   return (
     <details className="explain-details rules-explainer">
       <summary>
@@ -241,11 +248,12 @@ export function RulesExplainer({ limits }: { limits: InverterSettings['limits'] 
         100 W, exporting below −100 W, otherwise neutral), <strong>P_batt</strong> picks the mode (charging below −100 W,
         discharging above 100 W, otherwise idle), and when exporting with an idle battery the export price breaks the tie.
         They are the same rules and thresholds as the Home Assistant automation "EMHASS: Consolidated Inverter Control", so
-        dry-run decisions can be compared with it slot by slot. Signs follow EMHASS: P_batt + discharges / − charges the
-        battery; P_grid + imports / − exports.
+        dry-run decisions can be compared with it slot by slot. The export price threshold is Settings → EMHASS → MPC "No
+        export at or below", which also keeps EMHASS from planning exports in those slots. Signs follow EMHASS: P_batt +
+        discharges / − charges the battery; P_grid + imports / − exports.
       </p>
       <ol className="rules-list">
-        {rules(limits).map((r, i) => (
+        {rules(limits, noExportAtOrBelow).map((r, i) => (
           <li key={`${r.id}-${i}`}>
             <div className="cell-title">
               <span className="rule-badge small word">{r.id}</span> {r.label}
@@ -262,7 +270,7 @@ export function RulesExplainer({ limits }: { limits: InverterSettings['limits'] 
       <p className="cell-sub">Every combination of grid and battery power matches one of these, so a decision is made every slot.</p>
       <h3 className="sub-head">Feed-in limit</h3>
       <ul>
-        {feedinRules(limits).map((text) => (
+        {feedinRules(limits, noExportAtOrBelow).map((text) => (
           <li key={text}>{text}</li>
         ))}
       </ul>

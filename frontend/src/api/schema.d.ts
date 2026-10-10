@@ -1873,6 +1873,11 @@ export interface components {
              */
             min_horizon: number;
             /**
+             * No export at or below
+             * @description In every slot whose export price is at or below this, EMHASS plans no export: the PV it can't use or store is curtailed, and the battery doesn't discharge to the grid. The inverter control's feed-in limit is 0 W in those slots too. Empty turns both off. The plan needs EMHASS 0.16 or newer with compute_curtailment on; Health → EMHASS says when it can't be used.
+             */
+            no_export_at_or_below?: number | null;
+            /**
              * MIP gap for the retry
              * @description The retry stops when the plan is within this share of the best possible one (EMHASS's usual gap is 0.01); a looser gap finishes much faster on long horizons.
              * @default 0.05
@@ -2043,6 +2048,8 @@ export interface components {
              * @default 0
              */
             ev_reserved_w: number;
+            /** Export Max W */
+            export_max_w?: number | null;
             /** I */
             i: number;
             /** Load Cost */
@@ -2382,8 +2389,7 @@ export interface components {
              *       "force_charge_battery_min_w": -3000,
              *       "force_charge_grid_cap_above_w": 9000,
              *       "force_charge_grid_margin_w": 1000,
-             *       "grid_import_max_w": 18800,
-             *       "low_export_price": 0.03
+             *       "grid_import_max_w": 18800
              *     }
              */
             limits: components["schemas"]["InverterLimits"];
@@ -2492,12 +2498,6 @@ export interface components {
              * @default 18800
              */
             grid_import_max_w: number;
-            /**
-             * Block export at or below this price
-             * @description Feed-in 0 W and no PV-export mode when the slot's export price is at or below this (an unknown price counts as 0).
-             * @default 0.03
-             */
-            low_export_price: number;
         };
         /** InverterNow */
         InverterNow: {
@@ -4146,8 +4146,7 @@ export interface components {
              *         "force_charge_battery_min_w": -3000,
              *         "force_charge_grid_cap_above_w": 9000,
              *         "force_charge_grid_margin_w": 1000,
-             *         "grid_import_max_w": 18800,
-             *         "low_export_price": 0.03
+             *         "grid_import_max_w": 18800
              *       },
              *       "mode": "off"
              *     }

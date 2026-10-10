@@ -178,8 +178,9 @@ export interface RuleText {
 }
 
 /** The rules in the automation's order (importing, exporting, neutral), with the thresholds from the current limits
- * (Settings → Inverter control). "Self-use battery or PV" appears twice because two branches end there. */
-export function rules(limits: InverterSettings['limits'] | undefined): RuleText[] {
+ * (Settings → Inverter control) and the export block (Settings → EMHASS → MPC "No export at or below"; null = never).
+ * "Self-use battery or PV" appears twice because two branches end there. */
+export function rules(limits: InverterSettings['limits'] | undefined, noExportAtOrBelow: number | null): RuleText[] {
   const l = limits ?? {
     battery_max_w: 20000,
     battery_min_w: -20000,
@@ -189,10 +190,9 @@ export function rules(limits: InverterSettings['limits'] | undefined): RuleText[
     force_charge_battery_min_w: -3000,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
-    low_export_price: 0.03,
   }
   const full = `battery ${l.battery_min_w}…${l.battery_max_w} W`
-  const price = `${l.low_export_price} €/kWh`
+  const price = noExportAtOrBelow === null ? null : `${noExportAtOrBelow} €/kWh`
   return [
     {
       id: 'force_charge',
@@ -227,13 +227,19 @@ export function rules(limits: InverterSettings['limits'] | undefined): RuleText[
     {
       id: 'self_use_pv_export',
       label: 'Self-use PV and export excess to grid',
-      when: `Exporting, battery idle, export price above ${price}`,
+      when:
+        price === null
+          ? 'Exporting, battery idle (export is never blocked: "No export at or below" is empty)'
+          : `Exporting, battery idle, export price above ${price}`,
       sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may charge, not discharge)`,
     },
     {
       id: 'self_use',
       label: 'Self-use battery or PV',
-      when: `Exporting, battery idle, export price at or below ${price} (an unknown price counts as 0): keep the PV`,
+      when:
+        price === null
+          ? 'Exporting, battery idle, export price at or below "No export at or below": never, it is empty'
+          : `Exporting, battery idle, export price at or below ${price} (an unknown price counts as 0): keep the PV`,
       sets: `grid 0 W, ${full}`,
     },
     {
@@ -251,11 +257,16 @@ export function rules(limits: InverterSettings['limits'] | undefined): RuleText[
   ]
 }
 
-export function feedinRules(limits: InverterSettings['limits'] | undefined): string[] {
-  const price = limits?.low_export_price ?? 0.03
+export function feedinRules(
+  limits: InverterSettings['limits'] | undefined,
+  noExportAtOrBelow: number | null,
+): string[] {
   const max = limits?.export_max_w ?? 15500
+  if (noExportAtOrBelow === null) {
+    return [`${max} W (the export maximum) in every slot: "No export at or below" is empty`]
+  }
   return [
-    `0 W when the slot's export price is at or below ${price} €/kWh (an unknown price counts as 0)`,
+    `0 W when the slot's export price is at or below ${noExportAtOrBelow} €/kWh (an unknown price counts as 0)`,
     `otherwise ${max} W (the export maximum)`,
   ]
 }

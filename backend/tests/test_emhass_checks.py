@@ -73,3 +73,16 @@ def test_p10_blend_check_matches_what_is_sent() -> None:
 
     no_pv = Settings.model_validate({"pv": {"source": "none"}})
     assert "pv_quantile_bias" not in by_key(run_checks(cfg, "0.18.5", no_pv, None))
+
+
+def test_no_export_needs_emhass_0_16_with_curtailment() -> None:
+    off = Settings()
+    assert "no_export" not in by_key(run_checks(BASE, "0.18.5", off, None))
+    on = Settings.model_validate({"emhass": {"mpc": {"no_export_at_or_below": 0.03}}})
+    ok = by_key(run_checks({**BASE, "compute_curtailment": True}, "0.18.5", on, None))["no_export"]
+    assert ok.status == "ok"
+    no_curtailment = by_key(run_checks({**BASE, "compute_curtailment": False}, "0.18.5", on, None))["no_export"]
+    assert no_curtailment.status == "warning"
+    assert "compute_curtailment" in no_curtailment.explanation
+    too_old = by_key(run_checks({**BASE, "compute_curtailment": True}, "0.15.6", on, None))["no_export"]
+    assert too_old.status == "warning"

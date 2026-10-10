@@ -37,6 +37,12 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (night): no export at or below a price, in the plan (0.4.3)
+- `EmhassMpc.no_export_at_or_below` (schema 5; `_v4_to_v5` moves `inverter.limits.low_export_price`, default 0.03 when absent). Used by `domain/mpc/payload.py` (per-slot `maximum_power_to_grid`, via `domain/mpc/export_limit.py`) and `domain/inverter.py decide(…, no_export_at_or_below)`; None never blocks.
+- Sent only to EMHASS ≥ 0.16 (`_parse_power_limit`, vector limits) with `compute_curtailment` true, otherwise an `export_limit_unsupported` warning and a `no_export` check under Health → EMHASS. Not in compat builds (parity). `validate` checks the list length (EMHASS falls back to the first value on a mismatch).
+- EMHASS 0.18.5 keeps `maximum_power_to_grid` in its cache key (not a runtime key), so a changed list rebuilds the problem; it caches one problem only.
+- e2e: a new check sets the threshold to 1 €/kWh and confirms the live plan exports nothing (it exported up to 15.5 kW without it).
+
 ### 2026-10-10 (night): redesign "D", step 2: page layouts (0.4.1)
 - Plan: `lib/planSummary.ts` (the one-line summary), facts row, Chart/Table toggle, `TimeChart` got `ticks`/`onTick`/`compact` for the MPC run strip (`PlanCharts` → `MpcRunStrip`), prices in c/kWh (`formatCents`, `centsTick`), plan table column names (`planColumnLabel`/`formatPlanCell` in `lib/plan.ts`).
 - Runs: `components/RunTimeline.tsx` (lanes from `lib/runLanes.ts`), `pages/RunPreview.tsx` beside the list at ≥ 1180 px (`?run=` in the address).
