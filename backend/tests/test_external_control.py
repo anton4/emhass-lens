@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from emhass_lens.core.clock import FakeClock
 from emhass_lens.services.outputs import state_messages
 from tests.test_inverter_service import SOFAR
-from tests.test_phase1 import prime, run_job
+from tests.test_phase1 import prime, run_job, ticks
 from tests.test_phase2 import LEGACY_SWITCH, live_client
 from tests.world import TZ, World
 
@@ -63,7 +63,7 @@ def manual_run(client: TestClient, job: str) -> dict:
     """Start a job by hand and return its finished run (manual runs are always recorded)."""
     run_id = client.post(f"/api/jobs/{job}/run").json()["run_id"]
     assert run_id is not None, f"{job} didn't start"
-    for _ in range(200):
+    for _ in ticks():
         run = client.get(f"/api/runs/{run_id}").json()
         if run["outcome"] != "running":
             return run
@@ -72,7 +72,7 @@ def manual_run(client: TestClient, job: str) -> dict:
 
 def wait_for_run(client: TestClient, job: str, after_id: int) -> dict:
     """The newest finished run of `job` with an id above `after_id` (a background run started by a listener)."""
-    for _ in range(500):
+    for _ in ticks():
         runs = client.get("/api/runs", params={"job": job}).json()
         if runs and runs[0]["id"] > after_id and runs[0]["outcome"] != "running":
             return runs[0]

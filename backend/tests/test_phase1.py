@@ -1,5 +1,7 @@
 """Phase 1 end to end: prices, forecasts, PV, shadow MPC builds, EMHASS checks, plans and parity."""
 
+import time
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -30,8 +32,16 @@ def make_client(tmp_path: Path, world: World, clock: FakeClock, **boot_kwargs) -
     return TestClient(create_app(boot, clock=clock, http_transport=world.transport()))
 
 
+def ticks(timeout: float = 30, every: float = 0.01) -> Iterator[None]:
+    """A polling loop that gives up after `timeout` seconds, not after a count of requests (CI runners are slow)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        yield
+        time.sleep(every)
+
+
 def _wait_idle(client: TestClient, job: str) -> dict:
-    for _ in range(400):
+    for _ in ticks():
         info = next(j for j in client.get("/api/jobs").json() if j["id"] == job)
         if not info["running"]:
             return info
@@ -52,7 +62,7 @@ def run_job(client: TestClient, job: str) -> dict:
         if run_id is not None:
             break
     assert run_id is not None, f"{job} never started"
-    for _ in range(200):
+    for _ in ticks():
         run = client.get(f"/api/runs/{run_id}").json()
         if run["outcome"] != "running":
             return run

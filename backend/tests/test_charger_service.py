@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from emhass_lens.core.clock import FakeClock
-from tests.test_phase1 import prime, run_job
+from tests.test_phase1 import prime, run_job, ticks
 from tests.test_phase2 import LEGACY_SWITCH, live_client
 from tests.world import TZ, World
 
@@ -60,7 +60,7 @@ def container(client: TestClient):
 def wait_for_run(client: TestClient, job: str, after_id: int) -> dict:
     """The newest finished run of `job` started on demand (run_now) after `after_id`. Scheduled fires are ignored,
     and so is a duplicate that was skipped because the run under test still held the job's lock."""
-    for _ in range(500):
+    for _ in ticks():
         runs = client.get("/api/runs", params={"job": job}).json()
         new = [r for r in runs if r["id"] > after_id and r["trigger"] == "manual"]
         if any(r["outcome"] == "running" for r in new):

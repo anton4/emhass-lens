@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from emhass_lens.app import create_app
 from emhass_lens.bootstrap import Bootstrap
+from tests.test_phase1 import ticks
 
 
 def boot(tmp_path: Path, **kwargs) -> Bootstrap:
@@ -87,7 +88,7 @@ def test_jobs_listed_and_run_now_records_a_run(client: TestClient) -> None:
     assert started.status_code == 202
     assert started.json()["run_id"] is not None
     runs: list[dict] = []
-    for _ in range(50):
+    for _ in ticks():
         runs = client.get("/api/runs", params={"job": "system.heartbeat"}).json()
         if runs and runs[0]["outcome"] != "running":
             break
@@ -133,7 +134,7 @@ def test_retention_also_prunes_prices_forecasts_and_plans(tmp_path: Path) -> Non
     with TestClient(create_app(boot(tmp_path, safe_mode=True))) as client:
         started = client.post("/api/jobs/maintenance.retention/run").json()
         run: dict = {}
-        for _ in range(100):
+        for _ in ticks():
             run = client.get(f"/api/runs/{started['run_id']}").json()
             if run["outcome"] != "running":
                 break

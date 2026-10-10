@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from emhass_lens.core.clock import FakeClock
-from tests.test_phase1 import prime, run_job
+from tests.test_phase1 import prime, run_job, ticks
 from tests.test_phase2 import LEGACY_SWITCH, live_client
 from tests.world import TZ, World
 
@@ -88,7 +88,7 @@ def push(client: TestClient, world: World, entity: str, value) -> None:
 def manual_run(client: TestClient, job: str) -> dict:
     run_id = client.post(f"/api/jobs/{job}/run").json()["run_id"]
     assert run_id is not None, f"{job} didn't start"
-    for _ in range(300):
+    for _ in ticks():
         run = client.get(f"/api/runs/{run_id}").json()
         if run["outcome"] != "running":
             return run
@@ -99,7 +99,7 @@ def wait_for_run(client: TestClient, job: str, after_id: int, trigger: str = "ev
     """The run of `job` after `after_id` with this trigger (and a summary starting with `summary`) that did
     something. Two pushes in a row make two runs, and a write can trigger a queued rerun: those extra runs find
     nothing left to do (noop), so the newest run that acted wins, and a noop only when nothing else is there."""
-    for _ in range(600):
+    for _ in ticks():
         # the job's lock is held through any queued rerun, so wait for the lock, not just for the first record
         info = next(j for j in client.get("/api/jobs").json() if j["id"] == job)
         if info["running"]:
@@ -300,7 +300,7 @@ def test_live_refusals_and_the_kill_switch(tmp_path: Path, world: World) -> None
         m = len(world.ha_services)
         forced = client.post("/api/market/reconcile", json={"force_end": True}).json()
         run = client.get(f"/api/runs/{forced['run_id']}").json()
-        for _ in range(300):
+        for _ in ticks():
             if run["outcome"] != "running":
                 break
             run = client.get(f"/api/runs/{forced['run_id']}").json()

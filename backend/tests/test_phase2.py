@@ -12,7 +12,7 @@ from emhass_lens.bootstrap import Bootstrap
 from emhass_lens.core.clock import FakeClock
 from emhass_lens.services.outputs import discovery, topics
 from emhass_lens.settings.model import Settings
-from tests.test_phase1 import prime, run_job
+from tests.test_phase1 import prime, run_job, ticks
 from tests.world import EMHASS_URL, HA_URL, TZ, World
 
 START = datetime(2026, 10, 9, 11, 13, 0, tzinfo=UTC)
@@ -139,7 +139,7 @@ def test_ml_fit_records_lags_and_flags_a_change(tmp_path: Path, world: World) ->
         started = client.post("/api/ml/fit", json={"historic_days": 20}).json()
         run_id = started["run_id"]
         run: dict = {}
-        for _ in range(200):
+        for _ in ticks():
             run = client.get(f"/api/runs/{run_id}").json()
             if run["outcome"] != "running":
                 break
@@ -206,7 +206,7 @@ def test_mqtt_state_and_commands(tmp_path: Path, world: World) -> None:
         before = len(client.get("/api/runs", params={"job": "emhass.mpc"}).json())
         portal.call(outputs.handle, "emhass_lens/run_mpc/press", "PRESS")
         runs: list[dict] = []
-        for _ in range(200):
+        for _ in ticks():
             runs = client.get("/api/runs", params={"job": "emhass.mpc"}).json()
             if len(runs) > before and runs[0]["outcome"] != "running":
                 break
