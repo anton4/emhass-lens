@@ -88,7 +88,9 @@ def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world:
     try:
         decided = run_job(client, "charger.decide")
         assert decided["outcome"] == "dry_run", decided
-        assert decided["summary"] == "Would 'EMHASS: start charging' (emhass_start): press start, limit 8 A"
+        assert decided["summary"] == (
+            "Would 'EMHASS: start charging' (emhass_start): press start, limit 8 A · was 0 A, plan 5.5 kW"
+        )
         assert not [s for s in world.ha_services if s[0].startswith(("button", "number", "notify"))]
         calls = client.get(f"/api/runs/{decided['id']}/artifacts/charger_calls").json()
         assert {"service": "notify", "message": "EMHASS started EV at 8A", "ok": None, "dry_run": True} in calls
@@ -159,7 +161,8 @@ def test_the_soc_stop_fires_once_after_the_holding_time(tmp_path: Path, world: W
         assert stopped["outcome"] == "ok", stopped
         assert (
             stopped["summary"]
-            == "Did 'Target SoC reached: stop charging' (soc_limit): press stop, limit 0 A, target SoC back to 100 %"
+            == "Did 'Target SoC reached: stop charging' (soc_limit): press stop, limit 0 A, target SoC back to 100 % "
+            "· was 8 A, car 85 %, target 80 %"
         )
         calls = [s[0] for s in world.ha_services if s[0].startswith(("button", "number", "notify", "input_number"))]
         assert calls == ["button/press", "number/set_value", "notify/mobile_app_test", "input_number/set_value"]
@@ -184,7 +187,9 @@ def test_live_starts_the_car_and_reads_back(tmp_path: Path, world: World) -> Non
     try:
         run = run_job(client, "charger.decide")
         assert run["outcome"] == "ok", run
-        assert run["summary"] == "Did 'EMHASS: start charging' (emhass_start): press start, limit 8 A"
+        assert run["summary"] == (
+            "Did 'EMHASS: start charging' (emhass_start): press start, limit 8 A · was 0 A, plan 5.5 kW"
+        )
         calls = [
             (s[0], s[1].get("entity_id")) for s in world.ha_services if s[0].startswith(("button", "number", "notify"))
         ]

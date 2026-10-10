@@ -83,10 +83,15 @@ def test_the_horizon_is_cut_to_the_model_but_never_in_the_compat_build() -> None
 # --- the live path ------------------------------------------------------------------------------------------------
 
 
+def live(tmp_path: Path, world: World, clock: FakeClock, **ml) -> TestClient:
+    emhass = {"base_url": EMHASS, "mode": "live", "mpc": {"auto": True}, "ml": ml}
+    return live_client(tmp_path, world, clock, emhass=emhass)
+
+
 def test_a_short_model_fails_one_run_then_plans_the_cut_horizon_until_a_fit(tmp_path: Path, world: World) -> None:
     clock = FakeClock(START)
     world.emhass_model_steps = 40
-    client = live_client(tmp_path, world, clock)
+    client = live(tmp_path, world, clock, fit_on_fault=False)  # the automatic fit is tested below
     try:
         first = run_job(client, "emhass.mpc")
         wanted = sent(world)[0]["prediction_horizon"]
@@ -183,5 +188,75 @@ def test_a_health_timeout_while_emhass_computes_our_action_is_not_unreachable(tm
         emhass.busy = ("naive-mpc-optim", clock.now())
         run_job(client, "emhass.health")
         assert emhass.reachable is False
+    finally:
+        client.__exit__(None, None, None)
+
+
+# --- the automatic fit ----------------------------------------------------------------------------------------------
+
+NIGHT = datetime(2026, 10, 9, 0, 13, 0, tzinfo=UTC)  # 03:13 in Tallinn
+
+
+def fits(client: TestClient) -> list[dict]:
+    return client.get("/api/runs", params={"job": "ml.fit"}).json()
+
+
+def wait_for_fit(client: TestClient) -> dict:
+    for _ in ticks():
+        done = [r for r in fits(client) if r["outcome"] != "running"]
+        if done:
+            return done[0]
+    raise AssertionError("no ml.fit run")
+
+
+def test_the_model_is_fitted_after_the_first_run_of_the_night(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(NIGHT)
+    client = live(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        fit = wait_for_fit(client)
+        assert fit["outcome"] == "ok" and fit["trigger"] == "event"
+        assert fit["summary"].endswith("(automatic: nightly)")
+        assert [name for name, _ in world.emhass_actions].count("forecast-model-fit") == 1
+
+        clock.advance(minutes=15)  # the next run that night: already fitted today
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        assert len(fits(client)) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_no_automatic_fit_in_the_daytime_off_or_while_not_driving(tmp_path: Path, world: World) -> None:
+    for start, mode, auto_fit in ((START, "live", "daily"), (NIGHT, "live", "off"), (NIGHT, "dry_run", "daily")):
+        clock = FakeClock(start)
+        emhass = {"base_url": EMHASS, "mode": mode, "mpc": {"auto": True}, "ml": {"auto_fit": auto_fit}}
+        client = live_client(tmp_path / f"{mode}-{auto_fit}-{start.hour}", world, clock, emhass=emhass)
+        try:
+            run_job(client, "emhass.mpc")
+            ml = client.app.state.container.extras["ml"]  # type: ignore[attr-defined]
+            assert ml._auto is None, (start, mode, auto_fit)
+            assert fits(client) == []
+        finally:
+            client.__exit__(None, None, None)
+
+
+def test_a_short_model_is_fitted_right_after_the_replan(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    world.emhass_model_steps = 40
+    client = live(tmp_path, world, clock)
+    try:
+        first = run_job(client, "emhass.mpc")
+        assert first["outcome"] == "error"
+        replan = next_run(client, "emhass.mpc", first["id"])
+        assert replan["outcome"] == "ok" and sent(world)[-1]["prediction_horizon"] == 40
+        fit = wait_for_fit(client)
+        assert fit["outcome"] == "ok"
+        assert "(automatic: the model can't serve the runs: it forecasts only 40 of " in fit["summary"]
+        assert world.emhass_model_steps is None  # the fake EMHASS forgets the tuned model on a fit
+        assert "ml.model_short" not in problem_keys(client)
+        full = run_job(client, "emhass.mpc")
+        wanted = sent(world)[0]["prediction_horizon"]
+        assert full["outcome"] == "ok" and sent(world)[-1]["prediction_horizon"] == wanted
+        assert len(fits(client)) == 1  # nothing left to repair, and it isn't night
     finally:
         client.__exit__(None, None, None)

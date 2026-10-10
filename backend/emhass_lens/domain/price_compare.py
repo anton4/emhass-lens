@@ -47,11 +47,21 @@ def sensor_intervals(attributes: dict[str, Any] | None) -> list[Interval]:
 
 
 def compare(
-    name: str, intervals: list[Interval], ours: list[SlotPrice], field: str, tolerance: float
+    name: str,
+    intervals: list[Interval],
+    ours: list[SlotPrice],
+    field: str,
+    tolerance: float,
+    *,
+    spot_decimals: int | None = None,
+    vat_factor: float = 1.0,
 ) -> dict[str, Any]:
     """A parity section: every App slot inside a sensor interval against that interval's value. Forecast
     slots are skipped (the sensor only knows published prices); sensor intervals the App has no slot for
-    are counted."""
+    are counted. `spot_decimals`: the sensor's Nord Pool source rounds the spot price (the HA Nord Pool
+    integration to 3 decimals by default), so ours is compared with the spot rounded the same way; the import
+    price carries that rounding times the VAT factor."""
+    factor = vat_factor if field == "import_price" else 1.0
     by_start = sorted(ours, key=lambda s: s.start)
     diffs: list[dict[str, Any]] = []
     deltas: dict[str, list[float]] = {}
@@ -70,6 +80,8 @@ def compare(
                 skipped += 1
                 continue
             mine = float(getattr(slot, field))
+            if spot_decimals is not None:
+                mine += (round(slot.spot, spot_decimals) - slot.spot) * factor
             compared += 1
             delta = mine - interval.value
             if abs(delta) > tolerance:
@@ -99,6 +111,7 @@ def compare(
         "period_deltas": {period: round(median(values), 6) for period, values in deltas.items()},
         "delta_spread": {period: round(max(values) - min(values), 6) for period, values in deltas.items()},
         "ok": not diffs and compared > 0,
+        "spot_decimals": spot_decimals,
     }
 
 

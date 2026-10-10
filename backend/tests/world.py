@@ -69,6 +69,7 @@ class World:
     emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
     emhass_model_steps: int | None = None  # a tuned load model: runs with a longer horizon fail (fit resets it)
     emhass_health_timeout: bool = False  # /healthz doesn't answer in time (EMHASS busy computing)
+    emhass_fail_live: bool = False  # optimisations without a costfun parameter (the live one) end in an error
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -139,6 +140,10 @@ class World:
             if name == "naive-mpc-optim":
                 now = self.clock_now() if self.clock_now else datetime.now(UTC)
                 stamp = now.astimezone(UTC).isoformat()
+                if self.emhass_fail_live and not payload.get("costfun"):
+                    # EMHASS records the failed run in last-run; /api/v1/plan keeps the last good plan
+                    self.emhass_last_run = {"status": "error", "timestamp": stamp, "error_message": "solver timed out"}
+                    return httpx.Response(400, json=["ERROR - emhass.web_server - solver timed out"])
                 if self.action_status == "error":
                     self.emhass_last_run = {"status": "error", "timestamp": stamp, "error_message": "solver failed"}
                     return httpx.Response(400, text="ERROR - solver failed\n")

@@ -67,6 +67,15 @@ class PublishService:
         if self.c.extras["mpc"].mode != "live":
             ctx.run.outcome, ctx.run.summary = "noop", "Only publishes in live mode"
             return
+        costfun = self.c.extras.get("costfun")
+        left = costfun.leftover if costfun is not None else None
+        if left:
+            ctx.run.outcome = "noop"
+            ctx.run.summary = (
+                f"Not publishing: EMHASS holds the cost-function comparison's {left.get('costfun')} plan (the live run "
+                f"#{left.get('run_id')} after it failed)"
+            )
+            return
         async with emhass.action_lock:
             result = await emhass.act("publish-data", {}, settings.emhass.timeouts.publish)
         ctx.run.artifact(

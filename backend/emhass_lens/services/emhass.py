@@ -301,6 +301,16 @@ class EmhassService:
                 ctx.run.outcome, ctx.run.summary = "noop", f"No plan available ({plan.get('status')})"
             return False
         generated = str(plan.get("generated_at"))
+        costfun = self.c.extras.get("costfun")
+        if driver != "app" and costfun is not None and costfun.is_leftover(generated):
+            left = costfun.leftover or {}
+            if ctx.run:
+                ctx.run.outcome = "noop"
+                ctx.run.summary = (
+                    f"EMHASS holds the cost-function comparison's {left.get('costfun')} plan (the live run "
+                    f"#{left.get('run_id')} after it failed); not storing it"
+                )
+            return False
         stored = await self.c.app_db.run(self._store_plan, generated, driver, run_id, last_run, plan)
         if ctx.run:
             rows = len(plan.get("plan") or [])

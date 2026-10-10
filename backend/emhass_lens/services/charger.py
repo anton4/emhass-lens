@@ -26,6 +26,7 @@ from emhass_lens.domain.charger import (
     compare,
     decide,
     describe,
+    numbers,
     soc_stop_at,
     soc_stop_due,
     track_soc,
@@ -265,8 +266,9 @@ class ChargerService:
             "charger_decision",
             {**self.last, "observed_before": before.as_dict(), "soc": self.soc.as_dict(self.limits.soc_for_s)},
         )
+        facts = numbers(decision, inputs)
         if decision.action == "none":
-            ctx.run.outcome, ctx.run.summary = "noop", f"Nothing to do: {decision.why}"
+            ctx.run.outcome, ctx.run.summary = "noop", f"Nothing to do: {decision.why} · {facts}"
             return
         if decision.action == "stop_soc":
             self.soc = replace(self.soc, fired=True)
@@ -277,13 +279,13 @@ class ChargerService:
             blocked = self.preconditions()
             if blocked:
                 self.last["blocked"] = blocked
-                ctx.run.outcome, ctx.run.summary = "noop", f"Not in control ({blocked}); would: {what}"
+                ctx.run.outcome, ctx.run.summary = "noop", f"Not in control ({blocked}); would: {what} · {facts}"
                 return
-            await self.apply(ctx, decision, calls)
+            await self.apply(ctx, decision, calls, facts)
             return
         ctx.run.artifact("charger_calls", [{**call, "ok": None, "dry_run": True} for call in calls])
         ctx.run.outcome = "dry_run"
-        ctx.run.summary = f"Would {what}" + (" (control is off)" if self.mode == "off" else "")
+        ctx.run.summary = f"Would {what}" + (" (control is off)" if self.mode == "off" else "") + f" · {facts}"
         if self.mode == "dry_run":
             window = self.limits.soc_compare_window_s if decision.action == "stop_soc" else self.limits.compare_window_s
             self.expect = {
@@ -309,7 +311,7 @@ class ChargerService:
             return [{"service": "button.press", "entity_id": e.start_button}, limit, *notify]
         return [limit, *notify]  # set_current, pause
 
-    async def apply(self, ctx: JobContext, decision: ChargerDecision, calls: list[Call]) -> None:
+    async def apply(self, ctx: JobContext, decision: ChargerDecision, calls: list[Call], facts: str = "") -> None:
         assert ctx.run is not None
         amps = decision.target_current_a
         if amps is not None and not (0 <= amps <= self.limits.max_current_a):
@@ -339,7 +341,11 @@ class ChargerService:
         if failed or not result["agree"]:
             ctx.run.outcome = "error"
             ctx.run.error = "; ".join(str(c.get("error", "")) for c in failed) or "the charger doesn't show the target"
-        ctx.run.summary = f"Did {describe(decision)}" + ("; the notification failed" if notify_failed else "")
+        ctx.run.summary = (
+            f"Did {describe(decision)}"
+            + (f" · {facts}" if facts else "")
+            + ("; the notification failed" if notify_failed else "")
+        )
 
     async def _read_back(self, decision: ChargerDecision, attempts: int = 10, every_s: float = 0.5) -> dict[str, Any]:
         e = self.c.settings.current.charger.entities

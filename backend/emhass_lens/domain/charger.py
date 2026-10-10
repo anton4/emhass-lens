@@ -272,6 +272,33 @@ def compare(decision: ChargerDecision, observed: ChargerObserved) -> dict[str, A
     return {"agree": all(r["same"] for r in rows), "fields": rows, "charging_state": observed.state_raw}
 
 
+def _kw(watts: float) -> str:
+    return f"{watts / 1000:.1f} kW"
+
+
+def numbers(decision: ChargerDecision, i: ChargerInputs) -> str:
+    """The values behind a decision, for the decision list: the current before, and the PV, house load and
+    surplus (Excess Solar), the plan's EV power (EMHASS) or the car's SoC and target (SoC stop)."""
+    d = decision.derived
+    parts = [f"was {i.current_limit_a:g} A"]
+    if decision.rule.startswith("solar_"):
+        age = ""
+        if d.pv_age_s >= 9999:
+            age = ", no timestamp"
+        elif d.pv_age_s >= 120:
+            age = f", {d.pv_age_s / 60:.0f} min old"
+        parts.append(
+            f"PV {_kw(d.pv_power_w)} ({d.pv_source}{age}), house load {_kw(i.house_load_w)} "
+            f"(charger {_kw(d.charger_commanded_w)} of it), surplus {_kw(d.pv_power_w - d.other_load_w)}"
+        )
+    elif decision.rule.startswith("emhass_"):
+        parts.append(f"plan {_kw(i.p_deferrable0_w)}" if i.p_deferrable0_w is not None else "plan unknown")
+    elif decision.rule == "soc_limit":
+        target = f"{i.target_soc:g} %" if i.target_soc is not None else "unknown"
+        parts.append(f"car {i.soc:g} %, target {target}")
+    return ", ".join(parts)
+
+
 def describe(decision: ChargerDecision) -> str:
     if decision.action == "none":
         return f"nothing to do ({decision.why})"

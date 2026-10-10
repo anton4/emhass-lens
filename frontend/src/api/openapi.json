@@ -1652,6 +1652,9 @@
           "ml": {
             "$ref": "#/components/schemas/EmhassMl",
             "default": {
+              "auto_fit": "daily",
+              "auto_fit_hour": 3,
+              "fit_on_fault": true,
               "historic_days": 30,
               "n_trials": 10,
               "sklearn_model": "KNeighborsRegressor",
@@ -1757,6 +1760,41 @@
       "EmhassMl": {
         "additionalProperties": false,
         "properties": {
+          "auto_fit": {
+            "default": "daily",
+            "description": "Retrains EMHASS's load model right after the first MPC run in the night window, so it keeps up with the house. Only while EMHASS Lens drives EMHASS (live, Auto MPC on); never tunes. MPC runs wait while EMHASS fits, so a slow fit can cost one quarter's run.",
+            "enum": [
+              "off",
+              "daily",
+              "weekly"
+            ],
+            "title": "Fit the model automatically",
+            "type": "string",
+            "ui": {
+              "labels": {
+                "daily": "Every night",
+                "off": "Off",
+                "weekly": "Every week"
+              }
+            }
+          },
+          "auto_fit_hour": {
+            "default": 3,
+            "description": "The fit follows the first MPC run from this hour on; the window lasts 3 hours.",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Night window starts at",
+            "type": "integer",
+            "ui": {
+              "unit": "h"
+            }
+          },
+          "fit_on_fault": {
+            "default": true,
+            "description": "When the model forecasts fewer slots than the horizon (a tuned model) or the lag count changed, fit right after the next MPC run instead of waiting for the night. At most once every 6 hours.",
+            "title": "Fit right away when the model can't serve the runs",
+            "type": "boolean"
+          },
           "historic_days": {
             "default": 30,
             "maximum": 365.0,
@@ -5731,6 +5769,24 @@
               "widget": "entity"
             }
           },
+          "spot_decimals": {
+            "anyOf": [
+              {
+                "maximum": 6.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 3,
+            "description": "The Home Assistant Nord Pool integration rounds the spot price (€/kWh) to this many decimals, the 3 in sensor.nordpool_kwh_ee_eur_3_10_0. EMHASS Lens rounds its own spot price the same way before comparing, so only real differences show. Leave empty when your sensor's source doesn't round.",
+            "title": "Spot price decimals in your Nord Pool sensor",
+            "ui": {
+              "advanced": true
+            }
+          },
           "tolerance": {
             "default": 0.0001,
             "description": "Differences up to this count as equal (templates usually round to 4 decimals).",
@@ -5858,6 +5914,7 @@
             "default": {
               "export_entity": "sensor.nordpool_export",
               "import_entity": "sensor.nordpool_import",
+              "spot_decimals": 3,
               "tolerance": 0.0001
             },
             "title": "Compare with your price sensors"
@@ -7222,6 +7279,9 @@
               "base_url": "",
               "extra_runtime_params": {},
               "ml": {
+                "auto_fit": "daily",
+                "auto_fit_hour": 3,
+                "fit_on_fault": true,
                 "historic_days": 30,
                 "n_trials": 10,
                 "sklearn_model": "KNeighborsRegressor",
@@ -7489,6 +7549,7 @@
               "sensors": {
                 "export_entity": "sensor.nordpool_export",
                 "import_entity": "sensor.nordpool_import",
+                "spot_decimals": 3,
                 "tolerance": 0.0001
               },
               "tariff": {

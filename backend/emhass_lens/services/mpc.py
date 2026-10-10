@@ -137,8 +137,9 @@ class MpcService:
         costfun = self.c.extras.get("costfun")
         if settings.emhass.mpc.compare_costfuns and costfun is not None and costfun.cannot_run() is None:
             await costfun.compare_then_send(ctx, built)
-            return
-        await self.send(ctx, built.result, horizon, warn_note)
+        else:
+            await self.send(ctx, built.result, horizon, warn_note)
+        await self.c.extras["ml"].after_mpc_run()  # a nightly fit, or one because the model can't serve the runs
 
     async def build_now(self, ctx: JobContext, *, send: bool | None) -> Built:
         """Build and check this quarter's payload the way a run does, recording inputs, request, explain and
@@ -290,6 +291,9 @@ class MpcService:
             return
         self.last_live_run_id = ctx.run.id
         self.last_success_at = self.c.clock.now()
+        costfun = self.c.extras.get("costfun")
+        if costfun is not None:
+            await costfun.clear_leftover()  # EMHASS holds a live plan again
         ctx.run.outcome = "ok"
         ctx.run.error = None
         ctx.run.summary = f"Planned {horizon} in {response.duration_ms / 1000:.1f} s{warn_note}"

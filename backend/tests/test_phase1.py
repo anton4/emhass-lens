@@ -404,11 +404,13 @@ def test_setup_checklist_tracks_the_migration(tmp_path: Path, world: World) -> N
 
 
 def _raw(slots, field: str, bump) -> list[dict]:
+    """A Nord Pool template sensor's list: like the HA Nord Pool integration, its spot price has 3 decimals."""
+    factor = 1.24 if field == "import_price" else 1.0
     return [
         {
             "start": s.start.astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S%z"),
             "end": s.end.astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "value": round(float(getattr(s, field)) + bump(s), 4),
+            "value": round(float(getattr(s, field)) + (round(s.spot, 3) - s.spot) * factor + bump(s), 4),
         }
         for s in slots
         if not s.is_forecast

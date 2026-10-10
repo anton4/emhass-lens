@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alignTo, deferrableColumns, planChanges, rowAt, socColumns, socOf, stepSeries } from './plan'
+import { alignTo, deferrableColumns, lastRunNote, planChanges, rowAt, socColumns, socOf, stepSeries } from './plan'
 
 const t0 = Date.parse('2026-10-09T11:15:00Z') / 1000
 const row = (i: number, batt: number, grid: number, soc = 0.5) => ({
@@ -48,5 +48,24 @@ describe('plan helpers', () => {
     expect(socOf(row(0, 0, 0, 0.42))).toBe(0.42)
     expect(socOf({ timestamp: 'x', SOC_opt_0: 0.3, SOC_opt_1: 0.9 })).toBe(0.3)
     expect(socOf({ timestamp: 'x', P_batt: 1 })).toBeNull()
+  })
+})
+
+describe('lastRunNote', () => {
+  const now = new Date('2026-10-10T13:00:00Z')
+  it('says nothing for an ok run', () => {
+    expect(lastRunNote({ status: 'ok' }, '2026-10-10T12:43:00Z', now, 'Europe/Tallinn')).toBeNull()
+    expect(lastRunNote(null, null)).toBeNull()
+  })
+
+  it("names EMHASS's reason and says when the plan shown is older", () => {
+    const run = { status: 'error', action: 'naive-mpc-optim', timestamp: '2026-10-10T12:58:00Z', error_message: 'solver timed out' }
+    expect(lastRunNote(run, '2026-10-10T12:43:00Z', now, 'Europe/Tallinn')).toBe(
+      'EMHASS\'s last run (naive-mpc-optim, 15:58:00) ended with "error": solver timed out. ' +
+        'EMHASS keeps serving its last good plan, from 15:43:00, which is shown here.',
+    )
+    expect(lastRunNote({ status: 'infeasible' }, null, now, 'Europe/Tallinn')).toBe(
+      'EMHASS\'s last run (optimisation) ended with "infeasible": EMHASS gave no reason.',
+    )
   })
 })

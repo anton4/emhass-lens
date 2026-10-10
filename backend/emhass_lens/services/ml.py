@@ -1,10 +1,12 @@
 """EMHASS's ML load forecaster: fit, tune and predict, run on demand with the same lag settings MPC uses."""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
+from emhass_lens.domain.ml_schedule import auto_fit_due
 from emhass_lens.domain.mpc.payload import derive
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
@@ -16,6 +18,7 @@ log = logging.getLogger("emhass_lens.ml")
 
 FIT_KEY = "ml.last_fit"
 STEPS_KEY = "ml.model_steps"  # {steps, wanted, seen_at}: EMHASS's load model forecasts fewer slots than the horizon
+AUTO_KEY = "ml.auto_fit"  # {at, reason, fault, ok}: the last automatic fit attempt
 STEPS_MAX_AGE = timedelta(hours=24)  # then the full horizon is tried again (a refit outside the App would go unseen)
 
 
@@ -24,6 +27,57 @@ class MlService:
         self.c = c
         self._steps: dict[str, Any] | None = None
         self._steps_loaded = False
+        self._auto: asyncio.Task[None] | None = None
+
+    # --- automatic fit (domain/ml_schedule.py decides when) ----------------------------------------------
+    def fault(self, now: datetime) -> str | None:
+        """Why the model can't serve the runs, in words, or None."""
+        short = self.short_info(now)
+        if short:
+            return f"it forecasts only {short['steps']} of {short['wanted']} slots (a tuned model)"
+        mismatch = self.lags_mismatch()
+        if mismatch:
+            return mismatch[0].lower() + mismatch[1:]
+        return None
+
+    async def after_mpc_run(self) -> None:
+        """Called when a live MPC run ends: start a fit right after it when one is due (nightly, weekly, or because
+        the model can't serve the runs). Only while EMHASS Lens drives EMHASS."""
+        mpc = self.c.extras["mpc"]
+        replan = getattr(mpc, "_replan", None)
+        if replan is not None and not replan.done():
+            return  # the re-plan with the cut horizon runs first; it calls this again when it ends
+        if self._auto is not None and not self._auto.done():
+            return
+        if self.c.boot.safe_mode or mpc.driver() != "app" or self.c.extras.get("ml_running"):
+            return
+        if self.c.extras["emhass"].reachable is not True:
+            return
+        ml = self.c.settings.current.emhass.ml
+        now = self.c.clock.now()
+        last_fit = await self.c.app_db.run(self.c.kv_get, FIT_KEY) or {}
+        last_auto = await self.c.app_db.run(self.c.kv_get, AUTO_KEY)
+        reason = auto_fit_due(
+            now=now,
+            tz=self.c.extras["prices"].tz,
+            auto_fit=ml.auto_fit,
+            hour=ml.auto_fit_hour,
+            fit_on_fault=ml.fit_on_fault,
+            last_fit_at=parse_iso(last_fit.get("at")),
+            last_auto=last_auto,
+            last_auto_at=parse_iso((last_auto or {}).get("at")),
+            fault=self.fault(now),
+        )
+        if reason is None:
+            return
+        log.info("Fitting EMHASS's load model after this MPC run (%s)", reason)
+        fault = reason not in ("nightly", "weekly")
+        self._auto = asyncio.create_task(self._fit_after_run(reason, fault), name="ml:auto_fit")
+
+    async def _fit_after_run(self, reason: str, fault: bool) -> None:
+        async with self.c.scheduler.jobs["emhass.mpc"].lock:  # the MPC run that called us still holds the job
+            pass
+        self.c.scheduler.run_now("ml.fit", {"auto": reason, "fault": fault}, trigger="event")
 
     # --- how far the model forecasts (learnt from EMHASS's error, see domain/mpc/model_steps.py) ------------
     def _short(self) -> dict[str, Any] | None:
@@ -113,7 +167,12 @@ class MlService:
     async def fit(self, ctx: JobContext) -> None:
         payload = self.fit_payload(ctx.params)
         timeout = self.c.settings.current.emhass.timeouts.fit
-        if await self._action(ctx, "forecast-model-fit", payload, timeout):
+        auto = ctx.params.get("auto")
+        ok = await self._action(ctx, "forecast-model-fit", payload, timeout)
+        if auto:
+            attempt = {"at": iso(self.c.clock.now()), "reason": auto, "fault": bool(ctx.params.get("fault")), "ok": ok}
+            await self.c.app_db.run(self.c.kv_set, AUTO_KEY, attempt)
+        if ok:
             await self.c.app_db.run(
                 self.c.kv_set,
                 FIT_KEY,
@@ -125,7 +184,9 @@ class MlService:
             )
             await self.forget_steps()  # a fitted model forecasts num_lags slots again
             assert ctx.run is not None
-            ctx.run.summary = f"Fitted {payload['sklearn_model']} with {payload['num_lags']} lags"
+            ctx.run.summary = f"Fitted {payload['sklearn_model']} with {payload['num_lags']} lags" + (
+                f" (automatic: {auto})" if auto else ""
+            )
 
     async def tune(self, ctx: JobContext) -> None:
         payload = {

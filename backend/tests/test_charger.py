@@ -233,3 +233,21 @@ def test_compare_judges_the_limit_and_the_target_soc_only() -> None:
     assert [f["field"] for f in compare(stop, ChargerObserved(0.0, 1, 80.0))["fields"] if not f["same"]] == [
         "target_soc"
     ]
+
+
+def test_numbers_show_what_the_decision_was_made_from() -> None:
+    from emhass_lens.domain.charger import numbers
+
+    solar = inp(charge_mode="Excess Solar", current_limit_a=10.0, pv_actual_w=10500.0, house_load_w=8400.0)
+    decision = decide(solar, NOW, L, False)
+    assert (decision.rule, decision.target_current_a) == ("solar_adjust", 13)
+    # house 8.4 kW includes the charger's 10 A × 690 W = 6.9 kW: other load 1.5 kW, surplus 9.0 kW
+    assert numbers(decision, solar) == (
+        "was 10 A, PV 10.5 kW (actual), house load 8.4 kW (charger 6.9 kW of it), surplus 9.0 kW"
+    )
+    old = inp(charge_mode="Excess Solar", pv_actual_w=3000.0, pv_actual_updated=NOW - timedelta(minutes=12))
+    assert "PV 3.0 kW (actual, 12 min old)" in numbers(decide(old, NOW, L, False), old)
+    emhass = inp(state_raw=1, current_limit_a=0.0)
+    assert numbers(decide(emhass, NOW, L, False), emhass) == "was 0 A, plan 5.5 kW"
+    full = inp(soc=85.0, current_limit_a=8.0)
+    assert numbers(decide(full, NOW, L, True), full) == "was 8 A, car 85 %, target 80 %"

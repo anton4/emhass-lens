@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- EMHASS Lens now fits EMHASS's load model by itself: every night right after the first MPC run from 03:00 (or weekly, or off), and right after the next run when the model can't serve the runs (a short tuned model, changed lags). Only while it drives EMHASS; it never tunes.
+- When the live run after a cost-function comparison fails, EMHASS holds the comparison's last plan. EMHASS Lens no longer stores it as "someone else's" plan or publishes it, and Health says what happened.
+- The Plan page explains an EMHASS error (EMHASS's message, and whether the plan shown is older) and what "made for someone else" means.
+- EV charger: Recent decisions show the new current and the numbers behind each decision (current before, PV, house load, surplus, or the plan's EV power).
+- Price sensor check: the App's spot price is rounded like the Home Assistant Nord Pool integration's (3 decimals) before comparing, so rounding no longer shows as differences and a different network package is named again.
+
 ## 0.3.8
 
 - A tuned ML load model no longer stops planning. EMHASS's tuner picks its own lag count (6 h to 3 days) and a tuned model forecasts only that far, so runs with a longer horizon failed with "Unable to obtain … lags_opt values". EMHASS Lens now recognises that answer, plans again at once with the horizon cut to what the model covers, and shows a Health warning until the model is fitted again. The Tune button explains this.

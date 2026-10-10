@@ -11,13 +11,42 @@ describe('parseChargerSummary', () => {
     expect(parseChargerSummary("Would 'EMHASS: start charging' (emhass_start): press start, limit 8 A")).toEqual({
       rule: 'emhass_start',
       label: 'EMHASS: start charging',
+      action: 'press start, limit 8 A',
+      facts: null,
     })
     expect(parseChargerSummary("Did 'Target SoC reached: stop charging' (soc_limit): press stop, limit 0 A")).toEqual({
       rule: 'soc_limit',
       label: 'Target SoC reached: stop charging',
+      action: 'press stop, limit 0 A',
+      facts: null,
     })
-    expect(parseChargerSummary('Nothing to do: charge mode is Manual')).toEqual({ rule: 'none', label: 'Nothing to do' })
+    expect(parseChargerSummary('Nothing to do: charge mode is Manual')).toEqual({
+      rule: 'none',
+      label: 'Nothing to do',
+      action: 'charge mode is Manual',
+      facts: null,
+    })
     expect(parseChargerSummary('Not connected to Home Assistant')).toBeNull()
+  })
+
+  it('reads the numbers behind a decision', () => {
+    const facts = 'was 10 A, PV 10.5 kW (actual), house load 8.4 kW (charger 6.9 kW of it), surplus 9.0 kW'
+    expect(parseChargerSummary(`Would 'Excess solar: adjust the current' (solar_adjust): limit 13 A · ${facts}`)).toEqual({
+      rule: 'solar_adjust',
+      label: 'Excess solar: adjust the current',
+      action: 'limit 13 A',
+      facts,
+    })
+    expect(
+      parseChargerSummary("Would 'EMHASS: start charging' (emhass_start): press start, limit 8 A (control is off) · was 0 A, plan 5.5 kW"),
+    ).toMatchObject({ action: 'press start, limit 8 A', facts: 'was 0 A, plan 5.5 kW' })
+    expect(
+      parseChargerSummary("Did 'EMHASS: start charging' (emhass_start): press start, limit 8 A · was 0 A, plan 5.5 kW; the notification failed"),
+    ).toMatchObject({ facts: 'was 0 A, plan 5.5 kW' })
+    expect(parseChargerSummary('Nothing to do: the car is unplugged · was 0 A')).toMatchObject({
+      action: 'the car is unplugged',
+      facts: 'was 0 A',
+    })
   })
 })
 

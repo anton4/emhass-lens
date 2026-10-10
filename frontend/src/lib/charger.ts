@@ -125,12 +125,36 @@ export function chargerModeSpec(mode: string | null | undefined): { color: LampC
 
 const RULE = /'([^']+)' \((soc_limit|emhass_[a-z]+|solar_[a-z]+)\)/
 
-/** Rule id and label from a decide run's summary, e.g. "Would 'EMHASS: start charging' (emhass_start): …". */
-export function parseChargerSummary(summary: string | null | undefined): { rule: string; label: string } | null {
+export interface ParsedChargerSummary {
+  rule: string
+  label: string
+  /** What it does to the charger, e.g. "limit 12 A" or "press start, limit 8 A"; for "none", why nothing. */
+  action: string | null
+  /** The values it was decided from, e.g. "was 10 A, PV 8.3 kW (actual), …" (summaries from 0.3.9 on). */
+  facts: string | null
+}
+
+/** Split "<head> · <facts>[; the notification failed]" into its two parts. */
+function splitFacts(text: string): [string, string | null] {
+  const at = text.indexOf(' · ')
+  if (at < 0) return [text.replace(/; the notification failed$/, ''), null]
+  return [text.slice(0, at), text.slice(at + 3).replace(/; the notification failed$/, '')]
+}
+
+/** Rule id, label, action and the numbers behind it from a decide run's summary, e.g.
+ * "Would 'Excess solar: adjust the current' (solar_adjust): limit 12 A · was 10 A, PV 8.3 kW (actual), …". */
+export function parseChargerSummary(summary: string | null | undefined): ParsedChargerSummary | null {
   if (!summary) return null
   const match = RULE.exec(summary)
-  if (match) return { rule: match[2]!, label: match[1]! }
-  if (summary.startsWith('Nothing to do')) return { rule: 'none', label: 'Nothing to do' }
+  if (match) {
+    const [head, facts] = splitFacts(summary.slice(match.index + match[0].length).replace(/^: /, ''))
+    const action = head.replace(/ \(control is off\)$/, '').trim() || null
+    return { rule: match[2]!, label: match[1]!, action, facts }
+  }
+  if (summary.startsWith('Nothing to do')) {
+    const [head, facts] = splitFacts(summary.replace(/^Nothing to do:?\s*/, ''))
+    return { rule: 'none', label: 'Nothing to do', action: head || null, facts }
+  }
   return null
 }
 

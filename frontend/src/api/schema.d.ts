@@ -1655,6 +1655,9 @@ export interface components {
             /**
              * ML load forecast
              * @default {
+             *       "auto_fit": "daily",
+             *       "auto_fit_hour": 3,
+             *       "fit_on_fault": true,
              *       "historic_days": 30,
              *       "n_trials": 10,
              *       "sklearn_model": "KNeighborsRegressor",
@@ -1719,6 +1722,25 @@ export interface components {
         };
         /** EmhassMl */
         EmhassMl: {
+            /**
+             * Fit the model automatically
+             * @description Retrains EMHASS's load model right after the first MPC run in the night window, so it keeps up with the house. Only while EMHASS Lens drives EMHASS (live, Auto MPC on); never tunes. MPC runs wait while EMHASS fits, so a slow fit can cost one quarter's run.
+             * @default daily
+             * @enum {string}
+             */
+            auto_fit: "off" | "daily" | "weekly";
+            /**
+             * Night window starts at
+             * @description The fit follows the first MPC run from this hour on; the window lasts 3 hours.
+             * @default 3
+             */
+            auto_fit_hour: number;
+            /**
+             * Fit right away when the model can't serve the runs
+             * @description When the model forecasts fewer slots than the horizon (a tuned model) or the lag count changed, fit right after the next MPC run instead of waiting for the night. At most once every 6 hours.
+             * @default true
+             */
+            fit_on_fault: boolean;
             /**
              * Training history
              * @default 30
@@ -3275,6 +3297,12 @@ export interface components {
              */
             import_entity: string;
             /**
+             * Spot price decimals in your Nord Pool sensor
+             * @description The Home Assistant Nord Pool integration rounds the spot price (€/kWh) to this many decimals, the 3 in sensor.nordpool_kwh_ee_eur_3_10_0. EMHASS Lens rounds its own spot price the same way before comparing, so only real differences show. Leave empty when your sensor's source doesn't round.
+             * @default 3
+             */
+            spot_decimals: number | null;
+            /**
              * Tolerance
              * @description Differences up to this count as equal (templates usually round to 4 decimals).
              * @default 0.0001
@@ -3336,6 +3364,7 @@ export interface components {
              * @default {
              *       "export_entity": "sensor.nordpool_export",
              *       "import_entity": "sensor.nordpool_import",
+             *       "spot_decimals": 3,
              *       "tolerance": 0.0001
              *     }
              */
@@ -3823,6 +3852,9 @@ export interface components {
              *       "base_url": "",
              *       "extra_runtime_params": {},
              *       "ml": {
+             *         "auto_fit": "daily",
+             *         "auto_fit_hour": 3,
+             *         "fit_on_fault": true,
              *         "historic_days": 30,
              *         "n_trials": 10,
              *         "sklearn_model": "KNeighborsRegressor",
@@ -4089,6 +4121,7 @@ export interface components {
              *       "sensors": {
              *         "export_entity": "sensor.nordpool_export",
              *         "import_entity": "sensor.nordpool_import",
+             *         "spot_decimals": 3,
              *         "tolerance": 0.0001
              *       },
              *       "tariff": {

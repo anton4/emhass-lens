@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from emhass_lens.container import Container
     from emhass_lens.services.mpc import Built
 
+LEFTOVER_KEY = "costfun.leftover"
+
 log = logging.getLogger("emhass_lens.costfun")
 
 KEEP_DAYS = 30
@@ -32,6 +34,51 @@ class CostfunCompareService:
         self.c = c
         self.ignored: str | None = None  # set when EMHASS used another cost function than requested
         self.last_compared_at: datetime | None = None
+        self._leftover: dict[str, Any] | None = None
+        self._leftover_loaded = False
+
+    # --- a comparison plan left in EMHASS ----------------------------------------------------------------
+    @property
+    def leftover(self) -> dict[str, Any] | None:
+        """{costfun, generated_at, at, run_id, error} while EMHASS holds an alternative method's plan because the live
+        run after the comparison failed. Such a plan is neither stored nor published; the next good live plan clears
+        it."""
+        if not self._leftover_loaded:
+            self._leftover, self._leftover_loaded = self.c.kv_get(LEFTOVER_KEY), True
+        return self._leftover
+
+    def is_leftover(self, generated_at: str | None) -> bool:
+        left = self.leftover
+        return bool(left and generated_at and parse_iso(generated_at) == parse_iso(left.get("generated_at")))
+
+    async def _set_leftover(self, value: dict[str, Any] | None) -> None:
+        self._leftover, self._leftover_loaded = value, True
+        await self.c.app_db.run(self.c.kv_set, LEFTOVER_KEY, value)
+
+    async def clear_leftover(self) -> None:
+        if self.leftover is not None:
+            await self._set_leftover(None)
+
+    async def _note_leftover(self, ctx: JobContext, results: list[dict[str, Any]], at: datetime) -> None:
+        """The live run failed after alternatives made plans: EMHASS now holds the last of those."""
+        assert ctx.run is not None
+        made = [r for r in results if not r.get("live") and r.get("generated_at")]
+        if not made or ctx.run.outcome == "ok":
+            return
+        last = made[-1]
+        value = {
+            "costfun": last["costfun"],
+            "generated_at": last["generated_at"],
+            "at": iso(at),
+            "run_id": ctx.run.id,
+            "error": ctx.run.error or ctx.run.summary,
+        }
+        await self._set_leftover(value)
+        log.warning(
+            "The live run failed after the cost-function comparison: EMHASS holds the %s plan, which EMHASS Lens "
+            "neither stores nor publishes until a live run succeeds",
+            last["costfun"],
+        )
 
     # --- facts ------------------------------------------------------------------------------------------
     def live_costfun(self) -> tuple[str, str]:
@@ -88,7 +135,9 @@ class CostfunCompareService:
         if short_body is not None:
             # EMHASS's load model can't cover the horizon: no method can plan it; plan again with it cut
             await mpc.on_short_model(ctx, short_body)
+            await self._note_leftover(ctx, results, now)
             return
+        await self._note_leftover(ctx, results, now)
         results.append(await self._live_entry(ctx, built, live))
         await self.c.app_db.run(self._store, ctx.run.id, now, built.anchor, results)
         self.last_compared_at = now

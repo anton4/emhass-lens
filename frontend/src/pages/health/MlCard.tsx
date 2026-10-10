@@ -68,6 +68,7 @@ export function MlCard({ writable }: { writable: boolean }) {
           EMHASS forecasts the household load with a model trained on your load sensor. EMHASS Lens runs it with the same
           number of lags as the MPC runs. Fit and tune can take long (time limits {current ? `${formatDuration(current.timeouts.fit * 1000)} and ${formatDuration(current.timeouts.tune * 1000)}` : 'from Settings → EMHASS → Timeouts'}); MPC runs wait while EMHASS is busy with them.
         </p>
+        {current && <p className="muted">{autoFitText(current.ml)}</p>}
         {lagsChanged && (
           <div className="notice" data-color="amber" role="note">
             <strong>{lagsChanged.title}.</strong> {lagsChanged.detail} Run Fit so the model matches.
@@ -154,6 +155,7 @@ function MlJob({
         {run ? (
           <Link to={`/runs/${run.id}`} className="cell-sub">
             <OutcomeChip outcome={run.outcome} /> {formatTime(run.started_at)}
+            {run.trigger === 'event' && ' (automatic)'}
           </Link>
         ) : (
           <LabelledLamp color="neutral" text="Never run" />
@@ -161,4 +163,15 @@ function MlJob({
       </div>
     </div>
   )
+}
+
+/** When EMHASS Lens fits the model by itself, from Settings → EMHASS → ML load forecast. */
+function autoFitText(ml: { auto_fit?: string; auto_fit_hour?: number; fit_on_fault?: boolean }): string {
+  const hour = `${String(ml.auto_fit_hour ?? 3).padStart(2, '0')}:00`
+  const when =
+    ml.auto_fit === 'off'
+      ? 'EMHASS Lens does not fit the model on a schedule'
+      : `EMHASS Lens fits the model ${ml.auto_fit === 'weekly' ? 'once a week' : 'every night'} right after the first MPC run from ${hour}`
+  const fault = ml.fit_on_fault === false ? '' : ", and right after the next run when the model can't serve the runs (a tuned model, changed lags)"
+  return `${when}${fault}. Only while it drives EMHASS; it never tunes.`
 }

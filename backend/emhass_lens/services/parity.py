@@ -217,7 +217,16 @@ class ParityService:
                 )
                 continue
             ours = self.c.extras["prices"].priced(intervals[0].start, self.c.extras["forecasts"].current())
-            section = price_compare.compare(entity, intervals, ours, field, settings.prices.sensors.tolerance)
+            sensors = settings.prices.sensors
+            section = price_compare.compare(
+                entity,
+                intervals,
+                ours,
+                field,
+                sensors.tolerance,
+                spot_decimals=sensors.spot_decimals,
+                vat_factor=1 + settings.prices.tariff.vat_pct / 100,
+            )
             if not section["ok"]:
                 # a cause, not an excuse: the sensor is still different, so the run says mismatch
                 note = price_compare.explain(section, settings.prices.tariff, field, settings.prices.sensors.tolerance)

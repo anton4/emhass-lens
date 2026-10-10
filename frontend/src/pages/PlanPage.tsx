@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { useOutputs, usePlan, usePlanHistory } from '../api/queries'
+import { useOutputs, usePlan, usePlanHistory, useStatus } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { LabelledLamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { formatClock, formatDuration, formatSlot, formatTime } from '../lib/format'
 import { inCurrentSlot } from '../lib/publish'
-import { planChanges, rowAt } from '../lib/plan'
+import { EXTERNAL_PLAN_NOTE, lastRunNote, planChanges, rowAt } from '../lib/plan'
 import {
   HISTORY_WINDOWS,
   HORIZON_KEY,
@@ -33,6 +33,7 @@ const DRIVERS: Record<string, string> = {
 
 export function PlanPage() {
   const plan = usePlan()
+  const appStatus = useStatus()
   const outputs = useOutputs()
   const now = useNow(15_000)
   const nowS = now.getTime() / 1000
@@ -75,6 +76,8 @@ export function PlanPage() {
   const publishedAt = outputs.data?.last_published_at
   const lastRun = (current.last_run ?? {}) as Record<string, unknown>
   const status = typeof lastRun.status === 'string' ? lastRun.status : null
+  const runNote = lastRunNote(lastRun, current.generated_at, now, tz)
+  const leftover = appStatus.data?.problems.find((p) => p.key === 'costfun.leftover')
   const duration = typeof lastRun.duration_total_seconds === 'number' ? lastRun.duration_total_seconds * 1000 : null
   const currentRow = (data.current_row as PlanRow | null) ?? rowAt(rows, nowS)
   const first = rows[0]?.timestamp
@@ -84,10 +87,22 @@ export function PlanPage() {
     <>
       <PageHead title="Plan" intro="What EMHASS wants the battery, grid and loads to do in each quarter-hour.">
         <div className="toolbar">
-          <LabelledLamp color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'} text={`EMHASS ${status ?? '—'}`} />
+          <span title={runNote ?? undefined}>
+            <LabelledLamp color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'} text={`EMHASS ${status ?? '—'}`} />
+          </span>
         </div>
       </PageHead>
       <ErrorNotice error={plan.error} />
+      {leftover && (
+        <div className="notice" data-color="amber" role="note">
+          <strong>{leftover.title}.</strong> {leftover.detail} {leftover.hint}
+        </div>
+      )}
+      {runNote && (
+        <div className="notice" data-color="amber" role="note">
+          {runNote} <Link to="/runs?job=emhass.mpc">MPC runs</Link> show what EMHASS Lens sent and EMHASS's full answer.
+        </div>
+      )}
 
       <section className="panel">
         <div className="panel-body">
@@ -100,7 +115,15 @@ export function PlanPage() {
             </div>
             <div>
               <dt>Made for</dt>
-              <dd>{DRIVERS[current.driver] ?? current.driver}</dd>
+              <dd>
+                {DRIVERS[current.driver] ?? current.driver}
+                {current.driver === 'external' && (
+                  <div className="cell-sub">
+                    {EXTERNAL_PLAN_NOTE} <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it
+                    was picked up.
+                  </div>
+                )}
+              </dd>
             </div>
             {duration !== null && (
               <div>

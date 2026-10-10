@@ -2,6 +2,7 @@
 // configuration (see EMHASS docs/plan_output_schema.md). Signs: P_batt > 0 discharge, P_grid > 0 import.
 
 import type { PlanRow } from '../api/types'
+import { formatTime } from './format'
 import { isNumber } from './units'
 
 export const SLOT_S = 900
@@ -109,3 +110,32 @@ export function alignTo(x: number[], rows: PlanRow[], column: string): (number |
   }
   return x.map((t) => byTime.get(t) ?? null)
 }
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/** Why EMHASS's last run isn't "ok", in words, and whether the plan shown predates it; null when it is ok. */
+export function lastRunNote(
+  lastRun: Record<string, unknown> | null | undefined,
+  generatedAt: string | null | undefined,
+  now: Date = new Date(),
+  tz?: string,
+): string | null {
+  const status = text(lastRun?.status)
+  if (!lastRun || !status || status === 'ok') return null
+  const action = text(lastRun.action) ?? 'optimisation'
+  const at = text(lastRun.timestamp)
+  const why = text(lastRun.error_message) ?? text(lastRun.optim_status) ?? 'EMHASS gave no reason'
+  let note = `EMHASS's last run (${action}${at ? `, ${formatTime(at, now, tz)}` : ''}) ended with "${status}": ${why}.`
+  if (at && generatedAt && Date.parse(at) - Date.parse(generatedAt) > 1000) {
+    note += ` EMHASS keeps serving its last good plan, from ${formatTime(generatedAt, now, tz)}, which is shown here.`
+  }
+  return note
+}
+
+/** What "made for someone else" means. */
+export const EXTERNAL_PLAN_NOTE =
+  "EMHASS Lens didn't send the request that made this plan: EMHASS's own web UI, a Home Assistant automation or " +
+  'script, or the HACS integration with its Auto MPC switch off made it. Before 0.3.9 it could also be a ' +
+  'cost-function comparison plan left in EMHASS after a failed live run.'

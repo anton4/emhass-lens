@@ -3,6 +3,7 @@
 from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
+from emhass_lens.core.clock import parse_iso
 from emhass_lens.services.prices import area_tz, utc_day_start
 from emhass_lens.services.problems import Problem
 
@@ -309,6 +310,24 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 mismatch,
                 "Run 'ML model fit' on the Health page.",
                 "#/health",
+            )
+        )
+    costfun = x.get("costfun")
+    left = costfun.leftover if costfun is not None else None
+    if left:
+        when = parse_iso(left.get("at"))
+        at = when.astimezone(x["prices"].tz).strftime("%H:%M") if when else "?"
+        out.append(
+            Problem(
+                "costfun.leftover",
+                "warning",
+                "EMHASS holds a cost-function comparison plan",
+                f"The live run #{left.get('run_id')} at {at} failed after the cost-function comparison "
+                f"({left.get('error')}). EMHASS's current plan is the {left.get('costfun')} plan, which EMHASS Lens "
+                "neither stores nor publishes; the inverter keeps the last live plan until it is too old.",
+                "The next successful MPC run replaces it. If this repeats, turn off 'Compare cost functions on every "
+                "run' under Settings → EMHASS → MPC optimization.",
+                f"#/runs/{left.get('run_id')}",
             )
         )
     short = x["ml"].short_info(now)

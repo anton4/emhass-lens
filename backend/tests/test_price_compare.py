@@ -96,3 +96,20 @@ def test_explain_export_fees() -> None:
     section = compare("sensor.nordpool_export", theirs, ours, "export_price", 0.0001)
     note = explain(section, tariff, "export_price", 0.0001)
     assert note is not None and "export fees" in note and "0.50 c lower" in note
+
+
+def test_the_sensor_s_rounded_spot_price_is_not_a_difference() -> None:
+    """The HA Nord Pool integration rounds the spot to 3 decimals: 1.871 c becomes 1.9 c (owner's 00:00 slot)."""
+    tariff = Tariff()
+    ours = flat_slots(tariff, hours=2, spot=18.71)  # €/MWh
+    rounded = flat_slots(tariff, hours=2, spot=19.0)  # what the sensor's template starts from
+    export = hourly_from(rounded, "export_price")  # rounded to 4 decimals like the template
+    plain = compare("sensor.e", export, ours, "export_price", 0.0001)
+    assert plain["different"] == 8  # 0.29 c apart before rounding our spot
+    section = compare("sensor.e", export, ours, "export_price", 0.0001, spot_decimals=3)
+    assert section["ok"] is True and section["equal"] == 8 and section["spot_decimals"] == 3
+    vat = 1 + tariff.vat_pct / 100
+    imports = [Interval(i.start, i.end, float(r.import_price)) for i, r in zip(export, rounded[::4], strict=True)]
+    assert compare("sensor.i", imports, ours, "import_price", 0.0001, spot_decimals=3, vat_factor=vat)["ok"] is True
+    # the rounding reaches the import price with VAT: 0.029 c × 1.24, not 0.029 c
+    assert compare("sensor.i", imports, ours, "import_price", 0.00005, spot_decimals=3)["ok"] is False

@@ -152,3 +152,48 @@ def test_compare_is_refused_when_emhass_must_not_be_called(tmp_path: Path, world
         assert body["available"] is False and body["can_run"] is False
         assert "Off" in body["cannot_run_reason"]
         assert mpc_actions(world) == []
+
+
+def test_a_failed_live_run_after_a_comparison_leaves_no_plan_stored_or_published(tmp_path: Path, world: World) -> None:
+    """EMHASS's plan store keeps the last good plan, which is then the comparison's last alternative."""
+    clock = FakeClock(START)
+    client = live_client(
+        tmp_path,
+        world,
+        clock,
+        emhass={"base_url": "http://emhass.test:5000", "mode": "live", "mpc": {"auto": True, "compare_costfuns": True}},
+    )
+    costfun = client.app.state.container.extras["costfun"]  # type: ignore[attr-defined]
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        good = client.get("/api/plan").json()["current"]["generated_at"]
+
+        world.emhass_fail_live = True
+        clock.advance(minutes=15)
+        failed = run_job(client, "emhass.mpc")
+        assert failed["outcome"] == "error", failed
+        assert world.emhass_plan["generated_at"] != good  # EMHASS now serves the self-consumption plan
+        left = costfun.leftover
+        assert left["costfun"] == "self-consumption" and left["run_id"] == failed["id"]
+
+        watch = run_job(client, "emhass.plan_watch")
+        assert watch["summary"].startswith("EMHASS holds the cost-function comparison's self-consumption plan")
+        plan = client.get("/api/plan").json()["current"]
+        assert plan["generated_at"] == good and plan["driver"] == "app"
+        published = [a for a in world.emhass_actions if a[0] == "publish-data"]
+        publish = run_job(client, "emhass.publish")
+        assert publish["outcome"] == "noop" and publish["summary"].startswith("Not publishing: EMHASS holds")
+        assert [a for a in world.emhass_actions if a[0] == "publish-data"] == published
+        run_job(client, "health.evaluate")
+        keys = {p["key"] for p in client.get("/api/problems").json()["active"]}
+        assert "costfun.leftover" in keys
+
+        world.emhass_fail_live = False
+        clock.advance(minutes=15)
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        assert costfun.leftover is None
+        assert run_job(client, "emhass.publish")["outcome"] == "ok"
+        run_job(client, "health.evaluate")
+        assert "costfun.leftover" not in {p["key"] for p in client.get("/api/problems").json()["active"]}
+    finally:
+        client.__exit__(None, None, None)

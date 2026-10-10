@@ -159,6 +159,28 @@ class EmhassMl(Section):
         json_schema_extra=ui(unit="slots", advanced=True),
     )
     n_trials: int = Field(default=10, ge=5, le=100, title="Tuning trials", json_schema_extra=ui(advanced=True))
+    auto_fit: Literal["off", "daily", "weekly"] = Field(
+        default="daily",
+        title="Fit the model automatically",
+        description="Retrains EMHASS's load model right after the first MPC run in the night window, so it keeps up "
+        "with the house. Only while EMHASS Lens drives EMHASS (live, Auto MPC on); never tunes. MPC runs wait while "
+        "EMHASS fits, so a slow fit can cost one quarter's run.",
+        json_schema_extra=ui(labels={"off": "Off", "daily": "Every night", "weekly": "Every week"}),
+    )
+    auto_fit_hour: int = Field(
+        default=3,
+        ge=0,
+        le=23,
+        title="Night window starts at",
+        description="The fit follows the first MPC run from this hour on; the window lasts 3 hours.",
+        json_schema_extra=ui(unit="h"),
+    )
+    fit_on_fault: bool = Field(
+        default=True,
+        title="Fit right away when the model can't serve the runs",
+        description="When the model forecasts fewer slots than the horizon (a tuned model) or the lag count changed, "
+        "fit right after the next MPC run instead of waiting for the night. At most once every 6 hours.",
+    )
 
 
 class EmhassTimeouts(Section):
@@ -395,6 +417,16 @@ class PriceSensors(Section):
         title="Tolerance",
         description="Differences up to this count as equal (templates usually round to 4 decimals).",
         json_schema_extra=ui(unit="€/kWh"),
+    )
+    spot_decimals: int | None = Field(
+        default=3,
+        ge=0,
+        le=6,
+        title="Spot price decimals in your Nord Pool sensor",
+        description="The Home Assistant Nord Pool integration rounds the spot price (€/kWh) to this many decimals, "
+        "the 3 in sensor.nordpool_kwh_ee_eur_3_10_0. EMHASS Lens rounds its own spot price the same way before "
+        "comparing, so only real differences show. Leave empty when your sensor's source doesn't round.",
+        json_schema_extra=ui(advanced=True),
     )
 
 

@@ -320,6 +320,9 @@ function ChargerHistory({ timeZone }: { timeZone?: string }) {
                       {parsed ? (
                         <>
                           <span className="rule-badge small word">{parsed.rule === 'none' ? '–' : parsed.rule}</span> {parsed.label}
+                          {parsed.action && parsed.rule !== 'none' && <strong> → {parsed.action}</strong>}
+                          {parsed.rule === 'none' && parsed.action && <span className="muted">: {parsed.action}</span>}
+                          {parsed.facts && <div className="cell-sub">{parsed.facts}</div>}
                         </>
                       ) : (
                         <span className="faint">—</span>
