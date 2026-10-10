@@ -57,15 +57,17 @@ def container(client: TestClient):
     return client.app.state.container  # type: ignore[attr-defined]
 
 
-def wait_for_run(client: TestClient, job: str, after_id: int) -> dict:
-    """The newest finished run of `job` started on demand (run_now) after `after_id`. Scheduled fires are ignored,
-    and so is a duplicate that was skipped because the run under test still held the job's lock."""
+def wait_for_run(client: TestClient, job: str, after_id: int, summary: str = "") -> dict:
+    """The newest finished run of `job` started on demand (run_now) after `after_id` whose summary starts with
+    `summary`. Scheduled fires are ignored, and so is a duplicate that was skipped because the run under test
+    still held the job's lock. The live scheduler can add a further decision right after the one awaited (a
+    tick after the stop resumes EMHASS mode), so callers name the run they mean."""
     for _ in ticks():
         runs = client.get("/api/runs", params={"job": job}).json()
         new = [r for r in runs if r["id"] > after_id and r["trigger"] == "manual"]
         if any(r["outcome"] == "running" for r in new):
             continue
-        done = [r for r in new if r["outcome"] != "skipped"]
+        done = [r for r in new if r["outcome"] != "skipped" and (r["summary"] or "").startswith(summary)]
         if done:
             return done[0]
     raise AssertionError(f"no new {job} run")
@@ -150,7 +152,7 @@ def test_the_soc_stop_fires_once_after_the_holding_time(tmp_path: Path, world: W
         assert before == 0
         clock.advance(seconds=60)  # the scheduler may fire the overdue stop itself; run it by hand as well
         run_job(client, "charger.soc_stop")
-        stopped = wait_for_run(client, "charger.decide", before)
+        stopped = wait_for_run(client, "charger.decide", before, summary="Did 'Target SoC")
         assert stopped["outcome"] == "ok", stopped
         assert (
             stopped["summary"]
@@ -163,7 +165,7 @@ def test_the_soc_stop_fires_once_after_the_holding_time(tmp_path: Path, world: W
         # the target is 100 % now: the SoC clock resets, and EMHASS mode resumes charging (the automation does too)
         run_job(client, "charger.tick")
         assert client.get("/api/charger").json()["soc"] == {"since": None, "fired": False, "due_at": None}
-        resumed = wait_for_run(client, "charger.decide", stopped["id"])
+        resumed = wait_for_run(client, "charger.decide", stopped["id"], summary="Did 'EMHASS")
         assert "(emhass_adjust): limit 8 A" in resumed["summary"], resumed
         run_job(client, "charger.soc_stop")  # nothing due: no second stop
         runs = client.get("/api/runs", params={"job": "charger.decide"}).json()
