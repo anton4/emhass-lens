@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): the update check also asks GitHub (unreleased)
+### 2026-10-10 (evening): the update check also asks GitHub (0.3.17)
 - `UpdateService._github`: version from `raw.githubusercontent.com/anton4/emhass-lens/main/emhass_lens/config.yaml`; when newer than installed, an anonymous ghcr.io token + `HEAD /v2/anton4/emhass-lens-<arch>/manifests/<version>` (arch from `platform.machine()`); `UpdateInfo.released_version` / `store_path`; header chip "x.y.z released · Check for updates" (to `/hassio/store`) while the Supervisor hasn't picked it up. A ready release isn't looked up again. Tests in `test_updates.py`; the world fakes GitHub and the registry.
 
 ### 2026-10-10 (evening): update available in the header (0.3.16)

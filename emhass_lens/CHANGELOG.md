@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.17
 
 - The header also checks GitHub: once a new release's image for your machine is built, it shows **x.y.z released · Check for updates** until Home Assistant's App store picks it up.
 
