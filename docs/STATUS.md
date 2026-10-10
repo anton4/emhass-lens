@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): update available in the header (unreleased)
+### 2026-10-10 (evening): update available in the header (0.3.16)
 - `services/updates.UpdateService` reads `/addons/self/info` (`version_latest`, `update_available`, `slug`) at start and every 30 min (job `app.update_check`, unrecorded); `StatusInfo.update` (`UpdateInfo`); `Layout.tsx` shows an "Update to x.y.z" chip linking to `/hassio/addon/<slug>/info` (`target=_top`, out of the Ingress frame). The API tests that run "under the Supervisor" now get the fake transport (they had made real requests to http://supervisor). Test `test_updates.py`.
 
 ### 2026-10-10 (evening): This slot judges only what the inverter controls (0.3.15)
