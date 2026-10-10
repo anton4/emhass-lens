@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-10 (evening): automatic fit, leftover comparison plans, charger numbers, sensor rounding (unreleased)
+### 2026-10-10 (evening): automatic fit, leftover comparison plans, charger numbers, sensor rounding (0.3.9)
 - **Automatic fit:** `domain/ml_schedule.auto_fit_due` (night window from `emhass.ml.auto_fit_hour`, 3 h, crosses midnight; daily/weekly/off; fault fit at most every 6 h); `MlService.after_mpc_run()` from `MpcService.run` starts `ml.fit` with `{"auto": reason}` after the job lock frees, only when the App drives EMHASS; kv `ml.auto_fit`. Closes PLAN.md's "optionally weekly".
 - **Leftover comparison plans:** EMHASS's plan store keeps the last good plan, so a failed live run after a comparison left the last alternative there; the plan watch stored it as `external` with the failed run's status (the owner's "Made for someone else" + "EMHASS error"). `CostfunCompareService.leftover` (kv `costfun.leftover`) now keeps it out of `watch_plan` and `publish`, health `costfun.leftover`; cleared by the next good live plan. The Plan page shows EMHASS's `error_message` and explains `external`.
 - **Charger numbers:** `domain/charger.numbers()` appended to every decide summary after " · "; `parseChargerSummary` returns action and facts.

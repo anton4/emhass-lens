@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.9
 
 - EMHASS Lens now fits EMHASS's load model by itself: every night right after the first MPC run from 03:00 (or weekly, or off), and right after the next run when the model can't serve the runs (a short tuned model, changed lags). Only while it drives EMHASS; it never tunes.
 - When the live run after a cost-function comparison fails, EMHASS holds the comparison's last plan. EMHASS Lens no longer stores it as "someone else's" plan or publishes it, and Health says what happened.
