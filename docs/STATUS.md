@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): MQTT problem waits for the first connection (unreleased)
+- The owner's 18:06:33 "Problem: MQTT entities aren't being updated" had no detail, i.e. `last_error` was None: Health ran while the first connection was being made (MQTT had just been switched on). `OutputService.down_since` + a 2 min grace in `health_rules` (detail "still connecting to …" when there is no error yet); `explain_mqtt_error` (Supervisor: no Mosquitto App; CONNACK 4/5/134/135: login refused; refused/timeout/DNS: unreachable); `ProblemService.sync` logs a detail that arrives later. Tests `test_mqtt_health.py`.
+
 ### 2026-10-10 (evening): plan vs now on the Plan page, variant B (0.3.13)
 - Design canvas "Plan page: plan vs inverter now" (variants A/B); the owner chose B. `domain/plan_now.py` (`row_for` = the newest stored plan holding the slot, i.e. the one published at its start; `power_differs` 300 W and 15 %; `soc_expected` interpolated through the slot; `compare`), `services/plan_now.py` (measured from the watched Measurements entities with scale/invert, inverter registers + `preconditions`, charger observed), `GET /api/plan/now` (`PlanNow`). Frontend `pages/plan/NowSlot.tsx` replaces the old "This slot" card: tiles with a "now" line and amber edge (`ThisSlot` `now` prop), "Inverter set to" strip, Next slot toggle; `lib/planNow.ts`. Tests `test_plan_now.py`, `lib/planNow.test.ts`.
 

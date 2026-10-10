@@ -369,13 +369,18 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
             )
         )
     outputs = x["outputs"]
-    if outputs.enabled() and not outputs.connected:
+    if (
+        outputs.enabled()
+        and not outputs.connected
+        and outputs.down_since is not None
+        and now - outputs.down_since > timedelta(minutes=2)  # connecting takes a moment after a start
+    ):
         out.append(
             Problem(
                 "mqtt.disconnected",
                 "warning",
                 "MQTT entities aren't being updated",
-                outputs.last_error,
+                outputs.last_error or f"still connecting to {outputs.broker or 'the broker'}",
                 "Check the Mosquitto broker App or Settings → Home Assistant outputs.",
                 "#/health",
             )

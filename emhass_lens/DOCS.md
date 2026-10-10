@@ -53,6 +53,8 @@ With **Settings → Home Assistant outputs → MQTT entities** on, EMHASS Lens p
 
 The entities are retained on the broker, so they survive Home Assistant restarts.
 
+If EMHASS Lens can't reach the broker for 2 minutes, Health shows *MQTT entities aren't being updated* with the reason: no Mosquitto broker App found, the broker refused EMHASS Lens's login, or the broker can't be reached. Connecting after a start or after switching MQTT entities on doesn't count.
+
 ## The plan-published event
 
 In live mode EMHASS Lens publishes the plan right after each slot starts. It calls EMHASS's `publish-data`, then fires `emhass_lens_plan_published` with the current slot's values:

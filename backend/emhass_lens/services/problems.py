@@ -82,6 +82,10 @@ class ProblemService:
                 problem.title,
                 problem.detail,
             ):
+                if problem.detail and problem.detail != existing.detail:
+                    log.log(  # the reason often arrives a check later (e.g. MQTT's first connection attempt)
+                        30 if problem.severity != "error" else 40, "Problem: %s (%s)", problem.title, problem.detail
+                    )
                 existing.severity, existing.title, existing.detail = problem.severity, problem.title, problem.detail
                 existing.hint, existing.link = problem.hint, problem.link
                 await self.c.app_db.aexecute(

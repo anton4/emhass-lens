@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- MQTT: Health no longer warns while the first connection is being made (after a start or after switching MQTT entities on); after 2 minutes without a broker it says why (no Mosquitto broker App, login refused, broker unreachable), and the log line carries that reason too.
+
 ## 0.3.13
 
 - Plan page: **This slot** now shows the plan row in force for the current quarter-hour (not the next one in the last minutes of a quarter), with a **Next slot** button. Each tile shows what is measured now next to the plan, with an amber edge when they differ, and a strip below shows what the inverter is set to (mode, grid target, battery window, feed-in limit, when it was written) or why EMHASS Lens isn't in control.

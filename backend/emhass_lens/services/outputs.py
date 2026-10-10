@@ -15,8 +15,10 @@ import logging
 import secrets
 import ssl
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from emhass_lens.clients.supervisor import SupervisorError
 from emhass_lens.core.clock import iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.settings.model import Settings
@@ -210,6 +212,36 @@ def state_messages(c: Container) -> list[Message]:
     return [Message(t["state"], json.dumps(state)), Message(t["attributes"], json.dumps(attributes))]
 
 
+LOGIN_REFUSED = {4, 5, 134, 135}  # MQTT 3.1.1 and 5 CONNACK codes for bad credentials / not authorised
+UNREACHABLE = (
+    "connection refused",
+    "timed out",
+    "name or service not known",
+    "nodename nor servname",
+    "temporary failure in name resolution",
+    "no route to host",
+    "network is unreachable",
+)
+
+
+def explain_mqtt_error(exc: BaseException | str, broker: str | None, *, from_supervisor: bool = False) -> str:
+    """Why EMHASS Lens can't use the broker, in words that say what to do."""
+    text = exc if isinstance(exc, str) else (str(exc) or type(exc).__name__)
+    where = broker or "the broker"
+    if from_supervisor:
+        return (
+            "no MQTT broker App found: install and start the Mosquitto broker App, or name a broker under Settings → "
+            f"Home Assistant outputs (Supervisor: {text})"
+        )
+    rc = getattr(exc, "rc", None)
+    code = getattr(rc, "value", rc)
+    if isinstance(code, int) and code in LOGIN_REFUSED:
+        return f"the broker {where} refused EMHASS Lens's login ({text})"
+    if any(part in text.lower() for part in UNREACHABLE):
+        return f"can't reach the broker {where} ({text})"
+    return text
+
+
 class MqttLink(Protocol):
     async def publish(self, topic: str, payload: str, retain: bool) -> None: ...
 
@@ -219,6 +251,7 @@ class OutputService:
         self.c = c
         self.connected = False
         self.last_error: str | None = None
+        self.down_since: datetime | None = None  # enabled but not connected since (Health waits a while)
         self.broker: str | None = None
         self.link: MqttLink | None = None
         self._task: asyncio.Task[None] | None = None
@@ -230,6 +263,7 @@ class OutputService:
 
     def start(self) -> None:
         if self.enabled() and self._task is None:
+            self.down_since = self.c.clock.now()
             self._task = asyncio.create_task(self._run(), name="mqtt")
 
     async def stop(self, clear: bool = False) -> None:
@@ -350,7 +384,7 @@ class OutputService:
                     will=aiomqtt.Will(t["availability"], "offline", qos=1, retain=True),
                 ) as client:
                     self.link = _AioLink(client)
-                    self.connected, self.last_error = True, None
+                    self.connected, self.last_error, self.down_since = True, None, None
                     log.info("Connected to MQTT broker %s", self.broker)
                     await client.subscribe(f"{settings.outputs.discovery_prefix}/status")
                     await client.subscribe(t["auto_mpc_set"])
@@ -368,9 +402,12 @@ class OutputService:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                if self.connected or self.last_error != str(exc):
-                    log.warning("MQTT: %s; retrying in %.0f s", exc, backoff)
-                self.last_error = str(exc) or type(exc).__name__
+                why = explain_mqtt_error(exc, self.broker, from_supervisor=isinstance(exc, SupervisorError))
+                if self.connected or self.last_error != why:
+                    log.warning("MQTT: %s; retrying in %.0f s", why, backoff)
+                self.last_error = why
+            if self.down_since is None:
+                self.down_since = self.c.clock.now()
             self.connected = False
             self.link = None
             await asyncio.sleep(backoff)
