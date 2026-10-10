@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router'
 import { useEvents } from '../api/events'
 import { useStatus, useVersion } from '../api/queries'
-import { LabelledLamp } from './Lamp'
+import { Lamp, LabelledLamp } from './Lamp'
 import { COMPONENT_NAMES } from '../lib/components'
 import { driverSpec } from '../lib/driver'
 import { statusColor } from '../lib/status'
@@ -58,6 +58,18 @@ export function Layout() {
           <div className="mark">
             <span className="mark-name">EMHASS Lens</span>
             <span className="mark-version">{s?.version ?? UI_VERSION}</span>
+            {s?.update?.update_available && s.update.version_latest && (
+              <a
+                className="update-chip"
+                href={s.update.addon_path ?? '/hassio/store'}
+                target="_top"
+                rel="noopener"
+                title={`Home Assistant can install EMHASS Lens ${s.update.version_latest}; opens the App's page`}
+              >
+                <Lamp color="blue" />
+                Update to {s.update.version_latest}
+              </a>
+            )}
           </div>
           <ModeSwitch mode={s?.emhass_mode} writable={s?.writable} driver={s?.driver} safeMode={s?.safe_mode} />
           <div className="lamps" aria-label="Status">

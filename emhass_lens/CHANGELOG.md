@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The header shows **Update to x.y.z** next to the version when Home Assistant can install a newer EMHASS Lens (checked with the Supervisor every 30 minutes and at start); it opens the App's page in Home Assistant.
+
 ## 0.3.15
 
 - Plan page, This slot: house load and PV are shown but no longer judged (they are forecasts). The battery is judged against what the plan means for the house load, PV and EV charging now, so a house using less than forecast no longer marks the battery amber. When the battery runs the other way than expected, the card points to *Opposite sign* for the battery sensor.

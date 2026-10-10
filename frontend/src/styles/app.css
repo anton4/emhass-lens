@@ -122,6 +122,27 @@ time,
   color: var(--ink-muted);
 }
 
+/* a newer EMHASS Lens that Home Assistant can install; links to the App's page in Home Assistant */
+.update-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--lamp-blue) 45%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--tint-blue);
+  color: var(--ink);
+  font-size: var(--step--1);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.update-chip:hover,
+.update-chip:focus-visible {
+  text-decoration: underline;
+}
+
 .problem-count {
   font-family: var(--font-readout);
   font-size: var(--step--1);

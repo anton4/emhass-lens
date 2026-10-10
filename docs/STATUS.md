@@ -37,6 +37,9 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-10 (evening): update available in the header (unreleased)
+- `services/updates.UpdateService` reads `/addons/self/info` (`version_latest`, `update_available`, `slug`) at start and every 30 min (job `app.update_check`, unrecorded); `StatusInfo.update` (`UpdateInfo`); `Layout.tsx` shows an "Update to x.y.z" chip linking to `/hassio/addon/<slug>/info` (`target=_top`, out of the Ingress frame). The API tests that run "under the Supervisor" now get the fake transport (they had made real requests to http://supervisor). Test `test_updates.py`.
+
 ### 2026-10-10 (evening): This slot judges only what the inverter controls (0.3.15)
 - Owner's 18:15 slot: plan battery 1.57 kW discharge for 1.54 kW forecast load; house used 698 W; battery sensor counts charging as positive (needs Opposite sign). `domain/plan_now.battery_expected` (plan + Δload − ΔPV + Δdeferrable; the EV from the charger's limit while charging), `compare` judges grid vs plan, battery vs expected (`sign_hint` when opposite and ≥ 300 W), SoC; load and PV never judged. UI: no lamp for forecasts, expected value in the battery tile's hover, Opposite-sign notice.
 

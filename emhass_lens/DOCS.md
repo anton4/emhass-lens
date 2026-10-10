@@ -213,6 +213,10 @@ EMHASS-side features that work without any change here: capacity charges, therma
 
 All other settings live in the App: every save is kept as a revision, with who changed what and when, and any revision can be restored.
 
+## Updates
+
+When Home Assistant can install a newer EMHASS Lens, the header shows **Update to x.y.z** next to the version; it opens the App's page in Home Assistant. EMHASS Lens asks the Supervisor every 30 minutes and at start, so it shows exactly what Home Assistant offers. Home Assistant refreshes its App store on its own schedule: Settings → Add-ons → Add-on Store → ⋮ → Check for updates makes it notice a new release at once.
+
 ## Logs and runs
 
 - **Logs** shows the App's log live. Every line belongs to a component, and lines written during a job carry that run's number.

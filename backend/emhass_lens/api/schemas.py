@@ -27,6 +27,15 @@ class ProblemInfo(BaseModel):
     since: str | None = None
 
 
+class UpdateInfo(BaseModel):
+    """A newer EMHASS Lens that Home Assistant can install (from the Supervisor)."""
+
+    update_available: bool
+    version_latest: str | None = None
+    addon_path: str | None = None  # the App's page in Home Assistant, e.g. /hassio/addon/<slug>/info
+    checked_at: str | None = None
+
+
 class StatusInfo(BaseModel):
     version: str
     started_at: str
@@ -43,6 +52,7 @@ class StatusInfo(BaseModel):
     components: dict[str, ComponentStatus]
     problems: list[ProblemInfo]
     driver: str = "none"  # who drives EMHASS: app | legacy | both | none
+    update: UpdateInfo | None = None
 
 
 class LogEntry(BaseModel):

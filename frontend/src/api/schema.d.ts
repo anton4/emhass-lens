@@ -4440,6 +4440,7 @@ export interface components {
             timezone: string;
             /** Under Supervisor */
             under_supervisor: boolean;
+            update?: components["schemas"]["UpdateInfo"] | null;
             /** Version */
             version: string;
             /** Writable */
@@ -4582,6 +4583,20 @@ export interface components {
              * @default 24
              */
             vat_pct: number;
+        };
+        /**
+         * UpdateInfo
+         * @description A newer EMHASS Lens that Home Assistant can install (from the Supervisor).
+         */
+        UpdateInfo: {
+            /** Addon Path */
+            addon_path?: string | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Update Available */
+            update_available: boolean;
+            /** Version Latest */
+            version_latest?: string | null;
         };
         /** VacuumResult */
         VacuumResult: {

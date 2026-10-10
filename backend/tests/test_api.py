@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from emhass_lens.app import create_app
 from emhass_lens.bootstrap import Bootstrap
 from tests.test_phase1 import ticks
+from tests.world import World
 
 
 def boot(tmp_path: Path, **kwargs) -> Bootstrap:
@@ -99,7 +100,7 @@ def test_jobs_listed_and_run_now_records_a_run(client: TestClient) -> None:
 
 
 def test_writes_only_through_ingress_under_supervisor(tmp_path: Path) -> None:
-    app = create_app(boot(tmp_path, supervisor_token="t", ingress_ip="10.9.9.9"))
+    app = create_app(boot(tmp_path, supervisor_token="t", ingress_ip="10.9.9.9"), http_transport=World().transport())
     with TestClient(app) as client:
         status = client.get("/api/status").json()
         assert status["writable"] is False
@@ -149,7 +150,11 @@ def test_retention_also_prunes_prices_forecasts_and_plans(tmp_path: Path) -> Non
 
 
 def test_a_stored_secret_is_shown_only_on_request_through_ingress(tmp_path: Path) -> None:
-    with TestClient(create_app(boot(tmp_path / "a", supervisor_token="t", ingress_ip="testclient"))) as client:
+    with TestClient(
+        create_app(
+            boot(tmp_path / "a", supervisor_token="t", ingress_ip="testclient"), http_transport=World().transport()
+        )
+    ) as client:
         rev = client.get("/api/settings").json()["revision"]
         changes = {"forecast": {"ee": {"api_key": "abc123secret"}}}
         assert client.post("/api/settings/change", json={"base_revision": rev, "changes": changes}).status_code == 200
@@ -166,7 +171,11 @@ def test_a_stored_secret_is_shown_only_on_request_through_ingress(tmp_path: Path
         assert not any("abc123secret" in line for line in lines)
 
     # the direct port (not through Ingress) may not see it
-    with TestClient(create_app(boot(tmp_path / "b", supervisor_token="t", ingress_ip="10.9.9.9"))) as client:
+    with TestClient(
+        create_app(
+            boot(tmp_path / "b", supervisor_token="t", ingress_ip="10.9.9.9"), http_transport=World().transport()
+        )
+    ) as client:
         assert client.post("/api/settings/secret", json={"path": "forecast.ee.api_key"}).status_code == 403
 
 

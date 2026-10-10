@@ -8340,6 +8340,16 @@
             "title": "Under Supervisor",
             "type": "boolean"
           },
+          "update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "version": {
             "title": "Version",
             "type": "string"
@@ -8684,6 +8694,53 @@
           }
         },
         "title": "Tariff",
+        "type": "object"
+      },
+      "UpdateInfo": {
+        "description": "A newer EMHASS Lens that Home Assistant can install (from the Supervisor).",
+        "properties": {
+          "addon_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addon Path"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "update_available": {
+            "title": "Update Available",
+            "type": "boolean"
+          },
+          "version_latest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Latest"
+          }
+        },
+        "required": [
+          "update_available"
+        ],
+        "title": "UpdateInfo",
         "type": "object"
       },
       "VacuumResult": {

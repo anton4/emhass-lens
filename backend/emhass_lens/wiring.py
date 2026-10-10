@@ -34,6 +34,7 @@ from emhass_lens.services.problems import ProblemService
 from emhass_lens.services.publish import PublishService
 from emhass_lens.services.pv import PvService
 from emhass_lens.services.sofar import SofarWriter
+from emhass_lens.services.updates import UpdateService
 from emhass_lens.settings.model import Settings
 
 log = logging.getLogger("emhass_lens")
@@ -64,6 +65,7 @@ def build(c: Container) -> None:
     x["charger"] = ChargerService(c)
     x["market"] = MarketService(c)
     x["catchup"] = CatchUpService(c)
+    x["updates"] = UpdateService(c)
     x["measurements"] = MeasurementService(c)
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
@@ -252,6 +254,17 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="app.update_check",
+            title="App update check",
+            description="Asks the Supervisor whether a newer EMHASS Lens can be installed (shown next to the version).",
+            trigger=Periodic(1800, 45),
+            func=x["updates"].check,
+            record=False,
+            grace=timedelta(minutes=10),
+        )
+    )
+    s.add(
+        Job(
             id="inverter.verify",
             title="Inverter drift check",
             description="Live: every minute, sets back what something else changed since this slot's write.",
@@ -435,6 +448,8 @@ def subscribe(c: Container) -> None:
 
     def on_emhass_url(old: Settings, new: Settings, paths: list[str]) -> None:
         _spawn(c, _resolve_and_check(c))
+
+    _spawn(c, c.extras["updates"].check())
 
     def on_checks(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.run_now("emhass.config_check")

@@ -67,6 +67,9 @@ class World:
     supervisor_lists_backups: bool = True  # hassio_role: backup
     supervisor_backups: list[dict[str, Any]] = field(default_factory=list)
     emhass_ignores_costfun: bool = False  # an EMHASS too old for the costfun runtime parameter
+    supervisor_self: dict[str, Any] = field(
+        default_factory=lambda: {"slug": "local_emhass_lens", "state": "started"}
+    )  # /addons/self/info (version, version_latest, update_available ...)
     emhass_model_steps: int | None = None  # a tuned load model: runs with a longer horizon fail (fit resets it)
     emhass_health_timeout: bool = False  # /healthz doesn't answer in time (EMHASS busy computing)
     emhass_fail_live: bool = False  # optimisations without a costfun parameter (the live one) end in an error
@@ -96,9 +99,7 @@ class World:
                     return httpx.Response(403, json={"result": "error", "message": "Access not allowed for this App"})
                 return httpx.Response(200, json={"result": "ok", "data": {"addons": [{"slug": "5b918bf2_emhass"}]}})
             if path == "/addons/self/info":
-                return httpx.Response(
-                    200, json={"result": "ok", "data": {"slug": "local_emhass_lens", "state": "started"}}
-                )
+                return httpx.Response(200, json={"result": "ok", "data": self.supervisor_self})
             if path == "/backups":
                 if not self.supervisor_lists_backups:
                     return httpx.Response(403, json={"result": "error", "message": "Access not allowed for this App"})
