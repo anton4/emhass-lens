@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.5
 
 - Health no longer raises "No successful MPC run recently" the moment you take over: the grace for the first live run now counts from the take-over, not from when the App started.
 
