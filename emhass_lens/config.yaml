@@ -21,7 +21,6 @@ services:
   - mqtt:want
 # Backups: app.db (settings, prices, plans, measurements) is copied live after a WAL checkpoint and an integrity
 # check (backup_pre); run details and logs are bulky and rebuilt over time, so runs.db stays out
-backup: hot
 backup_pre: python -m emhass_lens.backup_pre
 backup_post: python -m emhass_lens.backup_post
 backup_exclude:
