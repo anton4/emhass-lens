@@ -358,3 +358,33 @@ def test_an_export_limit_of_the_wrong_length_is_refused() -> None:
     result = build(inputs, anchor, slot_floor(now), settings, emhass_version=(0, 18, 5))
     codes = [i.code for i in validate(result, inputs, settings) if i.level == "error"]
     assert "length_mismatch" in codes
+
+
+def test_charge_power_derating_is_planned_without() -> None:
+    """Run 2405: [[0.89, 0.5], [0.96, 0.14]] turned a 0.3 s solve into 20 s (over 2 min on the HA host)."""
+    now = utc(2026, 10, 9, 11, 13, 0)
+    inputs = inputs_at(now)
+    anchor = anchor_slot(now, "nearest")
+    derating = {"battery_charge_power_derating": [[0.89, 0.5], [0.96, 0.14]]}
+
+    out = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5), emhass_config=derating)
+    assert out.payload["battery_charge_power_derating"] == []
+    assert [(i.level, i.code) for i in out.issues] == [("info", "charge_derating_off")]
+    assert not [i for i in validate(out, inputs, Settings()) if i.level != "info"]
+
+    per_battery = {"battery_charge_power_derating": [[], [[0.9, 0.5]]]}
+    assert (
+        build(inputs, anchor, slot_floor(now), Settings(), emhass_config=per_battery).payload[
+            "battery_charge_power_derating"
+        ]
+        == []
+    )
+    for config in ({"battery_charge_power_derating": []}, {"battery_charge_power_derating": [[], []]}, {}, None):
+        plain = build(inputs, anchor, slot_floor(now), Settings(), emhass_config=config)
+        assert "battery_charge_power_derating" not in plain.payload and not plain.issues
+    compat = build(inputs, anchor, slot_floor(now), Settings(), emhass_config=derating, compat=True)
+    assert "battery_charge_power_derating" not in compat.payload  # parity mirrors the integration
+
+    keep = Settings.model_validate({"emhass": {"extra_runtime_params": derating}})
+    mine = build(inputs, anchor, slot_floor(now), keep, emhass_config=derating)
+    assert mine.payload["battery_charge_power_derating"] == [[0.89, 0.5], [0.96, 0.14]]  # Extra runtime parameters win

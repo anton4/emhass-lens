@@ -159,7 +159,8 @@ def test_compare_is_refused_when_emhass_must_not_be_called(tmp_path: Path, world
 
 
 def test_a_failed_live_run_after_a_comparison_leaves_no_plan_stored_or_published(tmp_path: Path, world: World) -> None:
-    """EMHASS's plan store keeps the last good plan, which is then the comparison's last alternative."""
+    """EMHASS's latest plan is then the comparison's last alternative: never stored, and the publish posts the last
+    good live plan's saved entities instead of it."""
     clock = FakeClock(START)
     client = live_client(
         tmp_path,
@@ -184,10 +185,14 @@ def test_a_failed_live_run_after_a_comparison_leaves_no_plan_stored_or_published
         assert watch["summary"].startswith("EMHASS holds the cost-function comparison's self-consumption plan")
         plan = client.get("/api/plan").json()["current"]
         assert plan["generated_at"] == good and plan["driver"] == "app"
-        published = [a for a in world.emhass_actions if a[0] == "publish-data"]
         publish = run_job(client, "emhass.publish")
-        assert publish["outcome"] == "noop" and publish["summary"].startswith("Not publishing: EMHASS holds")
-        assert [a for a in world.emhass_actions if a[0] == "publish-data"] == published
+        assert publish["outcome"] == "ok", publish
+        assert publish["summary"].startswith("Republished")
+        assert "EMHASS holds the cost-function comparison's" in publish["summary"]
+        assert [a for a in world.emhass_actions if a[0] == "publish-data"][-1] == (
+            "publish-data",
+            {"publish_prefix": "all"},
+        )
         run_job(client, "health.evaluate")
         keys = {p["key"] for p in client.get("/api/problems").json()["active"]}
         assert "costfun.leftover" in keys
@@ -197,6 +202,7 @@ def test_a_failed_live_run_after_a_comparison_leaves_no_plan_stored_or_published
         assert run_job(client, "emhass.mpc")["outcome"] == "ok"
         assert costfun.leftover is None
         assert run_job(client, "emhass.publish")["outcome"] == "ok"
+        assert world.emhass_actions[-1] == ("publish-data", {})
         run_job(client, "health.evaluate")
         assert "costfun.leftover" not in {p["key"] for p in client.get("/api/problems").json()["active"]}
     finally:

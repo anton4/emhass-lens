@@ -34,6 +34,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("emhass_lens.mpc")
 
+LIVE_RESULT_KEY = "mpc.live_result"
+SAVED_PLAN_KEY = "mpc.saved_plan"
+
 
 @dataclass
 class Shadow:
@@ -82,6 +85,29 @@ class MpcService:
         # when the App became the driver (live mode with Auto MPC on); health counts the first run's grace from here
         self.live_since: datetime | None = c.started_at if self._driving(c.settings.current) else None
         self._replan: asyncio.Task[None] | None = None
+        self._kv_cache: dict[str, Any] = {}
+
+    # --- what EMHASS holds after the last live run (kept across restarts) ---------------------------------
+    def _kv(self, key: str) -> Any:
+        if key not in self._kv_cache:
+            self._kv_cache[key] = self.c.kv_get(key)
+        return self._kv_cache[key]
+
+    async def _kv_put(self, key: str, value: Any) -> None:
+        self._kv_cache[key] = value
+        await self.c.app_db.run(self.c.kv_set, key, value)
+
+    @property
+    def live_result(self) -> dict[str, Any] | None:
+        """{ok, run_id, at, why} of the last live send. Not ok means EMHASS's latest result is no plan publish-data
+        can publish (a failed optimisation replaces it). None until the first live send that recorded it."""
+        return self._kv(LIVE_RESULT_KEY)
+
+    @property
+    def saved_plan(self) -> dict[str, Any] | None:
+        """{at, run_id, generated_at} of the last good live plan whose entities EMHASS saved (entity_save). A failed
+        optimisation doesn't touch them, so publish-data with publish_prefix "all" posts this plan."""
+        return self._kv(SAVED_PLAN_KEY)
 
     @property
     def mode(self) -> str:
@@ -262,6 +288,7 @@ class MpcService:
                 "body": response.body[:20000],
                 "lp_solver_timeout": limit,
                 "lp_solver_mip_rel_gap": payload.get("lp_solver_mip_rel_gap"),
+                "entity_save": payload.get("entity_save"),
             },
         )
         if response.error and response.http_status is None:
@@ -279,19 +306,40 @@ class MpcService:
         """Send the payload, read the plan back and store it. `locked` when the caller already holds the EMHASS
         action lock (a cost-function comparison keeps it for its whole sequence). With the solver budget on, the
         solve gets a time limit from the time left before the publish, and a solve that stopped at it is retried
-        once with a looser MIP gap (domain/mpc/solver_budget.py)."""
+        once with a looser MIP gap (domain/mpc/solver_budget.py). Whatever happens, remember whether EMHASS now
+        holds a plan publish-data can publish (`live_result`)."""
+        assert ctx.run is not None
+        try:
+            await self._send(ctx, result, horizon, warn_note, locked=locked)
+        finally:
+            await self._kv_put(
+                LIVE_RESULT_KEY,
+                {
+                    "ok": ctx.run.outcome == "ok",
+                    "run_id": ctx.run.id,
+                    "at": iso(self.c.clock.now()),
+                    "why": None if ctx.run.outcome == "ok" else ctx.run.error or ctx.run.summary,
+                },
+            )
+
+    async def _send(self, ctx: JobContext, result: BuildResult, horizon: str, warn_note: str, *, locked: bool) -> None:
         assert ctx.run is not None
         emhass = self.c.extras["emhass"]
         mpc = self.c.settings.current.emhass.mpc
         until = self.solver_deadline()
         limit = budget.limit_for(self.c.clock.now(), until, budget.LIVE_SHARE) if until else None
-        payload = {**result.payload, "lp_solver_timeout": limit} if limit else result.payload
+        # EMHASS saves the entities of a plan it can publish (a failed run leaves them be), so the publish can post the
+        # last good plan again while the optimisations fail. Unless extra runtime parameters say otherwise.
+        payload = {"entity_save": True, **result.payload}
+        if limit:
+            payload["lp_solver_timeout"] = limit
         retried: tuple[int, str] | None = None  # (first limit, why) when the first solve stopped at its limit
         async with contextlib.nullcontext() if locked else emhass.action_lock:
             response, last_run, sent_at = await self._attempt(ctx, payload)
             fresh_first = _fresh(last_run, sent_at)
-            if until and limit and not response.error and fresh_first and budget.timed_out(last_run, limit):
-                why = budget.explain_error(last_run, limit)
+            # EMHASS ≤ 0.18.4 answers a solve that stopped at its limit with HTTP 200, 0.18.5 with 400
+            if until and limit and fresh_first and budget.timed_out(last_run, limit, response.body):
+                why = budget.explain_error(last_run, limit, response.body)
                 retry_limit = budget.limit_for(self.c.clock.now(), until, 1.0)
                 if retry_limit:
                     log.warning("%s; retrying with a %g %% MIP gap and %d s", why, mpc.retry_mip_gap * 100, retry_limit)
@@ -307,9 +355,14 @@ class MpcService:
             return
         status = last_run.get("status")
         fresh = _fresh(last_run, sent_at)
-        if response.error:
+        used_limit = payload.get("lp_solver_timeout")
+        if response.error and not (fresh and budget.timed_out(last_run, used_limit, response.body)):
             ctx.run.outcome = "error"
             ctx.run.error = response.error
+            if retried is not None:
+                ctx.run.error = (
+                    f"{retried[1]}; the retry with a {mpc.retry_mip_gap * 100:g} % MIP gap failed: {response.error}"
+                )
             await self.on_short_model(ctx, response.body)
             return
         if not fresh:  # anything EMHASS reports about an older run says nothing about this request
@@ -320,7 +373,7 @@ class MpcService:
             return
         if status == "error":
             ctx.run.outcome = "error"
-            error = budget.explain_error(last_run, payload.get("lp_solver_timeout"))
+            error = budget.explain_error(last_run, used_limit, response.body)
             if retried is not None:
                 error = f"{retried[1]}; the retry with a {mpc.retry_mip_gap * 100:g} % MIP gap failed too: {error}"
             ctx.run.error = error
@@ -338,6 +391,11 @@ class MpcService:
             return
         self.last_live_run_id = ctx.run.id
         self.last_success_at = self.c.clock.now()
+        if payload.get("entity_save"):
+            await self._kv_put(
+                SAVED_PLAN_KEY,
+                {"at": iso(self.last_success_at), "run_id": ctx.run.id, "generated_at": last_run.get("timestamp")},
+            )
         costfun = self.c.extras.get("costfun")
         if costfun is not None:
             await costfun.clear_leftover()  # EMHASS holds a live plan again

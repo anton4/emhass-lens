@@ -6,10 +6,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from emhass_lens.clients.emhass import main_error
 from emhass_lens.core.clock import FakeClock
 from tests.test_phase1 import run_job
 from tests.test_phase2 import LEGACY_SWITCH, live_client
-from tests.world import TZ, World
+from tests.world import NOTHING_TO_PUBLISH, TZ, World, timed_out_log
 
 AT_11 = datetime(2026, 10, 9, 11, 11, 0, tzinfo=UTC)  # 14:11 local: the publish at 14:15:02 is 242 s away
 EMHASS = "http://emhass.test:5000"
@@ -32,13 +33,21 @@ def sent(world: World) -> list[dict]:
     return [p for name, p in world.emhass_actions if name == "naive-mpc-optim"]
 
 
-def test_a_solve_that_hits_its_limit_is_retried_with_a_looser_gap(tmp_path: Path, world: World) -> None:
+@pytest.mark.parametrize("http", [400, 200])  # EMHASS 0.18.5 answers a timed-out solve with 400 (run 2405), older 200
+def test_a_solve_that_hits_its_limit_is_retried_with_a_looser_gap(tmp_path: Path, world: World, http: int) -> None:
     world.emhass_solve_s = {"profit": 80}  # longer than the 63 s the first attempt gets
+    world.emhass_timeout_http = http
     c = client(tmp_path, world)
     try:
         run = run_job(c, "emhass.mpc")
         assert run["outcome"] == "ok", run
         first, retry = sent(world)
+        response = c.get(f"/api/runs/{run['id']}/artifacts/response").json()
+        assert response["http_status"] == http
+        if http == 400:  # the cause, not the saving publish's complaint after it
+            assert response["error"] == (
+                "HTTP 400: ERROR - emhass.web_server - Relaxed optimization also failed with status: user_limit"
+            )
         assert first["lp_solver_timeout"] == 63 and "lp_solver_mip_rel_gap" not in first
         assert retry["lp_solver_timeout"] == 105 and retry["lp_solver_mip_rel_gap"] == 0.05
         assert run["summary"].endswith("after a retry with a 5 % MIP gap (the first solve hit its 63 s limit)")
@@ -63,6 +72,14 @@ def test_a_retry_that_fails_too_says_why(tmp_path: Path, world: World) -> None:
         )
     finally:
         c.__exit__(None, None, None)
+
+
+def test_the_error_line_is_the_cause_not_the_follow_on_complaint() -> None:
+    assert main_error([line for line in timed_out_log(True) if "ERROR" in line]) == (
+        "ERROR - emhass.web_server - Relaxed optimization also failed with status: user_limit"
+    )
+    assert main_error([NOTHING_TO_PUBLISH]) == NOTHING_TO_PUBLISH  # publish-data's own failure (run 2406)
+    assert main_error([]) is None
 
 
 def test_emhass_s_own_limit_and_an_explicit_one_are_respected(tmp_path: Path, world: World) -> None:
@@ -98,6 +115,8 @@ def test_comparison_steps_get_short_limits_and_a_retried_live_plan_clears_the_le
         payloads = sent(world)
         assert [p.get("costfun") for p in payloads] == ["cost", "self-consumption", None, None]
         assert [p["lp_solver_timeout"] for p in payloads] == [15, 15, 63, 105]
+        # only the live plan's entities are saved: those are what a publish posts again after a failed live run
+        assert [p.get("entity_save") for p in payloads] == [None, None, True, True]
         assert c.app.state.container.extras["costfun"].leftover is None  # type: ignore[attr-defined]
     finally:
         c.__exit__(None, None, None)

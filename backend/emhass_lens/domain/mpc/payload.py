@@ -58,6 +58,13 @@ def derive(settings: Settings) -> Derived:
     )
 
 
+def _has_numbers(value: Any) -> bool:
+    """A derating table with at least one row (one battery's [[soc, share], …] or one per battery)."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return True
+    return isinstance(value, list) and any(_has_numbers(v) for v in value)
+
+
 def local(dt: datetime, settings: Settings) -> str:
     """A slot time as people read it, e.g. "Fri 18:45" (local time of the bidding zone)."""
     return dt.astimezone(area_zone(settings.prices.nordpool.area)).strftime("%a %H:%M")
@@ -230,6 +237,20 @@ def build(
     if mpc.costfun != "default" and not compat:
         # a runtime parameter since EMHASS 0.18 (optim_conf.costfun); the plan's cost_fun_* column shows what was used
         payload["costfun"] = mpc.costfun
+    if not compat and _has_numbers((emhass_config or {}).get("battery_charge_power_derating")):
+        # EMHASS gives every derating step a binary per slot tied to the SOC: run 2405's 208 slots took 20 s instead of
+        # 0.3 s on a fast machine and over 2 minutes on the HA host. The BMS tapers the charge anyway, and every
+        # quarter-hour's plan starts from the real SOC.
+        payload["battery_charge_power_derating"] = []
+        issues.append(
+            Issue(
+                "info",
+                "charge_derating_off",
+                "Planned without EMHASS's battery charge power derating: with it the solver can take minutes",
+                hint="To plan with it anyway, add battery_charge_power_derating under Settings → EMHASS → Extra "
+                "runtime parameters.",
+            )
+        )
     extra = settings.emhass.extra_runtime_params
     if extra:
         payload.update(extra)

@@ -199,6 +199,9 @@ def main() -> int:
 
             exported_before = exported_w(plan["current"]["rows"]) if plan.get("current") else 0.0
             patch(http, {"emhass": {"mpc": {"no_export_at_or_below": 1.0}}}, "e2e: no export at all")
+            # EMHASS stamps a plan to the second and EMHASS Lens stores one plan per stamp: two runs finishing within
+            # the same second keep the first plan
+            time.sleep(1.1)
             blocked = run_job(http, "emhass.mpc")
             sent = http.get(f"/api/runs/{blocked['id']}/artifacts/request").json().get("maximum_power_to_grid")
             no_export = http.get("/api/plan").json()
@@ -223,6 +226,42 @@ def main() -> int:
                 "publishes the plan and fires the event with the sensor values",
                 pub["outcome"] == "ok" and same,
                 f"{pub['summary']}; sensor.p_batt_forecast={batt}",
+            )
+
+            # a solve that stops at its limit replaces EMHASS's latest result (run 2405), so a plain publish-data
+            # fails (run 2406); the publish posts the entities EMHASS saved for the last good live plan instead
+            load = {"load_power_forecast": [1500] * 800}
+            patch(http, {"emhass": {"extra_runtime_params": {**load, "lp_solver_timeout": 0.001}}}, "e2e: time limit")
+            failed = run_job(http, "emhass.mpc")
+            event, pub = asyncio.run(publish_and_catch_event(token, http))
+            sent = http.get(f"/api/runs/{pub['id']}/artifacts/response").json()
+            batt = ha.get("/api/states/sensor.p_batt_forecast").json().get("state")
+            same = event is not None and abs(float(batt) - float(event["current"].get("p_batt_w", 0))) < 0.01
+            saved = subprocess.run(
+                ["docker", "exec", "el-emhass", "ls", "/data/entities"], capture_output=True, text=True
+            ).stdout.split()
+            check(
+                "after a solve stopped at its time limit, publishes the last good plan from EMHASS's saved entities",
+                failed["outcome"] == "error"
+                and "time limit" in (failed["error"] or "")
+                and pub["outcome"] == "ok"
+                and sent.get("payload") == {"publish_prefix": "all"}
+                and sent.get("http_status") == 200
+                and event is not None
+                and bool(event.get("republished_because"))
+                and same
+                and "sensor.p_batt_forecast.json" in saved,
+                f"{failed['error']}; {pub['summary']}; {len(saved)} saved entity files",
+            )
+            # a patch merges into extra_runtime_params and can't drop a key: back to EMHASS's own default limit
+            patch(http, {"emhass": {"extra_runtime_params": {**load, "lp_solver_timeout": 180}}}, "e2e: 180 s limit")
+            live = run_job(http, "emhass.mpc")
+            pub = run_job(http, "emhass.publish")
+            sent = http.get(f"/api/runs/{pub['id']}/artifacts/response").json()
+            check(
+                "publishes normally again once a live run succeeds",
+                live["outcome"] == "ok" and pub["outcome"] == "ok" and sent.get("payload") == {},
+                pub["summary"],
             )
 
             compared = run_job(http, "emhass.costfun_compare", timeout=300)

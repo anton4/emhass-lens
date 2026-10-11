@@ -80,6 +80,11 @@ class World:
     # (EMHASS records an error with no message after the limit and its relaxed retry), a 5 % gap always finishes
     emhass_solve_s: dict[str, float] = field(default_factory=dict)
     emhass_solver_stuck: bool = False  # even the looser gap times out
+    emhass_timeout_http: int = 400  # how EMHASS answers a solve that stopped at its limit: 400 in 0.18.5, 200 before
+    # what publish-data can post: whether EMHASS's latest result is a plan (a failed optimisation replaces it), and the
+    # last good plan whose entities EMHASS saved (entity_save), which publish_prefix "all" posts
+    emhass_result_ok: bool = True
+    emhass_saved_entities: str | None = None
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -168,19 +173,32 @@ class World:
                         "stage_times": {"optim_solve.solve": 2 * limit},
                         "error_message": None,
                     }
-                    return httpx.Response(200, text="EMHASS >> Action naive-mpc-optim executed... \n")
+                    self.emhass_result_ok = False
+                    if self.emhass_timeout_http == 200:
+                        return httpx.Response(200, text="EMHASS >> Action naive-mpc-optim executed... \n")
+                    return httpx.Response(
+                        self.emhass_timeout_http, json=timed_out_log(bool(payload.get("entity_save")))
+                    )
                 if self.emhass_fail_live and not payload.get("costfun"):
                     # EMHASS records the failed run in last-run; /api/v1/plan keeps the last good plan
                     self.emhass_last_run = {"status": "error", "timestamp": stamp, "error_message": "solver timed out"}
+                    self.emhass_result_ok = False
                     return httpx.Response(400, json=["ERROR - emhass.web_server - solver timed out"])
                 if self.action_status == "error":
                     self.emhass_last_run = {"status": "error", "timestamp": stamp, "error_message": "solver failed"}
+                    self.emhass_result_ok = False
                     return httpx.Response(400, text="ERROR - solver failed\n")
                 self.emhass_last_run = {"status": self.action_status, "timestamp": stamp}
+                self.emhass_result_ok = self.action_status == "ok"
                 if self.action_status == "ok":
                     configured = self.emhass_config.get("costfun", "profit")
                     costfun = configured if self.emhass_ignores_costfun else payload.get("costfun") or configured
                     self.emhass_plan = make_plan(now, payload, costfun=costfun)
+                    if payload.get("entity_save"):
+                        self.emhass_saved_entities = self.emhass_plan["generated_at"]
+            saved = payload.get("publish_prefix") == "all" and self.emhass_saved_entities
+            if name == "publish-data" and not saved and not self.emhass_result_ok:
+                return httpx.Response(400, json=[NOTHING_TO_PUBLISH])
             return httpx.Response(200, text=f"EMHASS >> Action {name} executed... \n")
         return httpx.Response(404)
 
@@ -277,6 +295,26 @@ class World:
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.handler)
+
+
+NOTHING_TO_PUBLISH = (
+    "ERROR - emhass.web_server - Optimization result is incomplete (status: User_Limit); nothing to publish. Run a "
+    "successful optimization before publishing."
+)
+
+
+def timed_out_log(entity_save: bool) -> list[str]:
+    """EMHASS 0.18.5's answer (HTTP 400) when the solve and its relaxed retry stopped at the time limit (run 2405);
+    with entity_save the saving publish adds its own complaint."""
+    lines = [
+        "INFO - emhass.web_server -  >> Performing naive-mpc-optim...",
+        "WARNING - emhass.web_server - Optimization failed with status: 'user_limit'. Retrying with relaxed "
+        "constraints (Continuous LP)...",
+        "INFO - emhass.web_server - Solving relaxed problem (LP)...",
+        "ERROR - emhass.web_server - Relaxed optimization also failed with status: user_limit",
+        "WARNING - emhass.web_server - Cost function cannot be evaluated or Infeasible/Unbounded",
+    ]
+    return [*lines, NOTHING_TO_PUBLISH] if entity_save else lines
 
 
 def short_model_log(steps: int, wanted: int) -> list[str]:

@@ -3,6 +3,11 @@
 publish-data makes EMHASS write its sensor.p_* entities for the slot that just started. Right after,
 EMHASS Lens fires `emhass_lens_plan_published` with the same values, so an automation can react to
 the event instead of polling the sensors on a fixed second.
+
+A failed optimisation replaces EMHASS's latest result, and publish-data then refuses it. Live MPC runs send
+entity_save, so EMHASS keeps the entities of the last good live plan; while the last live run failed, the publish
+asks EMHASS to post those (publish_prefix "all") for as long as the inverter would still follow that plan
+(Health → plan max age), and refuses after that.
 """
 
 import logging
@@ -12,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.mpc.anchor import published_row
+from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 
 if TYPE_CHECKING:
@@ -67,20 +73,18 @@ class PublishService:
         if self.c.extras["mpc"].mode != "live":
             ctx.run.outcome, ctx.run.summary = "noop", "Only publishes in live mode"
             return
-        costfun = self.c.extras.get("costfun")
-        left = costfun.leftover if costfun is not None else None
-        if left:
-            ctx.run.outcome = "noop"
-            ctx.run.summary = (
-                f"Not publishing: EMHASS holds the cost-function comparison's {left.get('costfun')} plan (the live run "
-                f"#{left.get('run_id')} after it failed)"
-            )
-            return
+        why = self.not_publishable()
+        payload: dict[str, Any] = {}
+        if why is not None:
+            saved = self.saved_plan_in_date(why, self.c.clock.now())
+            ctx.run.artifact("republish", {"why": why, "saved_plan": saved})
+            payload = {"publish_prefix": "all"}  # EMHASS posts the saved entities of that plan
         async with emhass.action_lock:
-            result = await emhass.act("publish-data", {}, settings.emhass.timeouts.publish)
+            result = await emhass.act("publish-data", payload, settings.emhass.timeouts.publish)
         ctx.run.artifact(
             "response",
             {
+                "payload": payload,
                 "http_status": result.http_status,
                 "duration_ms": result.duration_ms,
                 "error": result.error,
@@ -93,6 +97,8 @@ class PublishService:
         now = self.c.clock.now()
         row, plan = await self.current_row(now)
         event = self.event_data(now, row, plan)
+        if why is not None:
+            event["republished_because"] = why
         self.last_published_at, self.last_event = now, event
         ctx.run.artifact("event", event)
         if settings.outputs.fire_event:
@@ -107,13 +113,21 @@ class PublishService:
                 await outputs.refresh()
             except Exception as exc:  # MQTT trouble mustn't hide that EMHASS published
                 log.warning("Refreshing the MQTT entities failed: %s", exc)
+        verb = "Published" if why is None else "Republished"
         if row is None:
-            ctx.run.summary = ctx.run.summary or "Published; the stored plan has no row for this slot"
+            ctx.run.summary = ctx.run.summary or f"{verb}; the stored plan has no row for this slot"
         else:
             local = (parse_iso(str(row.get("timestamp"))) or slot_floor(now)).astimezone(self.c.extras["prices"].tz)
+            source = ""
+            if why is not None and plan is not None:
+                made = (parse_iso(plan.get("generated_at")) or now).astimezone(self.c.extras["prices"].tz)
+                run = f" (#{plan['run_id']})" if plan.get("run_id") else ""
+                source = f" from the plan of {made:%H:%M}{run}"
             ctx.run.summary = ctx.run.summary or (
-                f"Published {local:%H:%M}: {battery(row.get('P_batt'))}, {grid(row.get('P_grid'))}"
+                f"{verb} {local:%H:%M}{source}: {battery(row.get('P_batt'))}, {grid(row.get('P_grid'))}"
             )
+        if why is not None:
+            ctx.run.summary = f"{ctx.run.summary}. {why}"
         self.c.bus.publish("plan.published", event)
         inverter = self.c.extras.get("inverter")
         if inverter is not None and inverter.active() and ctx.params.get("chain_inverter", True):
@@ -124,6 +138,36 @@ class PublishService:
         if charger is not None and charger.active() and ctx.params.get("chain_charger", True):
             ev = row.get("P_deferrable0") if row is not None else None
             charger.ask_emhass_decision(float(ev) if isinstance(ev, int | float) else None, after_publish=True)
+
+    def not_publishable(self) -> str | None:
+        """Why EMHASS's latest result isn't the live plan to publish, or None when it is."""
+        costfun = self.c.extras.get("costfun")
+        left = costfun.leftover if costfun is not None else None
+        if left:
+            return (
+                f"EMHASS holds the cost-function comparison's {left.get('costfun')} plan (the live run "
+                f"#{left.get('run_id')} after it failed)"
+            )
+        live = self.c.extras["mpc"].live_result
+        if live is not None and not live.get("ok"):
+            return f"EMHASS's last optimisation (#{live.get('run_id')}) failed: {live.get('why') or 'no reason given'}"
+        return None
+
+    def saved_plan_in_date(self, why: str, now: Any) -> dict[str, Any]:
+        """The last good live plan EMHASS saved the entities of, when the inverter would still follow it (the same
+        age limit as services/inverter.py); otherwise RunRefused."""
+        saved = self.c.extras["mpc"].saved_plan
+        if not saved:
+            raise RunRefused(f"Not publishing: {why}; there is no saved plan to publish again yet")
+        made = parse_iso(saved.get("generated_at")) or parse_iso(saved.get("at"))
+        slots = self.c.settings.current.health.plan_max_age_slots
+        if made is None or now - made > timedelta(minutes=15 * slots):
+            local = f"{made.astimezone(self.c.extras['prices'].tz):%H:%M}" if made else "?"
+            raise RunRefused(
+                f"Not publishing: {why}; the last good plan (#{saved.get('run_id')}, {local}) is older than "
+                f"{15 * slots} min"
+            )
+        return saved
 
     async def current_row(self, now: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         """The row publish-data shows now: chosen exactly the way EMHASS chooses it, so the event matches

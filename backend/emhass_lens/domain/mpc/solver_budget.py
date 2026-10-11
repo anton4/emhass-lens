@@ -58,24 +58,32 @@ def solve_seconds(last_run: dict[str, Any] | None) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
-def timed_out(last_run: dict[str, Any] | None, limit: float | None) -> bool:
-    """EMHASS recorded an error without a reason after solving for about the whole limit."""
+# EMHASS 0.18.5 logs this as an ERROR when its relaxed retry stopped at the limit too, and answers HTTP 400
+RELAXED_AT_LIMIT = "also failed with status: user_limit"
+
+
+def timed_out(last_run: dict[str, Any] | None, limit: float | None, body: str = "") -> bool:
+    """EMHASS recorded an error without a reason after solving for about the whole limit, or its log (the action's
+    response `body`) says the relaxed retry stopped at the limit. EMHASS up to 0.18.4 answers such a run with HTTP 200,
+    0.18.5 with 400 (run 2405)."""
     if not last_run or last_run.get("status") != "error" or last_run.get("error_message") or not limit:
         return False
+    if RELAXED_AT_LIMIT in body:
+        return True
     solved = solve_seconds(last_run)
     return solved is not None and solved >= 0.9 * limit
 
 
-def explain_error(last_run: dict[str, Any] | None, limit: float | None) -> str:
+def explain_error(last_run: dict[str, Any] | None, limit: float | None, body: str = "") -> str:
     """Words for EMHASS's 'error' status, which often comes without a message."""
     message = (last_run or {}).get("error_message")
     if message:
         return str(message)
     solved = solve_seconds(last_run)
-    if timed_out(last_run, limit):
+    if timed_out(last_run, limit, body) and limit:
+        took = f" ({solved:.0f} s in all)" if solved is not None else ""
         return (
-            f"EMHASS's solver stopped at its time limit ({limit:g} s) and its relaxed retry found no plan either "
-            f"({solved:.0f} s in all)"
+            f"EMHASS's solver stopped at its time limit ({limit:g} s) and its relaxed retry found no plan either{took}"
         )
     if solved is not None:
         return f"EMHASS reported an error after {solved:.0f} s of solving; it gave no reason"

@@ -347,7 +347,8 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 "EMHASS holds a cost-function comparison plan",
                 f"The live run #{left.get('run_id')} at {at} failed after the cost-function comparison "
                 f"({left.get('error')}). EMHASS's current plan is the {left.get('costfun')} plan, which EMHASS Lens "
-                "neither stores nor publishes; the inverter keeps the last live plan until it is too old.",
+                "neither stores nor publishes; the publish and the inverter keep the last live plan until it is too "
+                "old.",
                 "The next successful MPC run replaces it. If this repeats, turn off 'Compare cost functions on every "
                 "run' under Settings → EMHASS → MPC optimization.",
                 f"#/runs/{left.get('run_id')}",

@@ -84,11 +84,23 @@ class EmhassClient:
         error_lines = [line for line in body_lines(body) if "ERROR" in line]
         error = None
         if resp.status_code >= 400:
-            error = f"HTTP {resp.status_code}" + (f": {error_lines[-1].strip()}" if error_lines else "")
+            main = main_error(error_lines)
+            error = f"HTTP {resp.status_code}" + (f": {main.strip()}" if main else "")
         return ActionResult(name, resp.status_code, body, error, error_lines, ms)
 
     async def close(self) -> None:
         await self.client.aclose()
+
+
+# With entity_save, a failed optimisation's log ends with publish-data's own complaint about the result; the cause is
+# the ERROR before it.
+FOLLOW_ON_ERROR = "nothing to publish"
+
+
+def main_error(error_lines: list[str]) -> str | None:
+    """The ERROR line that says what went wrong: the last one, unless that is only the follow-on complaint."""
+    causes = [line for line in error_lines if FOLLOW_ON_ERROR not in line]
+    return (causes or error_lines or [None])[-1]
 
 
 def body_lines(body: str) -> list[str]:

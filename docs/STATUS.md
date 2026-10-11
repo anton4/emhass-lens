@@ -37,6 +37,54 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-11 (night): MPC timeouts: derating left out, the retry fires on HTTP 400, publish posts the last good plan (0.4.10)
+- **Why:** runs 2405/2406 (the owner's export).
+  - MPC stopped at its 63 s limit, then EMHASS's relaxed retry stopped there too (126 s, no plan). Then publish-data failed with "Optimization result is incomplete (status: User_Limit)". This happened several times in a row in the evening.
+- **Cause: `battery_charge_power_derating` `[[0.89,0.5],[0.96,0.14]]` in the owner's EMHASS.**
+  - EMHASS 0.18.5 (`optimization.py` ~3211-3245) adds a boolean `soc_above[i, t]` per step and slot, tied to the cumulative SOC with big-M in both directions.
+  - EMHASS's "relaxed LP" retry only drops the deferrable-load binaries. D, E, soc_*_recovered and soc_above stay, so it is still a MILP.
+  - Replaying run 2405's request against EMHASS 0.18.5 in Docker on the Mac:
+
+    | Variant | Solve time |
+    |---|---|
+    | With derating, 1 % gap | 20.5 s |
+    | With derating, 5 % gap | 0.1 s |
+    | One step only | 2.8 s |
+    | Horizon cut to 112 slots | 2.4 s |
+    | Without derating | 0.3 s |
+
+  - The test fixture config has no derating, which is why it never showed in tests.
+  - The owner's soc_final is 1.0 (`input_number.emhass_target_soc` = 100), so every plan crosses both thresholds.
+- **Derating off** (owner's choice): `domain/mpc/payload.py` sends `battery_charge_power_derating: []` whenever EMHASS's config has a table.
+  - It is a runtime parameter (plant_conf in EMHASS's associations.csv).
+  - The run gets an info issue `charge_derating_off`.
+  - Extra runtime parameters can put the table back. Compat builds don't send it.
+- **Retry bug:** `services/mpc.py` only retried when `not response.error`, but EMHASS 0.18.5 answers a timed-out solve with HTTP 400 (any ERROR line in the action's log means 400).
+  - The gate is now just `budget.timed_out(last_run, limit, body)`, which also accepts "also failed with status: user_limit" in the body.
+  - A timed-out HTTP 400 is explained with `explain_error` instead of the raw line.
+  - `tests/world.py` answers a timed-out solve with 400 like 0.18.5 (`emhass_timeout_http`, 200 for older versions). The old fake answered 200, which is why the tests stayed green.
+- **Republish:**
+  - Live sends add `entity_save: true` (comparison steps drop it).
+  - EMHASS writes `data/entities/*.json` only for a publishable result: `publish_data` returns before saving on a status-only frame. Checked with a replay, where the md5 was unchanged after a failed run.
+  - `MpcService` keeps kv `mpc.live_result` ({ok, run_id, at, why}, written in a `finally` around `_send`) and `mpc.saved_plan` ({at, run_id, generated_at}, on ok with entity_save).
+  - `PublishService.run`: when the last live run wasn't ok, or a cost-function leftover exists (that noop is gone), it calls `publish-data {"publish_prefix": "all"}` while `saved_plan` is within `health.plan_max_age_slots`.
+    - Otherwise `RunRefused` (no saved plan yet / older than 30 min), without calling EMHASS.
+    - The run gets a `republish` artifact, `payload` in `response`, and `republished_because` in the event. The summary reads "Republished HH:MM from the plan of HH:MM (#id): … . <why>".
+- **Error line:** with entity_save, a failed MPC's log ends with publish's "nothing to publish" ERROR. `clients/emhass.py` `main_error()` skips that follow-on line.
+- **Tests:**
+  - `test_republish.py`. Its clock steps sit off the quarter-hour schedule and away from the nearest-rounding mid-slot guard, which waits in real time.
+  - `test_solver_retry.py`, parametrised over 400/200, plus `main_error`.
+  - `test_mpc.py::test_charge_power_derating_is_planned_without`.
+  - `test_costfun_service.py`: the leftover now republishes.
+- **e2e:** two new checks, 24/24.
+  - A solve forced to stop at `lp_solver_timeout: 0.001` is followed by a republish (EMHASS 200, `sensor.p_batt_forecast` equals the event), then a normal publish.
+  - Found on the way: EMHASS stamps plans to the second and `plan_snapshot.generated_at` is UNIQUE (INSERT OR IGNORE). Two optimisations finishing within one second keep the first plan. entity_save's ~30 ms pushed the e2e's back-to-back runs into the same second, so the no-export step now waits 1.1 s. That is harmless for quarter-hourly runs, but worth knowing.
+- **Upstream EMHASS ideas** (not filed):
+  - The relaxed retry can't rescue a timeout because the battery and grid binaries stay.
+  - The derating indicator only needs the "SOC ≥ threshold ⇒ above" direction.
+  - A time-limited incumbent is discarded.
+  - "Optimal (Relaxed)" maps to `error` in last-run.
+
 ### 2026-10-11 (evening): prices in €/kWh everywhere, a narrower accuracy card, total cost function, previous slot (0.4.9)
 - **Why:** redesign D (0.4.0, 0.4.1) brought c/kWh back to the Plan page (`formatCents`, `centsTick`), although 0.3.x had switched it to €/kWh. On the Inputs page, switching the unit to €/kWh left the chart's legend in c/kWh and every axis label at "0 c".
 - **The Inputs bug:** `TimeChart` captured `yFormat` and the series' `format` only when it built the uPlot instance, and `specKey` doesn't include them, so a unit switch only called `setData`. Both formatters are now read from the `extras` ref at draw time. That also protects the cost-function chart's kW/% switch.

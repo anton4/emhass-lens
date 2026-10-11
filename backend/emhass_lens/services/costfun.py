@@ -42,8 +42,8 @@ class CostfunCompareService:
     @property
     def leftover(self) -> dict[str, Any] | None:
         """{costfun, generated_at, at, run_id, error} while EMHASS holds an alternative method's plan because the live
-        run after the comparison failed. Such a plan is neither stored nor published; the next good live plan clears
-        it."""
+        run after the comparison failed. Such a plan is never stored or published (the publish posts the last good live
+        plan's saved entities instead); the next good live plan clears it."""
         if not self._leftover_loaded:
             self._leftover, self._leftover_loaded = self.c.kv_get(LEFTOVER_KEY), True
         return self._leftover
@@ -77,7 +77,7 @@ class CostfunCompareService:
         await self._set_leftover(value)
         log.warning(
             "The live run failed after the cost-function comparison: EMHASS holds the %s plan, which EMHASS Lens "
-            "neither stores nor publishes until a live run succeeds",
+            "neither stores nor publishes; the publish posts the last good live plan until a live run succeeds",
             last["costfun"],
         )
 
@@ -157,6 +157,7 @@ class CostfunCompareService:
             if method == live:
                 continue
             payload = {**built.result.payload, "costfun": method}
+            payload.pop("entity_save", None)  # EMHASS's saved entities stay the live plan's (the publish may post them)
             limit = budget.alternative_limit(self.c.clock.now(), until) if until else None
             if limit:
                 payload["lp_solver_timeout"] = limit  # short: the live plan keeps most of the time
