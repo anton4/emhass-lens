@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { PricesResponse } from '../../api/types'
 import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { forecastRanges, midnights } from '../../lib/prices'
-import { priceFactor, type PriceUnit } from '../../lib/units'
+import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
 
 /** Import, export and spot price per quarter-hour; forecast shaded, midnights and now marked. */
 export function PriceChart({ data, unit, nowS }: { data: PricesResponse; unit: PriceUnit; nowS: number }) {
@@ -37,7 +37,7 @@ export function PriceChart({ data, unit, nowS }: { data: PricesResponse; unit: P
       series={chart.series}
       ariaLabel="Import, export and spot price per quarter-hour. The breakdown table below has every value."
       timeZone={data.timezone}
-      yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : v.toFixed(2))}
+      yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
       bands={chart.bands}
       markers={chart.markers}
       now={nowS}

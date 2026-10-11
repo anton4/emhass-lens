@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   alignTo,
+  costFunTotal,
   deferrableColumns,
   formatPlanCell,
   lastRunNote,
@@ -98,8 +99,32 @@ describe('plan columns in words', () => {
   it('formats cells in the column unit', () => {
     expect(formatPlanCell('P_grid', -2104)).toBe('-2.10')
     expect(formatPlanCell('SOC_opt', 0.9412)).toBe('94.1')
-    expect(formatPlanCell('unit_load_cost', 0.15452)).toBe('15.5')
+    expect(formatPlanCell('unit_load_cost', 0.15452)).toBe('0.1545')
     expect(formatPlanCell('optim_status', 'Optimal')).toBe('Optimal')
-    expect(planColumnUnit('unit_prod_price')).toBe('c/kWh')
+    expect(planColumnUnit('unit_prod_price')).toBe('€/kWh')
+  })
+})
+
+describe('costFunTotal', () => {
+  it('sums the cost_fun column like sensor.total_cost_fun_value', () => {
+    const rows = [
+      { timestamp: '2026-10-11T10:00:00+03:00', P_grid: 100, cost_fun_profit: -0.25 },
+      { timestamp: '2026-10-11T10:15:00+03:00', P_grid: -900, cost_fun_profit: 0.1 },
+      { timestamp: '2026-10-11T10:30:00+03:00', P_grid: 0, cost_fun_profit: null },
+    ]
+    const total = costFunTotal(rows)
+    expect(total?.column).toBe('cost_fun_profit')
+    expect(total?.method).toBe('profit')
+    expect(total?.value).toBeCloseTo(-0.15)
+  })
+
+  it('names the self-consumption method in words', () => {
+    expect(costFunTotal([{ timestamp: '2026-10-11T10:00:00+03:00', cost_fun_selfcons: -1 }])?.method).toBe(
+      'self-consumption',
+    )
+  })
+
+  it('is null without a cost_fun column', () => {
+    expect(costFunTotal([{ timestamp: '2026-10-11T10:00:00+03:00', P_grid: 100 }])).toBeNull()
   })
 })

@@ -1,7 +1,8 @@
 """What the Plan page's "this slot" shows: the plan row in force, the next one, what is measured now, and what
-the inverter (and the EV charger) are set to. Reads only the watched Home Assistant states and stored plans."""
+the inverter (and the EV charger) are set to; and the slot that just ended against its measured quarter-hour means.
+Reads only the watched Home Assistant states, stored plans and stored measurements."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso
@@ -83,12 +84,36 @@ def deferrable_now(c: Container) -> float | None:
     return (observed.current_limit_a or 0.0) * charger.limits.w_per_amp
 
 
+def _row_before(plan: dict[str, Any], index: int) -> dict[str, Any] | None:
+    rows = plan.get("plan") or []
+    return rows[index - 1] if index > 0 else None
+
+
+async def ended_slot(
+    c: Container, found: tuple[dict[str, Any], dict[str, Any], int] | None, start: datetime
+) -> list[dict[str, Any]]:
+    """The plan for a slot that has ended against the quarter-hour means measured over it (stored by measure.sample
+    soon after the slot ends). A mean SOC sits half-way between the planned start and end of the slot."""
+    if found is None:
+        return []
+    plan, row, index = found
+    means = await c.app_db.run(c.extras["measurements"].read, start, start + SLOT)
+    m = c.settings.current.measurements
+    readings: dict[str, Reading] = {}
+    for quantity in QUANTITIES:
+        hit = means.get(quantity, {}).get(iso(start) or "")
+        readings[quantity] = Reading(hit[0] if hit else None, getattr(m, FIELDS[quantity]).entity or None, None)
+    return compare(row, _row_before(plan, index), readings, 0.5)
+
+
 async def plan_now(c: Container) -> dict[str, Any]:
     now = c.clock.now()
     slot = slot_floor(now)
-    plans = await c.extras["emhass"].plans(4)
+    # a run anchors at the next slot, so the plan in force for the previous slot is usually the third newest
+    plans = await c.extras["emhass"].plans(6)
     found = row_for(plans, slot)
     following = row_for(plans, slot + SLOT)
+    earlier = row_for(plans, slot - SLOT)
     published = c.extras["publish"].last_published_at
     out: dict[str, Any] = {
         "slot_start": iso(slot),
@@ -99,6 +124,9 @@ async def plan_now(c: Container) -> dict[str, Any]:
         "plan_run_id": None,
         "next_start": iso(slot + SLOT),
         "next_row": following[1] if following else None,
+        "prev_start": iso(slot - SLOT),
+        "prev_row": earlier[1] if earlier else None,
+        "prev_quantities": await ended_slot(c, earlier, slot - SLOT),
         "quantities": [],
         "inverter": inverter_now(c),
         "charger": charger_now(c),
@@ -106,13 +134,11 @@ async def plan_now(c: Container) -> dict[str, Any]:
     if found is None:
         return out
     plan, row, index = found
-    rows = plan.get("plan") or []
-    prev_row = rows[index - 1] if index > 0 else None
     fraction = (now - slot).total_seconds() / SLOT.total_seconds()
     out.update(
         row=row,
         plan_generated_at=plan.get("generated_at"),
         plan_run_id=plan.get("run_id"),
-        quantities=compare(row, prev_row, measured_now(c), fraction, deferrable_now(c)),
+        quantities=compare(row, _row_before(plan, index), measured_now(c), fraction, deferrable_now(c)),
     )
     return out

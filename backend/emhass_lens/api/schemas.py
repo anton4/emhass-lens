@@ -479,6 +479,9 @@ class PlanNow(BaseModel):
     plan_run_id: int | None = None
     next_start: str
     next_row: dict[str, Any] | None = None
+    prev_start: str
+    prev_row: dict[str, Any] | None = None
+    prev_quantities: list[NowQuantity] = []  # the previous slot against its measured quarter-hour means
     quantities: list[NowQuantity]
     inverter: InverterNow | None = None
     charger: ChargerNow | None = None

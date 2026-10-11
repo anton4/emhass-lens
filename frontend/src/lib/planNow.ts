@@ -11,28 +11,31 @@ export function byKey(quantities: NowQuantity[] | null | undefined): NowByKey {
   return out
 }
 
-/** "now 0.12 kW discharging", "now 312 W", "now 92.3 %"; null when nothing is measured. */
-export function measuredText(q: NowQuantity | undefined): string | null {
+/** "now 0.12 kW discharging", "now 312 W", "now 92.3 %"; for a slot that has ended (`past`) its quarter-hour mean,
+ *  "measured 0.12 kW discharging". Null when nothing is measured. */
+export function measuredText(q: NowQuantity | undefined, past = false): string | null {
   if (!q || !isNumber(q.measured)) return null
   const v = q.measured
-  if (q.key === 'soc') return `now ${formatFraction(v)}`
-  if (q.key === 'batt') return `now ${formatPower(Math.abs(v))} ${batteryDirection(v).toLowerCase()}`
-  if (q.key === 'grid') return `now ${formatPower(Math.abs(v))} ${gridDirection(v).toLowerCase()}`
-  return `now ${formatPower(v)}`
+  const word = past ? 'measured' : 'now'
+  if (q.key === 'soc') return `${word} ${formatFraction(v)}`
+  if (q.key === 'batt') return `${word} ${formatPower(Math.abs(v))} ${batteryDirection(v).toLowerCase()}`
+  if (q.key === 'grid') return `${word} ${formatPower(Math.abs(v))} ${gridDirection(v).toLowerCase()}`
+  return `${word} ${formatPower(v)}`
 }
 
 /** "expected 744 W discharging with the house load and PV now" for the battery; null otherwise. */
-export function expectedText(q: NowQuantity | undefined): string | null {
+export function expectedText(q: NowQuantity | undefined, past = false): string | null {
   if (!q || q.key !== 'batt' || !isNumber(q.expected)) return null
-  return `expected ${formatPower(Math.abs(q.expected))} ${batteryDirection(q.expected).toLowerCase()} with the house load and PV now`
+  const given = past ? 'the measured house load and PV' : 'the house load and PV now'
+  return `expected ${formatPower(Math.abs(q.expected))} ${batteryDirection(q.expected).toLowerCase()} with ${given}`
 }
 
-/** Hover text: what the battery is expected to do, which sensor, and how old its value is. */
-export function measuredTitle(q: NowQuantity | undefined): string | undefined {
+/** Hover text: what the battery is expected to do, which sensor, and how old its value is (or that it is a mean). */
+export function measuredTitle(q: NowQuantity | undefined, past = false): string | undefined {
   if (!q?.entity) return undefined
   const age = isNumber(q.age_s) ? `, ${q.age_s < 90 ? `${Math.round(q.age_s)} s` : `${Math.round(q.age_s / 60)} min`} old` : ''
-  const expected = expectedText(q)
-  return `${expected ? `${expected} · ` : ''}${q.entity}${age}`
+  const expected = expectedText(q, past)
+  return `${expected ? `${expected} · ` : ''}${past ? 'quarter-hour mean of ' : ''}${q.entity}${age}`
 }
 
 /** The pieces of the "Inverter set to" strip. */

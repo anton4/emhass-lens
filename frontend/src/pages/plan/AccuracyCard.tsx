@@ -24,13 +24,14 @@ function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : `${v.toFixed(0)} %`
 }
 
-/** The price forecast's error, which the API gives in c/kWh, as €/kWh like the rest of the Plan page. */
+/** The price forecast's error, which the API gives in c/kWh, in €/kWh like the rest of the Plan page ("0.0123 €";
+ *  the row's label says per kWh, which keeps the column narrow). */
 function eurFromCents(v: number | null | undefined, signed = false): string {
   if (v === null || v === undefined) return '—'
-  return `${signed && v > 0 ? '+' : ''}${(v / 100).toFixed(4)} €/kWh`
+  return `${signed && v > 0 ? '+' : ''}${(v / 100).toFixed(4)} €`
 }
 
-/** How far the plan has been from what happened: MAE and bias per quantity over 24 h and 7 d. */
+/** How far the plan has been from what happened: MAE with the bias under it, per quantity over 24 h and 7 d. */
 export function AccuracyCard({ history }: { history: PlanHistoryResponse | undefined }) {
   if (!history) return <Empty title="Loading…" />
   const configured = history.measurements.configured
@@ -59,22 +60,31 @@ export function AccuracyCard({ history }: { history: PlanHistoryResponse | undef
           <thead>
             <tr>
               <th>Quantity</th>
-              <th className="r">24 h error</th>
-              <th className="r">24 h bias</th>
-              <th className="r">7 d error</th>
-              <th className="r">7 d bias</th>
-              <th className="r">Slots (7 d)</th>
+              <th className="r">
+                <div>Last 24 h</div>
+                <div className="th-sub">error · bias</div>
+              </th>
+              <th className="r">
+                <div>Last 7 d</div>
+                <div className="th-sub">error · bias</div>
+              </th>
             </tr>
           </thead>
           <tbody>
             {ROWS.filter((r) => have.has(r.key)).map((r) => (
               <tr key={r.key}>
-                <td>{r.label}</td>
-                <td className="num r">{fmt(d.get(r.key), 'mae')}</td>
-                <td className="num r">{fmt(d.get(r.key), 'bias')}</td>
-                <td className="num r">{fmt(w.get(r.key), 'mae')}</td>
-                <td className="num r">{fmt(w.get(r.key), 'bias')}</td>
-                <td className="num r">{w.get(r.key)?.n ?? 0}</td>
+                <td>
+                  {r.label}
+                  <div className="cell-sub">{w.get(r.key)?.n ?? 0} slots in 7 d</div>
+                </td>
+                <td className="num r">
+                  {fmt(d.get(r.key), 'mae')}
+                  <div className="cell-sub">{fmt(d.get(r.key), 'bias')}</div>
+                </td>
+                <td className="num r">
+                  {fmt(w.get(r.key), 'mae')}
+                  <div className="cell-sub">{fmt(w.get(r.key), 'bias')}</div>
+                </td>
               </tr>
             ))}
             {pf && (
@@ -82,26 +92,23 @@ export function AccuracyCard({ history }: { history: PlanHistoryResponse | undef
                 <td>
                   Price forecast
                   <div className="cell-sub">
-                    {pf.provider}, {pf.lead_hours} h ahead, vs Nord Pool
+                    €/kWh, {pf.provider}, {pf.lead_hours} h ahead, vs Nord Pool · {pf.n} slots
                   </div>
                 </td>
-                <td className="num r" colSpan={2}>
-                  —
-                </td>
+                <td className="num r">—</td>
                 <td className="num r">
                   {eurFromCents(pf.mae)}
+                  <div className="cell-sub">{eurFromCents(pf.bias, true)}</div>
                   {pf.mape !== null && pf.mape !== undefined && <div className="cell-sub">{pct(pf.mape)} MAPE</div>}
                 </td>
-                <td className="num r">{eurFromCents(pf.bias, true)}</td>
-                <td className="num r">{pf.n}</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
       <p className="accuracy-hint">
-        Error is the mean absolute difference between the plan and the measurement per quarter-hour; bias is the mean
-        signed difference (plus: the plan expected more). Planned values are taken from the plan <em>{horizon}</em>
+        Error (first line) is the mean absolute difference between the plan and the measurement per quarter-hour; bias
+        (under it) is the mean signed difference (plus: the plan expected more). Planned values are taken from the plan <em>{horizon}</em>
         {history.horizon === 0 ? ' when the slot came' : ' of each slot'}
         {d.get('load')?.mape !== null && d.get('load')?.mape !== undefined
           ? `; the load error is ${pct(d.get('load')?.mape)} of the measured load over 24 h.`

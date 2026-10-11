@@ -1,6 +1,7 @@
 import type { PublishEvent } from '../api/types'
 import { formatTime } from '../lib/format'
 import { batteryText, gridText, kwText } from '../lib/publish'
+import { formatPrice } from '../lib/units'
 
 /** The values of a plan-published event, with EMHASS's signs spelled out. */
 export function PublishEventView({ event, timeZone }: { event: PublishEvent; timeZone?: string }) {
@@ -41,8 +42,8 @@ export function PublishEventView({ event, timeZone }: { event: PublishEvent; tim
         {event.price && (
           <div>
             <dt>Price</dt>
-            <dd>{(event.price.import * 100).toFixed(2)} c</dd>
-            <div className="cell-sub">import, export {(event.price.export * 100).toFixed(2)} c/kWh</div>
+            <dd>{formatPrice(event.price.import)}</dd>
+            <div className="cell-sub">import, export {formatPrice(event.price.export)}</div>
           </div>
         )}
       </dl>

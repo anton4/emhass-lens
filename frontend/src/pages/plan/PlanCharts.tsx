@@ -20,7 +20,7 @@ import {
   plannedAtTheTime,
   timeGrid,
 } from '../../lib/planHistory'
-import { centsTick, formatCents, formatPower } from '../../lib/units'
+import { eurTick, formatPower, formatPrice } from '../../lib/units'
 
 const SYNC = 'plan'
 
@@ -217,7 +217,7 @@ export function PlanCharts({
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
-    const fmt = (v: number) => formatCents(v)
+    const fmt = (v: number) => formatPrice(v)
     const series: ChartSeries[] = [
       { label: 'Import', color: '--q-import', values: imp, format: fmt },
       { label: 'Export', color: '--q-export', dash: [6, 4], values: exp, format: fmt },
@@ -290,7 +290,7 @@ export function PlanCharts({
             series={prices.series}
             ariaLabel="Import and export price per quarter-hour; shaded where the price is a forecast"
             syncKey={SYNC}
-            yFormat={centsTick}
+            yFormat={eurTick}
             fit={PRICE_FIT}
             legendValueWidth="13ch"
             xRange={zoom}

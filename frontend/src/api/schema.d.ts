@@ -3378,6 +3378,17 @@ export interface components {
             plan_generated_at?: string | null;
             /** Plan Run Id */
             plan_run_id?: number | null;
+            /**
+             * Prev Quantities
+             * @default []
+             */
+            prev_quantities: components["schemas"]["NowQuantity"][];
+            /** Prev Row */
+            prev_row?: {
+                [key: string]: unknown;
+            } | null;
+            /** Prev Start */
+            prev_start: string;
             /** Published At */
             published_at?: string | null;
             /** Quantities */

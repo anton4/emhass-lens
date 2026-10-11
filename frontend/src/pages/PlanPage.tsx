@@ -5,8 +5,10 @@ import type { PlanRow } from '../api/types'
 import { Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { useNow } from '../components/useNow'
+import { formatEur } from '../lib/costfun'
 import { formatDuration, formatSlot, formatSlotDate, formatTime } from '../lib/format'
 import {
+  costFunTotal,
   EXTERNAL_PLAN_NOTE,
   formatPlanCell,
   lastRunNote,
@@ -89,6 +91,7 @@ export function PlanPage() {
   const last = rows[rows.length - 1]?.timestamp
 
   const summary = planSummary(rows, nowS, tz)
+  const costFun = costFunTotal(rows)
   const viewToggle = (
     <div className="segmented" role="group" aria-label="Show the plan as">
       <button type="button" aria-pressed={!table} onClick={() => setTable(false)}>
@@ -161,6 +164,16 @@ export function PlanPage() {
             {formatSlot(last ? String(last) : null, now, tz)}
           </dd>
         </div>
+        {costFun && (
+          <div>
+            <dt>Total cost function</dt>
+            <dd
+              title={`Σ ${costFun.column} over the ${rows.length} slots of this plan, which EMHASS publishes as sensor.total_cost_fun_value (positive is money in)`}
+            >
+              {formatEur(costFun.value)} <span className="muted">{costFun.method}</span>
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Times in</dt>
           <dd>{tz}</dd>

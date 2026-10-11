@@ -26,7 +26,7 @@ export function InputsPage() {
   const inputs = useInputs()
   const now = useNow(30_000)
   const nowS = now.getTime() / 1000
-  const [unit, setUnit] = useState<PriceUnit>('cents')
+  const [unit, setUnit] = useState<PriceUnit>('eur')
   const data = prices.data
   const tz = data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const days = useMemo(() => (data ? localDays(data.slots, tz) : []), [data, tz])
@@ -41,11 +41,11 @@ export function InputsPage() {
     <>
       <PageHead title="Inputs" intro="Everything EMHASS is fed, each value with where it came from and how old it is.">
         <div className="segmented" role="group" aria-label="Price unit">
-          <button type="button" aria-pressed={unit === 'cents'} onClick={() => setUnit('cents')}>
-            c/kWh
-          </button>
           <button type="button" aria-pressed={unit === 'eur'} onClick={() => setUnit('eur')}>
             €/kWh
+          </button>
+          <button type="button" aria-pressed={unit === 'cents'} onClick={() => setUnit('cents')}>
+            c/kWh
           </button>
         </div>
       </PageHead>

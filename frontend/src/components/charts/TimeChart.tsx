@@ -112,16 +112,16 @@ export function TimeChart({
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
-  // Everything the hooks read comes from this ref, so data and zoom updates don't need a rebuild.
-  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick })
+  // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
+  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series })
   useEffect(() => {
-    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick }
+    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series }
   })
 
   const zoomable = Boolean(onZoom)
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill]), height, yRange, fit, zoomable, syncKey, timeZone,
-    theme, compact,
+    theme, compact, Boolean(yFormat),
   ])
 
   useEffect(() => {
@@ -167,13 +167,13 @@ export function TimeChart({
           values: compact
             ? () => []
             : yFormat
-              ? (_u, splits) => splits.map((v) => (v === null ? '' : yFormat(v)))
+              ? (_u, splits) => splits.map((v) => (v === null ? '' : (extras.current.yFormat?.(v) ?? String(v))))
               : undefined,
         },
       ],
       series: [
         { label: 'Time', value: (_u, v) => (v === null ? '—' : readoutTime(v, timeZone)) },
-        ...series.map((s) => ({
+        ...series.map((s, i) => ({
           label: s.label,
           stroke: cssColor(s.color),
           width: s.width ?? 2,
@@ -183,7 +183,11 @@ export function TimeChart({
           paths: s.step === false ? undefined : stepped,
           points: { show: false },
           spanGaps: false,
-          value: (_u: uPlot, v: number | null) => (v === null || v === undefined ? '—' : s.format ? s.format(v) : String(v)),
+          value: (_u: uPlot, v: number | null) => {
+            if (v === null || v === undefined) return '—'
+            const format = extras.current.series[i]?.format
+            return format ? format(v) : String(v)
+          },
         })),
       ],
       hooks: {

@@ -122,5 +122,24 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         assert inverter["charger_mode"] == "Passive Mode" and inverter["written_at"] is not None
         assert now["next_start"] == "2026-10-09T11:30:00.000+00:00"
         assert now["next_row"] is not None
+        assert now["prev_start"] == "2026-10-09T11:00:00.000+00:00"
+
+        # a slot on, 11:15 is the previous slot: its plan row against the quarter-hour means stored for it
+        clock.set(datetime(2026, 10, 9, 11, 31, 0, tzinfo=UTC))
+        container = client.app.state.container  # type: ignore[attr-defined]
+        container.app_db.executemany(
+            "INSERT OR REPLACE INTO measurement (slot_utc, quantity, value, coverage, entity_id) VALUES (?,?,?,?,?)",
+            [
+                ("2026-10-09T11:15:00.000+00:00", "batt", row["P_batt"] + 1500, 1.0, "sensor.batt_w"),
+                ("2026-10-09T11:15:00.000+00:00", "grid", row["P_grid"], 1.0, "sensor.grid_w"),
+            ],
+        )
+        before = client.get("/api/plan/now").json()
+        assert before["prev_start"] == "2026-10-09T11:15:00.000+00:00"
+        assert before["prev_row"]["timestamp"] == row["timestamp"]
+        ended = {q["key"]: q for q in before["prev_quantities"]}
+        assert ended["batt"]["measured"] == row["P_batt"] + 1500 and ended["batt"]["differs"] is True
+        assert ended["grid"]["differs"] is False and ended["grid"]["entity"] == "sensor.grid_w"
+        assert ended["load"]["measured"] is None and ended["batt"]["age_s"] is None
     finally:
         client.__exit__(None, None, None)

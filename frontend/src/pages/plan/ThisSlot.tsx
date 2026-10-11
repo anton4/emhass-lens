@@ -2,7 +2,7 @@ import type { PlanRow } from '../../api/types'
 import { Lamp } from '../../components/Lamp'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
 import { measuredText, measuredTitle, type NowByKey } from '../../lib/planNow'
-import { batteryDirection, formatCents, formatFraction, formatPower, gridDirection } from '../../lib/units'
+import { batteryDirection, formatFraction, formatPower, formatPrice, gridDirection } from '../../lib/units'
 
 function Tile({
   label,
@@ -43,17 +43,20 @@ function Tile({
   )
 }
 
-/** A plan row as tiles; with `now`, each tile also shows what is measured and whether that differs. */
+/** A plan row as tiles; with `now`, each tile also shows what is measured and whether that differs (for a slot that
+ *  has ended, `past`, the quarter-hour means). */
 export function ThisSlot({
   row,
   columns,
   now,
   charger,
+  past = false,
 }: {
   row: PlanRow
   columns: string[]
   now?: NowByKey
   charger?: string | null
+  past?: boolean
 }) {
   const batt = num(row, 'P_batt')
   const grid = num(row, 'P_grid')
@@ -62,9 +65,9 @@ export function ThisSlot({
   const loadCost = num(row, 'unit_load_cost')
   const prodPrice = num(row, 'unit_prod_price')
   const m = (key: keyof NowByKey) => ({
-    now: measuredText(now?.[key]),
+    now: measuredText(now?.[key], past),
     differs: now?.[key]?.differs,
-    nowTitle: measuredTitle(now?.[key]),
+    nowTitle: measuredTitle(now?.[key], past),
   })
   return (
     <div className="tiles">
@@ -127,8 +130,8 @@ export function ThisSlot({
         <Tile
           label="Import price"
           quantity="--q-import"
-          value={formatCents(loadCost)}
-          sub={prodPrice !== null ? `export ${formatCents(prodPrice)}` : undefined}
+          value={formatPrice(loadCost)}
+          sub={prodPrice !== null ? `export ${formatPrice(prodPrice)}` : undefined}
         />
       )}
     </div>

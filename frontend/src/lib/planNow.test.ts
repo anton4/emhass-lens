@@ -21,6 +21,15 @@ describe('this slot, measured now', () => {
     expect(expectedText(q('grid', 1, { expected: 5 }))).toBeNull()
   })
 
+  it('words a slot that has ended as its measured mean', () => {
+    expect(measuredText(q('grid', -1790), true)).toBe('measured 1.79 kW exporting')
+    expect(measuredText(q('soc', 0.5), true)).toBe('measured 50.0 %')
+    const batt = q('batt', 720, { expected: 744, entity: 'sensor.batt' })
+    expect(measuredTitle(batt, true)).toBe(
+      'expected 744 W discharging with the measured house load and PV · quarter-hour mean of sensor.batt',
+    )
+  })
+
   it('lists what the inverter is set to and what the charger does', () => {
     expect(
       inverterParts({

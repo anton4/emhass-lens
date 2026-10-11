@@ -2709,6 +2709,12 @@ dialog.confirm h2 {
   white-space: nowrap;
 }
 
+/* the quantity's name and its sub-line wrap, so the table fits half a page without scrolling */
+.accuracy-table td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .accuracy-hint {
   margin: 8px 0 0;
   font-size: var(--step--1);

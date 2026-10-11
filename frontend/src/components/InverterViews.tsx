@@ -11,6 +11,7 @@ import {
   type PlanValues,
 } from '../lib/inverter'
 import { batteryText, gridText, kwText } from '../lib/publish'
+import { formatPrice } from '../lib/units'
 import { LabelledLamp } from './Lamp'
 
 /** A decision: which rule matched and why, and the targets it sets (or would set). */
@@ -109,8 +110,8 @@ export function DecisionView({
             </div>
             <div>
               <dt>Export price</dt>
-              <dd>{values.export_price === null ? '—' : `${(values.export_price * 100).toFixed(2)} c`}</dd>
-              <div className="cell-sub">c/kWh for this slot</div>
+              <dd>{formatPrice(values.export_price)}</dd>
+              <div className="cell-sub">for this slot</div>
             </div>
           </dl>
         </>

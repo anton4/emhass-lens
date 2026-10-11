@@ -52,6 +52,21 @@ export function socOf(row: PlanRow | null | undefined): number | null {
   return column ? num(row, column) : null
 }
 
+
+/** The plan's cost_fun_* column summed over every slot: what EMHASS publishes as sensor.total_cost_fun_value
+ *  (EMHASS's sign: positive is money in). Null when the plan has no such column. */
+export function costFunTotal(rows: PlanRow[]): { column: string; method: string; value: number } | null {
+  const column = Object.keys(rows[0] ?? {}).find((k) => k.startsWith('cost_fun_'))
+  if (!column) return null
+  let value = 0
+  for (const row of rows) {
+    const v = row[column]
+    if (isNumber(v)) value += v
+  }
+  const suffix = column.slice('cost_fun_'.length)
+  return { column, method: suffix === 'selfcons' ? 'self-consumption' : suffix, value }
+}
+
 const COLUMN_LABELS: Record<string, string> = {
   P_PV: 'PV',
   P_Load: 'House load',
@@ -83,11 +98,11 @@ export function planColumnLabel(column: string): string {
 export function planColumnUnit(column: string): string {
   if (/^P_/.test(column)) return 'kW'
   if (/^SOC_opt/.test(column)) return '%'
-  if (column === 'unit_load_cost' || column === 'unit_prod_price') return 'c/kWh'
+  if (column === 'unit_load_cost' || column === 'unit_prod_price') return '€/kWh'
   return ''
 }
 
-/** A plan cell in its column's unit: W as kW, SOC as %, prices in c/kWh. */
+/** A plan cell in its column's unit: W as kW, SOC as %, prices in €/kWh. */
 export function formatPlanCell(column: string, value: unknown): string {
   if (!isNumber(value)) return value === null || value === undefined ? '—' : String(value)
   switch (planColumnUnit(column)) {
@@ -95,8 +110,8 @@ export function formatPlanCell(column: string, value: unknown): string {
       return (value / 1000).toFixed(2)
     case '%':
       return (value * 100).toFixed(1)
-    case 'c/kWh':
-      return (value * 100).toFixed(1)
+    case '€/kWh':
+      return value.toFixed(4)
     default:
       return Math.abs(value) >= 10 ? String(Math.round(value)) : value.toFixed(4)
   }

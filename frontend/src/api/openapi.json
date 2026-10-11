@@ -5873,6 +5873,30 @@
             ],
             "title": "Plan Run Id"
           },
+          "prev_quantities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NowQuantity"
+            },
+            "title": "Prev Quantities",
+            "type": "array"
+          },
+          "prev_row": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Row"
+          },
+          "prev_start": {
+            "title": "Prev Start",
+            "type": "string"
+          },
           "published_at": {
             "anyOf": [
               {
@@ -5916,6 +5940,7 @@
           "slot_start",
           "slot_end",
           "next_start",
+          "prev_start",
           "quantities"
         ],
         "title": "PlanNow",
