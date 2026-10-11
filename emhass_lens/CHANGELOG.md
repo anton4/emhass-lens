@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.7
+
+- Inverter control: the battery window is now labelled in Sofar's sign, where charging is positive. In Settings, its top is **Battery charge max** and its bottom **Battery discharge max (negative)**. The rule list says *Use only grid power* lets the battery charge but not discharge (PV first, the grid covers the rest), and *Self-use PV and export excess to grid* lets it discharge but not charge. Both used to say the opposite. The values written to the inverter are unchanged.
+
 ## 0.4.6
 
 - Run pages of EMHASS MPC and cost-function comparison runs show a **Pipeline**: building the payload, each EMHASS call (the compared cost functions, the live one with EMHASS's own stages and solve time) and reading back, as bars on one time axis, with the step that failed marked. Older runs show it too, placed from when each call ended. Other jobs are a single step and show none.
