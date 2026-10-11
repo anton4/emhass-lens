@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.10
+
+- MPC: EMHASS's **battery charge power derating** (`battery_charge_power_derating`) is left out of the plans. EMHASS gives every derating step a yes/no variable per slot. With two steps, a 52-hour plan took the solver over 2 minutes on the HA host (20 s instead of 0.3 s on a fast computer), so runs stopped at their time limit with no plan, often several in a row in the evening. The battery's BMS tapers the charge anyway, and every quarter-hour's plan starts from the real state of charge. To plan with it anyway, add `battery_charge_power_derating` under Settings → EMHASS → Extra runtime parameters.
+- MPC: a solve that stops at its time limit is retried with a 5 % MIP gap again. EMHASS 0.18.5 answers such a run with an error (HTTP 400), and the retry only expected a normal answer, so it never ran. The run's error now says that the solver stopped at its time limit, instead of quoting EMHASS's last log line.
+- Publish: a failed MPC run no longer makes the quarter-hour publish fail too. Live runs ask EMHASS to save the plan's sensors (`entity_save`), a failed run leaves them alone, and the publish then has EMHASS post the last good plan again (`publish_prefix: all`). The `sensor.p_*` values, the plan-published event (with `republished_because`), the inverter and the EV charger all follow that plan. Once it is older than the plan max age (Settings → Health, 30 min by default), the publish is refused with the reason and nothing is sent to EMHASS. The same applies when a cost-function comparison left its plan in EMHASS.
+- Plan: the **Previous slot / This slot / Next slot** switch stays in place when you click it. It used to sit right after the title, so it moved whenever the title and time range changed length; now it sits at the panel's right edge like the other panels' controls.
+
 ## 0.4.9
 
 - Prices are in €/kWh everywhere again: the Plan page (this slot's tiles, the price chart and the plan table), the run page's publish event and the Inverter page. The Inputs page still has its c/kWh switch, but now starts at €/kWh.
