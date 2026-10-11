@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Run pages of EMHASS MPC and cost-function comparison runs show a **Pipeline**: building the payload, each EMHASS call (the compared cost functions, the live one with EMHASS's own stages and solve time) and reading back, as bars on one time axis, with the step that failed marked. Older runs show it too, placed from when each call ended. Other jobs are a single step and show none.
+- Each EMHASS call now records when it was sent, so the pipeline is exact for new runs.
+- Price breakdown: spot keeps its grey, and fees, network and VAT are the import price's reds, from light to dark (as in design B).
+
 ## 0.4.5
 
 - EV charger: a decision no longer appears twice around each publish. Both the publish and EMHASS updating its EV power sensor asked for one, about a second apart. Now a slot gets one decision per EV power value, whichever of them arrives first; a new value still decides again at once.

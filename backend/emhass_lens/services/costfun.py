@@ -164,6 +164,7 @@ class CostfunCompareService:
             entry: dict[str, Any] = {
                 "costfun": method,
                 "live": False,
+                "sent_at": iso(sent_at),
                 "optim_status": None,
                 "duration_ms": None,
                 "problem": None,

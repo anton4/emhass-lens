@@ -37,6 +37,14 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-11: run pipeline and the price breakdown in reds (0.4.6)
+- The run pipeline was only in the canvas mockups. It is now built for runs that call EMHASS (`emhass.mpc`, `emhass.costfun_compare`):
+  - `lib/pipeline.ts` (`buildPipeline`, tests use run 985's numbers) and `components/RunPipeline.tsx`, on the Summary tab.
+  - `response` and `costfun:<method>` artifacts now carry `sent_at` (`services/mpc.py` `_attempt`, `services/costfun.py`). Older runs are placed from `generated_at` / `emhass_last_run.timestamp` minus the call's duration.
+  - EMHASS's `stage_times` are laid end to end, ending with the live call. They add up to slightly more than `duration_total_seconds`, so their sum is used.
+- Artifact queries are shared through `api/artifacts.ts`.
+- Price breakdown in design B's colours: spot `--q-spot`, fees, network and VAT `#f2aaa9`, `#e34948`, `#9b2c2b` (`--stack-*`).
+
 ### 2026-10-10 (night): Runs timeline with dense bars and a window switch (0.4.5)
 - The owner asked for design B's bars (equal buckets, side by side) and design A's 1 h / 6 h / 24 h switch on the Runs timeline.
 - Backend: `GET /api/runs/timeline?since&until&bucket_s` (`recorder.histogram`, one GROUP BY over the indexed started_at) gives counts per job, outcome and bucket with the newest run id, so a busy day isn't cut at the list's 1000-run cap. Test in `tests/test_runs_range.py`.

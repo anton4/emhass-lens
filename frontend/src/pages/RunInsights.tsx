@@ -1,6 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { api } from '../api/client'
+import { useArtifact } from '../api/artifacts'
 import type { EmhassCheck, ExplainArtifact, InputsSnapshot, Issue, ParityReport, PublishEvent } from '../api/types'
 import { ChecksTable } from '../components/ChecksTable'
 import { DerivedFacts, EvReserveNote, ExplainTable } from '../components/ExplainTable'
@@ -21,15 +20,6 @@ import {
   type ChargerDecisionArtifact,
 } from '../lib/charger'
 import { formatDuration } from '../lib/format'
-
-function useArtifact<T>(runId: number, kind: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ['artifact', runId, kind],
-    queryFn: () => api.get<T>(`/api/runs/${runId}/artifacts/${encodeURIComponent(kind)}`),
-    enabled,
-    staleTime: Infinity,
-  })
-}
 
 /** The `response` artifact of runs that called an EMHASS action. */
 interface ActionResponse {

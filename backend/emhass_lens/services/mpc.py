@@ -254,6 +254,7 @@ class MpcService:
         ctx.run.artifact(
             f"response{suffix}",
             {
+                "sent_at": iso(sent_at),
                 "http_status": response.http_status,
                 "duration_ms": response.duration_ms,
                 "error": response.error,

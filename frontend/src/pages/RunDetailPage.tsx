@@ -11,6 +11,7 @@ import { copyText, downloadText } from '../lib/download'
 import { formatBytes, formatDuration, formatTime } from '../lib/format'
 import { ARTIFACT_NAMES } from '../lib/artifacts'
 import { RunInsights } from './RunInsights'
+import { RunPipeline } from '../components/RunPipeline'
 import { LabelledLamp } from '../components/Lamp'
 
 type Tab = 'summary' | 'artifacts' | 'logs'
@@ -128,6 +129,8 @@ export function RunDetailPage() {
               {r.error && <div className="error-box">{r.error}</div>}
             </div>
           </section>
+
+          {r.artifacts.some((a) => a.kind === 'response' || a.kind.startsWith('costfun:')) && <RunPipeline run={r} />}
 
           <RunInsights runId={id} job={r.job} kinds={r.artifacts.map((a) => a.kind)} />
         </>

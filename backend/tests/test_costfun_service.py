@@ -45,6 +45,10 @@ def test_compare_runs_the_other_two_then_the_live_method(tmp_path: Path, world: 
             "request",
             "response",
         }
+        # every EMHASS call records when it was sent, so the run page can place it on its pipeline
+        cost = client.get(f"/api/runs/{run['id']}/artifacts/costfun:cost").json()
+        live = client.get(f"/api/runs/{run['id']}/artifacts/response").json()
+        assert cost["sent_at"].startswith("2026-") and live["sent_at"] >= cost["sent_at"]
         # EMHASS ended with the live plan, and the App stored it as this run's plan
         assert "cost_fun_profit" in (world.emhass_plan["plan"] or [{}])[0]
         plan = client.get("/api/plan").json()
