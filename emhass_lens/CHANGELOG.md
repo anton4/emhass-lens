@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.8
+
+- Inverter control: the feed-in limit is only written when something can reach the grid in the slot. That means the plan exports, curtails PV, or has PV to spare while the battery is nearly full (new setting **Battery counts as nearly full at**, 90 %). Otherwise the limit is left as it is, because every press of the feed-in button is an EEPROM write. Before, a slot like 08:15 with 300 W of PV and the battery at 73 % pressed it just because the export price crossed the threshold, and prices around the threshold flipped it up to 10 times a day. The limit's value still follows the export price. A limit left as it is shows *unchanged* with the reason, and the drift check doesn't set it back.
+
 ## 0.4.7
 
 - Inverter control: the battery window is now labelled in Sofar's sign, where charging is positive. In Settings, its top is **Battery charge max** and its bottom **Battery discharge max (negative)**. The rule list says *Use only grid power* lets the battery charge but not discharge (PV first, the grid covers the rest), and *Self-use PV and export excess to grid* lets it discharge but not charge. Both used to say the opposite. The values written to the inverter are unchanged.
