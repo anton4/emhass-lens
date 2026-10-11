@@ -1981,6 +1981,17 @@ button.diff-locate {
   gap: 4px 12px;
 }
 
+/* The title row takes the free space, so a control after it stays at the right edge however long the title
+   is, and the head wraps at the same width whichever title is shown. */
+.panel-head > .panel-title-row {
+  flex: 1 1 14rem;
+}
+
+.panel-head .panel-title-row h2,
+.panel-head .panel-title-row h3 {
+  margin-right: 0;
+}
+
 .inverter-strip {
   display: flex;
   flex-wrap: wrap;
