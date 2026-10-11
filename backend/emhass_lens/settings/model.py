@@ -865,10 +865,21 @@ class InverterEntities(Section):
 
 class InverterLimits(Section):
     battery_max_w: int = Field(
-        default=20000, ge=0, le=100000, title="Battery discharge max", json_schema_extra=ui(unit="W")
+        default=20000,
+        ge=0,
+        le=100000,
+        title="Battery charge max",
+        description="The top of the passive battery window. Sofar counts charging as positive, the opposite of "
+        "EMHASS's P_batt.",
+        json_schema_extra=ui(unit="W"),
     )
     battery_min_w: int = Field(
-        default=-20000, ge=-100000, le=0, title="Battery charge max (negative)", json_schema_extra=ui(unit="W")
+        default=-20000,
+        ge=-100000,
+        le=0,
+        title="Battery discharge max (negative)",
+        description="The bottom of the passive battery window: discharging is negative for Sofar.",
+        json_schema_extra=ui(unit="W"),
     )
     grid_import_max_w: int = Field(
         default=18800, ge=0, le=100000, title="Grid import max", json_schema_extra=ui(unit="W")
@@ -881,6 +892,8 @@ class InverterLimits(Section):
         ge=-100000,
         le=0,
         title="Battery min while exporting PV",
+        description="How far the battery may discharge in Self-use PV and export excess to grid, where it may not "
+        "charge.",
         json_schema_extra=ui(unit="W"),
     )
     force_charge_battery_min_w: int = Field(
@@ -888,6 +901,7 @@ class InverterLimits(Section):
         ge=-100000,
         le=0,
         title="Battery min while force charging",
+        description="How far the battery may discharge in Force charge, should the house use more than planned.",
         json_schema_extra=ui(unit="W"),
     )
     force_charge_grid_cap_above_w: int = Field(

@@ -2480,12 +2480,14 @@ export interface components {
         /** InverterLimits */
         InverterLimits: {
             /**
-             * Battery discharge max
+             * Battery charge max
+             * @description The top of the passive battery window. Sofar counts charging as positive, the opposite of EMHASS's P_batt.
              * @default 20000
              */
             battery_max_w: number;
             /**
-             * Battery charge max (negative)
+             * Battery discharge max (negative)
+             * @description The bottom of the passive battery window: discharging is negative for Sofar.
              * @default -20000
              */
             battery_min_w: number;
@@ -2496,11 +2498,13 @@ export interface components {
             export_max_w: number;
             /**
              * Battery min while exporting PV
+             * @description How far the battery may discharge in Self-use PV and export excess to grid, where it may not charge.
              * @default -16000
              */
             export_only_battery_min_w: number;
             /**
              * Battery min while force charging
+             * @description How far the battery may discharge in Force charge, should the house use more than planned.
              * @default -3000
              */
             force_charge_battery_min_w: number;

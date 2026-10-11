@@ -3548,9 +3548,10 @@
         "properties": {
           "battery_max_w": {
             "default": 20000,
+            "description": "The top of the passive battery window. Sofar counts charging as positive, the opposite of EMHASS's P_batt.",
             "maximum": 100000.0,
             "minimum": 0.0,
-            "title": "Battery discharge max",
+            "title": "Battery charge max",
             "type": "integer",
             "ui": {
               "unit": "W"
@@ -3558,9 +3559,10 @@
           },
           "battery_min_w": {
             "default": -20000,
+            "description": "The bottom of the passive battery window: discharging is negative for Sofar.",
             "maximum": 0.0,
             "minimum": -100000.0,
-            "title": "Battery charge max (negative)",
+            "title": "Battery discharge max (negative)",
             "type": "integer",
             "ui": {
               "unit": "W"
@@ -3578,6 +3580,7 @@
           },
           "export_only_battery_min_w": {
             "default": -16000,
+            "description": "How far the battery may discharge in Self-use PV and export excess to grid, where it may not charge.",
             "maximum": 0.0,
             "minimum": -100000.0,
             "title": "Battery min while exporting PV",
@@ -3588,6 +3591,7 @@
           },
           "force_charge_battery_min_w": {
             "default": -3000,
+            "description": "How far the battery may discharge in Force charge, should the house use more than planned.",
             "maximum": 0.0,
             "minimum": -100000.0,
             "title": "Battery min while force charging",

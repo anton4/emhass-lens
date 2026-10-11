@@ -179,7 +179,8 @@ export interface RuleText {
 
 /** The rules in the automation's order (importing, exporting, neutral), with the thresholds from the current limits
  * (Settings → Inverter control) and the export block (Settings → EMHASS → MPC "No export at or below"; null = never).
- * "Self-use battery or PV" appears twice because two branches end there. */
+ * "Self-use battery or PV" appears twice because two branches end there. The battery window is in Sofar's sign
+ * (charging positive), the opposite of EMHASS's P_batt. */
 export function rules(limits: InverterSettings['limits'] | undefined, noExportAtOrBelow: number | null): RuleText[] {
   const l = limits ?? {
     battery_max_w: 20000,
@@ -210,7 +211,7 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
       id: 'use_only_grid',
       label: 'Use only grid power',
       when: 'Importing, battery idle (−100…100 W)',
-      sets: `grid 0 W, battery 0…${l.battery_max_w} W (no charging)`,
+      sets: `grid 0 W, battery 0…${l.battery_max_w} W (may charge, not discharge: PV first, the grid covers the rest)`,
     },
     {
       id: 'charge_export',
@@ -231,7 +232,7 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
         price === null
           ? 'Exporting, battery idle (export is never blocked: "No export at or below" is empty)'
           : `Exporting, battery idle, export price above ${price}`,
-      sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may charge, not discharge)`,
+      sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may discharge, not charge: surplus PV is exported)`,
     },
     {
       id: 'self_use',

@@ -129,6 +129,8 @@ Every optimisation replaces EMHASS's latest plan, which publish-data and the pla
 
 EMHASS Lens can set a Sofar inverter's passive mode from the plan itself, instead of a Home Assistant automation doing it. It mirrors the automation "EMHASS: Consolidated Inverter Control" rule for rule: the plan's grid power picks the branch (importing, exporting or neutral), the battery power picks the mode (force charge, force discharge, use only grid, self-use, …), and when exporting with an idle battery the export price decides whether the PV is exported or kept. The feed-in limit is 0 W whenever the export price is at or below **Settings → EMHASS → MPC optimization → No export at or below**, otherwise the export maximum. The same value keeps EMHASS from planning exports in those slots, so in a blocked slot the plan shows no export and curtailed PV, and the rules pick *restrict export*. When the setting is empty, export is never blocked.
 
+The passive battery window (battery power min … max) follows Sofar's sign, where charging is positive: the opposite of EMHASS's `P_batt`. So *Use only grid power* (0 … 20000 W) lets the battery charge but not discharge: PV still feeds the house first, the grid covers the rest, and surplus PV charges the battery. The plan's battery power counts as idle within ±100 W, so a slot planned with a few tens of watts from the battery gets this mode too.
+
 | Mode | What happens |
 |---|---|
 | Off | Nothing is decided. |
