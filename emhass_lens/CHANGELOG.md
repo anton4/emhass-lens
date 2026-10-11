@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.9
+
+- Prices are in €/kWh everywhere again: the Plan page (this slot's tiles, the price chart and the plan table), the run page's publish event and the Inverter page. The Inputs page still has its c/kWh switch, but now starts at €/kWh.
+- Inputs: switching the price unit now updates the chart's axis and legend too. Before, the legend stayed in c/kWh and every axis label read "0 c" after switching to €/kWh.
+- Plan: **How accurate the plan has been** fits without scrolling. It has one column per window (last 24 h, last 7 d), with the bias under each error.
+- Plan: the facts row shows the **Total cost function**: the sum of the plan's cost function over its horizon, which EMHASS publishes as `sensor.total_cost_fun_value`.
+- Plan: **Previous slot** next to This slot and Next slot shows the plan for the quarter-hour that just ended, next to its measured quarter-hour means.
+
 ## 0.4.8
 
 - Inverter control: the feed-in limit is only written when something can reach the grid in the slot. That means the plan exports, curtails PV, or has PV to spare while the battery is nearly full (new setting **Battery counts as nearly full at**, 90 %). Otherwise the limit is left as it is, because every press of the feed-in button is an EEPROM write. Before, a slot like 08:15 with 300 W of PV and the battery at 73 % pressed it just because the export price crossed the threshold, and prices around the threshold flipped it up to 10 times a day. The limit's value still follows the export price. A limit left as it is shows *unchanged* with the reason, and the drift check doesn't set it back.
