@@ -6,6 +6,10 @@ below -100 W, discharging above 100 W, otherwise idle), and when exporting with 
 decides between exporting the PV and keeping it. Every combination maps to a mode, so EMHASS Lens can run it in
 dry run and show, slot by slot, whether it agrees with what the automation did. Sign conventions are EMHASS's:
 P_batt > 0 discharges the battery, P_grid > 0 imports from the grid.
+
+One deliberate difference: the automation writes the price's feed-in limit every slot, and every press of the
+feed-in button is an EEPROM write. Here the limit is only written when something can reach the grid in the slot
+(the plan exports, curtails PV, or has PV to spare with the battery nearly full); otherwise it is left as it is.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -34,6 +38,7 @@ class PlanValues:
     p_pv: float  # W
     p_pv_curtailment: float  # W
     export_price: float | None  # €/kWh for the current slot
+    soc: float | None = None  # 0…1, the plan's state of charge at the slot's end
 
 
 @dataclass(frozen=True)
@@ -50,9 +55,15 @@ class Decision:
     label: str
     why: str
     targets: Targets | None  # always set since the template automation; None only in old run artifacts
-    feedin_max_w: int
+    feedin_max_w: int  # the limit for the slot's export price
     feedin_why: str
     notes: list[str] = field(default_factory=list)
+    feedin_needed: bool = True  # False: nothing can reach the grid, so the limit is left as it is
+
+    @property
+    def feedin_target(self) -> int | None:
+        """The feed-in limit to write and judge; None leaves it as it is."""
+        return self.feedin_max_w if self.feedin_needed else None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -64,6 +75,25 @@ def round100(value: float) -> int:
 
 
 _round100 = round100
+
+
+def feedin_need(v: PlanValues, full_soc: float) -> tuple[bool, str]:
+    """Whether the feed-in limit changes anything in this slot, and why. Spare PV is what the PV gives beyond the
+    house (deferrable loads included): -(P_batt + P_grid). Without a planned export or curtailment, spare PV only
+    reaches the grid when the battery can't take it; below `full_soc` it can (an unknown SOC counts as full)."""
+    spare = -(v.p_batt + v.p_grid)
+    if v.p_grid < -BAND_W:
+        return True, f"the plan exports {-v.p_grid:.0f} W"
+    if v.p_pv_curtailment > 0:
+        return True, f"the plan curtails {v.p_pv_curtailment:.0f} W of PV"
+    if spare <= BAND_W:
+        house = v.p_pv - v.p_pv_curtailment + v.p_batt + v.p_grid
+        return False, f"no PV to spare (PV {v.p_pv:.0f} W, house {house:.0f} W)"
+    if v.soc is None:
+        return True, f"{spare:.0f} W of PV to spare and the battery's state of charge is unknown"
+    if v.soc >= full_soc:
+        return True, f"{spare:.0f} W of PV to spare with the battery nearly full ({v.soc:.0%})"
+    return False, f"the battery takes the spare {spare:.0f} W ({v.soc:.0%}, below {full_soc:.0%})"
 
 
 def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float | None) -> Decision:
@@ -121,8 +151,10 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
         feedin, feedin_why = 0, f"export price {price:.4f} €/kWh is at or below {threshold}"
     else:
         feedin, feedin_why = limits.export_max_w, "export allowed" if threshold is not None else "export never blocked"
+    needed, need_why = feedin_need(v, limits.battery_full_soc_pct / 100)
+    feedin_why += f"; written: {need_why}" if needed else f"; left as it is: {need_why}"
     label = LABELS[rule]
-    return Decision(rule, label, f"{why} ({vals})", Targets(label, grid, bmax, bmin), feedin, feedin_why, notes)
+    return Decision(rule, label, f"{why} ({vals})", Targets(label, grid, bmax, bmin), feedin, feedin_why, notes, needed)
 
 
 @dataclass(frozen=True)
@@ -157,5 +189,5 @@ def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Obs
 
 
 def compare(decision: Decision, observed: Observed) -> dict[str, Any]:
-    """Field-by-field agreement between a decision and what the entities show."""
-    return compare_targets(decision.targets, decision.feedin_max_w, observed)
+    """Field-by-field agreement between a decision and what the entities show (the feed-in only where it's written)."""
+    return compare_targets(decision.targets, decision.feedin_target, observed)

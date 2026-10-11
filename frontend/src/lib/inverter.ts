@@ -16,9 +16,10 @@ export interface InverterDecision {
   label: string
   why: string
   targets: InverterTargets | null // null only in runs made before 0.2.11
-  feedin_max_w: number
+  feedin_max_w: number // the limit for the slot's export price
   feedin_why: string
   notes?: string[]
+  feedin_needed?: boolean // false: nothing can reach the grid, the limit is left as it is (missing before 0.4.8)
 }
 
 /** status.last: the newest decision. */
@@ -191,6 +192,7 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
     force_charge_battery_min_w: -3000,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
+    battery_full_soc_pct: 90,
   }
   const full = `battery ${l.battery_min_w}…${l.battery_max_w} W`
   const price = noExportAtOrBelow === null ? null : `${noExportAtOrBelow} €/kWh`
@@ -263,11 +265,17 @@ export function feedinRules(
   noExportAtOrBelow: number | null,
 ): string[] {
   const max = limits?.export_max_w ?? 15500
+  const full = limits?.battery_full_soc_pct ?? 90
+  const written =
+    `Written only when something can reach the grid in the slot: the plan exports, curtails PV, or has PV to spare ` +
+    `with its state of charge at or above ${full} % (Settings → Inverter control). Otherwise the limit is left as it ` +
+    `is, because every press of the feed-in button is an EEPROM write.`
   if (noExportAtOrBelow === null) {
-    return [`${max} W (the export maximum) in every slot: "No export at or below" is empty`]
+    return [`${max} W (the export maximum) in every slot: "No export at or below" is empty`, written]
   }
   return [
     `0 W when the slot's export price is at or below ${noExportAtOrBelow} €/kWh (an unknown price counts as 0)`,
     `otherwise ${max} W (the export maximum)`,
+    written,
   ]
 }

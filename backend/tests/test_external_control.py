@@ -136,7 +136,8 @@ def test_the_resume_reapplies_the_plan_with_one_inverter_write(tmp_path: Path, w
         decide = wait_for_run(client, "inverter.decide", decides_before)
         assert decide["trigger"] == "manual" and decide["outcome"] == "ok", decide
         decision = client.get(f"/api/runs/{decide['id']}/artifacts/decision").json()["decision"]
-        feedin_changed = decision["feedin_max_w"] != SOFAR["number.sofar_feedin_max_power"]
+        feedin_before = SOFAR["number.sofar_feedin_max_power"]
+        feedin_changed = decision["feedin_needed"] and decision["feedin_max_w"] != feedin_before
         services = world.ha_services[services_before:]
         presses = [s[1]["entity_id"] for s in services if s[0] == "button/press"]
         assert presses.count(APPLY_BUTTON) == 1  # one passive-mode write for the whole hand-back

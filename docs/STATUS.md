@@ -37,6 +37,12 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-11: feed-in limit written only when something can reach the grid; battery window labels (0.4.7, 0.4.8)
+- **Why:** run 1817 (08:15, PV 307 W, house about 960 W, battery 73 %) wrote the feed-in limit 15500 → 0 W and pressed its button although nothing could be exported. The owner pointed out that every press wears the Sofar's EEPROM. With prices around the 0.04 threshold, run 1814's next 24 h would have flipped the limit 10 times.
+- **0.4.8:** `domain/inverter.py` `feedin_need()`: the limit matters when the plan exports (P_grid < −100 W), curtails PV, or has PV to spare (−(P_batt + P_grid) > 100 W) while the plan's SOC for the slot (`SOC_opt`, now in `PlanValues.soc`) is at or above `inverter.limits.battery_full_soc_pct` (90; an unknown SOC counts as full). `Decision.feedin_needed` / `feedin_target`: apply, readback, dry-run compare and the drift check use `feedin_target`, so a limit left as it is is never written, judged or set back. The value itself is still price-based (`feedin_max_w`). This is a deliberate difference from the template automation, which writes it every slot.
+- **0.4.7:** Sofar's passive battery window counts charging as positive (solax-modbus docs), the opposite of EMHASS's P_batt. Settings titles (`battery_max_w` = charge max, `battery_min_w` = discharge max) and the rule texts said it the other way round. Only labels changed.
+- Tests: `test_inverter.py` (feed-in need cases, the threshold setting, not judged), `test_inverter_service.py` (live leaves the limit alone in run 1817's slot, writes it when PV is curtailed, no drift correction for a limit not written).
+
 ### 2026-10-11: run pipeline and the price breakdown in reds (0.4.6)
 - The run pipeline was only in the canvas mockups. It is now built for runs that call EMHASS (`emhass.mpc`, `emhass.costfun_compare`):
   - `lib/pipeline.ts` (`buildPipeline`, tests use run 985's numbers) and `components/RunPipeline.tsx`, on the Summary tab.

@@ -5,7 +5,8 @@
            entities are read and compared with it, so you can see how often EMHASS Lens agrees with the
            automation before letting it take over.
 - Live:    the decision is applied (input_select, three passive-mode numbers + apply button, feed-in limit + button)
-           and read back. Turn the HA automation off first, or both will write.
+           and read back. Turn the HA automation off first, or both will write. The feed-in limit is only written
+           when something can reach the grid in the slot (see domain/inverter.py).
 """
 
 import logging
@@ -17,6 +18,7 @@ from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.drift import DriftTracker, assess
 from emhass_lens.domain.drift import describe as describe_drift
 from emhass_lens.domain.inverter import Decision, Observed, PlanValues, compare, compare_targets, decide
+from emhass_lens.domain.plan_now import soc_of
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.ha_values import num as _num
@@ -81,7 +83,8 @@ class InverterService:
     # --- inputs ---------------------------------------------------------------------------------------------
     async def plan_values(self, now: datetime) -> tuple[PlanValues | None, str]:
         """The current slot's plan: EMHASS's published sensors (what the automation reads) when they were
-        updated during this slot, otherwise the row of the stored plan that EMHASS publishes now."""
+        updated during this slot, otherwise the row of the stored plan that EMHASS publishes now. The state of
+        charge always comes from that row."""
         ha = self.c.extras["ha"]
         slot = slot_floor(now)
         prices = self.c.extras["prices"].priced(slot, self.c.extras["forecasts"].current())
@@ -91,11 +94,16 @@ class InverterService:
         fresh = all(
             _updated(states[k]) is not None and (_updated(states[k]) or slot) >= slot for k in ("p_batt", "p_grid")
         )
+        row, plan = await self.c.extras["publish"].current_row(now)
         if fresh and values["p_batt"] is not None and values["p_grid"] is not None:
             return PlanValues(
-                values["p_batt"], values["p_grid"], values["p_pv"] or 0.0, values["p_pv_curtailment"] or 0.0, export
+                values["p_batt"],
+                values["p_grid"],
+                values["p_pv"] or 0.0,
+                values["p_pv_curtailment"] or 0.0,
+                export,
+                soc_of(row),
             ), "EMHASS sensors (sensor.p_*)"
-        row, plan = await self.c.extras["publish"].current_row(now)
         generated = parse_iso(plan["generated_at"]) if plan else None
         max_age = timedelta(minutes=15 * self.c.settings.current.health.plan_max_age_slots)
         if row is None or generated is None or now - generated > max_age:
@@ -106,6 +114,7 @@ class InverterService:
             float(row.get(ROW_KEYS["p_pv"]) or 0.0),
             float(row.get(ROW_KEYS["p_pv_curtailment"]) or 0.0),
             export,
+            soc_of(row),
         ), "stored EMHASS plan (the sensors weren't updated for this slot yet)"
 
     def observed(self) -> Observed:
@@ -189,8 +198,8 @@ class InverterService:
         blocked = self.preconditions()
         if blocked:
             raise RunRefused(f"Not in control: {blocked}")
-        writer.check_limits(decision.targets, decision.feedin_max_w)
-        result = await writer.commit(ctx, owner="plan", targets=decision.targets, feedin_w=decision.feedin_max_w)
+        writer.check_limits(decision.targets, decision.feedin_target)
+        result = await writer.commit(ctx, owner="plan", targets=decision.targets, feedin_w=decision.feedin_target)
         wrote = result.wrote_passive or result.wrote_feedin
         self.last_apply = {"slot": iso(slot_floor(now)), "run_id": ctx.run.id, "ok": result.ok, "wrote": wrote}
         if not result.ok:
@@ -253,7 +262,7 @@ class InverterService:
         if not self.c.extras["ha"].connected or self.preconditions():
             return  # not ours to correct: a market session, another inverter mode, the enable switch off
         if self.applied_this_slot() and self.last_decision is not None:
-            result = compare_targets(self.last_decision.targets, self.last_decision.feedin_max_w, self.observed())
+            result = compare_targets(self.last_decision.targets, self.last_decision.feedin_target, self.observed())
             differing = {
                 r["field"]: (r["observed"], r["decided"])
                 for r in result["fields"]
@@ -306,7 +315,7 @@ class InverterService:
 
 def describe(decision: Decision) -> str:
     t = decision.targets
-    feed = f"feed-in {decision.feedin_max_w} W"
+    feed = f"feed-in {decision.feedin_max_w} W" if decision.feedin_needed else "feed-in unchanged"
     if t is None:
         return f"no passive-mode change ({decision.why}); {feed}"
     return (

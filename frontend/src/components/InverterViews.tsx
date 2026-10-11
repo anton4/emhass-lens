@@ -80,7 +80,9 @@ export function DecisionView({
                 {FIELD_LABELS.feedin_max_w}
                 <div className="cell-sub">{decision.feedin_why}</div>
               </td>
-              <td className="num">{fieldValue('feedin_max_w', decision.feedin_max_w)}</td>
+              <td className="num">
+                {decision.feedin_needed === false ? 'unchanged' : fieldValue('feedin_max_w', decision.feedin_max_w)}
+              </td>
               {observedBefore && <td className="num">{fieldValue('feedin_max_w', observedBefore.feedin_max_w)}</td>}
             </tr>
           </tbody>

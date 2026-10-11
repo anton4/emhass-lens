@@ -101,12 +101,69 @@ def test_live_applies_and_reads_back(tmp_path: Path, world: World) -> None:
         assert run["outcome"] == "ok", run
         services = [s[0] for s in world.ha_services]
         decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
-        feedin_changed = decision["feedin_max_w"] != 15500
+        feedin_changed = decision["feedin_needed"] and decision["feedin_max_w"] != 15500
         assert services.count("number/set_value") == 3 + feedin_changed  # passive mode (3) + feed-in if it changed
         assert "button/press" in services
         assert world.ha_states["number.sofar_passive_mode_grid_power"]["state"] == "5600.0"
         readback = client.get(f"/api/runs/{run['id']}/artifacts/readback").json()
         assert readback["agree"] is True
+    finally:
+        client.__exit__(None, None, None)
+
+
+FEEDIN = "number.sofar_feedin_max_power"
+FEEDIN_BUTTON = "button.sofar_feedin_limitation_mode"
+
+
+def block_export(client: TestClient, world: World, at_or_below: float) -> None:
+    rev = client.get("/api/settings").json()["revision"]
+    changes = {"emhass": {"mpc": {"no_export_at_or_below": at_or_below}}}
+    assert client.patch("/api/settings", json={"base_revision": rev, "changes": changes}).status_code == 200
+    prime(client, world)
+
+
+def plan_slot(world: World, g: float, b: float, pv: float, c: float = 0.0) -> None:
+    for name, value in (("p_grid", g), ("p_batt", b), ("p_pv", pv)):
+        world.set_state(f"sensor.{name}_forecast", value)
+    world.set_state("sensor.p_pv_curtailment", c)
+
+
+def test_live_leaves_the_feedin_limit_alone_when_nothing_can_reach_the_grid(tmp_path: Path, world: World) -> None:
+    plan_slot(world, 563, 87, 307)  # run 1817: importing at 08:15 with little PV
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        block_export(client, world, 1.0)  # every slot's export price is "cheap": the limit would be 0 W
+        set_mode(client, world, "live")
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        assert run["summary"].endswith("feed-in unchanged"), run["summary"]
+        decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
+        assert decision["feedin_max_w"] == 0 and decision["feedin_needed"] is False
+        touched = [s[1].get("entity_id") for s in world.ha_services]
+        assert FEEDIN not in touched and FEEDIN_BUTTON not in touched
+        assert world.ha_states[FEEDIN]["state"] == "15500"
+        readback = client.get(f"/api/runs/{run['id']}/artifacts/readback").json()
+        assert readback["agree"] is True and "feedin_max_w" not in [f["field"] for f in readback["fields"]]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_live_writes_the_feedin_limit_when_the_plan_curtails_pv(tmp_path: Path, world: World) -> None:
+    plan_slot(world, 0, 0, 5000, c=400)
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        block_export(client, world, 1.0)
+        set_mode(client, world, "live")
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        assert "feed-in 0 W" in run["summary"]
+        touched = [s[1].get("entity_id") for s in world.ha_services]
+        assert FEEDIN in touched and FEEDIN_BUTTON in touched
+        assert float(world.ha_states[FEEDIN]["state"]) == 0
     finally:
         client.__exit__(None, None, None)
 
@@ -175,6 +232,27 @@ def test_a_changed_register_is_set_back_after_it_is_seen_twice(tmp_path: Path, w
         assert float(world.ha_states[GRID]["state"]) == target
         status = client.get("/api/inverter").json()["drift"]
         assert status["enabled"] is True and status["corrections_1h"] == 1 and status["fighting"] is None
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_feedin_limit_that_wasnt_written_is_not_drift(tmp_path: Path, world: World) -> None:
+    plan_slot(world, 563, 87, 307)
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        block_export(client, world, 1.0)
+        set_mode(client, world, "live")
+        clock.set(SLOT_START)
+        assert run_job(client, "inverter.decide")["outcome"] == "ok"
+        world.set_state(FEEDIN, 8000)  # something else changed it; the slot doesn't need the limit
+        prime(client, world)
+        for _ in range(3):
+            clock.advance(130)
+            run_job(client, "inverter.verify")
+        assert drift_runs(client) == []
+        assert float(world.ha_states[FEEDIN]["state"]) == 8000
     finally:
         client.__exit__(None, None, None)
 

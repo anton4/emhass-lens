@@ -918,6 +918,17 @@ class InverterLimits(Section):
         title="Force charge: grid target margin",
         json_schema_extra=ui(unit="W"),
     )
+    battery_full_soc_pct: int = Field(
+        default=90,
+        ge=50,
+        le=100,
+        title="Battery counts as nearly full at",
+        description="The feed-in limit is only written when something can reach the grid: the plan exports, "
+        "curtails PV, or has PV to spare while its state of charge for the slot is at or above this. Below it the "
+        "battery takes the spare PV, so the limit is left as it is (every press of the feed-in button is an EEPROM "
+        "write).",
+        json_schema_extra=ui(unit="%"),
+    )
 
 
 class Inverter(Section):

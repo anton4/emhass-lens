@@ -2403,6 +2403,7 @@ export interface components {
             /**
              * Limits and thresholds
              * @default {
+             *       "battery_full_soc_pct": 90,
              *       "battery_max_w": 20000,
              *       "battery_min_w": -20000,
              *       "export_max_w": 15500,
@@ -2479,6 +2480,12 @@ export interface components {
         };
         /** InverterLimits */
         InverterLimits: {
+            /**
+             * Battery counts as nearly full at
+             * @description The feed-in limit is only written when something can reach the grid: the plan exports, curtails PV, or has PV to spare while its state of charge for the slot is at or above this. Below it the battery takes the spare PV, so the limit is left as it is (every press of the feed-in button is an EEPROM write).
+             * @default 90
+             */
+            battery_full_soc_pct: number;
             /**
              * Battery charge max
              * @description The top of the passive battery window. Sofar counts charging as positive, the opposite of EMHASS's P_batt.
@@ -4191,6 +4198,7 @@ export interface components {
              *         "state_select": "input_select.emhass_passive_state"
              *       },
              *       "limits": {
+             *         "battery_full_soc_pct": 90,
              *         "battery_max_w": 20000,
              *         "battery_min_w": -20000,
              *         "export_max_w": 15500,

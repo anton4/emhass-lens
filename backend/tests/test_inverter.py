@@ -9,8 +9,10 @@ L = InverterLimits()
 LOW = 0.03  # Settings → EMHASS → MPC "No export at or below", the automation's threshold
 
 
-def v(g: float, b: float, pv: float = 0.0, c: float = 0.0, price: float | None = 0.05) -> PlanValues:
-    return PlanValues(p_batt=b, p_grid=g, p_pv=pv, p_pv_curtailment=c, export_price=price)
+def v(
+    g: float, b: float, pv: float = 0.0, c: float = 0.0, price: float | None = 0.05, soc: float | None = None
+) -> PlanValues:
+    return PlanValues(p_batt=b, p_grid=g, p_pv=pv, p_pv_curtailment=c, export_price=price, soc=soc)
 
 
 @pytest.mark.parametrize(
@@ -86,6 +88,41 @@ def test_unknown_export_price_is_noted() -> None:
 )
 def test_feedin_limit(values, feedin) -> None:
     assert decide(values, L, LOW).feedin_max_w == feedin
+
+
+@pytest.mark.parametrize(
+    ("values", "needed", "why"),
+    [
+        # run 1817: importing at 08:15 with little PV, the battery at 73 %
+        (v(563, 87, pv=307, price=0.0229, soc=0.73), False, "left as it is: no PV to spare (PV 307 W, house 957 W)"),
+        (v(-3000, 6000, price=0.05, soc=0.6), True, "written: the plan exports 3000 W"),
+        (v(0, 0, pv=5000, c=400, price=0.02, soc=1.0), True, "written: the plan curtails 400 W of PV"),
+        (v(0, -3000, pv=4500, price=0.02, soc=0.7), False, "left as it is: the battery takes the spare 3000 W (70%"),
+        (v(0, -3000, pv=4500, price=0.02, soc=0.95), True, "written: 3000 W of PV to spare with the battery nearly"),
+        (v(0, -3000, pv=4500, price=0.02), True, "state of charge is unknown"),
+        (v(3000, -2500, price=0.02, soc=0.97), False, "no PV to spare"),  # charging from the grid
+        (v(50, -120, pv=1570, price=0.02, soc=0.95), False, "no PV to spare"),  # 70 W spare is within the band
+    ],
+)
+def test_the_feedin_limit_is_only_written_when_something_can_reach_the_grid(values, needed, why) -> None:
+    d = decide(values, L, LOW)
+    assert d.feedin_needed is needed
+    assert why in d.feedin_why
+    assert d.feedin_target == (d.feedin_max_w if needed else None)
+
+
+def test_the_nearly_full_threshold_is_a_setting() -> None:
+    spare = v(0, -3000, pv=4500, price=0.02, soc=0.85)
+    assert decide(spare, L, LOW).feedin_needed is False  # default 90 %
+    assert decide(spare, InverterLimits(battery_full_soc_pct=80), LOW).feedin_needed is True
+
+
+def test_a_feedin_limit_that_isnt_written_isnt_judged() -> None:
+    d = decide(v(563, 87, pv=307, price=0.0229, soc=0.73), L, LOW)
+    assert d.feedin_max_w == 0 and d.feedin_needed is False
+    result = compare(d, Observed("Use only grid power", 0.0, 20000.0, 0.0, 15500.0))
+    assert result["agree"] is True
+    assert "feedin_max_w" not in [f["field"] for f in result["fields"]]
 
 
 def test_compare_reports_each_field() -> None:

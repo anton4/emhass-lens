@@ -99,10 +99,16 @@ describe('rules', () => {
 
   it('says export is never blocked when "No export at or below" is empty', () => {
     expect(rules(undefined, null).find((r) => r.id === 'self_use_pv_export')?.when).toContain('never blocked')
-    expect(feedinRules(undefined, null)).toEqual([
+    expect(feedinRules(undefined, null)[0]).toBe(
       '15500 W (the export maximum) in every slot: "No export at or below" is empty',
-    ])
+    )
     expect(feedinRules(undefined, 0.03)[0]).toContain('at or below 0.03 €/kWh')
+  })
+
+  it('says the limit is only written when something can reach the grid', () => {
+    const [written] = feedinRules(undefined, 0.03).slice(-1)
+    expect(written).toContain('Written only when something can reach the grid')
+    expect(written).toContain('at or above 90 %')
   })
 })
 
