@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.6
 
 - Run pages of EMHASS MPC and cost-function comparison runs show a **Pipeline**: building the payload, each EMHASS call (the compared cost functions, the live one with EMHASS's own stages and solve time) and reading back, as bars on one time axis, with the step that failed marked. Older runs show it too, placed from when each call ended. Other jobs are a single step and show none.
 - Each EMHASS call now records when it was sent, so the pipeline is exact for new runs.
