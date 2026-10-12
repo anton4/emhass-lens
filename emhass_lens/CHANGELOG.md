@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.16
+
+- Inputs: the price chart and the price breakdown are one Prices section, the breakdown right under the prices on the same time axis (every day loaded, not one day at a time). Point at either and both show a popup for that quarter-hour: import, export and spot with Nord Pool or the forecast's source, and spot, fees, network and VAT with the rate and the import price under a rule.
+- Inputs: **All days**, **Yesterday**, **Today** and **Tomorrow** zoom both charts together and pick the day of the table; drag to zoom in, double-click to see every day again.
+- Inputs: the breakdown is in the Plan page's violets (fees, network and VAT from light to deep, spot grey), with the import price as a line on top. Prices show 3 decimals in €/kWh.
+
 ## 0.4.15
 
 - Plan: point at a chart and every chart shows a popup at that moment with each line's value, instead of the legend under it changing. It names the quarter-hour and whether it is measured or plan; for prices whether it is Nord Pool's or a forecast, and whose (for example "Forecast (eupowerprices.com)").
