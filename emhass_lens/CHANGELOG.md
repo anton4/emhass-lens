@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.20
+
+- Runs: the job and outcome filters each open a list where you tick any number of jobs or outcomes. **Include** shows only the ticked ones and **Exclude** hides them, for example every job but the heartbeat, or every outcome but OK and Nothing to do. The jobs are listed A–Z. Links to one job (`?job=emhass.mpc`) still work.
+- API: `GET /api/runs` takes `job` and `outcome` more than once, and `not_job` and `not_outcome` to leave runs out.
+
 ## 0.4.19
 
 - Market: with Qilowatt market control on **Shadow**, EMHASS Lens holds off the inverter while the automation runs a session and re-applies the plan the moment it ends, with at most one inverter write. It follows the market's *Session state select*, so there is nothing to turn on under Market session hold. Before, the feed-in limit a sell session left behind stayed until the drift check set it back a minute or two later.
