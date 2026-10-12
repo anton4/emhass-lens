@@ -37,6 +37,29 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: local times for button entities in Settings; the HACS settings import is removed (0.4.22)
+- **Timestamps:**
+  - The owner saw `2026-10-12T10:15:02.322394+00:00` beside the Sofar feed-in and apply buttons in Settings → Inverter
+    control. A Home Assistant button's state is the UTC time of its last press, and the entity picker printed it raw.
+  - `entityReading()` (`lib/entities.ts`) now formats states from the `button`, `input_button`, `scene`, `event` and
+    `datetime` domains, and sensors with `device_class: timestamp`. It uses the App's timezone (`status.timezone`, the
+    same as the Plan page's "Times in"), and buttons read "pressed …".
+- **EV charger audit:**
+  - The start and stop buttons in Settings had the same display bug, and the same fix covers them.
+  - The Charger page's own times already used the App's timezone.
+  - The backend only presses the charger buttons. Sofar's `_pressed_at()` parses the state with its offset, so the
+    cool-down math was right.
+- **HACS import removed** (the owner's choice, "step, card and backend"): the Getting started step, the Health card
+  and jump link, `/api/legacy/preview`, `/api/legacy/import` and `services/legacy_import.py`.
+  - Revisions saved by the import keep their label in Settings → History.
+  - DOCS and `RETIRING_HACS.md` now say to enter the tariffs under Settings.
+- **Answered (no change):**
+  - ML tune and ML predict run only on demand.
+  - Every MPC run predicts with the model (`load_forecast_method: mlforecaster`).
+  - Fit runs automatically: nightly after the first live MPC run from 03:00, and on a model fault at most every 6 h.
+- **Checked** with unit tests. Look at Settings → Inverter control and Settings → EV charger on the real HA after the
+  release.
+
 ### 2026-10-12: one day-strip mark per stretch of the same decision on the Market and EV charger pages (0.4.21)
 - **Why:** the owner found that on the Market page's "Today, decision by decision" the hover outline moved around
   inside what looked like one block, unlike the Inverter page.

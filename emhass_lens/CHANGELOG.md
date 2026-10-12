@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.22
+
+- Settings: a button entity shows when it was last pressed in the App's timezone, e.g. "pressed Mon, Oct 12, 13:15:02". Before, it showed Home Assistant's UTC time as stored (`2026-10-12T10:15:02.322394+00:00`), three hours off in Tallinn's summer. This covers the inverter's apply and feed-in buttons, the EV charger's start and stop buttons, and timestamp sensors.
+- Health: the HACS settings import is gone. That is the *Settings imported from the HACS integration* step under Getting started, the *Import from the HACS integration* card, and the `/api/legacy/preview` and `/api/legacy/import` endpoints. Enter tariffs under Settings → Prices and the API key under Settings → Price forecast.
+
 ## 0.4.21
 
 - Inverter: when export is allowed, a feed-in limit that already lets out what can reach the grid is kept instead of being rewritten to the export max. That covers the plan's export or spare PV, rounded up to 100 W. A limit a market sell session left behind (e.g. 3000 W against 2770 W of spare PV) no longer costs a feed-in button press, and the drift check doesn't set it back. A lower limit is still set to the export max. Cheap slots still get 0 W, and slots where the plan curtails PV get the export max.
