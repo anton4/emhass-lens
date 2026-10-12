@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.12
+
+- Inverter: **Force charge** sets the grid target to the import max (Grid import max, 18800 W by default) in every slot, and the battery limits its own charge. Before, the target followed the plan's P_grid below 9000 W, so two Force charge slots in a row pressed the apply button again just to change the grid power (02:00 set 18800 W, 02:15 set 4800 W), and every press is an EEPROM write on the Sofar. Back-to-back Force charge slots now write nothing ("Already set"). The battery may charge faster than the plan in a slot where the plan wanted only a little; the next quarter-hour's plan starts from the real state of charge. To follow the plan's P_grid like the automation, turn off **Force charge at the import max** under Settings → Inverter control → Limits and thresholds.
+
 ## 0.4.11
 
 - Inverter: **Today, slot by slot** is coloured by the passive state each slot set, so you can see where the mode changes: force charge blue, use only grid power slate, self-use lavender (dotted where export is restricted), charge battery and export striped, PV export aqua and force discharge orange. Slots where EMHASS Lens wasn't in control (for example an mFRR session) are hatched. A key above the strip counts the slots per state. In live mode the strip used to be all grey, because only dry run compares with the automation.
