@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.14
+
+- The pages are tabs under the top bar again, instead of a sidebar, so every page gets the full width (the content may now be up to 1440 px wide). The tabs keep their groups (a thin line between them), the "exp" tags and Health's problem count; on a phone they scroll sideways. The update link moved next to the name.
+- Plan: **This slot** is redesigned as a flow: PV at the top, the grid on the left, the battery on the right, the house and the EV below, with lines as thick as the power that point the way it flows. A line at the top says what happens ("Charging the battery from the grid"), next to the inverter's passive mode in its Inverter-page colour and an "as planned" or amber "Battery and grid differ from the plan" chip; when reality differs, the plan's own line follows ("Plan: the battery covers the house").
+- Plan: what is measured is now the big number in each box, and the plan the line under it ("plan 12.69 kW"). Each box shows how long ago its sensor last changed, and the panel's title when the page last read the values; it reads them every 10 seconds, and at once when a plan is published or the inverter or charger acts. The EV box shows the charger's power while it charges (its current limit) and its state.
+- Plan: beside the flow, the battery's state of charge with the plan's range for the slot as a bracket and EMHASS's minimum state of charge hatched, and the slot's prices with where the import price sits among today's ("cheap for today").
+
 ## 0.4.13
 
 - Inverter: one battery minimum for every mode that may discharge. **Battery min while force charging** (−3000 W) and **Battery min while exporting PV** (−16000 W) are gone; Force charge and Self-use PV and export excess to grid now use **Battery discharge max (negative)** (−20000 W by default) like the other modes. Use only grid power still keeps 0 (it may charge, not discharge). In Force charge the grid target is the import max, so the battery only discharges to hold the grid at 18.8 kW when the house uses more than that plus PV; in Self-use PV and export the battery only covers a house load above the PV. The first Force charge slot after the update writes the new minimum once. Your stored settings are migrated automatically.
