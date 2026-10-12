@@ -1,7 +1,7 @@
 // The Plan page's this slot: what is measured now next to the plan, and what the inverter is set to.
 
-import type { ChargerNow, InverterNow, NowQuantity } from '../api/types'
-import { batteryDirection, formatFraction, formatPower, gridDirection, isNumber } from './units'
+import type { InverterNow, NowQuantity } from '../api/types'
+import { batteryDirection, formatPower, isNumber } from './units'
 
 export type NowByKey = Partial<Record<'batt' | 'grid' | 'pv' | 'load' | 'soc', NowQuantity>>
 
@@ -11,18 +11,6 @@ export function byKey(quantities: NowQuantity[] | null | undefined): NowByKey {
   return out
 }
 
-/** "now 0.12 kW discharging", "now 312 W", "now 92.3 %"; for a slot that has ended (`past`) its quarter-hour mean,
- *  "measured 0.12 kW discharging". Null when nothing is measured. */
-export function measuredText(q: NowQuantity | undefined, past = false): string | null {
-  if (!q || !isNumber(q.measured)) return null
-  const v = q.measured
-  const word = past ? 'measured' : 'now'
-  if (q.key === 'soc') return `${word} ${formatFraction(v)}`
-  if (q.key === 'batt') return `${word} ${formatPower(Math.abs(v))} ${batteryDirection(v).toLowerCase()}`
-  if (q.key === 'grid') return `${word} ${formatPower(Math.abs(v))} ${gridDirection(v).toLowerCase()}`
-  return `${word} ${formatPower(v)}`
-}
-
 /** "expected 744 W discharging with the house load and PV now" for the battery; null otherwise. */
 export function expectedText(q: NowQuantity | undefined, past = false): string | null {
   if (!q || q.key !== 'batt' || !isNumber(q.expected)) return null
@@ -30,15 +18,7 @@ export function expectedText(q: NowQuantity | undefined, past = false): string |
   return `expected ${formatPower(Math.abs(q.expected))} ${batteryDirection(q.expected).toLowerCase()} with ${given}`
 }
 
-/** Hover text: what the battery is expected to do, which sensor, and how old its value is (or that it is a mean). */
-export function measuredTitle(q: NowQuantity | undefined, past = false): string | undefined {
-  if (!q?.entity) return undefined
-  const age = isNumber(q.age_s) ? `, ${q.age_s < 90 ? `${Math.round(q.age_s)} s` : `${Math.round(q.age_s / 60)} min`} old` : ''
-  const expected = expectedText(q, past)
-  return `${expected ? `${expected} · ` : ''}${past ? 'quarter-hour mean of ' : ''}${q.entity}${age}`
-}
-
-/** The pieces of the "Inverter set to" strip. */
+/** The pieces of the "Inverter set to" line. */
 export function inverterParts(inv: InverterNow): string[] {
   const parts: string[] = []
   const mode = [inv.charger_mode, inv.state].filter(Boolean).join(' · ')
@@ -50,13 +30,4 @@ export function inverterParts(inv: InverterNow): string[] {
   }
   if (isNumber(inv.feedin_max_w)) parts.push(`feed-in limit ${formatPower(inv.feedin_max_w)}`)
   return parts
-}
-
-/** The EV charger as the deferrable tile's second line. */
-export function chargerText(ch: ChargerNow | null | undefined): string | null {
-  if (!ch) return null
-  if (ch.state_raw === 0) return 'EV unplugged'
-  if (ch.state_raw === 4) return `EV charging at ${isNumber(ch.current_limit_a) ? ch.current_limit_a : '?'} A`
-  if (ch.state_raw === null || ch.state_raw === undefined || ch.state_raw < 0) return 'EV charger state unknown'
-  return 'EV plugged in, not charging'
 }

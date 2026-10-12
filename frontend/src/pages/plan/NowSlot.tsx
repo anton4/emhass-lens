@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { usePlanNow } from '../../api/queries'
-import type { PlanRow } from '../../api/types'
-import { LabelledLamp } from '../../components/Lamp'
+import type { PlanPrice, PlanRow } from '../../api/types'
 import { ErrorNotice } from '../../components/PageHead'
 import { formatClock, formatSlot } from '../../lib/format'
-import { byKey, chargerText, inverterParts } from '../../lib/planNow'
+import { byKey } from '../../lib/planNow'
 import { ThisSlot } from './ThisSlot'
 
 type Which = 'prev' | 'now' | 'next'
@@ -16,10 +15,19 @@ const NO_PLAN: Record<Which, string> = {
   next: 'No stored plan covers the next quarter-hour yet.',
 }
 
-/** The plan row in force for this quarter-hour (or the previous or next one), each tile with what is measured (now,
- * or the quarter-hour mean for the slot that has ended), and what the inverter is set to: plan and reality side by
- * side. */
-export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; now: Date }) {
+/** The plan row in force for this quarter-hour (or the previous or next one) as a flow: what is measured now (or the
+ *  quarter-hour means for the slot that has ended) with the plan under it, and what the inverter is set to. */
+export function NowSlot({
+  columns,
+  prices,
+  tz,
+  now,
+}: {
+  columns: string[]
+  prices: PlanPrice[]
+  tz: string
+  now: Date
+}) {
   const planNow = usePlanNow()
   const [which, setWhich] = useState<Which>('now')
   const d = planNow.data
@@ -30,8 +38,10 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
   const measured = byKey(quantities)
   const anyMeasured = (quantities ?? []).some((q) => q.measured !== null && q.measured !== undefined)
   const anySensor = (quantities ?? []).some((q) => q.entity)
-  const inv = d?.inverter
   const isNow = which === 'now'
+  const fetchedAt = planNow.dataUpdatedAt
+  // the state of charge starts where the slot before ended
+  const fromRow = (which === 'now' ? d?.prev_row : which === 'next' ? d?.row : undefined) as PlanRow | null | undefined
   return (
     <section className="panel">
       <div className="panel-head">
@@ -41,6 +51,13 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
             <span className="muted">
               {formatClock(start, tz)}–{formatClock(end, tz)}
               {isNow && d?.published_at && <> · published {formatClock(d.published_at, tz)}</>}
+              {which === 'prev' && anyMeasured && <> · quarter-hour means</>}
+              {isNow && fetchedAt > 0 && (
+                <span title="When this page last read the sensors, the plan and the inverter; it reads them every 10 s">
+                  {' '}
+                  · read {formatClock(new Date(fetchedAt).toISOString(), tz)}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -62,13 +79,22 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
       </div>
       <div className="panel-body">
         <ErrorNotice error={planNow.error} />
-        {row ? (
+        {row && start ? (
           <ThisSlot
             row={row}
+            fromRow={fromRow}
             columns={columns}
             now={which === 'next' ? undefined : measured}
-            charger={isNow ? chargerText(d?.charger) : null}
             past={which === 'prev'}
+            charger={isNow ? d?.charger : null}
+            inverter={isNow ? d?.inverter : null}
+            plan={isNow ? { generatedAt: d?.plan_generated_at ?? null, runId: d?.plan_run_id ?? null } : undefined}
+            socMin={d?.soc_min}
+            socMax={d?.soc_max}
+            prices={prices}
+            slotStart={start}
+            fetchedAt={fetchedAt}
+            tz={tz}
           />
         ) : (
           d && (
@@ -76,30 +102,6 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
               {NO_PLAN[which]}
             </p>
           )
-        )}
-        {isNow && inv && (
-          <div className="inverter-strip">
-            <LabelledLamp
-              color={inv.in_control ? 'green' : 'amber'}
-              text={inv.in_control ? 'Inverter set to' : 'Inverter not in control'}
-            />
-            {inv.in_control ? (
-              inverterParts(inv).map((part) => <span key={part}>{part}</span>)
-            ) : (
-              <span>{inv.reason}</span>
-            )}
-            {inv.written_at && (
-              <span className="muted">
-                written {formatClock(inv.written_at, tz)}
-                {inv.run_id && (
-                  <>
-                    {' · '}
-                    <Link to={`/runs/${inv.run_id}`}>run #{inv.run_id}</Link>
-                  </>
-                )}
-              </span>
-            )}
-          </div>
         )}
         {which !== 'next' && measured.batt?.sign_hint && (
           <div className="notice" data-color="amber" role="note">
@@ -122,11 +124,12 @@ export function NowSlot({ columns, tz, now }: { columns: string[]; tz: string; n
           (anyMeasured ? (
             <details className="chart-note more">
               <summary>How “now” is judged</summary>
-              “now” comes from the sensors under{' '}
-              <Link to="/settings?section=measurements">Settings → Measurements</Link>. House load and PV are forecasts
-              and aren't judged. The battery is compared with what the plan means for the load and PV now, the grid with
-              the plan; an amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from where the plan
-              expects it now).
+              The big numbers come from the sensors under{' '}
+              <Link to="/settings?section=measurements">Settings → Measurements</Link>, the plan is the line under
+              them, and the time next to a name is how long ago that sensor last changed. House load and PV are
+              forecasts and aren't judged. The battery is compared with what the plan means for the load and PV now,
+              the grid with the plan; an amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from
+              where the plan expects it now). The EV's power is its charger's current limit while it charges.
             </details>
           ) : (
             <p className="chart-note">

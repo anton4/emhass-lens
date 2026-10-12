@@ -141,7 +141,7 @@ export function usePlan() {
 
 /** The plan row in force for this quarter, what is measured now and what the inverter is set to. */
 export function usePlanNow() {
-  return useQuery({ queryKey: keys.planNow, queryFn: () => api.get<PlanNow>('/api/plan/now'), refetchInterval: 15_000 })
+  return useQuery({ queryKey: keys.planNow, queryFn: () => api.get<PlanNow>('/api/plan/now'), refetchInterval: 10_000 })
 }
 
 /** Both databases: sizes, budgets, tables, the last cleanup and compaction, backups and restores. */

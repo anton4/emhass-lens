@@ -466,6 +466,7 @@ class InverterNow(BaseModel):
 class ChargerNow(BaseModel):
     current_limit_a: float | None = None
     state_raw: int | None = None
+    power_w: float | None = None  # while charging its current limit in W (charger.limits.w_per_amp), else 0
 
 
 class PlanNow(BaseModel):
@@ -485,6 +486,8 @@ class PlanNow(BaseModel):
     quantities: list[NowQuantity]
     inverter: InverterNow | None = None
     charger: ChargerNow | None = None
+    soc_min: float | None = None  # EMHASS's battery_minimum_state_of_charge, 0–1
+    soc_max: float | None = None  # EMHASS's battery_maximum_state_of_charge, 0–1
 
 
 class PlannedValues(BaseModel):

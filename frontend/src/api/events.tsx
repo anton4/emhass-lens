@@ -84,14 +84,17 @@ export function EventsProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({ queryKey: keys.market })
           } else if (name === 'inverter') {
             void queryClient.invalidateQueries({ queryKey: keys.inverter })
+            void queryClient.invalidateQueries({ queryKey: keys.planNow })
           } else if (name === 'charger') {
             void queryClient.invalidateQueries({ queryKey: keys.charger })
+            void queryClient.invalidateQueries({ queryKey: keys.planNow })
           } else if (name === 'market') {
             void queryClient.invalidateQueries({ queryKey: keys.market })
             void queryClient.invalidateQueries({ queryKey: keys.marketSessions })
             void queryClient.invalidateQueries({ queryKey: keys.inverter })
           } else if (name === 'plan') {
             void queryClient.invalidateQueries({ queryKey: keys.plan })
+            void queryClient.invalidateQueries({ queryKey: keys.planNow })
             void queryClient.invalidateQueries({ queryKey: ['plan-history'] })
           } else if (name === 'costfun') {
             void queryClient.invalidateQueries({ queryKey: keys.costfun })

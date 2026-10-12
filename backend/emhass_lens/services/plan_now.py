@@ -68,7 +68,17 @@ def charger_now(c: Container) -> dict[str, Any] | None:
     if charger is None or charger.mode == "off":
         return None
     observed = charger.observed()
-    return {"current_limit_a": observed.current_limit_a, "state_raw": observed.state_raw}
+    return {"current_limit_a": observed.current_limit_a, "state_raw": observed.state_raw, "power_w": deferrable_now(c)}
+
+
+def soc_limits(c: Container) -> dict[str, float | None]:
+    """EMHASS's battery state-of-charge limits (0–1) from its config: the plan stays between them."""
+    config = c.extras["emhass"].config or {}
+    out: dict[str, float | None] = {}
+    for key, name in (("soc_min", "battery_minimum_state_of_charge"), ("soc_max", "battery_maximum_state_of_charge")):
+        value = config.get(name)
+        out[key] = float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+    return out
 
 
 def deferrable_now(c: Container) -> float | None:
@@ -130,6 +140,7 @@ async def plan_now(c: Container) -> dict[str, Any]:
         "quantities": [],
         "inverter": inverter_now(c),
         "charger": charger_now(c),
+        **soc_limits(c),
     }
     if found is None:
         return out

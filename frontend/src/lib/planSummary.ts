@@ -8,7 +8,7 @@ import { num, rowTime, socOf, SLOT_S } from './plan'
 type Action = 'charge' | 'discharge' | 'idle'
 
 /** Below this the battery counts as idle: EMHASS plans often carry a few watts of numerical noise. */
-const IDLE_W = 100
+export const IDLE_W = 100
 
 function actionOf(row: PlanRow | undefined): Action | null {
   const p = num(row, 'P_batt')

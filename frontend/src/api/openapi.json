@@ -662,6 +662,17 @@
             ],
             "title": "Current Limit A"
           },
+          "power_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power W"
+          },
           "state_raw": {
             "anyOf": [
               {
@@ -5919,6 +5930,28 @@
           "slot_start": {
             "title": "Slot Start",
             "type": "string"
+          },
+          "soc_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Max"
+          },
+          "soc_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Min"
           }
         },
         "required": [

@@ -121,6 +121,7 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         assert inverter["mode"] == "live" and inverter["in_control"] is True
         assert inverter["charger_mode"] == "Passive Mode" and inverter["written_at"] is not None
         assert now["next_start"] == "2026-10-09T11:30:00.000+00:00"
+        assert (now["soc_min"], now["soc_max"]) == (0.05, 1.0)  # EMHASS's config (fixtures/emhass)
         assert now["next_row"] is not None
         assert now["prev_start"] == "2026-10-09T11:00:00.000+00:00"
 

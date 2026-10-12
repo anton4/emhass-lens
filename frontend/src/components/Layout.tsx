@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useRunJob } from '../api/actions'
 import { useStatus, useVersion } from '../api/queries'
 import type { StatusInfo } from '../api/types'
-import { NAV_GROUPS, navLocation, pageForKey } from '../lib/nav'
+import { NAV_GROUPS, pageForKey } from '../lib/nav'
 import { CommandPalette, type PaletteAction } from './CommandPalette'
 import { Icon } from './Icon'
 import { Lamp } from './Lamp'
@@ -90,85 +90,53 @@ function UpdateLink({ status }: { status: StatusInfo | undefined }) {
   return null
 }
 
-function Sidebar({
-  status,
-  open,
-  onNavigate,
-}: {
-  status: StatusInfo | undefined
-  open: boolean
-  onNavigate: () => void
-}) {
+/** The pages as tabs in their groups. On a narrow screen they scroll sideways, and the current one is kept in view. */
+function Tabs({ status }: { status: StatusInfo | undefined }) {
   const problems = status?.problems ?? []
   const severe = problems.some((p) => p.severity === 'error')
-  const version = status?.version ?? UI_VERSION
-  return (
-    <aside className="sidebar" id="sidebar" data-open={open}>
-      <Link to="/" className="brand" onClick={onNavigate}>
-        <span className="brand-mark">
-          <Icon name="brand" size={20} />
-        </span>
-        <span className="brand-name">EMHASS Lens</span>
-        <span className="brand-version">{version === 'dev' ? 'dev' : `v${version}`}</span>
-      </Link>
-      <nav aria-label="Main" className="side-nav">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="nav-group">
-            <div className="nav-group-label">{group.label}</div>
-            {group.pages.map((page) => (
-              <NavLink key={page.to} to={page.to} end={page.to === '/'} className="nav-item" onClick={onNavigate}>
-                <span className="nav-label">{page.label}</span>
-                {page.experimental && <span className="nav-tag">exp</span>}
-                {page.to === '/health' && problems.length > 0 && (
-                  <span
-                    className="nav-count"
-                    data-color={severe ? 'red' : 'amber'}
-                    title={problems.map((p) => p.title).join('\n')}
-                  >
-                    <Lamp color={severe ? 'red' : 'amber'} />
-                    {problems.length}
-                    <span className="visually-hidden">{problems.length === 1 ? ' problem' : ' problems'}</span>
-                  </span>
-                )}
-                {page.key && (
-                  <kbd className="nav-key" aria-hidden="true">
-                    G {page.key.toUpperCase()}
-                  </kbd>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </nav>
-      <div className="sidebar-foot">
-        <UpdateLink status={status} />
-      </div>
-    </aside>
-  )
-}
-
-function Crumbs() {
   const location = useLocation()
-  const run = useMatch('/runs/:id')
-  const { group, page } = navLocation(location.pathname)
+  const nav = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const strip = nav.current
+    const current = strip?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!strip || !current) return
+    const left = current.offsetLeft - strip.offsetLeft
+    if (left < strip.scrollLeft || left + current.offsetWidth > strip.scrollLeft + strip.clientWidth) {
+      strip.scrollLeft = left - (strip.clientWidth - current.offsetWidth) / 2
+    }
+  }, [location.pathname])
+
   return (
-    <div className="crumbs">
-      <span className="crumb-group">{group.label}</span>
-      <span className="crumb-sep" aria-hidden="true">
-        /
-      </span>
-      {run ? (
-        <>
-          <Link to={page.to}>{page.label}</Link>
-          <span className="crumb-sep" aria-hidden="true">
-            /
-          </span>
-          <span className="crumb-here">Run {run.params.id}</span>
-        </>
-      ) : (
-        <span className="crumb-here">{page.label}</span>
-      )}
-    </div>
+    <nav aria-label="Main" className="page-tabs" ref={nav}>
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className="page-tab-group" role="group" aria-label={group.label}>
+          {group.pages.map((page) => (
+            <NavLink
+              key={page.to}
+              to={page.to}
+              end={page.to === '/'}
+              className="page-tab"
+              title={page.key ? `${page.label} (g then ${page.key})` : undefined}
+            >
+              {page.label}
+              {page.experimental && <span className="nav-tag">exp</span>}
+              {page.to === '/health' && problems.length > 0 && (
+                <span
+                  className="nav-count"
+                  data-color={severe ? 'red' : 'amber'}
+                  title={problems.map((p) => p.title).join('\n')}
+                >
+                  <Lamp color={severe ? 'red' : 'amber'} />
+                  {problems.length}
+                  <span className="visually-hidden">{problems.length === 1 ? ' problem' : ' problems'}</span>
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      ))}
+    </nav>
   )
 }
 
@@ -196,14 +164,12 @@ export function Layout() {
   const status = useStatus()
   const version = useVersion()
   const s = status.data
-  const location = useLocation()
   const navigate = useNavigate()
   const runJob = useRunJob()
-  const [menuOpen, setMenuOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const pendingG = useRef<number | null>(null)
-  const { page } = navLocation(location.pathname)
+  const shownVersion = s?.version ?? UI_VERSION
 
   // An App update (different version) or restart (new started_at) means the backend changed under us.
   const initialStart = sessionStartedAt(version.data?.started_at)
@@ -228,7 +194,7 @@ export function Layout() {
     })
   }
 
-  // ⌘K / Ctrl+K opens the palette anywhere; "g" then a letter opens a page; Escape closes the drawer
+  // ⌘K / Ctrl+K opens the palette anywhere; "g" then a letter opens a page
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -236,7 +202,6 @@ export function Layout() {
         setPaletteOpen(true)
         return
       }
-      if (event.key === 'Escape') setMenuOpen(false)
       if (
         event.metaKey ||
         event.ctrlKey ||
@@ -321,27 +286,27 @@ export function Layout() {
 
   return (
     <div className="app">
-      <Sidebar status={s} open={menuOpen} onNavigate={() => setMenuOpen(false)} />
-      {menuOpen && <div className="scrim" aria-hidden="true" onClick={() => setMenuOpen(false)} />}
-      <div className="app-main">
-        <header className="topbar">
-          <button
-            type="button"
-            className="menu-button"
-            aria-expanded={menuOpen}
-            aria-controls="sidebar"
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            <Icon name="menu" />
-            {page.label}
-          </button>
-          <Crumbs />
-          <button type="button" className="palette-button" onClick={() => setPaletteOpen(true)}>
-            <Icon name="search" size={14} />
-            <span className="palette-button-text">Search or jump to…</span>
-            <kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
-          </button>
+      <header className="topbar">
+        <div className="topbar-row">
+          <Link to="/" className="brand">
+            <span className="brand-mark">
+              <Icon name="brand" size={20} />
+            </span>
+            <span className="brand-name">EMHASS Lens</span>
+            <span className="brand-version">{shownVersion === 'dev' ? 'dev' : `v${shownVersion}`}</span>
+          </Link>
+          <UpdateLink status={s} />
           <div className="topbar-status">
+            <button
+              type="button"
+              className="palette-button"
+              aria-label="Search or jump to"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Icon name="search" size={14} />
+              <span className="palette-button-text">Search or jump to…</span>
+              <kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
             {s && <StatusMenu status={s} />}
             {s && <ProblemsChip status={s} />}
             <button
@@ -352,15 +317,16 @@ export function Layout() {
               onClick={runMpc}
             >
               <Icon name="play" size={11} />
-              {runJob.isPending ? 'Starting…' : 'Run MPC now'}
+              <span className="run-mpc-text">{runJob.isPending ? 'Starting…' : 'Run MPC now'}</span>
             </button>
           </div>
-        </header>
-        <BannerSlot banners={banners} />
-        <main>
-          <Outlet />
-        </main>
-      </div>
+        </div>
+        <Tabs status={s} />
+      </header>
+      <BannerSlot banners={banners} />
+      <main>
+        <Outlet />
+      </main>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={actions} />
     </div>
   )

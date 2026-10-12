@@ -1,139 +1,410 @@
-import type { PlanRow } from '../../api/types'
-import { Lamp } from '../../components/Lamp'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
+import type { ChargerNow, InverterNow, NowQuantity, PlanPrice, PlanRow } from '../../api/types'
+import { LabelledLamp, Lamp } from '../../components/Lamp'
+import { useNow } from '../../components/useNow'
+import { modeTone } from '../../lib/inverter'
+import { formatClock } from '../../lib/format'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
-import { measuredText, measuredTitle, type NowByKey } from '../../lib/planNow'
-import { batteryDirection, formatFraction, formatPower, formatPrice, gridDirection } from '../../lib/units'
+import { expectedText, inverterParts, type NowByKey } from '../../lib/planNow'
+import {
+  agreement,
+  flowHeadline,
+  flowNodes,
+  flowSegments,
+  measuredValues,
+  NARROW_FLOW,
+  planValues,
+  priceInDay,
+  segmentBox,
+  shortAge,
+  WIDE_FLOW,
+  type FlowLayout,
+  type FlowNode,
+} from '../../lib/slotFlow'
+import { formatFraction, formatPrice, isNumber } from '../../lib/units'
 
-function Tile({
-  label,
-  value,
-  sub,
+/** How old a sensor's value is now, and its hover text. A slot that has ended shows quarter-hour means instead. */
+function sensorAge(
+  q: NowQuantity | undefined,
+  past: boolean,
+  fetchedAt: number,
+  now: Date,
+  tz: string,
+): { age: string | null; title: string | undefined } {
+  if (!q?.entity) return { age: null, title: undefined }
+  const expected = expectedText(q, past)
+  const prefix = expected ? `${expected} · ` : ''
+  if (past) return { age: null, title: `${prefix}quarter-hour mean of ${q.entity}` }
+  if (!isNumber(q.age_s)) return { age: null, title: `${prefix}${q.entity}` }
+  const changed = fetchedAt - q.age_s * 1000
+  const age = shortAge((now.getTime() - changed) / 1000)
+  return { age, title: `${prefix}${q.entity} last changed at ${formatClock(new Date(changed).toISOString(), tz)}` }
+}
+
+function FlowBox({
+  node,
+  layout,
+  withDeferrable,
+  q,
+  past,
+  fetchedAt,
   now,
-  differs,
-  nowTitle,
-  quantity,
+  tz,
 }: {
-  label: string
-  value: string
-  sub?: string
-  now?: string | null
-  differs?: boolean | null
-  nowTitle?: string
-  /** The quantity's chart colour ("--q-batt"), shown as a swatch next to the label. */
-  quantity?: string
+  node: FlowNode
+  layout: FlowLayout
+  withDeferrable: boolean
+  q: NowQuantity | undefined
+  past: boolean
+  fetchedAt: number
+  now: Date
+  tz: string
 }) {
+  const at = node.key === 'load' && !withDeferrable ? layout.at.loadAlone : layout.at[node.key]
+  const differs = node.measured ? q?.differs : null
+  const { age, title } = sensorAge(q, past, fetchedAt, now, tz)
   return (
-    <div className="tile" data-differs={differs || undefined}>
-      <div className="tile-label">
-        <span className="tile-name">
-          {quantity && <span className="swatch" style={{ background: `var(${quantity})` }} aria-hidden="true" />}
-          {label}
+    <div
+      className="flow-node"
+      data-differs={differs || undefined}
+      data-idle={node.idle || undefined}
+      style={{ left: at.x, top: at.y, width: layout.node.w, height: layout.node.h }}
+    >
+      <div className="flow-node-head">
+        <span className="flow-node-name">
+          <span className="swatch" style={{ background: `var(${node.quantity})` }} aria-hidden="true" />
+          {node.label}
         </span>
-        {differs === true && <Lamp color="amber" label="differs from the plan" />}
-        {differs === false && <Lamp color="green" label="as planned" />}
+        {age && (
+          <span className="flow-node-age" title={title}>
+            {age}
+          </span>
+        )}
+        {typeof differs === 'boolean' && (
+          <Lamp color={differs ? 'amber' : 'green'} label={differs ? 'differs from the plan' : 'as planned'} />
+        )}
       </div>
-      <div className="tile-value">{value}</div>
-      {sub && <div className="cell-sub">{sub}</div>}
-      {now && (
-        <div className="tile-now" title={nowTitle}>
-          {now}
+      <div className="flow-node-value" title={title}>
+        {node.value ?? '—'}
+      </div>
+      {node.direction && <div className="flow-node-dir">{node.direction}</div>}
+      {node.plan && (
+        <div className="flow-node-plan" title={node.plan}>
+          {node.plan}
         </div>
       )}
     </div>
   )
 }
 
-/** A plan row as tiles; with `now`, each tile also shows what is measured and whether that differs (for a slot that
- *  has ended, `past`, the quarter-hour means). */
+function Soc({
+  q,
+  from,
+  to,
+  min,
+  max,
+  past,
+  fetchedAt,
+  now,
+  tz,
+}: {
+  q: NowQuantity | undefined
+  from: number | null
+  to: number | null
+  min: number | null
+  max: number | null
+  past: boolean
+  fetchedAt: number
+  now: Date
+  tz: string
+}) {
+  const actual = isNumber(q?.measured) ? q.measured : null
+  if (actual === null && to === null) return null
+  const pct = (v: number) => formatFraction(v, 0)
+  const planned = to === null ? null : from === null ? `${pct(to)} at the end` : `${pct(from)} → ${pct(to)}`
+  const lo = Math.min(from ?? to ?? 0, to ?? 0)
+  const hi = Math.max(from ?? to ?? 0, to ?? 0)
+  const { age, title } = sensorAge(q, past, fetchedAt, now, tz)
+  const differs = q?.differs === true
+  return (
+    <div className="slot-fact">
+      <div className="slot-fact-label">
+        <span>Battery state of charge</span>
+        {age && <span title={title}>{age}</span>}
+      </div>
+      <div className="slot-fact-row">
+        <span className="slot-fact-value" title={title}>
+          {actual !== null ? formatFraction(actual) : planned}
+        </span>
+        {actual !== null && planned && (
+          <span className="slot-fact-plan" data-differs={differs || undefined}>
+            plan {planned}
+          </span>
+        )}
+      </div>
+      <div
+        className="soc-bar"
+        role="img"
+        aria-label={`State of charge ${actual !== null ? `${formatFraction(actual)}, ` : ''}planned ${planned ?? '—'}`}
+      >
+        <span className="soc-fill" style={{ width: `${(actual ?? to ?? 0) * 100}%` }} />
+        {isNumber(min) && min > 0 && <span className="soc-reserve" style={{ width: `${min * 100}%` }} />}
+        {isNumber(max) && max < 1 && <span className="soc-ceiling" style={{ left: `${max * 100}%` }} />}
+        {to !== null && (
+          <span
+            className="soc-plan"
+            data-differs={differs || undefined}
+            style={{ left: `${lo * 100}%`, width: `max(3px, ${(hi - lo) * 100}%)` }}
+          />
+        )}
+      </div>
+      <div className="slot-scale">
+        <span>0 %</span>
+        {isNumber(min) && min > 0 && <span>reserve {pct(min)}</span>}
+        <span>100 %</span>
+      </div>
+    </div>
+  )
+}
+
+function Price({ row, prices, slotStart, tz }: { row: PlanRow; prices: PlanPrice[]; slotStart: string; tz: string }) {
+  const importPrice = num(row, 'unit_load_cost')
+  const exportPrice = num(row, 'unit_prod_price')
+  if (importPrice === null && exportPrice === null) return null
+  const day = priceInDay(prices, slotStart, importPrice, tz)
+  return (
+    <div className="slot-fact">
+      <div className="slot-fact-label">
+        <span>Price this slot</span>
+      </div>
+      {importPrice !== null && (
+        <div className="slot-fact-row">
+          <span>Import</span>
+          <span className="slot-fact-value">{formatPrice(importPrice)}</span>
+        </div>
+      )}
+      {day && (
+        <>
+          <div className="price-range" role="img" aria-label={`Import price ${day.word}`}>
+            <span className="price-dot" style={{ left: `${day.position * 100}%` }} />
+          </div>
+          <div className="slot-scale">
+            <span>{formatPrice(day.min, 'eur', false)}</span>
+            <span className="slot-scale-word">{day.word}</span>
+            <span>{formatPrice(day.max, 'eur', false)}</span>
+          </div>
+        </>
+      )}
+      {exportPrice !== null && (
+        <div className="slot-fact-row" style={{ marginTop: 10 }}>
+          <span>Export</span>
+          <span className="slot-fact-value">{formatPrice(exportPrice)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A slot as a flow: what is measured (or, for the next slot, planned) as the big numbers, the plan under them,
+ *  a line that says what happens, the state of charge and the price; for this slot also what the inverter is set to. */
 export function ThisSlot({
   row,
+  fromRow,
   columns,
-  now,
-  charger,
+  now: quantities,
   past = false,
+  charger,
+  inverter,
+  plan,
+  socMin,
+  socMax,
+  prices,
+  slotStart,
+  fetchedAt,
+  tz,
 }: {
   row: PlanRow
+  /** The row the slot's state of charge starts from (the slot before's end), when known. */
+  fromRow?: PlanRow | null
   columns: string[]
+  /** What is measured: now, or for a slot that has ended (`past`) the quarter-hour means. None for the next slot. */
   now?: NowByKey
-  charger?: string | null
   past?: boolean
+  charger?: ChargerNow | null
+  inverter?: InverterNow | null
+  /** When the plan in force was made, and by which run. */
+  plan?: { generatedAt: string | null; runId: number | null }
+  socMin?: number | null
+  socMax?: number | null
+  prices: PlanPrice[]
+  slotStart: string
+  fetchedAt: number
+  tz: string
 }) {
-  const batt = num(row, 'P_batt')
-  const grid = num(row, 'P_grid')
-  const curtail = num(row, 'P_PV_curtailment')
+  const clock = useNow(5_000)
+  // the layout follows the room the flow has (not the window): the wide one when it fits, else the narrow one,
+  // scaled down when even that doesn't fit
+  const wrap = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState<number | null>(null)
+  useEffect(() => {
+    const el = wrap.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setRoom(entry!.contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const narrow = room !== null && room < WIDE_FLOW.width
+  const layout = narrow ? NARROW_FLOW : WIDE_FLOW
+  const scale = room !== null ? Math.min(1, room / layout.width) : 1
   const deferrables = deferrableColumns(columns)
-  const loadCost = num(row, 'unit_load_cost')
-  const prodPrice = num(row, 'unit_prod_price')
-  const m = (key: keyof NowByKey) => ({
-    now: measuredText(now?.[key], past),
-    differs: now?.[key]?.differs,
-    nowTitle: measuredTitle(now?.[key], past),
-  })
+  const withDeferrable = deferrables.length > 0
+  const deferrable = withDeferrable ? (charger ? 'EV' : 'Deferrable') : null
+  const planned = planValues(row, columns)
+  const measured = measuredValues(quantities, past ? null : charger)
+  const shown = { ...planned }
+  for (const key of Object.keys(measured) as (keyof typeof measured)[]) shown[key] = measured[key] ?? planned[key]
+  const anyMeasured = Object.values(measured).some((v) => v !== null)
+  const users = charger ? 'the EV' : 'the deferrable load'
+  const headline = flowHeadline(shown, users)
+  const planHeadline = flowHeadline(planned, users)
+  const agree = agreement(quantities)
+  const nodes = flowNodes(planned, measured, { deferrable, curtailed: num(row, 'P_PV_curtailment'), charger })
+  const segments = flowSegments(shown, layout, withDeferrable)
+  const boxes = segments.map((s) => ({ s, ...segmentBox(s, layout) }))
+  const tone = inverter?.in_control && inverter.state ? modeTone(inverter.state) : null
+  const lowerFirst = (text: string) => `${text[0]!.toLowerCase()}${text.slice(1)}`
+
   return (
-    <div className="tiles">
-      {batt !== null && (
-        <Tile
-          label="Battery"
-          quantity="--q-batt"
-          value={formatPower(Math.abs(batt))}
-          sub={batteryDirection(batt)}
-          {...m('batt')}
-        />
+    <div className="slot">
+      <div className="slot-top">
+        {tone && (
+          <span className="slot-mode" title={`The inverter's passive mode: ${tone.state}`}>
+            <span className="slot-mode-swatch" style={{ background: tone.fill }} aria-hidden="true" />
+            {tone.short}
+          </span>
+        )}
+        <span className="slot-headline">{headline}</span>
+        {agree && (
+          <span className="slot-agree" data-color={agree.color}>
+            <Lamp color={agree.color} />
+            {agree.text}
+          </span>
+        )}
+      </div>
+      {(anyMeasured || plan?.generatedAt) && (
+        <p className="slot-line">
+          {anyMeasured && planHeadline !== headline && (
+            <>
+              <strong>Plan:</strong> {lowerFirst(planHeadline)}
+              {plan?.generatedAt && ' · '}
+            </>
+          )}
+          {plan?.generatedAt && (
+            <>
+              planned {formatClock(plan.generatedAt, tz)}
+              {plan.runId && (
+                <>
+                  {' · '}
+                  <Link to={`/runs/${plan.runId}`}>run #{plan.runId}</Link>
+                </>
+              )}
+            </>
+          )}
+        </p>
       )}
-      {grid !== null && (
-        <Tile
-          label="Grid"
-          quantity="--q-grid"
-          value={formatPower(Math.abs(grid))}
-          sub={gridDirection(grid)}
-          {...m('grid')}
-        />
+      {inverter && (
+        <p className="slot-line">
+          <LabelledLamp
+            color={inverter.in_control ? 'green' : 'amber'}
+            text={inverter.in_control ? 'Inverter set to' : 'Inverter not in control:'}
+          />{' '}
+          {inverter.in_control ? inverterParts(inverter).join(' · ') : inverter.reason}
+          {inverter.written_at && (
+            <>
+              {' · '}written {formatClock(inverter.written_at, tz)}
+              {inverter.run_id && (
+                <>
+                  {' · '}
+                  <Link to={`/runs/${inverter.run_id}`}>run #{inverter.run_id}</Link>
+                </>
+              )}
+            </>
+          )}
+        </p>
       )}
-      {num(row, 'P_PV') !== null && (
-        <Tile
-          label="PV"
-          quantity="--q-pv"
-          value={formatPower(num(row, 'P_PV'))}
-          sub={curtail !== null && curtail > 0 ? `${formatPower(curtail)} curtailed` : 'No curtailment'}
-          {...m('pv')}
-        />
-      )}
-      {num(row, 'P_Load') !== null && (
-        <Tile
-          label="House load"
-          quantity="--q-load"
-          value={formatPower(num(row, 'P_Load'))}
-          sub="forecast"
-          {...m('load')}
-        />
-      )}
-      {deferrables.map((c, i) => (
-        <Tile
-          key={c}
-          label={deferrables.length === 1 ? 'Deferrable load' : `Deferrable load ${i + 1}`}
-          quantity="--q-ev"
-          value={formatPower(num(row, c))}
-          sub={(num(row, c) ?? 0) > 0 ? 'Running' : 'Off'}
-          now={i === 0 ? charger : null}
-        />
-      ))}
-      {socOf(row) !== null && (
-        <Tile
-          label="SOC at slot end"
-          quantity="--q-batt"
-          value={formatFraction(socOf(row), 0)}
-          sub="planned"
-          {...m('soc')}
-        />
-      )}
-      {loadCost !== null && (
-        <Tile
-          label="Import price"
-          quantity="--q-import"
-          value={formatPrice(loadCost)}
-          sub={prodPrice !== null ? `export ${formatPrice(prodPrice)}` : undefined}
-        />
-      )}
+      <div className="slot-body">
+        <div className="flow-wrap" ref={wrap} style={{ height: layout.height * scale }}>
+          <div
+            className="flow"
+            data-size={narrow ? 'narrow' : 'wide'}
+            role="group"
+            aria-label={`Where the power goes: ${headline}`}
+            style={{
+              width: layout.width,
+              height: layout.height,
+              ...(scale < 1 && { transform: `scale(${scale})`, margin: 0 }),
+            }}
+          >
+            {boxes.map(({ s, line, idle }) => (
+              <span
+                key={s.key}
+                className="flow-line"
+                data-idle={idle || undefined}
+                data-dir={s.dir}
+                data-flat={s.from[1] === s.to[1] || undefined}
+                style={{ ...line, backgroundColor: idle ? undefined : s.color }}
+                aria-hidden="true"
+              />
+            ))}
+            {boxes.map(({ s, arrow }) =>
+              arrow ? (
+                <span
+                  key={s.key}
+                  className="flow-arrow"
+                  style={{
+                    left: arrow.left,
+                    top: arrow.top,
+                    width: arrow.width,
+                    height: arrow.height,
+                    clipPath: arrow.clip,
+                    background: s.color,
+                  }}
+                  aria-hidden="true"
+                />
+              ) : null,
+            )}
+            <span className="flow-hub" style={{ left: layout.hub.x, top: layout.hub.y }} aria-hidden="true" />
+            {nodes.map((node) => (
+              <FlowBox
+                key={node.key}
+                node={node}
+                layout={layout}
+                withDeferrable={withDeferrable}
+                q={node.key === 'ev' ? undefined : quantities?.[node.key]}
+                past={past}
+                fetchedAt={fetchedAt}
+                now={clock}
+                tz={tz}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="slot-side">
+          <Soc
+            q={quantities?.soc}
+            from={fromRow === undefined ? null : socOf(fromRow)}
+            to={socOf(row)}
+            min={socMin ?? null}
+            max={socMax ?? null}
+            past={past}
+            fetchedAt={fetchedAt}
+            now={clock}
+            tz={tz}
+          />
+          <Price row={row} prices={prices} slotStart={slotStart} tz={tz} />
+        </div>
+      </div>
     </div>
   )
 }

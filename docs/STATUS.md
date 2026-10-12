@@ -37,6 +37,16 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: tabs on top, This slot as a flow with measured values first (0.4.14)
+- **Why:** the owner found the sidebar took too much width inside the HA panel, and the Plan page's seven equal tiles hard to read. Canvas: https://claude.ai/artifact/Q5eFpzfREXZHQQkz3nwpDC. The owner picked nav A (two rows) and This slot A (flow), with two changes: the measured values are the big numbers and the plan the line under them, and the page shows when the values last changed.
+- **Shell** (`components/Layout.tsx`): `Tabs` replaces `Sidebar` and `Crumbs`. The top bar's first row has the brand, the update link, ⌘K, the status chip, problems and Run MPC; the second row has the pages from `lib/nav.ts` as `.page-tab`s in `.page-tab-group`s (`.tabs` is the Run page's tab list). The current tab is scrolled into view on narrow screens. No drawer any more; `navLocation` and the `menu` icon are gone. `main` is up to 1440 px wide.
+- **This slot** (`pages/plan/ThisSlot.tsx`, logic in `lib/slotFlow.ts`):
+  - `planValues` / `measuredValues` (the charger's `power_w` as the EV), `flowHeadline` (from the measured values, falling back to the plan per quantity; the plan's own line is shown when it reads differently), `agreement` (battery, grid, SOC), `flowNodes`, `flowSegments` and `segmentBox` (line thickness 3–16 px for 0–20 kW, arrows in the middle, a dashed hairline below 100 W), `priceInDay`.
+  - Two layouts, `WIDE_FLOW` (720 px) and `NARROW_FLOW` (328 px), picked by the flow's own width (ResizeObserver) and scaled down below 328 px.
+  - Ages: `age_s` plus the query's `dataUpdatedAt`, ticking every 5 s. `usePlanNow` refreshes every 10 s and on plan, inverter and charger events.
+- **Backend:** `PlanNow.soc_min` / `soc_max` from EMHASS's config (`battery_minimum_state_of_charge` / `battery_maximum_state_of_charge`), `ChargerNow.power_w` (`deferrable_now`). Tests in `test_plan_now.py` and `test_charger_service.py`.
+- **Checked** with a mock API at 1280, 900, 390 and 360 px, light and dark, in three situations (night Force charge, midday charge + export with the EV, a slot that differs). Not yet against the real HA.
+
 ### 2026-10-12: one battery min for every mode that may discharge (0.4.13)
 - **Why:** the owner's call, to simplify the settings and the logic.
   - `force_charge_battery_min_w` (−3000) and `export_only_battery_min_w` (−16000) are removed. Force charge and self_use_pv_export use `battery_min_w` (−20000) like the other modes, and use_only_grid keeps 0.

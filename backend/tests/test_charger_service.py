@@ -200,6 +200,25 @@ def test_live_starts_the_car_and_reads_back(tmp_path: Path, world: World) -> Non
         client.__exit__(None, None, None)
 
 
+def test_the_plan_page_shows_the_chargers_power(tmp_path: Path, world: World) -> None:
+    """While charging, the charger's power is its current limit (690 W per A); plugged in but idle, 0 W."""
+    world.set_state(STATE, 4)
+    world.set_state(LIMIT, 8)
+    client = client_for(tmp_path, world, FakeClock(START))
+    try:
+        prime(client, world)
+        assert client.get("/api/plan/now").json()["charger"] == {
+            "current_limit_a": 8.0,
+            "state_raw": 4,
+            "power_w": 8 * 690.0,
+        }
+        world.set_state(STATE, 1)
+        prime(client, world)
+        assert client.get("/api/plan/now").json()["charger"]["power_w"] == 0.0
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_live_refusals(tmp_path: Path, world: World) -> None:
     clock = FakeClock(START)
     client = client_for(tmp_path, world, clock, mode="live", entities={"automation": "automation.ev_charging"})

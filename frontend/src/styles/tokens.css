@@ -6,7 +6,6 @@
  */
 :root {
   --panel: #ffffff;
-  --sidebar: #f3f4f7;
   --surface: #ffffff;
   --surface-sunk: #f6f7f9;
   --surface-hover: #f1f2f4;
@@ -116,7 +115,6 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --panel: #111214;
-    --sidebar: #18191c;
     --surface: #1a1b1e;
     --surface-sunk: #202125;
     --surface-hover: #26272b;

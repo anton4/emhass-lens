@@ -1,24 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV_PAGES, navLocation, pageForKey } from './nav'
-
-describe('navLocation', () => {
-  it('finds the group and page of a path', () => {
-    expect(navLocation('/').page.label).toBe('Plan')
-    expect(navLocation('/').group.label).toBe('Operate')
-    expect(navLocation('/charger').group.label).toBe('Control')
-    expect(navLocation('/settings').page.label).toBe('Settings')
-  })
-
-  it('puts a run under Runs', () => {
-    const where = navLocation('/runs/985')
-    expect(where.page.label).toBe('Runs')
-    expect(where.group.label).toBe('Diagnose')
-  })
-
-  it('falls back to Plan for unknown paths', () => {
-    expect(navLocation('/nowhere').page.to).toBe('/')
-  })
-})
+import { NAV_PAGES, pageForKey } from './nav'
 
 describe('pageForKey', () => {
   it('maps the second key of a "g" shortcut to its page', () => {

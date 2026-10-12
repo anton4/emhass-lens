@@ -180,7 +180,7 @@ export function PlanPage() {
         </div>
       </dl>
 
-      <NowSlot columns={data.columns} tz={tz} now={now} />
+      <NowSlot columns={data.columns} prices={data.prices} tz={tz} now={now} />
 
       <section className="panel">
         <div className="panel-head">

@@ -1375,6 +1375,8 @@ export interface components {
         ChargerNow: {
             /** Current Limit A */
             current_limit_a?: number | null;
+            /** Power W */
+            power_w?: number | null;
             /** State Raw */
             state_raw?: number | null;
         };
@@ -3396,6 +3398,10 @@ export interface components {
             slot_end: string;
             /** Slot Start */
             slot_start: string;
+            /** Soc Max */
+            soc_max?: number | null;
+            /** Soc Min */
+            soc_min?: number | null;
         };
         /** PlanPrice */
         PlanPrice: {
