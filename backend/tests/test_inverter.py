@@ -2,10 +2,10 @@
 
 import pytest
 
-from emhass_lens.domain.inverter import Observed, PlanValues, compare, decide
+from emhass_lens.domain.inverter import Observed, PlanValues, Targets, compare, decide
 from emhass_lens.settings.model import InverterLimits
 
-L = InverterLimits()
+L = InverterLimits(force_charge_at_import_max=False)  # the automation's Force charge grid target
 LOW = 0.03  # Settings → EMHASS → MPC "No export at or below", the automation's threshold
 
 
@@ -54,6 +54,20 @@ def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> No
         bmax,
         bmin,
     )
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        v(12685.32, -10638.3),  # run 2791: above the cap, the import max either way
+        v(3795.27, -3063.52),  # run 2803: the automation's rule gives 4800 W, which pressed the apply button again
+        v(101, -101),
+    ],
+)
+def test_force_charge_holds_the_import_max_by_default(values) -> None:
+    d = decide(values, InverterLimits(), LOW)
+    assert d.targets == Targets("Force charge", 18800, 20000, -3000)
+    assert "the import max: the battery limits its own charge" in d.why
 
 
 def test_jinja_round_is_half_to_even() -> None:

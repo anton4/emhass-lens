@@ -142,7 +142,7 @@ def test_the_resume_reapplies_the_plan_with_one_inverter_write(tmp_path: Path, w
         presses = [s[1]["entity_id"] for s in services if s[0] == "button/press"]
         assert presses.count(APPLY_BUTTON) == 1  # one passive-mode write for the whole hand-back
         assert len([s for s in services if s[0] == "number/set_value"]) == 3 + feedin_changed
-        assert world.ha_states["number.sofar_passive_mode_grid_power"]["state"] == "5600.0"
+        assert world.ha_states["number.sofar_passive_mode_grid_power"]["state"] == "18800.0"
         assert client.get("/api/emhass").json()["mpc"]["hold"]["last_resume"]["outcome"] == "ok"
     finally:
         client.__exit__(None, None, None)

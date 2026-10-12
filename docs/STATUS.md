@@ -37,6 +37,17 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: Force charge holds the import max (0.4.12)
+- **Why:** runs 2791/2803 (the owner's exports): two Force charge slots in a row.
+  - 02:00: P_grid 12685 W is above the 9000 W cap, so the grid target was 18800 W.
+  - 02:15: P_grid 3795 W gave round100 + 1000 W margin = 4800 W. That cost 3 number writes and another apply press, an EEPROM write, only to lower the grid power.
+- **Change:** `InverterLimits.force_charge_at_import_max` (default on). `domain/inverter.py` `decide()` then sets `grid_import_max_w` in every Force charge slot, and the BMS limits the charge.
+  - Consecutive Force charge slots have identical targets, so `SofarWriter.plan_calls` writes nothing ("Already set").
+  - Off restores the automation's rule (cap + margin). `tests/test_inverter.py` keeps its automation-parity table with it off.
+- **Trade-off (owner's choice):** a Force charge slot where the plan wants a small top-up charges at full power. The next MPC starts from the real state of charge.
+- **Dry run:** with it on, the comparison with the automation differs on `grid_power_w` in Force charge slots at or below the cap.
+- **Tests:** `test_back_to_back_force_charge_slots_write_nothing` replays the two slots: no service calls in the second. It fails on the old rule with "grid 4800 W".
+
 ### 2026-10-12: the Inverter page's day strip in colour, with a popup per slot (0.4.11)
 - **Why:** the owner found "Today, slot by slot" all grey (in live no compare runs exist, so every slot was "not compared") and couldn't see where the mode changed. Mockup approved first: https://claude.ai/artifact/CVGh35JPPNzAoNsmNmcLSd (self-use changed from slate to lavender on the owner's request).
 - **Colours:** `--mode-*` tokens in `tokens.css`, one per passive state (import to export: force charge blue, grid only slate, self-use lavender, restrict export lavender with dots, charge + export blue/aqua stripes, PV export aqua, force discharge orange; `--mode-blocked` hatches the slots not in control). Blue, orange, aqua and lavender pass the dataviz validator's all-pairs CVD and normal-vision checks in both themes.

@@ -2408,6 +2408,7 @@ export interface components {
              *       "battery_min_w": -20000,
              *       "export_max_w": 15500,
              *       "export_only_battery_min_w": -16000,
+             *       "force_charge_at_import_max": true,
              *       "force_charge_battery_min_w": -3000,
              *       "force_charge_grid_cap_above_w": 9000,
              *       "force_charge_grid_margin_w": 1000,
@@ -2510,6 +2511,12 @@ export interface components {
              */
             export_only_battery_min_w: number;
             /**
+             * Force charge at the import max
+             * @description Every Force charge slot sets the grid target to Grid import max and the battery limits its own charge, so back-to-back Force charge slots write nothing (every press of the apply button is an EEPROM write). The battery may charge faster than the plan in that slot; the next plan starts from the real state of charge. Off: follow the plan's P_grid like the automation, with the two settings below (in dry run the comparison with the automation otherwise differs on the grid target in Force charge slots at or below the cap).
+             * @default true
+             */
+            force_charge_at_import_max: boolean;
+            /**
              * Battery min while force charging
              * @description How far the battery may discharge in Force charge, should the house use more than planned.
              * @default -3000
@@ -2517,11 +2524,13 @@ export interface components {
             force_charge_battery_min_w: number;
             /**
              * Force charge: use the import max above
+             * @description Only used when Force charge at the import max is off.
              * @default 9000
              */
             force_charge_grid_cap_above_w: number;
             /**
              * Force charge: grid target margin
+             * @description Only used when Force charge at the import max is off.
              * @default 1000
              */
             force_charge_grid_margin_w: number;
@@ -4214,6 +4223,7 @@ export interface components {
              *         "battery_min_w": -20000,
              *         "export_max_w": 15500,
              *         "export_only_battery_min_w": -16000,
+             *         "force_charge_at_import_max": true,
              *         "force_charge_battery_min_w": -3000,
              *         "force_charge_grid_cap_above_w": 9000,
              *         "force_charge_grid_margin_w": 1000,

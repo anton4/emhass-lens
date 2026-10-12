@@ -54,14 +54,14 @@ def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world:
         set_mode(client, world, "dry_run")
         decided = run_job(client, "inverter.decide")
         assert decided["outcome"] == "dry_run", decided
-        assert "'Force charge' (rule force_charge): grid 5600 W, battery -3000…20000 W" in decided["summary"]
+        assert "'Force charge' (rule force_charge): grid 18800 W, battery -3000…20000 W" in decided["summary"]
         assert world.ha_services == [] or all(not s[0].startswith("number") for s in world.ha_services)
 
         decision = client.get(f"/api/runs/{decided['id']}/artifacts/decision").json()["decision"]
         # the automation then sets the same values (feed-in follows the slot's export price) ...
         world.set_state("number.sofar_feedin_max_power", decision["feedin_max_w"])
         world.set_state("input_select.emhass_passive_state", "Force charge")
-        world.set_state("number.sofar_passive_mode_grid_power", 5600)
+        world.set_state("number.sofar_passive_mode_grid_power", 18800)
         world.set_state("number.sofar_passive_mode_battery_power_min", -3000)
         prime(client, world)
         same = run_job(client, "inverter.compare")
@@ -71,7 +71,7 @@ def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world:
         prime(client, world)
         differs = run_job(client, "inverter.compare")
         assert differs["outcome"] == "mismatch"
-        assert "grid_power_w: decided 5600, automation set 5000.0" in differs["summary"]
+        assert "grid_power_w: decided 18800, automation set 5000.0" in differs["summary"]
         status = client.get("/api/inverter").json()
         assert status["agreement_24h"] == {"hours": 24, "compared": 2, "agreed": 1, "rate": 0.5}
     finally:
@@ -104,9 +104,33 @@ def test_live_applies_and_reads_back(tmp_path: Path, world: World) -> None:
         feedin_changed = decision["feedin_needed"] and decision["feedin_max_w"] != 15500
         assert services.count("number/set_value") == 3 + feedin_changed  # passive mode (3) + feed-in if it changed
         assert "button/press" in services
-        assert world.ha_states["number.sofar_passive_mode_grid_power"]["state"] == "5600.0"
+        assert world.ha_states["number.sofar_passive_mode_grid_power"]["state"] == "18800.0"
         readback = client.get(f"/api/runs/{run['id']}/artifacts/readback").json()
         assert readback["agree"] is True
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_back_to_back_force_charge_slots_write_nothing(tmp_path: Path, world: World) -> None:
+    """Runs 2791 and 2803: the second slot's smaller P_grid used to lower the grid target and press apply again."""
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        assert run_job(client, "inverter.decide")["outcome"] == "ok"
+        assert "button/press" in [s[0] for s in world.ha_services]
+        written = len(world.ha_services)
+        clock.set(SLOT_START)
+        for name, value in (("p_grid_forecast", 3795.27), ("p_batt_forecast", -3063.52)):
+            world.set_state(f"sensor.{name}", value, updated=datetime(2026, 10, 9, 11, 15, tzinfo=UTC))
+        prime(client, world)
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        assert run["summary"].startswith("Already set: 'Force charge' (rule force_charge): grid 18800 W"), run
+        decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()
+        assert decision["source"] == "EMHASS sensors (sensor.p_*)"
+        assert world.ha_services[written:] == []
     finally:
         client.__exit__(None, None, None)
 

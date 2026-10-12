@@ -7,9 +7,13 @@ decides between exporting the PV and keeping it. Every combination maps to a mod
 dry run and show, slot by slot, whether it agrees with what the automation did. Sign conventions are EMHASS's:
 P_batt > 0 discharges the battery, P_grid > 0 imports from the grid.
 
-One deliberate difference: the automation writes the price's feed-in limit every slot, and every press of the
-feed-in button is an EEPROM write. Here the limit is only written when something can reach the grid in the slot
-(the plan exports, curtails PV, or has PV to spare with the battery nearly full); otherwise it is left as it is.
+Two deliberate differences, both because every press of a Sofar button is an EEPROM write:
+- The automation writes the price's feed-in limit every slot. Here the limit is only written when something can
+  reach the grid in the slot (the plan exports, curtails PV, or has PV to spare with the battery nearly full);
+  otherwise it is left as it is.
+- The automation's Force charge grid target follows P_grid below a cap, so back-to-back Force charge slots press the
+  apply button just to change it. Here Force charge sets the import max by default and the battery limits its own
+  charge, so those slots write nothing (`force_charge_at_import_max` off restores the automation's rule).
 """
 
 from dataclasses import asdict, dataclass, field
@@ -115,10 +119,12 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
         if b < -BAND_W:
             grid = (
                 limits.grid_import_max_w
-                if g > limits.force_charge_grid_cap_above_w
+                if limits.force_charge_at_import_max or g > limits.force_charge_grid_cap_above_w
                 else _round100(g) + limits.force_charge_grid_margin_w
             )
             rule, why = "force_charge", f"importing and charging the battery; grid target {grid} W"
+            if limits.force_charge_at_import_max:
+                why += " (the import max: the battery limits its own charge)"
             bmin = limits.force_charge_battery_min_w
         elif b > BAND_W:
             rule, why, grid = "use_bat_import", "importing and discharging (use the battery, import the rest)", 0

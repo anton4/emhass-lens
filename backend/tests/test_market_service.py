@@ -226,7 +226,7 @@ def test_live_runs_a_session_throttles_writes_and_hands_the_inverter_back_to_the
         assert handoff["outcome"] == "ok" and handoff["summary"].startswith("Set 'Force charge'"), handoff
         assert calls(world, m)[:2] == [("input_select/select_option", SESSION), ("input_boolean/turn_on", ENABLE)]
         assert presses(world, APPLY, m) == 1
-        assert world.ha_states[GRID]["state"] == "5600.0"  # the plan, not grid 0
+        assert world.ha_states[GRID]["state"] == "18800.0"  # the plan, not grid 0
         assert world.ha_states[SESSION]["state"] == "none" and world.ha_states[ENABLE]["state"] == "on"
         status = client.get("/api/market").json()
         assert status["session"] is None and status["wear_24h"]["our_commits"] >= 4

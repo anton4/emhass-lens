@@ -904,11 +904,22 @@ class InverterLimits(Section):
         description="How far the battery may discharge in Force charge, should the house use more than planned.",
         json_schema_extra=ui(unit="W"),
     )
+    force_charge_at_import_max: bool = Field(
+        default=True,
+        title="Force charge at the import max",
+        description="Every Force charge slot sets the grid target to Grid import max and the battery limits its own "
+        "charge, so back-to-back Force charge slots write nothing (every press of the apply button is an EEPROM "
+        "write). The battery may charge faster than the plan in that slot; the next plan starts from the real state "
+        "of charge. Off: follow the plan's P_grid like the automation, with the two settings below (in dry run the "
+        "comparison with the automation otherwise differs on the grid target in Force charge slots at or below the "
+        "cap).",
+    )
     force_charge_grid_cap_above_w: int = Field(
         default=9000,
         ge=0,
         le=100000,
         title="Force charge: use the import max above",
+        description="Only used when Force charge at the import max is off.",
         json_schema_extra=ui(unit="W"),
     )
     force_charge_grid_margin_w: int = Field(
@@ -916,6 +927,7 @@ class InverterLimits(Section):
         ge=0,
         le=10000,
         title="Force charge: grid target margin",
+        description="Only used when Force charge at the import max is off.",
         json_schema_extra=ui(unit="W"),
     )
     battery_full_soc_pct: int = Field(

@@ -102,8 +102,26 @@ describe('rules', () => {
       'self_use_restrict',
       'self_use',
     ])
-    expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('18800 W if P_grid > 9000 W')
+    expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('18800 W (the import max;')
     expect(list.find((r) => r.id === 'self_use_pv_export')?.when).toContain('above 0.03 €/kWh')
+  })
+
+  it("follows the plan's P_grid in Force charge when the import max is off", () => {
+    const limits = {
+      battery_max_w: 20000,
+      battery_min_w: -20000,
+      grid_import_max_w: 18800,
+      export_max_w: 15500,
+      export_only_battery_min_w: -16000,
+      force_charge_battery_min_w: -3000,
+      force_charge_at_import_max: false,
+      force_charge_grid_cap_above_w: 9000,
+      force_charge_grid_margin_w: 1000,
+      battery_full_soc_pct: 90,
+    }
+    expect(rules(limits, 0.03).find((r) => r.id === 'force_charge')?.sets).toContain(
+      '18800 W if P_grid > 9000 W, else P_grid rounded to 100 W + 1000 W',
+    )
   })
 
   it('says export is never blocked when "No export at or below" is empty', () => {

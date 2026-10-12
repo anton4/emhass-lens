@@ -389,18 +389,22 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
     export_max_w: 15500,
     export_only_battery_min_w: -16000,
     force_charge_battery_min_w: -3000,
+    force_charge_at_import_max: true,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
     battery_full_soc_pct: 90,
   }
   const full = `battery ${l.battery_min_w}…${l.battery_max_w} W`
   const price = noExportAtOrBelow === null ? null : `${noExportAtOrBelow} €/kWh`
+  const forceGrid = l.force_charge_at_import_max
+    ? `grid target = ${l.grid_import_max_w} W (the import max; the battery limits its own charge)`
+    : `grid target = ${l.grid_import_max_w} W if P_grid > ${l.force_charge_grid_cap_above_w} W, else P_grid rounded to 100 W + ${l.force_charge_grid_margin_w} W`
   return [
     {
       id: 'force_charge',
       label: 'Force charge',
       when: 'Importing (P_grid > 100 W) and charging the battery (P_batt < −100 W)',
-      sets: `grid target = ${l.grid_import_max_w} W if P_grid > ${l.force_charge_grid_cap_above_w} W, else P_grid rounded to 100 W + ${l.force_charge_grid_margin_w} W; battery ${l.force_charge_battery_min_w}…${l.battery_max_w} W`,
+      sets: `${forceGrid}; battery ${l.force_charge_battery_min_w}…${l.battery_max_w} W`,
     },
     {
       id: 'use_bat_import',
