@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.19
+
+- Market: with Qilowatt market control on **Shadow**, EMHASS Lens holds off the inverter while the automation runs a session and re-applies the plan the moment it ends, with at most one inverter write. It follows the market's *Session state select*, so there is nothing to turn on under Market session hold. Before, the feed-in limit a sell session left behind stayed until the drift check set it back a minute or two later.
+
 ## 0.4.18
 
 - Inputs: **What the import price is made of** is a column per quarter-hour instead of one filled area. Spot, fees, network and VAT are stacked with a hairline between them and a gap between quarter-hours, and the import price is a dark cap on top; when spot is below zero, the cap sits inside the column. Spot is a darker grey and fees a stronger violet, so the two no longer run together. Forecast quarter-hours are faded.
