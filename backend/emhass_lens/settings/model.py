@@ -915,6 +915,33 @@ class InverterLimits(Section):
         description="Only used when Force charge at the import max is off.",
         json_schema_extra=ui(unit="W"),
     )
+    cap_discharge_at_plan: bool = Field(
+        default=True,
+        title="Use the battery, import the rest: cap the discharge at the plan",
+        description="When the plan imports and discharges in the same slot, it saves the battery's energy for a "
+        "dearer slot. With grid 0 W and the full window the battery would cover the whole house instead. On: the "
+        "battery discharges at most the plan's P_batt (plus the slack below) and the grid covers the rest. "
+        "Off: like the automation.",
+    )
+    cap_charge_at_plan: bool = Field(
+        default=True,
+        title="Charge and export: cap the charge at the plan",
+        description="When the plan exports and charges in the same slot, it sells some PV now and leaves room to "
+        "fill the battery later. With grid 0 W the battery would take all the surplus and nothing would be exported. "
+        "On: the battery charges at most the plan's charge (plus the slack below) and the rest is exported. "
+        "Never in a slot at or below No export at or below, where the feed-in limit is 0 W. Off: like the automation.",
+    )
+    battery_cap_slack_w: int = Field(
+        default=500,
+        ge=0,
+        le=5000,
+        title="Battery cap slack",
+        description="A cap from the two settings above is written at the plan's battery power plus half of this, "
+        "then left as it is while it stays between the plan's battery power and that plus this, so small changes in "
+        "the plan don't press the apply button (an EEPROM write). 0: the plan's, rounded up to 100 W, rewritten "
+        "whenever it changes.",
+        json_schema_extra=ui(unit="W"),
+    )
     battery_full_soc_pct: int = Field(
         default=90,
         ge=50,

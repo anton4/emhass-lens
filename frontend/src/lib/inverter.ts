@@ -14,6 +14,7 @@ export interface InverterTargets {
 
 export interface InverterDecision {
   rule: string // the automation's mode name, e.g. "force_charge" ("a".."i" or "none" in runs made before 0.2.11)
+  branch?: string // which rule matched (RuleText.key); two rules end in the mode self_use (missing in older runs)
   label: string
   why: string
   targets: InverterTargets | null // null only in runs made before 0.2.11
@@ -370,6 +371,7 @@ export function fieldValue(field: string, value: string | number | null | undefi
   return `${Math.round(value)} W`
 }
 
+/** A rule in plain words (the EV charger's rules use it as it is). */
 export interface RuleText {
   id: string
   label: string
@@ -377,11 +379,39 @@ export interface RuleText {
   sets: string
 }
 
+export type RuleGroup = 'import' | 'export' | 'neutral'
+
+/** An inverter rule. Three of them set the passive state "Self-use battery or PV" and two end in the mode self_use, so
+ * each has its own key and title. */
+export interface InverterRuleText {
+  /** As in the decision's `branch`. */
+  key: string
+  /** The mode, as in the decision's `rule`. */
+  id: string
+  group: RuleGroup
+  title: string
+  /** The passive state it sets: the automation's input_select option. */
+  state: string
+  when: string
+  sets: string
+}
+
+/** The branches P_grid picks, in the order they are tried. */
+export const RULE_GROUPS: { group: RuleGroup; title: string }[] = [
+  { group: 'import', title: 'Importing: P_grid above 100 W' },
+  { group: 'export', title: 'Exporting: P_grid below −100 W' },
+  { group: 'neutral', title: 'Neutral: P_grid −100…100 W' },
+]
+
+const SELF_USE = 'Self-use battery or PV'
+
 /** The rules in the automation's order (importing, exporting, neutral), with the thresholds from the current limits
  * (Settings → Inverter control) and the export block (Settings → EMHASS → MPC "No export at or below"; null = never).
- * "Self-use battery or PV" appears twice because two branches end there. The battery window is in Sofar's sign
- * (charging positive), the opposite of EMHASS's P_batt. */
-export function rules(limits: InverterSettings['limits'] | undefined, noExportAtOrBelow: number | null): RuleText[] {
+ * The battery window is in Sofar's sign (charging positive), the opposite of EMHASS's P_batt. */
+export function rules(
+  limits: InverterSettings['limits'] | undefined,
+  noExportAtOrBelow: number | null,
+): InverterRuleText[] {
   const l = limits ?? {
     battery_max_w: 20000,
     battery_min_w: -20000,
@@ -390,6 +420,9 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
     force_charge_at_import_max: true,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
+    cap_discharge_at_plan: true,
+    cap_charge_at_plan: true,
+    battery_cap_slack_w: 500,
     battery_full_soc_pct: 90,
   }
   const full = `battery ${l.battery_min_w}…${l.battery_max_w} W`
@@ -397,68 +430,127 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
   const forceGrid = l.force_charge_at_import_max
     ? `grid target = ${l.grid_import_max_w} W (the import max; the battery limits its own charge)`
     : `grid target = ${l.grid_import_max_w} W if P_grid > ${l.force_charge_grid_cap_above_w} W, else P_grid rounded to 100 W + ${l.force_charge_grid_margin_w} W`
+  const slack = l.battery_cap_slack_w
+  const plus = slack ? ` + ${Math.floor(slack / 2)} W` : ''
+  const kept = slack ? `; kept while 0–${slack} W above the plan` : ''
+  const dischargeSets = l.cap_discharge_at_plan
+    ? `grid 0 W, battery min = −(the plan's discharge${plus}) rounded up to 100 W, max ${l.battery_max_w} W: the battery gives what the plan says, the grid the rest${kept}`
+    : `grid 0 W, ${full} (the battery covers the whole house)`
+  const blocked = price === null ? '' : `. At or below ${price}: ${full}, because the feed-in limit is 0 W there`
+  const chargeSets = l.cap_charge_at_plan
+    ? `grid 0 W, battery min ${l.battery_min_w} W, max = the plan's charge${plus} rounded up to 100 W: the battery takes what the plan says and the rest is exported${kept}${blocked}`
+    : `grid 0 W, ${full} (the battery takes all the surplus)`
   return [
     {
+      key: 'force_charge',
       id: 'force_charge',
-      label: 'Force charge',
-      when: 'Importing (P_grid > 100 W) and charging the battery (P_batt < −100 W)',
+      group: 'import',
+      title: 'Force charge from the grid',
+      state: 'Force charge',
+      when: 'Charging the battery (P_batt below −100 W)',
       sets: `${forceGrid}; ${full}`,
     },
     {
+      key: 'use_bat_import',
       id: 'use_bat_import',
-      label: 'Self-use battery or PV',
-      when: 'Importing and discharging the battery (P_batt > 100 W): use the battery, import the rest',
-      sets: `grid 0 W, ${full}`,
+      group: 'import',
+      title: 'Use the battery, import the rest',
+      state: SELF_USE,
+      when: 'Discharging the battery (P_batt above 100 W)',
+      sets: dischargeSets,
     },
     {
+      key: 'use_only_grid',
       id: 'use_only_grid',
-      label: 'Use only grid power',
-      when: 'Importing, battery idle (−100…100 W)',
+      group: 'import',
+      title: 'Use only grid power',
+      state: 'Use only grid power',
+      when: 'Battery idle (P_batt −100…100 W)',
       sets: `grid 0 W, battery 0…${l.battery_max_w} W (may charge, not discharge: PV first, the grid covers the rest)`,
     },
     {
+      key: 'charge_export',
       id: 'charge_export',
-      label: 'Charge battery and export some to grid',
-      when: 'Exporting (P_grid < −100 W) and charging the battery',
-      sets: `grid 0 W, ${full}`,
+      group: 'export',
+      title: 'Charge and export',
+      state: 'Charge battery and export some to grid',
+      when: 'Charging the battery',
+      sets: chargeSets,
     },
     {
+      key: 'force_discharge',
       id: 'force_discharge',
-      label: 'Force discharge',
-      when: 'Exporting and discharging the battery',
+      group: 'export',
+      title: 'Force discharge',
+      state: 'Force discharge',
+      when: 'Discharging the battery',
       sets: `grid target = P_grid rounded to 100 W (negative); ${full}`,
     },
     {
+      key: 'self_use_pv_export',
       id: 'self_use_pv_export',
-      label: 'Self-use PV and export excess to grid',
+      group: 'export',
+      title: 'Export the PV',
+      state: 'Self-use PV and export excess to grid',
       when:
         price === null
-          ? 'Exporting, battery idle (export is never blocked: "No export at or below" is empty)'
-          : `Exporting, battery idle, export price above ${price}`,
+          ? 'Battery idle (export is never blocked: "No export at or below" is empty)'
+          : `Battery idle, export price above ${price}`,
       sets: `grid 0 W, battery ${l.battery_min_w}…0 W (may discharge, not charge: surplus PV is exported)`,
     },
     {
+      key: 'self_use_keep_pv',
       id: 'self_use',
-      label: 'Self-use battery or PV',
+      group: 'export',
+      title: 'Keep the PV (export too cheap)',
+      state: SELF_USE,
       when:
         price === null
-          ? 'Exporting, battery idle, export price at or below "No export at or below": never, it is empty'
-          : `Exporting, battery idle, export price at or below ${price} (an unknown price counts as 0): keep the PV`,
+          ? 'Battery idle, export price at or below "No export at or below": never, it is empty'
+          : `Battery idle, export price at or below ${price}. Rare: EMHASS plans no export in those slots, so this happens only when the price is unknown (it counts as 0)`,
       sets: `grid 0 W, ${full}`,
     },
     {
+      key: 'self_use_restrict',
       id: 'self_use_restrict',
-      label: 'Self-use battery or PV, restrict export to grid',
-      when: 'Grid neutral (−100…100 W) and PV is curtailed',
+      group: 'neutral',
+      title: 'Restrict export (PV curtailed)',
+      state: 'Self-use battery or PV, restrict export to grid',
+      when: 'PV is curtailed',
       sets: `grid 0 W, ${full}`,
     },
     {
+      key: 'self_use',
       id: 'self_use',
-      label: 'Self-use battery or PV',
-      when: 'Grid neutral, no curtailment',
+      group: 'neutral',
+      title: 'Self-use',
+      state: SELF_USE,
+      when: 'No curtailment',
       sets: `grid 0 W, ${full}`,
     },
   ]
+}
+
+/** What EMHASS Lens does differently from the automation with the current limits (dry run differs there too). */
+export function deviations(limits: InverterSettings['limits'] | undefined): string[] {
+  const out: string[] = []
+  if (limits?.force_charge_at_import_max ?? true) {
+    out.push('Force charge holds the import max, so back-to-back Force charge slots write nothing.')
+  }
+  if (limits?.cap_discharge_at_plan ?? true) {
+    out.push(
+      'Use the battery, import the rest: the battery gives what the plan says instead of covering the whole house, ' +
+        'so the energy stays for the dearer slot it was saved for.',
+    )
+  }
+  if (limits?.cap_charge_at_plan ?? true) {
+    out.push(
+      'Charge and export: the battery takes what the plan says and the rest is exported, so it keeps room for the ' +
+        'PV later in the day instead of filling up now.',
+    )
+  }
+  out.push('The feed-in limit is only written when something can reach the grid in the slot.')
+  return out
 }
 
 export function feedinRules(

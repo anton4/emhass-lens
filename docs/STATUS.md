@@ -37,6 +37,26 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: inverter rules: one "chosen now", a clearer list, battery caps at the plan (unreleased)
+- **Why:** the owner saw "chosen now" on rules 7 and 9 at once and asked for a review of the rules.
+  - Both rules end in the mode `self_use`, and the list matched on the mode. Only one rule ever matches. Rule 7 (exporting with an idle battery in a cheap slot) can hardly happen, because EMHASS gets `maximum_power_to_grid = 0` for those slots; it fires only when the export price is unknown.
+  - The review found two rules where grid 0 W doesn't do what the plan says, because the battery takes all the slack. `use_bat_import` drains the battery that the plan saved for a dearer slot. `charge_export` puts all the surplus in the battery and exports nothing.
+- **Tag:** `Decision.branch`, one key per rule (`domain/inverter.py` `BRANCHES`; rule 7 is `self_use_keep_pv`). `rule` and `label` are unchanged, so history, summaries and the automation comparison are too. `RulesExplainer` tags `r.key === branch`.
+- **List:** `InverterRuleText` (key, group, title, state); the charger keeps `RuleText`.
+  - Three groups (importing, exporting, neutral) numbered 1–9 across them (`.rule-groups` holds the counter).
+  - Each rule has its own title: three of them set the passive state "Self-use battery or PV".
+  - *More about decisions* lists the deviations (`deviations()`).
+- **Caps** (`InverterLimits.cap_discharge_at_plan`, `cap_charge_at_plan`, both on; `battery_cap_slack_w` 500):
+  - `use_bat_import` gets battery min = −cap(P_batt).
+  - `charge_export` gets battery max = cap(−P_batt), but not in a cheap slot, where the feed-in limit is 0 W.
+- **`battery_cap()`:**
+  - Writes the plan + slack/2, rounded up to 100 W, and keeps the register's cap while it is in [need, need + slack].
+  - A fixed grid of slack-sized steps was tried first: the hold then adds almost nothing, and a plan at a step's edge (990/1010 W) writes every slot.
+  - A scratch simulation over random walks, noise and rising plans: 2–3× fewer apply presses than following the plan to 100 W; ~270 W above the plan on average.
+- **Service:** `decide_job` passes the registers as `held`, except drift corrections (`held=None`), so a value someone else wrote within the slack is set back, not adopted.
+- **Verified:** backend 389 tests (new ones in `test_inverter.py` and `test_inverter_service.py`; the drift test fails when `held` is always passed), frontend 171 tests, ruff, pyright, lint, build. Also checked in Chrome against the local backend, behind a proxy that injected a decision: three groups numbered 1–9, a single tag for `self_use` and for `use_bat_import`, and no horizontal scroll at 390 px (in an iframe). e2e not run.
+- **To watch:** the day strip and the wear on the Market page after a few evenings with `use_bat_import`. The caps cost presses that grid 0 W didn't; raise the slack if they add up.
+
 ### 2026-10-12: Inputs, prices and their breakdown on one time axis (0.4.16)
 - **Why:** the owner wanted:
   - the Inputs page in the Plan page's price colours;

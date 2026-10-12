@@ -312,3 +312,67 @@ def test_something_that_keeps_changing_the_inverter_stops_the_corrections(tmp_pa
         assert "inverter.fighting" in {p["key"] for p in client.get("/api/problems").json()["active"]}
     finally:
         client.__exit__(None, None, None)
+
+
+# --- importing while discharging: the cap follows the plan within the slack -----------------------------------------
+
+BMIN = "number.sofar_passive_mode_battery_power_min"
+
+
+def plan_sensors(world: World, g: float, b: float, at: datetime) -> None:
+    for name, value in (("p_grid_forecast", g), ("p_batt_forecast", b)):
+        world.set_state(f"sensor.{name}", value, updated=at)
+
+
+def test_back_to_back_discharge_slots_within_the_slack_write_nothing(tmp_path: Path, world: World) -> None:
+    plan_slot(world, 2000, 1180, 0)  # the house 3 kW at night: the battery about 1.2 kW, the grid the rest
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        first = run_job(client, "inverter.decide")
+        assert first["outcome"] == "ok", first
+        assert "(rule use_bat_import): grid 0 W, battery -1500…20000 W" in first["summary"], first
+        assert float(world.ha_states[BMIN]["state"]) == -1500
+        written = len(world.ha_services)
+        clock.set(SLOT_START)
+        plan_sensors(world, 1740, 1260, datetime(2026, 10, 9, 11, 15, tzinfo=UTC))
+        prime(client, world)
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        assert run["summary"].startswith(
+            "Already set: 'Self-use battery or PV' (rule use_bat_import): grid 0 W, battery -1500…20000 W"
+        ), run
+        assert world.ha_services[written:] == []
+        decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
+        assert decision["branch"] == "use_bat_import"
+        assert "kept: within 500 W above the plan's 1260 W" in decision["why"]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_drifted_cap_is_set_back_even_within_the_slack(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        clock.set(SLOT_START)
+        plan_sensors(world, 2000, 1180, datetime(2026, 10, 9, 11, 15, tzinfo=UTC))
+        prime(client, world)
+        assert run_job(client, "inverter.decide")["outcome"] == "ok"
+        assert float(world.ha_states[BMIN]["state"]) == -1500
+        world.set_state(BMIN, -1400)  # something else; still within the slack above the plan's 1180 W
+        prime(client, world)
+        run_job(client, "inverter.verify")
+        clock.advance(150)
+        run_job(client, "inverter.verify")
+        clock.advance(60)
+        run_job(client, "inverter.verify")
+        [fixed] = drift_runs(client)
+        assert fixed["outcome"] == "ok", fixed
+        assert fixed["summary"].startswith("Drift: battery min -1400 W, expected -1500 W; set back · Set "), fixed
+        assert float(world.ha_states[BMIN]["state"]) == -1500
+    finally:
+        client.__exit__(None, None, None)

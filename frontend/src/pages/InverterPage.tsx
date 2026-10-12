@@ -214,7 +214,7 @@ export function InverterPage() {
       <RulesExplainer
         limits={limits}
         noExportAtOrBelow={settings.data?.settings.emhass.mpc.no_export_at_or_below ?? null}
-        current={last?.decision.rule}
+        current={last?.decision.branch ?? last?.decision.rule}
       />
 
       <InverterHistory timeZone={tz} />

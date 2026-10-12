@@ -1,6 +1,8 @@
 import type { InverterSettings } from '../api/types'
 import {
   FIELD_LABELS,
+  RULE_GROUPS,
+  deviations,
   feedinRules,
   fieldValue,
   rules,
@@ -230,8 +232,8 @@ export function CallsList({ calls, nothing = 'No calls: the inverter already sho
   )
 }
 
-/** The rules in plain words, in the automation's order, with the configured thresholds; the one chosen for this
- *  slot is tagged, and the details fold away. */
+/** The rules in plain words, in the automation's order and grouped by what P_grid picks, with the configured
+ *  thresholds; the one chosen for this slot is tagged, and the details fold away. */
 export function RulesExplainer({
   limits,
   noExportAtOrBelow,
@@ -240,9 +242,10 @@ export function RulesExplainer({
   limits: InverterSettings['limits'] | undefined
   /** Settings → EMHASS → MPC "No export at or below"; null when empty. */
   noExportAtOrBelow: number | null
-  /** The rule of this slot's decision. */
+  /** The branch of this slot's decision (InverterRuleText.key). */
   current?: string | null
 }) {
+  const list = rules(limits, noExportAtOrBelow)
   return (
     <section className="panel">
       <div className="panel-head">
@@ -250,33 +253,42 @@ export function RulesExplainer({
         <span className="muted">The first match wins, top to bottom</span>
       </div>
       <div className="panel-body">
-        <ol className="rule-steps">
-          {rules(limits, noExportAtOrBelow).map((r, i) => (
-            <li key={`${r.id}-${i}`}>
-              <div className="cell-title">
-                <span className="rule-badge small word">{r.id}</span> {r.label}
-                {r.id === current && (
-                  <span className="chip" data-color="blue">
-                    chosen now
-                  </span>
-                )}
-              </div>
-              <div>
-                <span className="muted">When</span> {r.when}
-              </div>
-              <div>
-                <span className="muted">Sets</span> {r.sets}
-              </div>
-            </li>
+        <div className="rule-groups">
+          {RULE_GROUPS.map((g) => (
+            <div key={g.group}>
+              <h3 className="sub-head">{g.title}</h3>
+              <ol className="rule-steps" start={list.findIndex((r) => r.group === g.group) + 1}>
+                {list
+                  .filter((r) => r.group === g.group)
+                  .map((r) => (
+                    <li key={r.key}>
+                      <div className="cell-title">
+                        <span className="rule-badge small word">{r.id}</span> {r.title}
+                        {r.key === current && (
+                          <span className="chip" data-color="blue">
+                            chosen now
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="muted">When</span> {r.when}
+                      </div>
+                      <div>
+                        <span className="muted">Sets</span> <q>{r.state}</q>, {r.sets}
+                      </div>
+                    </li>
+                  ))}
+              </ol>
+            </div>
           ))}
-        </ol>
+        </div>
         <details className="more rules-more">
           <summary>More about decisions</summary>
           <p>
             Each slot, the plan's values pick one of these modes: <strong>P_grid</strong> picks the branch (importing
             above 100 W, exporting below −100 W, otherwise neutral), <strong>P_batt</strong> picks the mode (charging
             below −100 W, discharging above 100 W, otherwise idle), and when exporting with an idle battery the export
-            price breaks the tie. They are the same rules and thresholds as the Home Assistant automation "EMHASS:
+            price breaks the tie. They are the rules and thresholds of the Home Assistant automation "EMHASS:
             Consolidated Inverter Control", so dry-run decisions can be compared with it slot by slot. The export price
             threshold is Settings → EMHASS → MPC "No export at or below", which also keeps EMHASS from planning exports
             in those slots. Signs follow EMHASS: P_batt + discharges / − charges the battery; P_grid + imports / −
@@ -285,6 +297,12 @@ export function RulesExplainer({
           <p className="cell-sub">
             Every combination of grid and battery power matches one of these, so a decision is made every slot.
           </p>
+          <h3 className="sub-head">Where it differs from the automation</h3>
+          <ul>
+            {deviations(limits).map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
           <h3 className="sub-head">Feed-in limit</h3>
           <ul>
             {feedinRules(limits, noExportAtOrBelow).map((text) => (

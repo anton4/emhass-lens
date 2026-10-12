@@ -149,7 +149,10 @@ class InverterService:
             ctx.run.outcome, ctx.run.summary = "noop", f"Nothing to decide: {source}"
             return
         settings = self.c.settings.current
-        decision = decide(values, settings.inverter.limits, settings.emhass.mpc.no_export_at_or_below)
+        before = self.observed()
+        # a battery cap already set is kept within the slack; a drift correction sets back the plan's own
+        held = None if ctx.params.get("drift") else before
+        decision = decide(values, settings.inverter.limits, settings.emhass.mpc.no_export_at_or_below, held)
         blocked = self.preconditions()
         self.last_decision = decision
         self.last = {
@@ -159,9 +162,7 @@ class InverterService:
             "run_id": ctx.run.id,
             "blocked": blocked,
         }
-        ctx.run.artifact(
-            "decision", {**self.last, "values": values.__dict__, "observed_before": self.observed().__dict__}
-        )
+        ctx.run.artifact("decision", {**self.last, "values": values.__dict__, "observed_before": before.__dict__})
         text = describe(decision)
         catch_up = " (catch-up after Home Assistant came back)" if ctx.params.get("catch_up") else ""
         if blocked:

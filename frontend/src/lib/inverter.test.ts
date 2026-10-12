@@ -4,6 +4,7 @@ import {
   compareDiffs,
   decideChip,
   decisionAction,
+  deviations,
   feedinRules,
   fieldValue,
   formatAgreement,
@@ -15,6 +16,7 @@ import {
   NO_SETTINGS_FILL,
   parseDecisionSummary,
   parseDecisionTargets,
+  RULE_GROUPS,
   rules,
   runSlot,
   STRIP_BAND,
@@ -117,11 +119,88 @@ describe('rules', () => {
       force_charge_at_import_max: false,
       force_charge_grid_cap_above_w: 9000,
       force_charge_grid_margin_w: 1000,
+      cap_discharge_at_plan: true,
+      cap_charge_at_plan: true,
+      battery_cap_slack_w: 500,
       battery_full_soc_pct: 90,
     }
     expect(rules(limits, 0.03).find((r) => r.id === 'force_charge')?.sets).toContain(
       '18800 W if P_grid > 9000 W, else P_grid rounded to 100 W + 1000 W',
     )
+  })
+
+  it('gives every rule its own key, so only the one that matched is tagged', () => {
+    const list = rules(undefined, 0.03)
+    expect(list.map((r) => r.key)).toEqual([
+      'force_charge',
+      'use_bat_import',
+      'use_only_grid',
+      'charge_export',
+      'force_discharge',
+      'self_use_pv_export',
+      'self_use_keep_pv',
+      'self_use_restrict',
+      'self_use',
+    ])
+    expect(new Set(list.map((r) => r.title)).size).toBe(list.length)
+    expect(list.filter((r) => r.state === 'Self-use battery or PV').map((r) => r.key)).toEqual([
+      'use_bat_import',
+      'self_use_keep_pv',
+      'self_use',
+    ])
+    expect(list.map((r) => r.group)).toEqual([
+      'import',
+      'import',
+      'import',
+      'export',
+      'export',
+      'export',
+      'export',
+      'neutral',
+      'neutral',
+    ])
+    expect(RULE_GROUPS.map((g) => g.group)).toEqual(['import', 'export', 'neutral'])
+  })
+
+  it('caps the battery at the plan in the two mixed rules, within the slack', () => {
+    const list = rules(undefined, 0.03)
+    const discharge = list.find((r) => r.key === 'use_bat_import')?.sets
+    expect(discharge).toContain("battery min = −(the plan's discharge + 250 W) rounded up to 100 W, max 20000 W")
+    expect(discharge).toContain('the grid the rest; kept while 0–500 W above the plan')
+    const charge = list.find((r) => r.key === 'charge_export')?.sets
+    expect(charge).toContain("max = the plan's charge + 250 W rounded up to 100 W")
+    expect(charge).toContain('At or below 0.03 €/kWh: battery -20000…20000 W, because the feed-in limit is 0 W')
+    expect(list.find((r) => r.key === 'self_use_keep_pv')?.when).toContain('Rare: EMHASS plans no export')
+  })
+
+  it('says what the mixed rules do with the caps off or without a slack', () => {
+    const base = {
+      battery_max_w: 20000,
+      battery_min_w: -20000,
+      grid_import_max_w: 18800,
+      export_max_w: 15500,
+      force_charge_at_import_max: true,
+      force_charge_grid_cap_above_w: 9000,
+      force_charge_grid_margin_w: 1000,
+      cap_discharge_at_plan: false,
+      cap_charge_at_plan: false,
+      battery_cap_slack_w: 500,
+      battery_full_soc_pct: 90,
+    }
+    const off = rules(base, 0.03)
+    expect(off.find((r) => r.key === 'use_bat_import')?.sets).toBe(
+      'grid 0 W, battery -20000…20000 W (the battery covers the whole house)',
+    )
+    expect(off.find((r) => r.key === 'charge_export')?.sets).toBe(
+      'grid 0 W, battery -20000…20000 W (the battery takes all the surplus)',
+    )
+    expect(deviations(base)).toHaveLength(2)
+    const noSlack = rules({ ...base, cap_discharge_at_plan: true, battery_cap_slack_w: 0 }, 0.03)
+    expect(noSlack.find((r) => r.key === 'use_bat_import')?.sets).toBe(
+      "grid 0 W, battery min = −(the plan's discharge) rounded up to 100 W, max 20000 W: the battery gives what the " +
+        'plan says, the grid the rest',
+    )
+    expect(deviations(undefined)).toHaveLength(4)
   })
 
   it('says export is never blocked when "No export at or below" is empty', () => {

@@ -2405,9 +2405,12 @@ export interface components {
             /**
              * Limits and thresholds
              * @default {
+             *       "battery_cap_slack_w": 500,
              *       "battery_full_soc_pct": 90,
              *       "battery_max_w": 20000,
              *       "battery_min_w": -20000,
+             *       "cap_charge_at_plan": true,
+             *       "cap_discharge_at_plan": true,
              *       "export_max_w": 15500,
              *       "force_charge_at_import_max": true,
              *       "force_charge_grid_cap_above_w": 9000,
@@ -2482,6 +2485,12 @@ export interface components {
         /** InverterLimits */
         InverterLimits: {
             /**
+             * Battery cap slack
+             * @description A cap from the two settings above is written at the plan's battery power plus half of this, then left as it is while it stays between the plan's battery power and that plus this, so small changes in the plan don't press the apply button (an EEPROM write). 0: the plan's, rounded up to 100 W, rewritten whenever it changes.
+             * @default 500
+             */
+            battery_cap_slack_w: number;
+            /**
              * Battery counts as nearly full at
              * @description The feed-in limit is only written when something can reach the grid: the plan exports, curtails PV, or has PV to spare while its state of charge for the slot is at or above this. Below it the battery takes the spare PV, so the limit is left as it is (every press of the feed-in button is an EEPROM write).
              * @default 90
@@ -2499,6 +2508,18 @@ export interface components {
              * @default -20000
              */
             battery_min_w: number;
+            /**
+             * Charge and export: cap the charge at the plan
+             * @description When the plan exports and charges in the same slot, it sells some PV now and leaves room to fill the battery later. With grid 0 W the battery would take all the surplus and nothing would be exported. On: the battery charges at most the plan's charge (plus the slack below) and the rest is exported. Never in a slot at or below No export at or below, where the feed-in limit is 0 W. Off: like the automation.
+             * @default true
+             */
+            cap_charge_at_plan: boolean;
+            /**
+             * Use the battery, import the rest: cap the discharge at the plan
+             * @description When the plan imports and discharges in the same slot, it saves the battery's energy for a dearer slot. With grid 0 W and the full window the battery would cover the whole house instead. On: the battery discharges at most the plan's P_batt (plus the slack below) and the grid covers the rest. Off: like the automation.
+             * @default true
+             */
+            cap_discharge_at_plan: boolean;
             /**
              * Export max (feed-in)
              * @default 15500
@@ -4210,9 +4231,12 @@ export interface components {
              *         "state_select": "input_select.emhass_passive_state"
              *       },
              *       "limits": {
+             *         "battery_cap_slack_w": 500,
              *         "battery_full_soc_pct": 90,
              *         "battery_max_w": 20000,
              *         "battery_min_w": -20000,
+             *         "cap_charge_at_plan": true,
+             *         "cap_discharge_at_plan": true,
              *         "export_max_w": 15500,
              *         "force_charge_at_import_max": true,
              *         "force_charge_grid_cap_above_w": 9000,

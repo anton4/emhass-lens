@@ -3972,6 +3972,19 @@ button.icon-button {
   text-align: center;
 }
 
+/* the inverter's rules in three groups, numbered on across them */
+.rule-groups {
+  counter-reset: step;
+}
+
+.rule-groups .rule-steps {
+  counter-reset: none;
+}
+
+.rule-groups > div:first-child > .sub-head {
+  margin-top: 0;
+}
+
 .rule-steps .cell-title {
   display: flex;
   flex-wrap: wrap;

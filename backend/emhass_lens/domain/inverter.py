@@ -14,8 +14,18 @@ Two deliberate differences, both because every press of a Sofar button is an EEP
 - The automation's Force charge grid target follows P_grid below a cap, so back-to-back Force charge slots press the
   apply button just to change it. Here Force charge sets the import max by default and the battery limits its own
   charge, so those slots write nothing (`force_charge_at_import_max` off restores the automation's rule).
+
+Two more where the automation's grid target of 0 W doesn't do what the plan says, because the battery then takes all
+the slack (each has a setting; off restores the automation's rule):
+- Importing while discharging, the plan saves the battery for a dearer slot, but grid 0 W makes it cover the whole
+  house. `cap_discharge_at_plan` caps the discharge at the plan's P_batt, and the grid covers the rest.
+- Exporting while charging, the plan sells some PV now and fills the battery later, but grid 0 W puts all the surplus
+  in the battery. `cap_charge_at_plan` caps the charge at the plan's, and the rest is exported.
+A cap is written at the plan plus half of `battery_cap_slack_w` and kept while it stays within the slack above the
+plan, so small changes in the plan don't press the apply button.
 """
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -33,6 +43,19 @@ LABELS = {
     "self_use": "Self-use battery or PV",
     "self_use_restrict": "Self-use battery or PV, restrict export to grid",
 }
+
+# The rules in the order they are tried, one key each; the mode (`rule`) of self_use_keep_pv is self_use
+BRANCHES = (
+    "force_charge",
+    "use_bat_import",
+    "use_only_grid",
+    "charge_export",
+    "force_discharge",
+    "self_use_pv_export",
+    "self_use_keep_pv",
+    "self_use_restrict",
+    "self_use",
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +86,7 @@ class Decision:
     feedin_why: str
     notes: list[str] = field(default_factory=list)
     feedin_needed: bool = True  # False: nothing can reach the grid, so the limit is left as it is
+    branch: str = ""  # which of the rules matched (BRANCHES); two of them end in the mode self_use
 
     @property
     def feedin_target(self) -> int | None:
@@ -71,6 +95,17 @@ class Decision:
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class Observed:
+    """What the inverter entities show (after the automation ran, or after we applied)."""
+
+    state: str | None
+    grid_power_w: float | None
+    battery_max_w: float | None
+    battery_min_w: float | None
+    feedin_max_w: float | None
 
 
 def round100(value: float) -> int:
@@ -100,8 +135,36 @@ def feedin_need(v: PlanValues, full_soc: float) -> tuple[bool, str]:
     return False, f"the battery takes the spare {spare:.0f} W ({v.soc:.0%}, below {full_soc:.0%})"
 
 
-def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float | None) -> Decision:
-    """`no_export_at_or_below` (Settings → EMHASS → MPC) blocks export in cheap slots; None never blocks."""
+def battery_cap(need_w: float, current_w: float | None, slack_w: int, limit_w: int) -> tuple[int, bool]:
+    """A cap on the battery's power (W, positive) for the plan's `need_w`, and whether the current one was kept.
+    `current_w` (the register's cap now) is kept while it lies between the need and the need plus the slack;
+    otherwise the cap is written at the need plus half the slack, rounded up to 100 W, so the plan can move either
+    way before the next write (with a fixed step a plan around a step's edge would write every slot). Never above
+    `limit_w`."""
+    need = min(max(need_w, 0.0), float(limit_w))
+    fresh = min(limit_w, math.ceil((need + slack_w / 2) / 100) * 100)
+    if current_w is not None and need <= current_w <= min(max(need + slack_w, fresh), limit_w):
+        current = round(current_w)
+        return current, current != fresh
+    return fresh, False
+
+
+def _cap_text(need: float, cap: int, kept: bool, slack: int) -> str:
+    if cap < need:
+        return f"{cap} W (the configured limit; the plan: {need:.0f} W)"
+    if kept:
+        return f"{cap} W (kept: within {slack} W above the plan's {need:.0f} W)"
+    if slack:
+        return f"{cap} W (the plan's {need:.0f} W + {slack // 2} W, rounded up to 100 W)"
+    return f"{cap} W (the plan's {need:.0f} W rounded up to 100 W)"
+
+
+def decide(
+    v: PlanValues, limits: InverterLimits, no_export_at_or_below: float | None, held: Observed | None = None
+) -> Decision:
+    """`no_export_at_or_below` (Settings → EMHASS → MPC) blocks export in cheap slots; None never blocks. `held` is
+    what the registers show now: a battery cap there is kept while it is within the slack above the plan (None:
+    always the plan's)."""
     g, b, pv, c = v.p_grid, v.p_batt, v.p_pv, v.p_pv_curtailment
     threshold = no_export_at_or_below
     notes: list[str] = []
@@ -114,6 +177,7 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
     cheap = threshold is not None and price <= threshold
     vals = f"P_grid {g:.0f} W, P_batt {b:.0f} W, P_PV {pv:.0f} W, curtailment {c:.0f} W"
     bmax, bmin = limits.battery_max_w, limits.battery_min_w
+    slack = limits.battery_cap_slack_w
 
     if g > BAND_W:  # importing
         if b < -BAND_W:
@@ -126,13 +190,38 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
             if limits.force_charge_at_import_max:
                 why += " (the import max: the battery limits its own charge)"
         elif b > BAND_W:
-            rule, why, grid = "use_bat_import", "importing and discharging (use the battery, import the rest)", 0
+            rule, grid = "use_bat_import", 0
+            if limits.cap_discharge_at_plan:
+                now_w = -held.battery_min_w if held is not None and held.battery_min_w is not None else None
+                cap, kept = battery_cap(b, now_w, slack, -limits.battery_min_w)
+                bmin = -cap
+                why = (
+                    f"importing and discharging: the battery gives at most {_cap_text(b, cap, kept, slack)}, "
+                    "the grid the rest"
+                )
+            else:
+                why = "importing and discharging (use the battery, import the rest)"
         else:
             rule, why, grid = "use_only_grid", "importing, battery idle", 0
             bmin = 0
     elif g < -BAND_W:  # exporting
         if b < -BAND_W:
-            rule, why, grid = "charge_export", "exporting while charging the battery", 0
+            rule, grid = "charge_export", 0
+            if limits.cap_charge_at_plan and not cheap:
+                now_w = held.battery_max_w if held is not None else None
+                cap, kept = battery_cap(-b, now_w, slack, limits.battery_max_w)
+                bmax = cap
+                why = (
+                    f"exporting while charging: the battery takes at most {_cap_text(-b, cap, kept, slack)}, "
+                    "the rest is exported"
+                )
+            elif limits.cap_charge_at_plan:
+                why = (
+                    f"exporting while charging the battery; not capped: the price {price:.4f} €/kWh is at or below "
+                    f"{threshold}, so the feed-in limit is 0 W and the battery keeps the PV"
+                )
+            else:
+                why = "exporting while charging the battery"
         elif b > BAND_W:
             grid = _round100(g)
             rule, why = "force_discharge", f"exporting from the battery; grid target {grid} W"
@@ -159,18 +248,9 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
     needed, need_why = feedin_need(v, limits.battery_full_soc_pct / 100)
     feedin_why += f"; written: {need_why}" if needed else f"; left as it is: {need_why}"
     label = LABELS[rule]
-    return Decision(rule, label, f"{why} ({vals})", Targets(label, grid, bmax, bmin), feedin, feedin_why, notes, needed)
-
-
-@dataclass(frozen=True)
-class Observed:
-    """What the inverter entities show (after the automation ran, or after we applied)."""
-
-    state: str | None
-    grid_power_w: float | None
-    battery_max_w: float | None
-    battery_min_w: float | None
-    feedin_max_w: float | None
+    branch = "self_use_keep_pv" if rule == "self_use" and g < -BAND_W else rule
+    targets = Targets(label, grid, bmax, bmin)
+    return Decision(rule, label, f"{why} ({vals})", targets, feedin, feedin_why, notes, needed, branch)
 
 
 def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Observed) -> dict[str, Any]:
