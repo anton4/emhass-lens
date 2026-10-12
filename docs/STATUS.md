@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-12: one day-strip mark per stretch of the same decision on the Market and EV charger pages (unreleased)
+### 2026-10-12: one day-strip mark per stretch of the same decision on the Market and EV charger pages (0.4.21)
 - **Why:** the owner found that on the Market page's "Today, decision by decision" the hover outline moved around
   inside what looked like one block, unlike the Inverter page.
   - In a Qilowatt session the market reconciles every minute and on every command change (often 10–60 s apart).
@@ -53,7 +53,7 @@ These come from docs/PLAN.md §10:
   power every minute, each change is still its own narrow mark.
 - **Checked** with unit tests only (no local market runs). Look at it on the real HA after the release.
 
-### 2026-10-12: keep a feed-in limit that already covers the slot (unreleased)
+### 2026-10-12: keep a feed-in limit that already covers the slot (0.4.21)
 - **Why:** the owner found the feed-in presses in runs 3267 and 3281 excessive. The export price was fine, and the spare PV went into the battery.
   - Kratt sell sessions had left 3000 W and 3800 W. The plan's spare PV was 2770 W and 1008 W.
   - `feedin_need()` (0.4.8) said the limit mattered (plan SOC 90.3 % ≥ 90 %), and then only exactly 15500 W would do.
@@ -103,7 +103,7 @@ These come from docs/PLAN.md §10:
 
   Backend: 393 tests, ruff, pyright. Frontend: typecheck, lint, 184 tests, build. e2e was not run.
 
-### 2026-10-12: in market shadow mode the hold follows the market's session select (unreleased)
+### 2026-10-12: in market shadow mode the hold follows the market's session select (0.4.19)
 - **Why:** the owner sent runs 3267 and 3281 (inverter live, market shadow, two Kratt sell sessions at 13:07–13:14).
   - At a session end the automation writes the safe passive state but not the feed-in limit (`domain/market.py`). So 3000 W and 3800 W stayed behind.
   - The hold was off, so the drift check set 3000 W back 1m45s later (13:11:30), and the slot decision at 13:15:02 fixed 3800 W.

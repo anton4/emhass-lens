@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.21
+
+- Inverter: when export is allowed, a feed-in limit that already lets out what can reach the grid is kept instead of being rewritten to the export max. That covers the plan's export or spare PV, rounded up to 100 W. A limit a market sell session left behind (e.g. 3000 W against 2770 W of spare PV) no longer costs a feed-in button press, and the drift check doesn't set it back. A lower limit is still set to the export max. Cheap slots still get 0 W, and slots where the plan curtails PV get the export max.
+- Market and EV charger: the day strip shows one mark per stretch of the same decision instead of one per decision. Pointing at a mark shows a popup with the time range, what was decided and how many decisions agreed with the automation.
+
 ## 0.4.20
 
 - Runs: the job and outcome filters each open a list where you tick any number of jobs or outcomes. **Include** shows only the ticked ones and **Exclude** hides them, for example every job but the heartbeat, or every outcome but OK and Nothing to do. The jobs are listed A–Z. Links to one job (`?job=emhass.mpc`) still work.
