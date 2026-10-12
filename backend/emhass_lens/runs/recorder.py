@@ -14,7 +14,7 @@ import gzip
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -169,25 +169,49 @@ class RunRecorder:
     # --- reading -----------------------------------------------------------------------------------
     async def list(
         self,
-        job: str | None = None,
-        outcome: str | None = None,
+        job: str | Sequence[str] | None = None,
+        outcome: str | Sequence[str] | None = None,
         limit: int = 100,
         before: int | None = None,
         *,
+        not_jobs: Sequence[str] = (),
+        not_outcomes: Sequence[str] = (),
         after: int | None = None,
         since: str | None = None,
         until: str | None = None,
         ascending: bool = False,
     ) -> list[dict[str, Any]]:
-        """Runs newest first (or oldest first), filtered by job, outcome and a started_at range [since, until),
-        paged by id: `before` going back, `after` going forward. `since`/`until` are UTC ISO like started_at."""
+        """Runs newest first (or oldest first), of any of the jobs and outcomes given and none of `not_jobs` and
+        `not_outcomes`, started within [since, until), paged by id: `before` going back, `after` going forward.
+        `since`/`until` are UTC ISO like started_at."""
+        where: list[str] = []
+        args: list[Any] = []
+
+        def among(column: str, values: str | Sequence[str] | None, negate: bool = False) -> None:
+            picked = [values] if isinstance(values, str) else list(values or ())
+            if picked:
+                where.append(f"{column} {'NOT IN' if negate else 'IN'} ({','.join('?' * len(picked))})")
+                args.extend(picked)
+
+        among("job", job)
+        among("job", not_jobs, negate=True)
+        among("outcome", outcome)
+        among("outcome", not_outcomes, negate=True)
+        for clause, value in (
+            ("id < ?", before),
+            ("id > ?", after),
+            ("started_at >= ?", since),
+            ("started_at < ?", until),
+        ):
+            if value is not None:
+                where.append(clause)
+                args.append(value)
         return await self.db.aquery(
             "SELECT id, job, trigger, mode, scheduled_at, started_at, finished_at, duration_ms, outcome, "
             "summary, error, settings_rev, pinned FROM run "
-            "WHERE (? IS NULL OR job = ?) AND (? IS NULL OR outcome = ?) AND (? IS NULL OR id < ?) "
-            "AND (? IS NULL OR id > ?) AND (? IS NULL OR started_at >= ?) AND (? IS NULL OR started_at < ?) "
+            f"{'WHERE ' + ' AND '.join(where) if where else ''} "
             f"ORDER BY id {'ASC' if ascending else 'DESC'} LIMIT ?",
-            (job, job, outcome, outcome, before, before, after, after, since, since, until, until, limit),
+            (*args, limit),
         )
 
     async def histogram(self, since: str, until: str, bucket_s: int) -> list[dict[str, Any]]:

@@ -37,6 +37,28 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: Runs filters: several jobs and outcomes, include or exclude (0.4.20)
+- **Why:** the owner wanted the jobs A–Z, several jobs at once, and a way to leave jobs and outcomes out.
+- **API:** `GET /api/runs` takes `job`, `outcome`, `not_job` and `not_outcome`, each repeatable.
+  - `RunRecorder.list` builds `IN (…)` / `NOT IN (…)` clauses. A single `job` string still works for every other caller.
+  - Test: `test_runs_filter_by_several_jobs_and_outcomes`.
+- **URL:** the page uses the same keys as the API (`?job=a&job=b` or `?not_job=a`), so old `?job=emhass.mpc` links still work.
+  - `lib/multiFilter.ts` (`readMulti`, `writeMulti`, `multiQuery`, `multiSummary`) has tests.
+  - `query()` in `api/client.ts` repeats a key for an array.
+- **UI:** `components/MultiFilter.tsx` is a select-like button and a panel.
+  - The panel has an Include/Exclude `.segmented` switch, a checkbox per option (outcomes with their lamp), Clear, and a hint line. A ticked option is struck through in Exclude.
+  - With nothing ticked the mode is local state, since the URL has no key for it.
+  - The panel moves sideways to stay inside 16 px gutters on a phone.
+  - The outside-click/Escape handling moved from `StatusMenu` to `components/useDismiss.ts`, which both use.
+  - Outcomes keep their order (OK … Error). A picked job that is no longer registered stays in the list so it can be unticked.
+- **Checked** in Chrome against a local backend with seeded runs:
+  - A–Z order; include two jobs; switch to Exclude; exclude outcomes picked before ticking;
+  - Escape and an outside click close the panel;
+  - `?job=emhass.mpc`;
+  - 390 px in an iframe (the panel at 57–357 px, no sideways scroll).
+
+  Backend: 393 tests, ruff, pyright. Frontend: typecheck, lint, 184 tests, build. e2e was not run.
+
 ### 2026-10-12: in market shadow mode the hold follows the market's session select (unreleased)
 - **Why:** the owner sent runs 3267 and 3281 (inverter live, market shadow, two Kratt sell sessions at 13:07–13:14).
   - At a session end the automation writes the safe passive state but not the feed-in limit (`domain/market.py`). So 3000 W and 3800 W stayed behind.

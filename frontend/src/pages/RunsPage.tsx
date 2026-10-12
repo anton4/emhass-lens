@@ -3,11 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api, query } from '../api/client'
 import { useJobs, useRuns, useStatus } from '../api/queries'
 import type { RunSummary } from '../api/types'
+import { MultiFilter, type MultiOption } from '../components/MultiFilter'
 import { OutcomeChip } from '../components/Outcome'
 import { RunTimeline } from '../components/RunTimeline'
 import { useMediaQuery } from '../components/useMediaQuery'
 import { RunPreview } from './RunPreview'
-import { OUTCOME_NAMES, outcomeLabel } from '../lib/outcomes'
+import { multiQuery, readMulti, writeMulti, type MultiValue } from '../lib/multiFilter'
+import { OUTCOME_NAMES, OUTCOMES, outcomeLabel } from '../lib/outcomes'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { SortableTh } from '../components/SortableTh'
 import { localInputToIso, shiftDay, todayKey } from '../lib/days'
@@ -21,8 +23,8 @@ const SERVER_SORTED = new Set(['id', 'started'])
 
 export function RunsPage() {
   const [params, setParams] = useSearchParams()
-  const job = params.get('job') ?? ''
-  const outcome = params.get('outcome') ?? ''
+  const job = readMulti(params, 'job')
+  const outcome = readMulti(params, 'outcome')
   const from = params.get('from') ?? ''
   const to = params.get('to') ?? ''
   const sortKey = params.get('sort') ?? 'started'
@@ -41,8 +43,8 @@ export function RunsPage() {
   const since = localInputToIso(from, tz) || undefined
   const until = localInputToIso(to, tz) || undefined
   const filters = {
-    job: job || undefined,
-    outcome: outcome || undefined,
+    ...multiQuery('job', job),
+    ...multiQuery('outcome', outcome),
     since,
     until,
     order: order === 'asc' ? ('asc' as const) : undefined,
@@ -54,7 +56,7 @@ export function RunsPage() {
   const [moreKey, setMoreKey] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
   const [noMore, setNoMore] = useState(false)
-  const filterKey = `${job}|${outcome}|${since}|${until}|${order}`
+  const filterKey = JSON.stringify([job, outcome, since, until, order])
   if (moreKey !== filterKey) {
     setMoreKey(filterKey)
     setMore([])
@@ -74,6 +76,15 @@ export function RunsPage() {
       { replace: true },
     )
   }
+  const setMulti = (key: string, value: MultiValue) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        writeMulti(next, key, value)
+        return next
+      },
+      { replace: true },
+    )
   const onSort = (key: string) => {
     const next = nextSort(sort, key, key === 'job' || key === 'outcome' ? 'asc' : 'desc')
     const isDefault = next.key === 'started' && next.dir === 'desc'
@@ -85,6 +96,17 @@ export function RunsPage() {
   const first = runs.data ?? []
   const loaded = [...first, ...more.filter((o) => !first.some((r) => r.id === o.id))]
   const jobTitle = (id: string) => jobs.data?.find((j) => j.id === id)?.title ?? id
+  // A–Z by title; a picked job that is no longer registered stays in the list so it can be unticked
+  const jobOptions: MultiOption[] = [
+    ...(jobs.data ?? []).map((j) => j.id),
+    ...job.values.filter((id) => !jobs.data?.some((j) => j.id === id)),
+  ]
+    .map((id) => ({ value: id, label: jobTitle(id) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+  const outcomeOptions: MultiOption[] = [
+    ...OUTCOME_NAMES,
+    ...outcome.values.filter((o) => !OUTCOME_NAMES.includes(o)),
+  ].map((o) => ({ value: o, label: outcomeLabel(o), lamp: OUTCOMES[o]?.color ?? 'neutral' }))
   const shown = SERVER_SORTED.has(sortKey)
     ? loaded
     : sortRows(
@@ -116,6 +138,7 @@ export function RunsPage() {
   }
 
   const ranged = Boolean(from || to)
+  const filtered = ranged || job.values.length > 0 || outcome.values.length > 0
   const pick = (id: number) => (wide ? setFilters({ run: String(id) }) : navigate(`/runs/${id}`))
   return (
     <>
@@ -130,28 +153,20 @@ export function RunsPage() {
         onPick={pick}
       />
       <div className="toolbar list-controls" style={{ marginBottom: 12 }}>
-        <label>
-          <span className="visually-hidden">Job</span>
-          <select value={job} onChange={(e) => setFilters({ job: e.target.value })}>
-            <option value="">All jobs</option>
-            {(jobs.data ?? []).map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="visually-hidden">Outcome</span>
-          <select value={outcome} onChange={(e) => setFilters({ outcome: e.target.value })}>
-            <option value="">All outcomes</option>
-            {OUTCOME_NAMES.map((o) => (
-              <option key={o} value={o}>
-                {outcomeLabel(o)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MultiFilter
+          label="Job"
+          noun="jobs"
+          options={jobOptions}
+          value={job}
+          onChange={(v) => setMulti('job', v)}
+        />
+        <MultiFilter
+          label="Outcome"
+          noun="outcomes"
+          options={outcomeOptions}
+          value={outcome}
+          onChange={(v) => setMulti('outcome', v)}
+        />
         <label className="range-input">
           <span className="muted">From</span>
           <input
@@ -242,9 +257,9 @@ export function RunsPage() {
             </table>
           </div>
           {runs.isSuccess && loaded.length === 0 && (
-            <Empty title={ranged || job || outcome ? 'No runs match the filters' : 'No runs yet'}>
-              {ranged || job || outcome ? (
-                'Widen the time range or pick another job or outcome.'
+            <Empty title={filtered ? 'No runs match the filters' : 'No runs yet'}>
+              {filtered ? (
+                'Widen the time range or change the job or outcome filter.'
               ) : (
                 <>
                   Jobs run on their schedule; you can also start one from <Link to="/health">Health</Link>.

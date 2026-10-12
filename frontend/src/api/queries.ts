@@ -78,9 +78,12 @@ export function useJobs() {
   return useQuery({ queryKey: keys.jobs, queryFn: () => api.get<JobInfo[]>('/api/jobs'), refetchInterval: 60_000 })
 }
 
+/** `job` and `outcome` keep any of several values, `not_job` and `not_outcome` leave them out. */
 export type RunFilters = {
-  job?: string
-  outcome?: string
+  job?: string | readonly string[]
+  outcome?: string | readonly string[]
+  not_job?: readonly string[]
+  not_outcome?: readonly string[]
   limit?: number
   before?: number
   after?: number

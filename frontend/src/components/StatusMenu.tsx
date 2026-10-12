@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useEvents } from '../api/events'
 import { useJobs } from '../api/queries'
@@ -10,6 +10,7 @@ import { statusColor } from '../lib/status'
 import { Icon } from './Icon'
 import { LabelledLamp, Lamp, type LampColor } from './Lamp'
 import { ModeSwitch } from './ModeSwitch'
+import { useDismiss } from './useDismiss'
 import { useNow } from './useNow'
 
 const MODE_TEXT: Record<string, string> = { off: 'OFF', dry_run: 'DRY RUN', live: 'LIVE' }
@@ -76,24 +77,8 @@ export function StatusMenu({ status }: { status: StatusInfo }) {
   const panelId = useId()
   const driver = driverSpec(status.driver)
 
-  useEffect(() => {
-    if (!open) return
-    const onDown = (event: PointerEvent) => {
-      // Dialogs the panel opens (mode confirmation) live in the top layer, outside the wrapper
-      const target = event.target as Element | null
-      if (target?.closest('dialog')) return
-      if (wrap.current && !wrap.current.contains(target)) setOpen(false)
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+  const close = useCallback(() => setOpen(false), [])
+  useDismiss(open, wrap, close)
 
   return (
     <div className="status-menu" ref={wrap}>

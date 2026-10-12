@@ -649,9 +649,9 @@ export interface paths {
         };
         /**
          * List Runs
-         * @description Runs newest first (`order=asc`: oldest first), optionally for one job and outcome and started within
-         *     [since, until). Page with `before` (the oldest id seen, newest first) or `after` (the newest id seen, oldest
-         *     first).
+         * @description Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to
+         *     keep any of several, and `not_job` or `not_outcome` to leave them out. Page with `before` (the oldest id seen,
+         *     newest first) or `after` (the newest id seen, oldest first).
          */
         get: operations["list_runs_api_runs_get"];
         put?: never;
@@ -5627,8 +5627,10 @@ export interface operations {
     list_runs_api_runs_get: {
         parameters: {
             query?: {
-                job?: string | null;
-                outcome?: string | null;
+                job?: string[] | null;
+                outcome?: string[] | null;
+                not_job?: string[] | null;
+                not_outcome?: string[] | null;
                 limit?: number;
                 before?: number | null;
                 after?: number | null;

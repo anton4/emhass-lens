@@ -27,8 +27,10 @@ def utc_bound(value: str | None, name: str) -> str | None:
 @router.get("")
 async def list_runs(
     c: ContainerDep,
-    job: str | None = None,
-    outcome: str | None = None,
+    job: Annotated[list[str] | None, Query()] = None,
+    outcome: Annotated[list[str] | None, Query()] = None,
+    not_job: Annotated[list[str] | None, Query()] = None,
+    not_outcome: Annotated[list[str] | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     before: int | None = None,
     after: int | None = None,
@@ -36,14 +38,16 @@ async def list_runs(
     until: str | None = None,
     order: Literal["desc", "asc"] = "desc",
 ) -> list[RunSummary]:
-    """Runs newest first (`order=asc`: oldest first), optionally for one job and outcome and started within
-    [since, until). Page with `before` (the oldest id seen, newest first) or `after` (the newest id seen, oldest
-    first)."""
+    """Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to
+    keep any of several, and `not_job` or `not_outcome` to leave them out. Page with `before` (the oldest id seen,
+    newest first) or `after` (the newest id seen, oldest first)."""
     rows = await c.recorder.list(
         job,
         outcome,
         limit,
         before,
+        not_jobs=not_job or (),
+        not_outcomes=not_outcome or (),
         after=after,
         since=utc_bound(since, "since"),
         until=utc_bound(until, "until"),

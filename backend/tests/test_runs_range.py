@@ -45,6 +45,36 @@ def test_runs_in_a_time_range_newest_or_oldest_first(tmp_path: Path) -> None:
         assert client.get("/api/runs", params={"since": "yesterday"}).status_code == 400
 
 
+def test_runs_filter_by_several_jobs_and_outcomes(tmp_path: Path) -> None:
+    clock = FakeClock(T0)
+    with make_client(tmp_path, World(), clock) as client:
+        c = client.app.state.container  # type: ignore[attr-defined]
+
+        async def make(job: str, outcome: str) -> None:
+            async with c.recorder.start(job) as run:
+                run.outcome = outcome
+
+        for minute, (job, outcome) in enumerate(
+            [("test.a", "ok"), ("test.b", "error"), ("test.c", "noop"), ("test.a", "noop")]
+        ):
+            clock.set(T0 + timedelta(minutes=minute))
+            client.portal.call(make, job, outcome)  # type: ignore[union-attr]
+
+        def get(**params: object) -> list[tuple[str, str]]:
+            resp = client.get("/api/runs", params=params)
+            assert resp.status_code == 200, resp.text
+            # the App's own start-up runs are in the list too; only the test jobs matter here
+            return [(r["job"], r["outcome"]) for r in resp.json() if r["job"].startswith("test.")]
+
+        assert get(job="test.a") == [("test.a", "noop"), ("test.a", "ok")]
+        assert get(job=["test.a", "test.b"]) == [("test.a", "noop"), ("test.b", "error"), ("test.a", "ok")]
+        assert get(not_job=["test.a"]) == [("test.c", "noop"), ("test.b", "error")]
+        assert get(outcome=["ok", "noop"]) == [("test.a", "noop"), ("test.c", "noop"), ("test.a", "ok")]
+        assert get(not_outcome="noop") == [("test.b", "error"), ("test.a", "ok")]
+        assert get(job=["test.a", "test.c"], not_outcome=["ok"]) == [("test.a", "noop"), ("test.c", "noop")]
+        assert get(not_job=["test.a", "test.b"], not_outcome=["noop"]) == []
+
+
 def test_market_sessions_in_a_time_range(tmp_path: Path) -> None:
     with make_client(tmp_path, World(), FakeClock(T0)) as client:
         c = client.app.state.container  # type: ignore[attr-defined]

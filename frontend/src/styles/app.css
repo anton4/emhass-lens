@@ -3296,6 +3296,80 @@ dialog.confirm h2 {
   font-size: var(--step--1);
 }
 
+/* a filter that keeps or leaves out several values: a button like a select and a panel of checkboxes */
+.multi-filter {
+  position: relative;
+}
+
+.multi-filter-button {
+  gap: 8px;
+  padding: 5px 9px;
+  font-size: var(--step-0);
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.multi-filter-button[data-active] {
+  border-color: var(--accent-text);
+}
+
+.multi-filter-button .icon {
+  color: var(--ink-muted);
+}
+
+.multi-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.multi-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.multi-filter-hint {
+  margin: 8px 0 4px;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.multi-filter-list {
+  display: grid;
+  gap: 2px;
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0;
+  list-style: none;
+}
+
+.multi-filter-list .check {
+  display: flex;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.multi-filter-list .check:hover {
+  background: var(--surface-hover);
+}
+
+.multi-filter-list .check[data-excluded] {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
 th .sort-button {
   all: unset;
   cursor: pointer;

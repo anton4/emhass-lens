@@ -88,10 +88,14 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`
 }
 
-export function query(params: Record<string, string | number | boolean | null | undefined>): string {
+/** A query string; an array repeats its key once per value (`job=a&job=b`). */
+export function query(
+  params: Record<string, string | number | boolean | readonly string[] | null | undefined>,
+): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
+    if (Array.isArray(value)) for (const item of value as readonly string[]) search.append(key, item)
+    else if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
   }
   const text = search.toString()
   return text ? `?${text}` : ''
