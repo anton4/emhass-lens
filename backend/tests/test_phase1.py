@@ -392,7 +392,7 @@ def test_setup_checklist_tracks_the_migration(tmp_path: Path, world: World) -> N
         assert steps["ha"]["state"] == "done"
         assert steps["emhass"]["state"] == "done"
         assert steps["emhass_config"]["state"] == "done"
-        assert steps["import"]["state"] == "skipped"  # no HACS integration switch in this world
+        assert "import" not in steps  # the HACS settings import is gone
         assert steps["inputs"]["state"] == "done"
         assert steps["drive"]["state"] == "todo"
         assert steps["mqtt"]["optional"] is True

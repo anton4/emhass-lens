@@ -4040,69 +4040,6 @@
         "title": "LastBuild",
         "type": "object"
       },
-      "LegacyApplyRequest": {
-        "properties": {
-          "base_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Revision"
-          }
-        },
-        "title": "LegacyApplyRequest",
-        "type": "object"
-      },
-      "LegacyPreview": {
-        "properties": {
-          "changes": {
-            "additionalProperties": true,
-            "title": "Changes",
-            "type": "object"
-          },
-          "diff": {
-            "items": {
-              "$ref": "#/components/schemas/DiffEntry"
-            },
-            "title": "Diff",
-            "type": "array"
-          },
-          "errors": {
-            "items": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "title": "Errors",
-            "type": "array"
-          },
-          "found": {
-            "title": "Found",
-            "type": "boolean"
-          },
-          "notes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Notes",
-            "type": "array"
-          }
-        },
-        "required": [
-          "found",
-          "changes",
-          "notes",
-          "diff",
-          "errors"
-        ],
-        "title": "LegacyPreview",
-        "type": "object"
-      },
       "LogEntry": {
         "properties": {
           "component": {
@@ -9725,65 +9662,6 @@
         "summary": "Run Job",
         "tags": [
           "jobs"
-        ]
-      }
-    },
-    "/api/legacy/import": {
-      "post": {
-        "operationId": "legacy_apply_api_legacy_import_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LegacyApplyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SaveResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "422": {
-            "description": "Unprocessable Content"
-          }
-        },
-        "summary": "Legacy Apply",
-        "tags": [
-          "system"
-        ]
-      }
-    },
-    "/api/legacy/preview": {
-      "get": {
-        "description": "What importing the HACS integration's settings would change.",
-        "operationId": "legacy_preview_api_legacy_preview_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LegacyPreview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Legacy Preview",
-        "tags": [
-          "system"
         ]
       }
     },

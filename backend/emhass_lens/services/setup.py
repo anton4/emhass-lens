@@ -59,40 +59,7 @@ async def checklist(c: Container) -> list[dict[str, Any]]:
             )
         )
 
-    imported = await c.app_db.aquery_one(
-        "SELECT id, created_at FROM settings_revision WHERE source = 'legacy_import' ORDER BY id DESC LIMIT 1"
-    )
     legacy_present = ha.state(settings.parity.legacy_auto_mpc_switch) is not None if ha.connected else None
-    if imported:
-        steps.append(
-            step(
-                "import",
-                "Settings imported from the HACS integration",
-                "done",
-                f"revision {imported['id']}",
-                "#/settings",
-            )
-        )
-    elif legacy_present is False:
-        steps.append(
-            step(
-                "import",
-                "Settings imported from the HACS integration",
-                "skipped",
-                "The HACS integration isn't installed; enter tariffs under Settings → Prices",
-                "#/settings",
-            )
-        )
-    else:
-        steps.append(
-            step(
-                "import",
-                "Settings imported from the HACS integration",
-                "todo",
-                "Health → Import from the HACS integration",
-                "#/health?card=import",
-            )
-        )
 
     problems = [p for p in x["problems"].problems.values() if p.key.startswith("prices.")]
     steps.append(

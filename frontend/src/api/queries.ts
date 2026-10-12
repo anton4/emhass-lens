@@ -8,7 +8,6 @@ import type {
   InputsResponse,
   InverterStatus,
   JobInfo,
-  LegacyPreview,
   MarketSession,
   MarketStatus,
   OutputsStatus,
@@ -51,7 +50,6 @@ export const keys = {
   problems: ['problems'] as const,
   entities: (params: Record<string, unknown>) => ['ha-entities', params] as const,
   entity: (entityId: string) => ['ha-entity', entityId] as const,
-  legacy: ['legacy-preview'] as const,
   latestRun: (job: string) => ['runs', { job, limit: 1 }] as const,
   outputs: ['outputs'] as const,
   inverter: ['inverter'] as const,
@@ -215,16 +213,6 @@ export function useEntity(entityId: string, enabled: boolean) {
     enabled: enabled && entityId !== '',
     staleTime: 30_000,
     retry: false,
-  })
-}
-
-export function useLegacyPreview(enabled = true) {
-  return useQuery({
-    queryKey: keys.legacy,
-    queryFn: () => api.get<LegacyPreview>('/api/legacy/preview'),
-    staleTime: 60_000,
-    retry: false,
-    enabled,
   })
 }
 

@@ -1,4 +1,4 @@
-"""EMHASS status and discovery, problems, Home Assistant entities, legacy import, take over / hand back."""
+"""EMHASS status and discovery, problems, Home Assistant entities, take over / hand back."""
 
 import time
 from typing import Annotated, Any
@@ -10,15 +10,12 @@ from emhass_lens.api.routes.runs import utc_bound
 from emhass_lens.api.schemas import (
     ChargeModeRequest,
     ChargerStatus,
-    DiffEntry,
     DriverRequest,
     DriverResult,
     EmhassStatusOut,
     EntityOption,
     InverterStatus,
     JobInfo,
-    LegacyApplyRequest,
-    LegacyPreview,
     MarketReconcileRequest,
     MarketSession,
     MarketStatus,
@@ -28,16 +25,14 @@ from emhass_lens.api.schemas import (
     ProblemInfo,
     ProblemsResponse,
     RunStarted,
-    SaveResponse,
     SetupChecklist,
     SetupStep,
     StorageOverview,
 )
 from emhass_lens.core.clock import iso
 from emhass_lens.domain.entity_search import search_entities
-from emhass_lens.services import driver, legacy_import, setup
-from emhass_lens.settings.model import Settings
-from emhass_lens.settings.store import SettingsInvalid, StaleRevision, _errors, deep_merge, diff_docs, mask_diff
+from emhass_lens.services import driver, setup
+from emhass_lens.settings.store import StaleRevision
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -129,45 +124,6 @@ def _entity_option(state: dict[str, Any]) -> EntityOption:
         unit=attrs.get("unit_of_measurement"),
         device_class=attrs.get("device_class"),
     )
-
-
-@router.get("/legacy/preview")
-async def legacy_preview(c: ContainerDep) -> LegacyPreview:
-    """What importing the HACS integration's settings would change."""
-    try:
-        result = await legacy_import.preview(c)
-    except Exception as exc:
-        return LegacyPreview(
-            found=False, changes={}, notes=[f"Reading the integration failed: {exc}"], diff=[], errors=[]
-        )
-    current = c.settings.current.model_dump(mode="json")
-    merged = deep_merge(current, result["changes"])
-    try:
-        new = Settings.model_validate(merged)
-    except Exception as exc:
-        return LegacyPreview(**result, diff=[], errors=_errors(exc))
-    diff = mask_diff(diff_docs(current, new.model_dump(mode="json")))
-    return LegacyPreview(**result, diff=[DiffEntry(**d) for d in diff], errors=[])
-
-
-@router.post("/legacy/import", dependencies=[Writable], responses={409: {}, 422: {}})
-async def legacy_apply(c: ContainerDep, request: Request, body: LegacyApplyRequest) -> SaveResponse:
-    result = await legacy_import.preview(c)
-    if not result["found"]:
-        raise HTTPException(404, "The HACS integration wasn't found")
-    try:
-        saved = await c.settings.save(
-            result["changes"],
-            base_revision=body.base_revision,
-            actor=actor(request),
-            source="legacy_import",
-            comment="Imported from the HACS integration",
-        )
-    except StaleRevision as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except SettingsInvalid as exc:
-        raise HTTPException(422, exc.errors) from exc
-    return SaveResponse(revision=saved.revision, diff=[DiffEntry(**d) for d in saved.diff])
 
 
 @router.post("/driver/take-over", dependencies=[Writable])

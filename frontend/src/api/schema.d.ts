@@ -350,43 +350,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/legacy/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Legacy Apply */
-        post: operations["legacy_apply_api_legacy_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/legacy/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Legacy Preview
-         * @description What importing the HACS integration's settings would change.
-         */
-        get: operations["legacy_preview_api_legacy_preview_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/logs": {
         parameters: {
             query?: never;
@@ -2640,28 +2603,6 @@ export interface components {
             horizon: number;
             /** Run Id */
             run_id: number | null;
-        };
-        /** LegacyApplyRequest */
-        LegacyApplyRequest: {
-            /** Base Revision */
-            base_revision?: number | null;
-        };
-        /** LegacyPreview */
-        LegacyPreview: {
-            /** Changes */
-            changes: {
-                [key: string]: unknown;
-            };
-            /** Diff */
-            diff: components["schemas"]["DiffEntry"][];
-            /** Errors */
-            errors: {
-                [key: string]: string;
-            }[];
-            /** Found */
-            found: boolean;
-            /** Notes */
-            notes: string[];
         };
         /** LogEntry */
         LogEntry: {
@@ -5222,64 +5163,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    legacy_apply_api_legacy_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LegacyApplyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SaveResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    legacy_preview_api_legacy_preview_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LegacyPreview"];
                 };
             };
         };

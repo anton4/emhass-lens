@@ -788,18 +788,6 @@ class MpcPreview(BaseModel):
     ev_reserve: EvReserveOut | None = None
 
 
-class LegacyPreview(BaseModel):
-    found: bool
-    changes: dict[str, Any]
-    notes: list[str]
-    diff: list[DiffEntry]
-    errors: list[dict[str, str]]
-
-
-class LegacyApplyRequest(BaseModel):
-    base_revision: int | None = None
-
-
 class DriverResult(BaseModel):
     ok: bool
     run_id: int | None = None

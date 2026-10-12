@@ -29,7 +29,6 @@ export type PlanSnapshot = S['PlanSnapshotOut']
 export type EmhassStatus = S['EmhassStatusOut']
 export type EntityOption = S['EntityOption']
 export type MpcPreview = S['MpcPreview']
-export type LegacyPreview = S['LegacyPreview']
 
 export interface FieldError {
   loc: string

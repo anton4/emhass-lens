@@ -16,7 +16,6 @@ import { formatCountdown, formatDateTime, formatTime } from '../lib/format'
 import { nextSort, sortRows, type SortState } from '../lib/sort'
 import { DriverCard } from './health/DriverCard'
 import { EmhassCard } from './health/EmhassCard'
-import { LegacyImportCard } from './health/LegacyImportCard'
 import { MlCard } from './health/MlCard'
 import { OutputsCard } from './health/OutputsCard'
 import { SetupCard } from './health/SetupCard'
@@ -84,7 +83,6 @@ export function HealthPage() {
       </section>
 
       <ParityCard />
-      <LegacyImportCard writable={s?.writable ?? false} />
     </>
   )
 }
@@ -100,7 +98,6 @@ const SECTIONS = [
   ['card-storage', 'Storage'],
   ['card-jobs', 'Jobs'],
   ['card-parity', 'Parity'],
-  ['card-import', 'Import'],
 ] as const
 
 /** Jump links to the page's sections (the address hash belongs to the router, so these scroll instead). */

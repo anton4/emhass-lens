@@ -14,7 +14,7 @@ Do this only after the Phase 3 exit criteria in docs/PLAN.md are met:
 ## 2. Final release of anton4/homeassistant-ee-nordpool
 In the old repo, on a branch:
 - **README:** a banner at the top.
-  > **This integration is retired.** Its successor is [EMHASS Lens](https://github.com/anton4/emhass-lens), a Home Assistant App that does the same planning with everything visible in its own UI. Install it, use *Import from the HACS integration* on its Health page, then *Take over*.
+  > **This integration is retired.** Its successor is [EMHASS Lens](https://github.com/anton4/emhass-lens), a Home Assistant App that does the same planning with everything visible in its own UI. Install it, enter your tariffs under Settings → Prices, then use *Take over* on its Health page.
 - **A repair issue** in `__init__.py` `async_setup_entry`, so users see it in Settings → Repairs:
   ```python
   from homeassistant.helpers import issue_registry as ir
@@ -26,7 +26,7 @@ In the old repo, on a branch:
   with `strings.json` / `translations/en.json`:
   ```json
   "issues": {"retired_use_emhass_lens": {"title": "Nordpool EE Prices is retired",
-    "description": "EMHASS Lens (a Home Assistant App) replaces this integration. Install it, import these settings on its Health page, use Take over, then remove this integration."}}
+    "description": "EMHASS Lens (a Home Assistant App) replaces this integration. Install it, enter your tariffs under Settings → Prices, use Take over on its Health page, then remove this integration."}}
   ```
 - **Release:** bump `manifest.json` version (e.g. 2026.11.0) and make a GitHub release so HACS offers the update.
 

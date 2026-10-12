@@ -144,8 +144,6 @@ def main() -> int:
                 wait_for(legacy_has_pv, 90, every=3)
                 parity = run_job(http, "parity.check")
                 check("matches the HACS integration (parity)", parity["outcome"] == "ok", parity["summary"])
-                preview = http.get("/api/legacy/preview").json()
-                check("finds the HACS integration's settings", preview["found"], "; ".join(preview["notes"]))
 
             patch(http, {"emhass": {"base_url": EMHASS, "mode": "dry_run"}}, "e2e: EMHASS")
             check_run = run_job(http, "emhass.config_check")
