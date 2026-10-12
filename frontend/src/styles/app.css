@@ -1748,7 +1748,8 @@ button.diff-locate {
   white-space: nowrap;
 }
 
-.time-chart .u-legend .u-series:first-child .u-marker {
+/* a live legend starts with the time, which has no line */
+.time-chart .u-legend.u-live .u-series:first-child .u-marker {
   display: none;
 }
 
@@ -1782,6 +1783,176 @@ button.diff-locate {
 
 .time-chart .u-cursor-y {
   display: none;
+}
+
+/* with a popup the legend is a key: the dashed "planned at the time" lines are in the popup's "planned then" column */
+.time-chart .u-legend .is-then {
+  display: none;
+}
+
+/* the value popup beside a chart's cursor (components/charts/ChartPopup.tsx), drawn inside uPlot's plot layer */
+.chart-pop {
+  position: absolute;
+  z-index: 3;
+  padding: 7px 8px 8px;
+  background: var(--surface);
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chart-pop[data-flip] {
+  transform: translateX(-100%);
+}
+
+/* on a narrow plot: across the top of the plot, for the chart under the pointer only */
+.chart-pop[data-docked] {
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  white-space: normal;
+}
+
+.chart-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.chart-pop-time {
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-pop-tag {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--tint-neutral);
+  color: var(--on-neutral);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.chart-pop-tag[data-tone='blue'] {
+  background: var(--tint-blue);
+  color: var(--on-blue);
+}
+
+/* columns as wide as their widest value: every row is a subgrid of the rows' grid */
+.chart-pop-rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 10px;
+}
+
+.chart-pop-rows[data-then] {
+  grid-template-columns: auto auto auto;
+}
+
+.chart-pop-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+
+.chart-pop-row[data-near] {
+  background: var(--surface-hover);
+}
+
+.chart-pop-row[data-near] .chart-pop-name,
+.chart-pop-row[data-near] b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.chart-pop-cols {
+  min-height: 18px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.chart-pop-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.chart-pop-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 0;
+  border-top-width: 2px;
+}
+
+.chart-pop-value b {
+  font-family: var(--font-code);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-pop-value i {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+/* "planned then": a soft band from the header to the last row */
+.chart-pop-then {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-right: -4px;
+  padding: 0 8px;
+  background: var(--then-band);
+  color: var(--then-ink);
+  font-family: var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-pop-cols .chart-pop-then {
+  font-family: var(--font-body);
+  font-weight: 500;
+  border-radius: 6px 6px 0 0;
+}
+
+.chart-pop-row:last-child .chart-pop-then {
+  border-radius: 0 0 6px 6px;
+}
+
+.chart-pop-dash {
+  display: inline-block;
+  width: 12px;
+  height: 0;
+  border-top: 1.5px dashed currentColor;
+}
+
+/* a ring round the dot of the line nearest the pointer */
+.chart-pop-ring {
+  position: absolute;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid var(--ink-faint);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .price-stack {
@@ -2631,7 +2802,7 @@ tr[data-current] td:first-child {
 }
 
 .soc-fill {
-  background: var(--q-batt);
+  background: var(--q-soc);
 }
 
 .soc-reserve,

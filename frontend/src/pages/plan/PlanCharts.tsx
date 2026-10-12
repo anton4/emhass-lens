@@ -9,6 +9,8 @@ import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { snapWindow } from '../../lib/chartRange'
 import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
+import { IDLE_W } from '../../lib/planSummary'
+import { isForecast, originLabel } from '../../lib/prices'
 import {
   deferrableFuture,
   hasMeasured,
@@ -20,7 +22,7 @@ import {
   plannedAtTheTime,
   timeGrid,
 } from '../../lib/planHistory'
-import { eurTick, formatPower, formatPrice } from '../../lib/units'
+import { eurTick, formatPower, formatSignedPower } from '../../lib/units'
 
 const SYNC = 'plan'
 
@@ -63,29 +65,65 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
   return out
 }
 
-// Power quantities, each in its own colour on every chart: battery, grid, PV (an area), load; the deferrable loads follow.
+const charging = (w: number) => (w >= IDLE_W ? 'charging' : w <= -IDLE_W ? 'discharging' : 'idle')
+const importing = (w: number) => (w >= IDLE_W ? 'importing' : w <= -IDLE_W ? 'exporting' : 'no flow')
+
+// Power quantities, each in its own colour on every chart: battery, grid, PV (an area), load; the deferrable loads
+// follow. The battery is drawn with charging up (EMHASS counts discharging as positive), like the grid's import.
 const POWER = [
   {
     column: 'P_batt',
     measured: 'batt',
     planned: 'P_batt',
-    label: 'Battery (+ discharge)',
+    label: 'Battery (+ charge)',
+    popupLabel: 'Battery',
     color: '--q-batt',
     fill: undefined,
+    flip: true,
+    format: formatSignedPower,
+    describe: charging,
   },
   {
     column: 'P_grid',
     measured: 'grid',
     planned: 'P_grid',
     label: 'Grid (+ import)',
+    popupLabel: 'Grid',
     color: '--q-grid',
     fill: undefined,
+    flip: false,
+    format: formatSignedPower,
+    describe: importing,
   },
-  { column: 'P_PV', measured: 'pv', planned: 'P_PV', label: 'PV', color: '--q-pv', fill: 0.16 },
-  { column: 'P_Load', measured: 'load', planned: 'P_Load', label: 'House load', color: '--q-load', fill: undefined },
+  {
+    column: 'P_PV',
+    measured: 'pv',
+    planned: 'P_PV',
+    label: 'PV',
+    popupLabel: 'PV',
+    color: '--q-pv',
+    fill: 0.16,
+    flip: false,
+    format: formatPower,
+    describe: undefined,
+  },
+  {
+    column: 'P_Load',
+    measured: 'load',
+    planned: 'P_Load',
+    label: 'House load',
+    popupLabel: 'House load',
+    color: '--q-load',
+    fill: undefined,
+    flip: false,
+    format: formatPower,
+    describe: undefined,
+  },
 ] as const
 
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
+
+const negated = (values: (number | null)[]) => values.map((v) => (v === null ? null : -v))
 
 /** Power, state of charge and prices on one synced time axis: measured history (solid) with what the plan
  *  said at the time (dashed) left of the now line, the current plan right of it. */
@@ -117,20 +155,25 @@ export function PlanCharts({
       const measured = hasMeasured(past, q.measured)
       const planned = hasPlanned(past, q.planned)
       if (!inPlan && !measured && !planned) continue
+      const values = pastAndFuture(x, past, q.measured, rows, q.column, pastEndS)
       series.push({
         label: q.label,
+        popupLabel: q.popupLabel,
         color: q.color,
         fill: q.fill,
-        values: pastAndFuture(x, past, q.measured, rows, q.column, pastEndS),
-        format: formatPower,
+        values: q.flip ? negated(values) : values,
+        format: q.format,
+        describe: q.describe,
       })
       if (planned) {
+        const then = plannedAtTheTime(x, past, q.planned)
         series.push({
           label: `${q.label}, planned at the time`,
           color: q.color,
           ...DASHED,
-          values: plannedAtTheTime(x, past, q.planned),
-          format: formatPower,
+          values: q.flip ? negated(then) : then,
+          format: q.format,
+          then: true,
         })
       }
     }
@@ -151,6 +194,7 @@ export function PlanCharts({
           ...DASHED,
           values: plannedAtTheTime(x, past, 'P_deferrable'),
           format: formatPower,
+          then: true,
         })
       }
     }
@@ -166,7 +210,7 @@ export function PlanCharts({
     const first = columns[0] ?? 'SOC_opt'
     series.push({
       label: columns.length > 1 ? 'Battery 1 SOC' : 'Battery SOC',
-      color: '--q-batt',
+      color: '--q-soc',
       step: false,
       values: pastAndFuture(x, past, 'soc', rows, first, pastEndS, 100, false),
       format: fmt,
@@ -174,11 +218,12 @@ export function PlanCharts({
     if (plannedSoc) {
       series.push({
         label: columns.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
-        color: '--q-batt',
+        color: '--q-soc',
         ...DASHED,
         step: false,
         values: plannedAtTheTime(x, past, 'SOC', 100, false),
         format: fmt,
+        then: true,
       })
     }
     columns.slice(1).forEach((column, i) => {
@@ -217,15 +262,25 @@ export function PlanCharts({
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
-    const fmt = (v: number) => formatPrice(v)
+    const fmt = (v: number) => `${v.toFixed(3)} €/kWh`
     const series: ChartSeries[] = [
       { label: 'Import', color: '--q-import', values: imp, format: fmt },
-      { label: 'Export', color: '--q-export', dash: [6, 4], values: exp, format: fmt },
+      { label: 'Export', color: '--q-export', values: exp, format: fmt },
     ]
-    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS) }
+    const origins = new Map(slots.map((p) => [Date.parse(p.start) / 1000, p.origin]))
+    const tag = (t: number) => {
+      const origin = origins.get(t)
+      return origin ? { text: originLabel(origin), tone: isForecast(origin) ? ('blue' as const) : ('neutral' as const) } : null
+    }
+    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS), tag }
   }, [history, data.prices, pastEndS])
 
   const hasPast = past.length > 0
+  // the popup's tag: measured left of the now line, the plan right of it
+  const slotTag = {
+    tag: (t: number) =>
+      t < pastEndS ? { text: 'measured', tone: 'neutral' as const } : { text: 'plan', tone: 'blue' as const },
+  }
   return (
     <div className="chart-stack">
       <p className="chart-note chart-zoom" role="status">
@@ -237,7 +292,7 @@ export function PlanCharts({
             </button>
           </>
         ) : (
-          `Drag across a chart to zoom in; double-click to see the whole ${hasPast ? 'range' : 'plan'} again.`
+          `Point at a chart to read every line at that moment. Drag across a chart to zoom in; double-click to see the whole ${hasPast ? 'range' : 'plan'} again.`
         )}
       </p>
       <section className="chart-block">
@@ -254,12 +309,13 @@ export function PlanCharts({
           shade={shade}
           now={nowS}
           timeZone={data.timezone}
-          height={240}
+          height={300}
+          popup={slotTag}
         />
         {hasPast && (
           <p className="chart-note">
-            Left of the now line: measured values (solid) and what the plan said at the time (dashed). Right of it: the
-            current plan.
+            Left of the now line: measured values (solid) and what the plan said at the time (dashed, &ldquo;planned
+            then&rdquo; in the popup). Right of it: the current plan.
           </p>
         )}
       </section>
@@ -278,7 +334,8 @@ export function PlanCharts({
             shade={shade}
             now={nowS}
             timeZone={data.timezone}
-            height={170}
+            height={210}
+            popup={slotTag}
           />
         </section>
       )}
@@ -292,14 +349,14 @@ export function PlanCharts({
             syncKey={SYNC}
             yFormat={eurTick}
             fit={PRICE_FIT}
-            legendValueWidth="13ch"
             xRange={zoom}
             onZoom={zoomTo}
             bands={prices.bands}
             shade={prices.shade}
             now={nowS}
             timeZone={data.timezone}
-            height={170}
+            height={210}
+            popup={{ tag: prices.tag }}
           />
           {prices.bands.length > 0 && (
             <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>

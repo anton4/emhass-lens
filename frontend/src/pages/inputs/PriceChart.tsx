@@ -25,7 +25,7 @@ export function PriceChart({ data, unit, nowS }: { data: PricesResponse; unit: P
     const fmt = (v: number) => `${v.toFixed(digits)} ${suffix}`
     const series: ChartSeries[] = [
       { label: 'Import', color: '--q-import', values: cols[0] ?? [], format: fmt },
-      { label: 'Export', color: '--q-export', dash: [6, 4], values: cols[1] ?? [], format: fmt },
+      { label: 'Export', color: '--q-export', values: cols[1] ?? [], format: fmt },
       { label: 'Spot', color: '--q-spot', dash: [2, 3], values: cols[2] ?? [], width: 1.5, format: fmt },
     ]
     return { x, series, bands: forecastRanges(slots), markers: midnights(slots, data.timezone) }

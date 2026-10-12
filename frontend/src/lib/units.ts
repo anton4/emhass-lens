@@ -16,6 +16,13 @@ export function formatPower(watts: unknown): string {
   return `${kw.format(watts / 1000)} kW`
 }
 
+/** Power with its sign in front: "+3.02 kW", "−850 W", "0 W". */
+export function formatSignedPower(watts: unknown): string {
+  if (!isNumber(watts)) return '—'
+  const text = formatPower(Math.abs(watts))
+  return Math.abs(watts) < 1 ? text : `${watts > 0 ? '+' : '−'}${text}`
+}
+
 /** €/kWh as "0.1234 €/kWh" or "12.34 c/kWh". */
 export function formatPrice(eurPerKwh: unknown, unit: PriceUnit = 'eur', withUnit = true): string {
   if (!isNumber(eurPerKwh)) return '—'

@@ -55,14 +55,17 @@
   --focus: #0277bd;
   --link: #0277bd;
 
-  /* One colour per quantity, the same on every chart (validated for colour-vision deficiency, light and dark). */
+  /* One colour per quantity, the same on every chart (the power ones validated for colour-vision deficiency, light
+     and dark). The state of charge has its own teal, so it doesn't read as the battery's power; import and export
+     are one violet in two clearly different shades (the dark one is what you pay). */
   --q-pv: #eda100;
   --q-load: #e87ba4;
   --q-batt: #2a78d6;
   --q-grid: #eb6834;
   --q-ev: #1baf7a;
-  --q-import: #e34948;
-  --q-export: #008300;
+  --q-soc: #0f8f86;
+  --q-import: #33197d;
+  --q-export: #a874de;
   --q-spot: #8a8984;
 
   /* Categorical slots in fixed order, for charts whose series are not quantities (cost functions, fee parts). */
@@ -94,6 +97,9 @@
   --chart-wash: rgba(27, 28, 31, 0.045);
   --chart-past: rgba(27, 28, 31, 0.025);
   --chart-now: #1b1c1f;
+  /* the chart popup's "planned then" column */
+  --then-band: #eef4fb;
+  --then-ink: #3b5f80;
 
   --font-body: 'Geist Variable', 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-readout: var(--font-body);
@@ -168,8 +174,9 @@
     --q-batt: #3987e5;
     --q-grid: #d95926;
     --q-ev: #199e70;
-    --q-import: #e66767;
-    --q-export: #0f9d0f;
+    --q-soc: #2bb3a8;
+    --q-import: #d4c8ff;
+    --q-export: #8f55c9;
     --q-spot: #8f8e88;
 
     --series-1: #3987e5;
@@ -191,6 +198,8 @@
     --chart-wash: rgba(227, 228, 232, 0.06);
     --chart-past: rgba(227, 228, 232, 0.035);
     --chart-now: #e3e4e8;
+    --then-band: #172431;
+    --then-ink: #9ec3e6;
 
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
     color-scheme: dark;

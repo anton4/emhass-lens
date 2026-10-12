@@ -37,6 +37,24 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: a value popup on every Plan chart, taller charts, new colours (0.4.15)
+- **Why:** the owner wanted the values next to the cursor instead of in the legend, slightly taller charts, and clearer colours (the state of charge in the battery's blue, the red price with the dotted green one). Canvas: https://claude.ai/artifact/BSj6NXeucdtCoZPA3Z5v4z. The owner picked B (a popup on every chart at once), colour option 2, and battery + for charging.
+- **Popup** (`components/charts/ChartPopup.tsx`, store in `cursorStore.ts`, logic in `lib/chartPopup.ts`):
+  - `TimeChart` takes `popup={{ tag }}`. Its legend then stops being live and becomes a key.
+  - uPlot's `setCursor` hook hands `{idx, left, pointerY, points}` to the store once per frame, and the popup is portalled into `u.over`. Synced charts all show theirs. The chart under the pointer (mouseenter/leave) marks the nearest line with a ring and a shaded row.
+  - It flips left past 58 % of the width and is clamped into the plot after measuring its height (`useLayoutEffect`, no state).
+  - Below 520 px of plot only the hovered chart shows one, docked across the top.
+  - `ChartSeries.then` folds a "planned at the time" series into the row before it, as the "planned then" column on a blue band (`--then-band`, `--then-ink`). The key hides those series (uPlot `class: 'is-then'`).
+- **Plan charts:**
+  - Heights are 300 / 210 / 210.
+  - The battery is drawn with + charge (`negated`), and battery and grid use `formatSignedPower` with direction words.
+  - Prices show 3 decimals and are tagged by origin (`originLabel`: Nord Pool / Forecast (eupowerprices.com)).
+- **Colours** (`tokens.css`):
+  - `--q-soc` teal (#0f8f86 / dark #2bb3a8), also used for This slot's SOC bar.
+  - `--q-import` #33197d / dark #d4c8ff and `--q-export` #a874de / dark #8f55c9, both solid, also on the Inputs price chart.
+  - Not run through the dataviz validator; the owner chose them on the canvas.
+- **Checked** with the mock API: hover in the past and the plan, a flip near the right edge, the forecast tag, docking at 390 px. Dark mode was not looked at.
+
 ### 2026-10-12: tabs on top, This slot as a flow with measured values first (0.4.14)
 - **Why:** the owner found the sidebar took too much width inside the HA panel, and the Plan page's seven equal tiles hard to read. Canvas: https://claude.ai/artifact/Q5eFpzfREXZHQQkz3nwpDC. The owner picked nav A (two rows) and This slot A (flow), with two changes: the measured values are the big numbers and the plan the line under them, and the page shows when the values last changed.
 - **Shell** (`components/Layout.tsx`): `Tabs` replaces `Sidebar` and `Crumbs`. The top bar's first row has the brand, the update link, ⌘K, the status chip, problems and Run MPC; the second row has the pages from `lib/nav.ts` as `.page-tab`s in `.page-tab-group`s (`.tabs` is the Run page's tab list). The current tab is scrolled into view on narrow screens. No drawer any more; `navLocation` and the `menu` icon are gone. `main` is up to 1440 px wide.

@@ -1,12 +1,15 @@
 // A time-series chart on uPlot: step lines per 15-minute slot, a synced crosshair across charts,
 // shaded ranges (forecast), hairlines (midnights) and a "now" marker. The live legend under the
-// plot is the readout: it lists every series' value at the crosshair. Optionally the y-axis hugs
-// the visible data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
+// plot is the readout: it lists every series' value at the crosshair; with `popup` a popup beside the
+// cursor shows them instead and the legend is a plain key. Optionally the y-axis hugs the visible
+// data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
 
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { fitRange, type FitOptions } from '../../lib/chartRange'
+import { ChartPopup } from './ChartPopup'
+import { createCursorStore, type CursorAt, type PopupTag } from './cursorStore'
 import { cssColor, useThemeVersion, withAlpha } from './useTheme'
 
 export interface ChartSeries {
@@ -20,8 +23,14 @@ export interface ChartSeries {
   fill?: number
   /** Step line (value holds until the next point). Default true. */
   step?: boolean
-  /** Readout format for the legend. */
+  /** Readout format for the legend and the popup. */
   format?: (value: number) => string
+  /** The plan at the time for the series just before this one: the popup shows it in that row, the key leaves it out. */
+  then?: boolean
+  /** A shorter name for the popup ("Battery" for "Battery (+ charge)"). */
+  popupLabel?: string
+  /** A word for the value's direction in the popup ("charging"). */
+  describe?: (value: number) => string
 }
 
 /** A mark at one moment, drawn as a short bar (MPC runs on the plan's time axis). */
@@ -63,6 +72,8 @@ interface TimeChartProps {
   onTick?: (tick: ChartTick) => void
   /** No legend and no y-axis labels (the y-axis keeps its width so the time axis lines up with the charts above). */
   compact?: boolean
+  /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"). */
+  popup?: { tag?: (t: number) => PopupTag | null }
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -107,21 +118,27 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
-  shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false,
+  shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
-  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series })
+  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup })
   useEffect(() => {
-    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series }
+    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup }
   })
+  const [cursor] = useState(createCursorStore)
+  const readPopup = useCallback(
+    () => ({ series: extras.current.series, x: extras.current.x, timeZone, tag: extras.current.popup?.tag }),
+    [timeZone],
+  )
 
   const zoomable = Boolean(onZoom)
+  const withPopup = Boolean(popup) && !compact
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill]), height, yRange, fit, zoomable, syncKey, timeZone,
-    theme, compact, Boolean(yFormat),
+    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then]), height, yRange, fit, zoomable, syncKey,
+    timeZone, theme, compact, Boolean(yFormat), withPopup,
   ])
 
   useEffect(() => {
@@ -130,6 +147,33 @@ export function TimeChart({
     const ink = cssColor('--ink-muted')
     const grid = cssColor('--chart-grid')
     const stepped = uPlot.paths.stepped?.({ align: 1 })
+    // the popup follows the cursor once per frame; only the chart under the pointer marks the nearest line
+    let hovered = false
+    let frame: number | null = null
+    const follow = (u: uPlot) => {
+      frame = null
+      const idx = u.cursor.idx
+      const left = u.cursor.left ?? -1
+      if (idx === null || idx === undefined || left < 0 || u.select.width > 0) {
+        cursor.setAt(null)
+        return
+      }
+      const points: CursorAt['points'] = []
+      u.series.forEach((s, i) => {
+        const meta = extras.current.series[i - 1]
+        if (i === 0 || !s.show || !meta || meta.then) return
+        const v = u.data[i]?.[idx]
+        if (v !== null && v !== undefined) points.push({ series: i - 1, y: u.valToPos(v, 'y') })
+      })
+      cursor.setAt({
+        idx,
+        left,
+        pointerY: hovered ? (u.cursor.top ?? null) : null,
+        points,
+        width: u.over.clientWidth,
+        height: u.over.clientHeight,
+      })
+    }
     const opts: uPlot.Options = {
       width: Math.max(320, el.clientWidth),
       height,
@@ -142,7 +186,7 @@ export function TimeChart({
         // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
         bind: zoomable ? { dblclick: () => null } : undefined,
       },
-      legend: { show: !compact, live: true },
+      legend: { show: !compact, live: !withPopup },
       scales: {
         x: { time: true },
         y: yRange
@@ -183,6 +227,7 @@ export function TimeChart({
           paths: s.step === false ? undefined : stepped,
           points: { show: false },
           spanGaps: false,
+          class: s.then ? 'is-then' : undefined,
           value: (_u: uPlot, v: number | null) => {
             if (v === null || v === undefined) return '—'
             const format = extras.current.series[i]?.format
@@ -193,6 +238,15 @@ export function TimeChart({
       hooks: {
         ready: [
           (u) => {
+            if (withPopup) {
+              cursor.setOver(u.over)
+              u.over.addEventListener('mouseenter', () => {
+                hovered = true
+              })
+              u.over.addEventListener('mouseleave', () => {
+                hovered = false
+              })
+            }
             u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
             // The tick nearest the pointer, within 6 px: its label as the tooltip, a click opens it
             const nearest = (event: MouseEvent): ChartTick | undefined => {
@@ -217,6 +271,11 @@ export function TimeChart({
               const tick = nearest(event)
               if (tick) extras.current.onTick?.(tick)
             })
+          },
+        ],
+        setCursor: [
+          (u) => {
+            if (withPopup && frame === null) frame = requestAnimationFrame(() => follow(u))
           },
         ],
         setSelect: [
@@ -284,6 +343,8 @@ export function TimeChart({
     observer.observe(el)
     return () => {
       observer.disconnect()
+      if (frame !== null) cancelAnimationFrame(frame)
+      cursor.setOver(null)
       chart.destroy()
       plot.current = null
     }
@@ -308,12 +369,15 @@ export function TimeChart({
   }, [bands, shade, markers, now, ticks])
 
   return (
-    <div
-      ref={wrap}
-      className="time-chart"
-      role="img"
-      aria-label={ariaLabel}
-      style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
-    />
+    <>
+      <div
+        ref={wrap}
+        className="time-chart"
+        role="img"
+        aria-label={ariaLabel}
+        style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
+      />
+      {withPopup && <ChartPopup store={cursor} read={readPopup} />}
+    </>
   )
 }
