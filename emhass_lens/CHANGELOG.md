@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.13
+
+- Inverter: one battery minimum for every mode that may discharge. **Battery min while force charging** (−3000 W) and **Battery min while exporting PV** (−16000 W) are gone; Force charge and Self-use PV and export excess to grid now use **Battery discharge max (negative)** (−20000 W by default) like the other modes. Use only grid power still keeps 0 (it may charge, not discharge). In Force charge the grid target is the import max, so the battery only discharges to hold the grid at 18.8 kW when the house uses more than that plus PV; in Self-use PV and export the battery only covers a house load above the PV. The first Force charge slot after the update writes the new minimum once. Your stored settings are migrated automatically.
+
 ## 0.4.12
 
 - Inverter: **Force charge** sets the grid target to the import max (Grid import max, 18800 W by default) in every slot, and the battery limits its own charge. Before, the target followed the plan's P_grid below 9000 W, so two Force charge slots in a row pressed the apply button again just to change the grid power (02:00 set 18800 W, 02:15 set 4800 W), and every press is an EEPROM write on the Sofar. Back-to-back Force charge slots now write nothing ("Already set"). The battery may charge faster than the plan in a slot where the plan wanted only a little; the next quarter-hour's plan starts from the real state of charge. To follow the plan's P_grid like the automation, turn off **Force charge at the import max** under Settings → Inverter control → Limits and thresholds.
