@@ -1,15 +1,31 @@
 // Helpers for the Home Assistant entity picker (pure, so they can be tested without a DOM).
 
+import { formatDateTime, parseTime } from './format'
+
 /** The domains a field accepts, from its ui.domain hint ("sensor" or ["sensor", "input_number"]). */
 export function entityDomains(domain: string | string[] | undefined): string[] {
   if (!domain) return []
   return (Array.isArray(domain) ? domain : [domain]).filter(Boolean)
 }
 
-/** The state as Home Assistant shows it: "62 %", "on", "unavailable". */
-export function entityReading(entity: { state?: string | null; unit?: string | null }): string {
+// Domains whose state is a moment in UTC ISO (a button's is the time of its last press)
+const TIMESTAMP_DOMAINS = ['button', 'input_button', 'scene', 'event', 'datetime']
+const PRESSED_DOMAINS = ['button', 'input_button']
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+
+/** The state as Home Assistant shows it: "62 %", "on", "unavailable", "pressed Mon, Oct 12, 13:15:02" (a moment
+ * in `timeZone`, the App's, rather than the UTC ISO string Home Assistant stores). */
+export function entityReading(
+  entity: { entity_id?: string; state?: string | null; unit?: string | null; device_class?: string | null },
+  timeZone?: string,
+): string {
   const state = entity.state ?? ''
   if (!state) return ''
+  const domain = entity.entity_id?.split('.')[0] ?? ''
+  const moment = TIMESTAMP_DOMAINS.includes(domain) || entity.device_class === 'timestamp'
+  if (moment && ISO_TIME.test(state) && parseTime(state)) {
+    return `${PRESSED_DOMAINS.includes(domain) ? 'pressed ' : ''}${formatDateTime(state, timeZone)}`
+  }
   return entity.unit && !['unavailable', 'unknown'].includes(state) ? `${state} ${entity.unit}` : state
 }
 

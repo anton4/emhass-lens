@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../../api/client'
-import { keys, useEmhass, useEntity, useEntitySearch } from '../../api/queries'
+import { keys, useEmhass, useEntity, useEntitySearch, useStatus } from '../../api/queries'
 import type { EmhassStatus, EntityOption } from '../../api/types'
 import { LabelledLamp } from '../../components/Lamp'
 import { entityDomains, entityReading, matchSegments } from '../../lib/entities'
@@ -40,6 +40,7 @@ export function EntityPicker({ id, value, domains, disabled, invalid, onValue }:
   const search = useDebounced(typed ? value : '', 150)
   const results = useEntitySearch(domainList, search, LIMIT, open)
   const current = useEntity(value, !open)
+  const timeZone = useStatus().data?.timezone
   const listId = useId()
   const listRef = useRef<HTMLUListElement>(null)
 
@@ -132,7 +133,7 @@ export function EntityPicker({ id, value, domains, disabled, invalid, onValue }:
                 <span className="entity-option-name">
                   <Highlighted text={option.name ?? option.entity_id} words={words} />
                 </span>
-                <span className="entity-option-state">{entityReading(option)}</span>
+                <span className="entity-option-state">{entityReading(option, timeZone)}</span>
                 <span className="entity-option-id">
                   <Highlighted text={option.entity_id} words={words} />
                 </span>
@@ -145,7 +146,7 @@ export function EntityPicker({ id, value, domains, disabled, invalid, onValue }:
       {!open && value && match && (
         <div className="entity-state">
           {match.name && <span>{match.name}: </span>}
-          <strong className="num">{entityReading(match)}</strong>
+          <strong className="num">{entityReading(match, timeZone)}</strong>
         </div>
       )}
       {!open && value && match === null && (
