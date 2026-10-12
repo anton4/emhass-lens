@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.17
+
+- Inverter: **How a rule is chosen** tags only the rule that matched. Before, "Self-use" slots tagged rules 7 and 9 at once, because both end in the same mode. The rules are grouped by what the plan's grid power picks (importing, exporting, neutral), still numbered 1–9, and each has a title of its own (three of them were all "Self-use battery or PV").
+- Inverter: when the plan imports and discharges in the same slot (*Use the battery, import the rest*), the battery gives what the plan says and the grid covers the rest. Before, the battery covered the whole house and used up energy the plan had saved for a dearer slot.
+- Inverter: when the plan exports and charges in the same slot (*Charge and export*), the battery takes what the plan says and the rest is exported. Before, the battery took all the surplus PV and nothing was exported. Never in a slot at or below *No export at or below*.
+- Inverter: a cap is set at the plan + 250 W and kept while it stays 0–500 W above the plan, so small changes in the plan don't press the apply button (an EEPROM write). New under Settings → Inverter control: the two caps (both on; off does what the automation does) and **Battery cap slack** (500 W). *More about decisions* lists where EMHASS Lens differs from the automation.
+
 ## 0.4.16
 
 - Inputs: the price chart and the price breakdown are one Prices section, the breakdown right under the prices on the same time axis (every day loaded, not one day at a time). Point at either and both show a popup for that quarter-hour: import, export and spot with Nord Pool or the forecast's source, and spot, fees, network and VAT with the rate and the import price under a rule.
