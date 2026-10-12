@@ -9,6 +9,7 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
+import { InverterSlotPopup } from '../components/controller/InverterSlotPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { todayKey } from '../lib/days'
@@ -22,10 +23,14 @@ import { SortableTh } from '../components/SortableTh'
 import {
   inverterModeSpec,
   decideChip,
+  inverterLegend,
+  inverterStrip,
   mergeBySlot,
   parseDecisionSummary,
+  STRIP_BAND,
   type InverterComparison,
   type InverterLast,
+  type SlotDetail,
 } from '../lib/inverter'
 import type { RunSummary } from '../api/types'
 
@@ -55,14 +60,8 @@ export function InverterPage() {
   const today = todayKey(tz, now)
   const todayDecides = useRuns(runFilters('inverter.decide', today, tz, 0))
   const todayCompares = useRuns(runFilters('inverter.compare', today, tz, 0))
-  const strip = useMemo<StripInput[]>(
-    () =>
-      mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? []).map((row) => ({
-        t: row.slot / 1000,
-        compare: row.compare?.outcome,
-        label: parseDecisionSummary(row.decide?.summary)?.rule,
-        runId: row.decide?.id ?? row.compare?.id,
-      })),
+  const strip = useMemo(
+    () => inverterStrip(mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? [])),
     [todayDecides.data, todayCompares.data],
   )
 
@@ -141,6 +140,9 @@ export function InverterPage() {
             ? 'Inverter control is off, so nothing is decided. Switch to Dry run to compare with the automation slot by slot.'
             : 'No decisions yet today.'
         }
+        legend={<StripKey strip={strip} />}
+        footer={<StripLine strip={strip} />}
+        detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
       />
 
       <div className="two-col">
@@ -318,6 +320,44 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
       )}
       <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
+  )
+}
+
+/** What the strip's colours mean, with how many slots each today. */
+function StripKey({ strip }: { strip: StripInput<SlotDetail>[] }) {
+  return (
+    <>
+      {inverterLegend(strip).map((k) => (
+        <span key={k.text} className="day-strip-key-item">
+          <span className="day-strip-swatch" style={{ background: k.fill }} />
+          {k.text} <span className="num">{k.count}</span>
+        </span>
+      ))}
+    </>
+  )
+}
+
+/** What the line under the strip means: the comparison (dry run) and the writes (live). */
+function StripLine({ strip }: { strip: StripInput<SlotDetail>[] }) {
+  const count = (band: string) => strip.filter((s) => s.band === band).length
+  const parts = [
+    { band: STRIP_BAND.same, text: 'same as the automation' },
+    { band: STRIP_BAND.differs, text: 'the automation differed' },
+    { band: STRIP_BAND.wrote, text: 'wrote to the inverter' },
+  ]
+    .map((p) => ({ ...p, n: count(p.band) }))
+    .filter((p) => p.n > 0)
+  if (parts.length === 0) return null
+  return (
+    <>
+      <span>Line under the strip:</span>
+      {parts.map((p) => (
+        <span key={p.band} className="day-strip-key-item">
+          <span className="day-strip-swatch line" style={{ background: p.band }} />
+          <span className="num">{p.n}</span> {p.text}
+        </span>
+      ))}
+    </>
   )
 }
 

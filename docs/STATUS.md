@@ -37,6 +37,13 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: the Inverter page's day strip in colour, with a popup per slot (0.4.11)
+- **Why:** the owner found "Today, slot by slot" all grey (in live no compare runs exist, so every slot was "not compared") and couldn't see where the mode changed. Mockup approved first: https://claude.ai/artifact/CVGh35JPPNzAoNsmNmcLSd (self-use changed from slate to lavender on the owner's request).
+- **Colours:** `--mode-*` tokens in `tokens.css`, one per passive state (import to export: force charge blue, grid only slate, self-use lavender, restrict export lavender with dots, charge + export blue/aqua stripes, PV export aqua, force discharge orange; `--mode-blocked` hatches the slots not in control). Blue, orange, aqua and lavender pass the dataviz validator's all-pairs CVD and normal-vision checks in both themes.
+- **Data:** no backend change. `lib/inverter.ts` reads the five settings from the decide summaries (`parseDecisionTargets`, `decisionAction`) and the automation's values from the compare summaries (`compareDiffs`); `inverterStrip` builds the strip inputs (fill, label, quiet self-use labels, the line under the strip, a `SlotDetail` per slot with the fields changed since the last slot in control and the feed-in limit's last change).
+- **`DayStrip`** is HTML now (absolutely placed buttons, no SVG) so textures render, with optional `legend`, `footer` and `detail` (popup on hover, keyboard focus or tap; one tab stop, arrow keys move). Market and the EV charger pass none of them and keep their green/amber/grey marks. `stripLabels` takes the strip's width and lets quiet labels give way; `stripRuns` rounds and separates runs of equal marks.
+- **Popup:** `components/controller/InverterSlotPopup.tsx`.
+
 ### 2026-10-11 (night): MPC timeouts: derating left out, the retry fires on HTTP 400, publish posts the last good plan (0.4.10)
 - **Why:** runs 2405/2406 (the owner's export).
   - MPC stopped at its 63 s limit, then EMHASS's relaxed retry stopped there too (126 s, no plan). Then publish-data failed with "Optimization result is incomplete (status: User_Limit)". This happened several times in a row in the evening.
@@ -116,7 +123,7 @@ These come from docs/PLAN.md §10:
 ### 2026-10-10 (night): redesign "D", step 3: controller pages and price breakdown (0.4.4)
 - Inverter, EV charger and Market share the D controller layout:
   - `components/controller/ControllerHead.tsx`: title, experimental tag, an on-page mode switch that writes `inverter|charger|market.mode` through `useSetControllerMode` with a confirmation (Live names the HA automation), the explanation line and the facts row.
-  - `AgreementFact` (with a bar), `CompareChip`, and `DayStrip` (built by `lib/dayStrip.ts`: `stripItems`, `stripLabels`, `holdUntilNext`) for "Today, slot by slot" (decision by decision for the charger and the market).
+  - `AgreementFact` (with a bar), `CompareChip`, and `DayStrip` (built by `lib/dayStrip.ts`: `stripItems`, `stripLabels`, `stripRuns`, `holdUntilNext`) for "Today, slot by slot" (decision by decision for the charger and the market).
   - The explainers in `components/*Views.tsx` are now sections with a visible numbered list (the current rule or branch tagged) and the prose under "More about decisions".
 - Price breakdown: spot in `--q-spot`, fees/network/VAT in greys (`--stack-*` tokens), VAT outlined; the legend toggles are pills.
 - Dark mode of the redesign is still unchecked (the owner asked to skip it for now).

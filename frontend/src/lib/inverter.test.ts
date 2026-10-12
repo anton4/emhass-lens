@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '../api/types'
 import {
+  compareDiffs,
   decideChip,
+  decisionAction,
   feedinRules,
   fieldValue,
   formatAgreement,
+  inverterLegend,
+  inverterStrip,
   mergeBySlot,
+  modeTone,
+  NOT_IN_CONTROL_FILL,
+  NO_SETTINGS_FILL,
   parseDecisionSummary,
+  parseDecisionTargets,
   rules,
   runSlot,
+  STRIP_BAND,
 } from './inverter'
 
 function run(id: number, job: string, startedAt: string, outcome = 'ok', summary: string | null = null): RunSummary {
@@ -128,5 +137,160 @@ describe('decideChip', () => {
     })
     expect(decideChip({ outcome: 'noop', summary: 'Nothing to decide: no plan row for this slot' })).toBeNull()
     expect(decideChip({ outcome: 'dry_run', summary: "Would set 'Force charge' (rule g)" })).toBeNull()
+  })
+})
+
+const FC = "'Force charge' (rule force_charge): grid 5600 W, battery -3000…20000 W, feed-in unchanged"
+const SELF = "'Self-use battery or PV' (rule self_use): grid 0 W, battery -20000…20000 W, feed-in unchanged"
+const PVX = "'Self-use PV and export excess to grid' (rule self_use_pv_export): grid 0 W, battery -16000…0 W, feed-in 15500 W"
+
+describe('parseDecisionTargets', () => {
+  it('reads the settings from every kind of decide summary', () => {
+    expect(parseDecisionTargets(`Would set ${FC}`)).toEqual({
+      state: 'Force charge',
+      rule: 'force_charge',
+      grid_power_w: 5600,
+      battery_min_w: -3000,
+      battery_max_w: 20000,
+      feedin_max_w: null,
+    })
+    expect(parseDecisionTargets(`Set ${PVX}`)?.feedin_max_w).toBe(15500)
+    expect(parseDecisionTargets(`Already set: ${PVX}`)?.battery_max_w).toBe(0)
+    expect(parseDecisionTargets(`Not in control (x is 'off' (e.g. an mFRR session)); would: ${FC}`)?.state).toBe(
+      'Force charge',
+    )
+    const drift = `Drift: grid power 0 W; set back · Set ${FC} (catch-up after Home Assistant came back)`
+    expect(parseDecisionTargets(drift)?.grid_power_w).toBe(5600)
+  })
+
+  it('returns null for runs without settings', () => {
+    expect(parseDecisionTargets('Nothing to decide: no plan row for this slot')).toBeNull()
+    expect(parseDecisionTargets("Set 'Self-use battery or PV' (rule b): grid 0 W")).toBeNull() // before 0.2.11
+    expect(parseDecisionTargets(null)).toBeNull()
+  })
+})
+
+describe('decisionAction', () => {
+  it('tells dry run, written, already set and not in control apart', () => {
+    expect(decisionAction(`Would set ${FC}`)).toEqual({ kind: 'would' })
+    expect(decisionAction(`Set ${FC}`)).toEqual({ kind: 'set' })
+    expect(decisionAction(`Already set: ${FC}`)).toEqual({ kind: 'already' })
+    expect(decisionAction(`Not in control (x is 'off' (e.g. an mFRR session)); would: ${FC}`)).toEqual({
+      kind: 'blocked',
+      reason: "x is 'off' (e.g. an mFRR session)",
+    })
+    expect(decisionAction(`Drift: grid power 0 W; set back · Set ${FC}`)).toEqual({
+      kind: 'set',
+      drift: 'grid power 0 W',
+    })
+    expect(decisionAction('The plan is stale (made never); not touching the inverter')).toBeNull()
+  })
+})
+
+describe('compareDiffs', () => {
+  it('reads what the automation set where it differed', () => {
+    expect(
+      compareDiffs(
+        'Differs — state: decided Force charge, automation set Self-use battery or PV, restrict export to grid; ' +
+          'grid_power_w: decided 5600, automation set 5000.0; feedin_max_w: decided 0, automation set None',
+      ),
+    ).toEqual({
+      state: 'Self-use battery or PV, restrict export to grid',
+      grid_power_w: '5000 W',
+      feedin_max_w: '—',
+    })
+    expect(compareDiffs('The automation did the same')).toEqual({})
+  })
+})
+
+describe('inverterStrip', () => {
+  const at = (hhmm: string) => `2026-10-10T${hhmm}:05Z`
+  it('colours each slot by its state and notes what changed since the slot before', () => {
+    const decides = [
+      run(1, 'inverter.decide', at('00:00'), 'dry_run', `Would set ${SELF}`),
+      run(3, 'inverter.decide', at('00:15'), 'dry_run', `Would set ${FC}`),
+      run(5, 'inverter.decide', at('00:30'), 'noop', `Not in control (x is 'off'); would: ${SELF}`),
+      run(7, 'inverter.decide', at('00:45'), 'dry_run', `Would set ${PVX}`),
+      run(9, 'inverter.decide', at('01:00'), 'dry_run', `Would set ${SELF}`),
+      run(11, 'inverter.decide', at('01:15'), 'noop', 'Nothing to decide: no plan row for this slot'),
+    ]
+    const compares = [
+      run(2, 'inverter.compare', at('00:00'), 'ok', 'The automation did the same'),
+      run(4, 'inverter.compare', at('00:15'), 'mismatch', 'Differs — grid_power_w: decided 5600, automation set 5000.0'),
+    ]
+    const strip = inverterStrip(mergeBySlot(decides, compares))
+    expect(strip.map((s) => s.fill)).toEqual([
+      modeTone('Self-use battery or PV').fill,
+      'var(--mode-force-charge)',
+      NOT_IN_CONTROL_FILL,
+      'var(--mode-pv-export)',
+      'var(--mode-self-use)',
+      NO_SETTINGS_FILL,
+    ])
+    expect(strip.map((s) => s.label)).toEqual(['Self-use', 'Force charge', 'Not in control', 'PV export', 'Self-use', null])
+    expect(strip.map((s) => s.quiet)).toEqual([true, false, false, false, true, false])
+    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.same, STRIP_BAND.differs, null, null, null, null])
+    expect(strip.map((s) => s.runId)).toEqual([1, 3, 5, 7, 9, 11])
+
+    const [first, fc, blocked, pvx, self] = strip.map((s) => s.detail!)
+    expect(first?.changed).toEqual([])
+    expect(fc?.changed).toEqual(['state', 'grid_power_w', 'battery_min_w'])
+    expect(fc?.differs).toEqual({ grid_power_w: '5000 W' })
+    // compared with the last slot EMHASS Lens was in control of
+    expect(blocked?.changed).toEqual(['state', 'grid_power_w', 'battery_min_w'])
+    expect(blocked?.action?.kind).toBe('blocked')
+    expect(pvx?.changed).toEqual(['state', 'grid_power_w', 'battery_min_w', 'battery_max_w', 'feedin_max_w'])
+    expect(self?.feedinBefore).toEqual({ value: 15500, slot: Date.parse('2026-10-10T00:45:00Z') })
+  })
+
+  it('dates the feed-in limit from when it last changed', () => {
+    const strip = inverterStrip(
+      mergeBySlot(
+        [
+          run(1, 'inverter.decide', at('00:00'), 'dry_run', `Would set ${PVX}`),
+          run(2, 'inverter.decide', at('00:15'), 'dry_run', `Would set ${PVX}`),
+          run(3, 'inverter.decide', at('00:30'), 'dry_run', `Would set ${SELF}`),
+        ],
+        [],
+      ),
+    )
+    expect(strip.map((s) => s.detail?.changed.includes('feedin_max_w'))).toEqual([true, false, false])
+    expect(strip[2]?.detail?.feedinBefore).toEqual({ value: 15500, slot: Date.parse('2026-10-10T00:00:00Z') })
+  })
+
+  it('marks the slots that wrote to the inverter in live', () => {
+    const strip = inverterStrip(
+      mergeBySlot(
+        [
+          run(1, 'inverter.decide', at('00:00'), 'ok', `Set ${FC}`),
+          run(2, 'inverter.decide', at('00:15'), 'ok', `Already set: ${FC}`),
+        ],
+        [],
+      ),
+    )
+    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.wrote, null])
+  })
+})
+
+describe('inverterLegend', () => {
+  it('counts the slots per state, import to export, then the others', () => {
+    const strip = inverterStrip(
+      mergeBySlot(
+        [
+          run(1, 'inverter.decide', '2026-10-10T00:00:05Z', 'dry_run', `Would set ${PVX}`),
+          run(2, 'inverter.decide', '2026-10-10T00:15:05Z', 'dry_run', `Would set ${FC}`),
+          run(3, 'inverter.decide', '2026-10-10T00:30:05Z', 'dry_run', `Would set ${FC}`),
+          run(4, 'inverter.decide', '2026-10-10T00:45:05Z', 'noop', `Not in control (x is 'off'); would: ${FC}`),
+          run(5, 'inverter.decide', '2026-10-10T01:00:05Z', 'noop', 'Nothing to decide: no plan row'),
+        ],
+        [],
+      ),
+    )
+    expect(inverterLegend(strip).map((k) => [k.text, k.count])).toEqual([
+      ['Force charge', 2],
+      ['PV export', 1],
+      ['Not in control', 1],
+      ['No settings', 1],
+    ])
   })
 })

@@ -3,6 +3,7 @@
 
 import type { LampColor } from '../components/Lamp'
 import type { Agreement, InverterSettings, RunSummary } from '../api/types'
+import type { StripInput } from './dayStrip'
 
 export interface InverterTargets {
   state: string
@@ -119,6 +120,204 @@ export function parseDecisionSummary(summary: string | null | undefined): { rule
   if (match) return { rule: match[2]!, label: match[1]! }
   if (summary.includes('no passive-mode change')) return { rule: 'none', label: 'No change' }
   return null
+}
+
+/** The settings a decide run set (or would set), as its summary names them. */
+export interface DecisionTargets {
+  rule: string
+  state: string
+  grid_power_w: number
+  battery_min_w: number
+  battery_max_w: number
+  feedin_max_w: number | null // null: the limit was left as it is
+}
+
+const TARGETS = /'([^']+)' \(rule ([a-z_]+)\): grid (-?\d+) W, battery (-?\d+)…(-?\d+) W, feed-in (?:(-?\d+) W|unchanged)/
+
+/** The settings from a decide run's summary, e.g. "Would set 'Force charge' (rule force_charge): grid 5600 W,
+ * battery -3000…20000 W, feed-in 0 W" ("feed-in unchanged" when the limit is left as it is). Null for runs without
+ * settings (nothing to decide, refused) and for runs made before the summary named them. */
+export function parseDecisionTargets(summary: string | null | undefined): DecisionTargets | null {
+  const m = summary ? TARGETS.exec(summary) : null
+  if (!m) return null
+  return {
+    state: m[1]!,
+    rule: m[2]!,
+    grid_power_w: Number(m[3]),
+    battery_min_w: Number(m[4]),
+    battery_max_w: Number(m[5]),
+    feedin_max_w: m[6] === undefined ? null : Number(m[6]),
+  }
+}
+
+export interface DecisionAction {
+  /** would: dry run; set: written (live); already: live, nothing to write; blocked: not in control */
+  kind: 'would' | 'set' | 'already' | 'blocked'
+  /** Why EMHASS Lens wasn't in control (blocked). */
+  reason?: string
+  /** What had drifted when a drift check set the settings back. */
+  drift?: string
+}
+
+/** What a decide run did with its decision, from its summary's opening words. */
+export function decisionAction(summary: string | null | undefined): DecisionAction | null {
+  if (!summary) return null
+  const drift = /^Drift: (.*?); set back · (.*)$/.exec(summary)
+  if (drift) {
+    const inner = decisionAction(drift[2])
+    return inner && { ...inner, drift: drift[1] }
+  }
+  const blocked = /^Not in control \((.*)\); would: /.exec(summary)
+  if (blocked) return { kind: 'blocked', reason: blocked[1] }
+  if (summary.startsWith('Would set ')) return { kind: 'would' }
+  if (summary.startsWith('Already set: ')) return { kind: 'already' }
+  if (summary.startsWith('Set ')) return { kind: 'set' }
+  return null
+}
+
+/** Where the automation set something else, by field, from a compare run's summary ("Differs — grid_power_w:
+ * decided 5600, automation set 5000.0; …"), formatted for display. Empty when it did the same. */
+export function compareDiffs(summary: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!summary?.startsWith('Differs — ')) return out
+  for (const part of summary.slice('Differs — '.length).split('; ')) {
+    const m = /^([a-z_]+): decided (.*), automation set (.*)$/.exec(part)
+    if (!m) continue
+    const field = m[1]!
+    const raw = m[3]!
+    const n = Number(raw)
+    out[field] = raw === 'None' ? '—' : field !== 'state' && raw !== '' && Number.isFinite(n) ? fieldValue(field, n) : raw
+  }
+  return out
+}
+
+export interface ModeTone {
+  state: string // the passive state, the automation's input_select option
+  short: string
+  fill: string // CSS background
+}
+
+/** The passive states from importing to exporting, as the day strip shows them. The colours are the --mode-* tokens,
+ * checked together for colour-vision deficiency in both themes. */
+export const MODE_TONES: ModeTone[] = [
+  { state: 'Force charge', short: 'Force charge', fill: 'var(--mode-force-charge)' },
+  { state: 'Use only grid power', short: 'Grid only', fill: 'var(--mode-grid-only)' },
+  { state: 'Self-use battery or PV', short: 'Self-use', fill: 'var(--mode-self-use)' },
+  {
+    state: 'Self-use battery or PV, restrict export to grid',
+    short: 'Restrict export',
+    fill: 'var(--mode-restrict-export)',
+  },
+  { state: 'Charge battery and export some to grid', short: 'Charge + export', fill: 'var(--mode-charge-export)' },
+  { state: 'Self-use PV and export excess to grid', short: 'PV export', fill: 'var(--mode-pv-export)' },
+  { state: 'Force discharge', short: 'Force discharge', fill: 'var(--mode-force-discharge)' },
+]
+
+/** The state most slots are in: its name gives way to the others on the strip. */
+export const EVERYDAY_STATE = 'Self-use battery or PV'
+export const NOT_IN_CONTROL_FILL = 'var(--mode-blocked)'
+export const NO_SETTINGS_FILL = 'var(--line-neutral)'
+
+export function modeTone(state: string): ModeTone {
+  return MODE_TONES.find((m) => m.state === state) ?? { state, short: state, fill: NO_SETTINGS_FILL }
+}
+
+/** One slot of the inverter's day strip, for its popup. */
+export interface SlotDetail {
+  slot: number // ms, the start of the quarter-hour
+  targets: DecisionTargets | null
+  action: DecisionAction | null
+  summary: string | null // the decide run's, shown when there are no settings
+  /** Settings that differ from the slot before (the feed-in limit: from the last one set). */
+  changed: string[]
+  /** The feed-in limit set earlier today and since when, for a slot that left it as it is. */
+  feedinBefore: { value: number; slot: number } | null
+  /** Where the automation set something else: field → what it set. */
+  differs: Record<string, string>
+  compare: string | null // the compare run's outcome: ok, mismatch, noop
+}
+
+const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
+
+/** The line under the inverter's strip. */
+export const STRIP_BAND = { same: 'var(--line-green)', differs: 'var(--lamp-amber)', wrote: 'var(--ink-2)' }
+
+/** The inverter's day strip from mergeBySlot rows: each slot coloured by its passive state (hatched where EMHASS Lens
+ * wasn't in control), and the line under it showing the comparison (dry run) or a write (live). */
+export function inverterStrip(rows: HistoryRow[]): StripInput<SlotDetail>[] {
+  const out: StripInput<SlotDetail>[] = []
+  // the last settings EMHASS Lens was in control of, and the last feed-in limit set
+  const last: { targets: DecisionTargets | null; feedin: SlotDetail['feedinBefore'] } = { targets: null, feedin: null }
+  for (const row of [...rows].sort((a, b) => a.slot - b.slot)) {
+    const summary = row.decide?.summary ?? null
+    const targets = parseDecisionTargets(summary)
+    const action = decisionAction(summary)
+    const blocked = action?.kind === 'blocked'
+    const before = last.targets
+    const changed: string[] = []
+    if (targets) {
+      if (before) changed.push(...SETTINGS.filter((f) => before[f] !== targets[f]))
+      if (targets.feedin_max_w !== null && targets.feedin_max_w !== last.feedin?.value) changed.push('feedin_max_w')
+    }
+    const detail: SlotDetail = {
+      slot: row.slot,
+      targets,
+      action,
+      summary,
+      changed,
+      feedinBefore: last.feedin,
+      differs: compareDiffs(row.compare?.summary),
+      compare: row.compare?.outcome ?? null,
+    }
+    if (targets && !blocked) {
+      last.targets = targets
+      if (targets.feedin_max_w !== null && changed.includes('feedin_max_w')) {
+        last.feedin = { value: targets.feedin_max_w, slot: row.slot }
+      }
+    }
+    const tone = targets ? modeTone(targets.state) : null
+    const compare = detail.compare
+    out.push({
+      t: row.slot / 1000,
+      compare,
+      label: blocked ? 'Not in control' : (tone?.short ?? null),
+      quiet: targets?.state === EVERYDAY_STATE && !blocked,
+      runId: row.decide?.id ?? row.compare?.id,
+      fill: blocked ? NOT_IN_CONTROL_FILL : (tone?.fill ?? NO_SETTINGS_FILL),
+      band:
+        compare === 'ok'
+          ? STRIP_BAND.same
+          : compare === 'mismatch'
+            ? STRIP_BAND.differs
+            : action?.kind === 'set'
+              ? STRIP_BAND.wrote
+              : null,
+      detail,
+    })
+  }
+  return out
+}
+
+/** The strip's key: each passive state seen (in MODE_TONES order, unknown ones after), then the slots not in control
+ * and those without settings, with how many slots each. */
+export function inverterLegend(inputs: StripInput<SlotDetail>[]): { text: string; fill: string; count: number }[] {
+  const states = new Map<string, number>()
+  let blocked = 0
+  let none = 0
+  for (const { detail } of inputs) {
+    if (detail?.action?.kind === 'blocked') blocked++
+    else if (detail?.targets) states.set(detail.targets.state, (states.get(detail.targets.state) ?? 0) + 1)
+    else none++
+  }
+  const known = MODE_TONES.map((m) => m.state)
+  const unknown = [...states.keys()].filter((s) => !known.includes(s)).sort()
+  const out = [...known, ...unknown].flatMap((state) => {
+    const count = states.get(state)
+    return count ? [{ text: modeTone(state).short, fill: modeTone(state).fill, count }] : []
+  })
+  if (blocked) out.push({ text: 'Not in control', fill: NOT_IN_CONTROL_FILL, count: blocked })
+  if (none) out.push({ text: 'No settings', fill: NO_SETTINGS_FILL, count: none })
+  return out
 }
 
 /** A decide run that didn't act because the automation wasn't in control (e.g. an mFRR session) reads better as that

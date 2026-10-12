@@ -77,6 +77,19 @@
   --stack-fees: #f2aaa9;
   --stack-network: #e34948;
   --stack-vat: #9b2c2b;
+  /* The inverter's passive states on the day strip (Control → Inverter). Blue, orange, aqua and lavender pass the
+     all-pairs colour-vision check in both themes; grid-only stays slate; the two mixed states are textures of their
+     parts, and a hatch marks slots EMHASS Lens wasn't in control of. */
+  --mode-force-charge: #2a78d6;
+  --mode-grid-only: #5d6069;
+  --mode-self-use: #ab9bf5;
+  --mode-self-use-dot: #6250d6;
+  --mode-pv-export: #1baf7a;
+  --mode-force-discharge: #eb6834;
+  --mode-restrict-export: radial-gradient(circle, var(--mode-self-use-dot) 1px, transparent 1.4px) 0 0 / 4px 4px,
+    var(--mode-self-use);
+  --mode-charge-export: repeating-linear-gradient(135deg, var(--mode-pv-export) 0 3px, var(--mode-force-charge) 3px 6px);
+  --mode-blocked: repeating-linear-gradient(135deg, var(--ink-faint) 0 1px, transparent 1px 5px), var(--surface-sunk);
   --chart-grid: #eceef2;
   --chart-axis: #c4c7cf;
   --chart-wash: rgba(27, 28, 31, 0.045);
@@ -169,6 +182,12 @@
     --stack-fees: #7a3534;
     --stack-network: #e66767;
     --stack-vat: #f2aaa9;
+    --mode-force-charge: #3987e5;
+    --mode-grid-only: #9da0a8;
+    --mode-self-use: #5e5699;
+    --mode-self-use-dot: #a99ff0;
+    --mode-pv-export: #199e70;
+    --mode-force-discharge: #d95926;
     --chart-grid: #26282d;
     --chart-axis: #44474e;
     --chart-wash: rgba(227, 228, 232, 0.06);
