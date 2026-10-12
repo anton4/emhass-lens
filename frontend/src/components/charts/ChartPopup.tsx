@@ -1,7 +1,7 @@
 // The value popup next to a chart's cursor (TimeChart's `popup`): the slot, whether it is measured or plan, and one
 // row per line with the plan at the time beside the measured value. Charts that share a syncKey all show theirs at the
-// same moment; the one under the pointer marks the line nearest it. Below 520 px of plot only the chart under the
-// pointer shows one, across the top of its plot.
+// same moment; the one under the pointer marks the line nearest it, and a chart of columns rings the column. Below
+// 520 px of plot only the chart under the pointer shows one, across the top of its plot.
 
 import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -39,7 +39,7 @@ export function ChartPopup({
   const t = x[at.idx]
   if (rows.length === 0 || t === undefined) return null
   const near = at.pointerY !== null ? nearestRow(at.points, at.pointerY) : null
-  const anchorY = at.points.find((p) => p.series === near)?.y ?? at.points[0]?.y ?? at.height / 2
+  const anchorY = at.column?.top ?? at.points.find((p) => p.series === near)?.y ?? at.points[0]?.y ?? at.height / 2
   const estimate = 46 + 20 * rows.length + (hasThen ? 18 : 0)
   const place = placePopup({ left: at.left, anchorY, width: at.width, height: at.height, popupHeight: estimate })
   const tag = tagFor?.(t) ?? null
@@ -47,6 +47,18 @@ export function ChartPopup({
   return createPortal(
     <>
       {ring && <span className="chart-pop-ring" style={{ left: at.left, top: ring.y }} aria-hidden="true" />}
+      {at.column && (
+        <span
+          className="chart-col-ring"
+          style={{
+            left: at.column.left - 2,
+            top: at.column.top - 3,
+            width: at.column.width + 4,
+            height: at.column.height + 5,
+          }}
+          aria-hidden="true"
+        />
+      )}
       <div
         ref={box}
         className="chart-pop"

@@ -4,10 +4,10 @@ import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
 import { forecastRanges, importComponents, midnights, periodLabel, PRICE_PARTS, stackLayers, type PricePart } from '../../lib/prices'
 import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
 
-// Spot in its own grey (as on every chart); what is added on top of it in the import price's violets, light to deep,
-// so neighbours always differ in lightness.
+// Spot in a grey (darker than its line on the other charts, so its columns stand out); what is added on top of it in
+// the import price's violets, light to deep, so neighbours always differ in lightness.
 const PARTS: readonly { key: PricePart; label: string; color: string }[] = [
-  { key: 'spot', label: 'Spot', color: '--q-spot' },
+  { key: 'spot', label: 'Spot', color: '--stack-spot' },
   { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: '--stack-fees' },
   { key: 'network', label: 'Network', color: '--stack-network' },
   { key: 'vat', label: 'VAT', color: '--stack-vat' },
@@ -41,8 +41,9 @@ function closed(values: number[], factor: number): (number | null)[] {
   return out
 }
 
-/** What each quarter-hour's import price is made of: spot, fees, network and VAT stacked on the price chart's time
- *  axis, with the import price on top; the cursor, the zoom and the popup go along with the price chart. */
+/** What each quarter-hour's import price is made of: a column per slot of spot, fees, network and VAT stacked, on the
+ *  price chart's time axis, with the import price as a cap; the cursor, the zoom and the popup go along with the price
+ *  chart. */
 export function PriceStack({
   slots,
   unit,
@@ -88,8 +89,7 @@ export function PriceStack({
         f,
       ),
       below,
-      fill: below === undefined ? 1 : undefined,
-      width: shown.has(key) ? 1 : 0,
+      column: 'stack',
       muted: !shown.has(key),
       format: fmt,
     })
@@ -97,7 +97,7 @@ export function PriceStack({
     const series: ChartSeries[] = [
       part('spot', undefined),
       // the edge the other parts stack from: the top of a positive spot, zero under a negative one
-      { label: 'Stack base', color: '--q-spot', values: closed(layers.fees.lo, f), helper: true },
+      { label: 'Stack base', color: '--stack-spot', values: closed(layers.fees.lo, f), helper: true },
       part('fees', 1),
       part('network', 2),
       part('vat', 3),
@@ -109,6 +109,7 @@ export function PriceStack({
           f,
         ),
         width: all ? 2 : 0,
+        column: 'cap',
         total: true,
         format: fmt,
       },
@@ -126,7 +127,7 @@ export function PriceStack({
       <TimeChart
         x={chart.x}
         series={chart.series}
-        ariaLabel="What each quarter-hour's import price is made of: spot, fees, network and VAT, stacked. The table below has every value."
+        ariaLabel="What each quarter-hour's import price is made of: a column of spot, fees, network and VAT, stacked. The table below has every value."
         syncKey={syncKey}
         timeZone={timeZone}
         yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
@@ -139,6 +140,7 @@ export function PriceStack({
         height={240}
         popup={{ tag: chart.tag }}
         legend={false}
+        snapToSlot
       />
       <ul className="legend" role="group" aria-label="Parts shown in the chart">
         {PARTS.map((p) => (

@@ -1968,8 +1968,24 @@ button.diff-locate {
   color: var(--ink);
 }
 
-.time-chart .u-cursor-pt.is-helper {
+.time-chart .u-cursor-pt.is-helper,
+.time-chart .u-cursor-pt.is-column {
   display: none;
+}
+
+/* on a chart of columns the ringed column marks the cursor, not a line through it */
+.time-chart[data-columns] .u-cursor-x {
+  display: none;
+}
+
+/* a ring round the column under the cursor */
+.chart-col-ring {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 /* a ring round the dot of the line nearest the pointer */

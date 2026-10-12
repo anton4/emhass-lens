@@ -37,7 +37,32 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-12: inverter rules: one "chosen now", a clearer list, battery caps at the plan (unreleased)
+### 2026-10-12: the price breakdown as columns (0.4.18)
+- **Why:** the owner found the stacked areas hard to read: the grey spot ran together into one shape.
+  - Canvas with the options: https://claude.ai/artifact/4573i4QumxjxRGf1XRitmn. The owner picked B: quarter-hour columns, part gaps, a clearer palette.
+- **`TimeChart`** gained `ChartSeries.column`:
+  - `'stack'` draws one column per slot from the `below` series (or zero) to the value. It uses a custom uPlot path builder that returns a `Map` of fill style to `Path2D` and draws no stroke or uPlot band.
+  - `'cap'` is a 2 px bar at the value (none at `width` 0).
+  - Columns in `bands` (the forecast) are drawn at 55 %.
+- **Geometry** lives in `lib/chartColumns.ts`, which has tests:
+  - `columnGap` is 2 / 1 / 0.5 / 0 px by slot width.
+  - `columnSegment` puts a 1 px gap at the low end of a part that sits on another, and at the zero end of a negative spot.
+  - `slotIndex` finds the slot under a value; `inRanges` tells whether a slot is in a forecast.
+- **Cursor:**
+  - On a chart of columns, `follow()` adds `CursorAt.column` (the column's box). `ChartPopup` rings it (`.chart-col-ring`) and anchors the popup at its top.
+  - Column series get no cursor dots (`is-column`) and the cursor line is hidden (`[data-columns]`).
+  - The new prop `snapToSlot` (on both Inputs charts) moves uPlot's cursor to the start of the slot under the pointer with `cursor.move`. uPlot's nearest-index rule had shown the next slot over the right half of a slot. The Plan charts still use the nearest index.
+- **Colours:** a new `--stack-spot` (#6e6d68, dark #7d7c77) for the columns only; `--q-spot` stays for the spot lines. Fees, network and VAT are now #c4b6f3, #8a6ee0 and #4a2fb0 (dark #4a3b8f, #7b62d3, #b8a8f8), so neighbours still differ in lightness.
+- **Checked** in Chrome against a local backend with today's Nord Pool prices:
+  - All days and Today, hover from either chart (same slot, ring, popup);
+  - a negative spot and a forecast tail injected into `/api/prices`;
+  - Spot switched off;
+  - dark tokens;
+  - 390 px in an iframe (docked popup, 1 px gaps).
+
+  Frontend typecheck, lint, 179 tests and the build pass. e2e was not run.
+
+### 2026-10-12: inverter rules: one "chosen now", a clearer list, battery caps at the plan (0.4.17)
 - **Why:** the owner saw "chosen now" on rules 7 and 9 at once and asked for a review of the rules.
   - Both rules end in the mode `self_use`, and the list matched on the mode. Only one rule ever matches. Rule 7 (exporting with an idle battery in a cheap slot) can hardly happen, because EMHASS gets `maximum_power_to_grid = 0` for those slots; it fires only when the export price is unknown.
   - The review found two rules where grid 0 W doesn't do what the plan says, because the battery takes all the slack. `use_bat_import` drains the battery that the plan saved for a dearer slot. `charge_export` puts all the surplus in the battery and exports nothing.

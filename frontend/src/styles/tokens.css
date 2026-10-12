@@ -74,11 +74,12 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
-  /* The parts of the import price on top of spot (price breakdown): the import price's violets, light to deep,
-     while spot keeps its own grey */
-  --stack-fees: #ddd4f7;
-  --stack-network: #9f86e3;
-  --stack-vat: #5e43c2;
+  /* The price breakdown's columns: spot in a darker grey than its line elsewhere, and the parts on top of it in the
+     import price's violets, light to deep, so each part differs from its neighbours in lightness */
+  --stack-spot: #6e6d68;
+  --stack-fees: #c4b6f3;
+  --stack-network: #8a6ee0;
+  --stack-vat: #4a2fb0;
   /* The inverter's passive states on the day strip (Control → Inverter). Blue, orange, aqua and lavender pass the
      all-pairs colour-vision check in both themes; grid-only stays slate; the two mixed states are textures of their
      parts, and a hatch marks slots EMHASS Lens wasn't in control of. */
@@ -184,9 +185,10 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
-    --stack-fees: #3b2f66;
-    --stack-network: #6c55b8;
-    --stack-vat: #9f8af0;
+    --stack-spot: #7d7c77;
+    --stack-fees: #4a3b8f;
+    --stack-network: #7b62d3;
+    --stack-vat: #b8a8f8;
     --mode-force-charge: #3987e5;
     --mode-grid-only: #9da0a8;
     --mode-self-use: #5e5699;

@@ -64,6 +64,7 @@ export function PriceChart({
       now={nowS}
       height={260}
       popup={{ tag: chart.tag }}
+      snapToSlot
     />
   )
 }

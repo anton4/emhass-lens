@@ -15,6 +15,8 @@ export interface CursorAt {
   points: { series: number; y: number }[]
   width: number
   height: number
+  /** The column at idx, on a chart of columns: ringed, and the popup sits beside it. */
+  column?: { left: number; width: number; top: number; height: number }
 }
 
 interface Snapshot {

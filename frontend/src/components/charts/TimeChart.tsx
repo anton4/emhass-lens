@@ -1,5 +1,5 @@
-// A time-series chart on uPlot: step lines per 15-minute slot, a synced crosshair across charts,
-// shaded ranges (forecast), hairlines (midnights) and a "now" marker. The live legend under the
+// A time-series chart on uPlot: step lines per 15-minute slot (or stacked columns, one per slot), a synced crosshair
+// across charts, shaded ranges (forecast), hairlines (midnights) and a "now" marker. The live legend under the
 // plot is the readout: it lists every series' value at the crosshair; with `popup` a popup beside the
 // cursor shows them instead and the legend is a plain key. Optionally the y-axis hugs the visible
 // data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
+import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
 import { fitRange, type FitOptions } from '../../lib/chartRange'
 import { ChartPopup } from './ChartPopup'
 import { createCursorStore, type CursorAt, type PopupTag } from './cursorStore'
@@ -41,7 +42,14 @@ export interface ChartSeries {
   muted?: boolean
   /** The popup's last row, under a rule. */
   total?: boolean
+  /** A column per slot instead of a line: 'stack' fills from the series `below` (or zero) to the value, a hairline
+   *  apart from the part it sits on; 'cap' is a short bar at the value across the column (none at `width` 0). Columns
+   *  in a shaded range (a forecast) are faded. */
+  column?: 'stack' | 'cap'
 }
+
+// how strongly columns in a shaded range (a forecast) are drawn
+const FADED = 0.55
 
 /** A mark at one moment, drawn as a short bar (MPC runs on the plan's time axis). */
 export interface ChartTick {
@@ -86,6 +94,8 @@ interface TimeChartProps {
   popup?: { tag?: (t: number) => PopupTag | null }
   /** Leave out uPlot's legend (the page draws its own key). */
   legend?: boolean
+  /** Each x is a slot's start: the cursor reads the slot the pointer is in instead of the nearest start. */
+  snapToSlot?: boolean
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -131,6 +141,7 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
+  snapToSlot = false,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -143,7 +154,10 @@ export function TimeChart({
   const [cursor] = useState(createCursorStore)
   const readPopup = useCallback(
     () => ({
-      series: extras.current.series.map((s) => ({ ...s, area: s.below !== undefined || Boolean(s.fill) })),
+      series: extras.current.series.map((s) => ({
+        ...s,
+        area: s.below !== undefined || Boolean(s.fill) || s.column === 'stack',
+      })),
       x: extras.current.x,
       timeZone,
       tag: extras.current.popup?.tag,
@@ -154,9 +168,10 @@ export function TimeChart({
   const zoomable = Boolean(onZoom)
   const withPopup = Boolean(popup) && !compact
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted]), height,
-    yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend,
+    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
+    height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
   ])
+  const columns = series.some((s) => s.column)
 
   useEffect(() => {
     const el = wrap.current
@@ -164,6 +179,82 @@ export function TimeChart({
     const ink = cssColor('--ink-muted')
     const grid = cssColor('--chart-grid')
     const stepped = uPlot.paths.stepped?.({ align: 1 })
+    const hasColumns = series.some((s) => s.column)
+    // One column per slot for a 'stack' or 'cap' series, read from extras so new data needs no rebuild: a gap between
+    // neighbours, a hairline between stacked parts, faded in a shaded range (a forecast).
+    const columnPaths: uPlot.Series.PathBuilder = (u, si) => {
+      const fill = new Map<string, Path2D>()
+      const paths = { stroke: null, fill, clip: null, flags: 0 }
+      const meta = extras.current.series[si - 1]
+      if (!meta?.column || (meta.column === 'cap' && meta.width === 0)) return paths
+      const xs = u.data[0]
+      const ys = u.data[si] ?? []
+      const lows = meta.column === 'stack' && meta.below !== undefined ? u.data[meta.below + 1] : undefined
+      const dpr = uPlot.pxRatio
+      const hair = Math.max(1, Math.round(dpr))
+      const cap = Math.max(2, Math.round(2 * dpr))
+      const color = cssColor(meta.color)
+      const faded = withAlpha(color, FADED)
+      const pathFor = (style: string) => {
+        let path = fill.get(style)
+        if (!path) {
+          path = new Path2D()
+          fill.set(style, path)
+        }
+        return path
+      }
+      const { left: plotLeft, width: plotWidth } = u.bbox
+      for (let i = 0; i + 1 < xs.length; i++) {
+        const v = ys[i]
+        const start = xs[i]
+        const end = xs[i + 1]
+        if (v === null || v === undefined || start === undefined || end === undefined) continue
+        const a = u.valToPos(start, 'x', true)
+        const b = u.valToPos(end, 'x', true)
+        if (b < plotLeft || a > plotLeft + plotWidth) continue
+        const gap = columnGap((b - a) / dpr) * dpr
+        const left = Math.round(a + gap / 2)
+        const width = Math.round(b - gap / 2) - left
+        if (width <= 0) continue
+        const path = pathFor(inRanges(start, end, extras.current.bands) ? faded : color)
+        if (meta.column === 'cap') {
+          path.rect(left, Math.round(u.valToPos(v, 'y', true) - cap / 2), width, cap)
+          continue
+        }
+        const seg = columnSegment(lows?.[i] ?? 0, v)
+        if (!seg) continue
+        let top = Math.round(u.valToPos(seg.to, 'y', true))
+        let bottom = Math.round(u.valToPos(seg.from, 'y', true))
+        if (seg.inset === 'low') bottom -= hair
+        else if (seg.inset === 'high') top += hair
+        if (bottom > top) path.rect(left, top, width, bottom - top)
+      }
+      return paths
+    }
+    // the column at idx in plot pixels: from the lowest to the highest edge of its parts and its cap
+    const columnAt = (u: uPlot, idx: number): CursorAt['column'] => {
+      const start = u.data[0][idx]
+      const end = u.data[0][idx + 1]
+      if (start === undefined || end === undefined) return undefined
+      let lo = 0
+      let hi = 0
+      let any = false
+      extras.current.series.forEach((meta, k) => {
+        if (!meta.column || !u.series[k + 1]?.show || (meta.column === 'cap' && meta.width === 0)) return
+        const v = u.data[k + 1]?.[idx]
+        if (v === null || v === undefined) return
+        const base = meta.column === 'cap' ? v : meta.below !== undefined ? (u.data[meta.below + 1]?.[idx] ?? 0) : 0
+        lo = Math.min(lo, v, base)
+        hi = Math.max(hi, v, base)
+        any = true
+      })
+      if (!any) return undefined
+      const a = u.valToPos(start, 'x')
+      const b = u.valToPos(end, 'x')
+      const gap = columnGap(b - a)
+      const top = u.valToPos(hi, 'y')
+      return { left: a + gap / 2, width: b - a - gap, top, height: u.valToPos(lo, 'y') - top }
+    }
     // the popup follows the cursor once per frame; only the chart under the pointer marks the nearest line
     let hovered = false
     let frame: number | null = null
@@ -178,18 +269,20 @@ export function TimeChart({
       const points: CursorAt['points'] = []
       u.series.forEach((s, i) => {
         const meta = extras.current.series[i - 1]
-        // lines that aren't drawn (helpers, parts switched off) can't be the one nearest the pointer
-        if (i === 0 || !s.show || !meta || meta.then || meta.helper || meta.width === 0) return
+        // lines that aren't drawn (helpers, parts switched off) can't be the one nearest the pointer; columns are ringed
+        if (i === 0 || !s.show || !meta || meta.then || meta.helper || meta.column || meta.width === 0) return
         const v = u.data[i]?.[idx]
         if (v !== null && v !== undefined) points.push({ series: i - 1, y: u.valToPos(v, 'y') })
       })
+      const column = hasColumns ? columnAt(u, idx) : undefined
       cursor.setAt({
         idx,
-        left,
+        left: column ? column.left + column.width / 2 : left,
         pointerY: hovered ? (u.cursor.top ?? null) : null,
         points,
         width: u.over.clientWidth,
         height: u.over.clientHeight,
+        column,
       })
     }
     const opts: uPlot.Options = {
@@ -203,6 +296,17 @@ export function TimeChart({
         drag: zoomable ? { x: true, y: false, setScale: false } : { x: false, y: false },
         // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
         bind: zoomable ? { dblclick: () => null } : undefined,
+        // on the start of the slot under the pointer, so the nearest index is that slot (and synced charts agree)
+        ...(snapToSlot
+          ? {
+              move: (u: uPlot, left: number, top: number): [number, number] => {
+                const xs = u.data[0]
+                if (left < 0 || xs.length === 0) return [left, top]
+                const start = xs[slotIndex(xs, u.posToVal(left, 'x'))]
+                return [start === undefined ? left : u.valToPos(start, 'x'), top]
+              },
+            }
+          : {}),
       },
       legend: { show: !compact && legend, live: !withPopup },
       scales: {
@@ -237,15 +341,21 @@ export function TimeChart({
         { label: 'Time', value: (_u, v) => (v === null ? '—' : readoutTime(v, timeZone)) },
         ...series.map((s, i) => ({
           label: s.label,
-          stroke: s.helper ? 'transparent' : cssColor(s.color),
-          width: s.helper ? 0 : (s.width ?? 2),
+          stroke: s.helper || s.column ? 'transparent' : cssColor(s.color),
+          width: s.helper || s.column ? 0 : (s.width ?? 2),
           dash: s.dash,
-          fill: s.fill && s.below === undefined ? withAlpha(cssColor(s.color), s.fill) : undefined,
-          fillTo: s.fill && s.below === undefined ? 0 : undefined,
-          paths: s.step === false ? undefined : stepped,
+          fill: s.fill && s.below === undefined && !s.column ? withAlpha(cssColor(s.color), s.fill) : undefined,
+          fillTo: s.fill && s.below === undefined && !s.column ? 0 : undefined,
+          paths: s.column ? columnPaths : s.step === false ? undefined : stepped,
           points: { show: false },
           spanGaps: false,
-          class: s.then ? 'is-then' : s.helper || s.muted || s.width === 0 ? 'is-helper' : undefined,
+          class: s.then
+            ? 'is-then'
+            : s.column
+              ? 'is-column'
+              : s.helper || s.muted || s.width === 0
+                ? 'is-helper'
+                : undefined,
           value: (_u: uPlot, v: number | null) => {
             if (v === null || v === undefined) return '—'
             const format = extras.current.series[i]?.format
@@ -253,9 +363,9 @@ export function TimeChart({
           },
         })),
       ],
-      // stacked areas: each fills down to the series below it
+      // stacked areas: each fills down to the series below it (columns draw their own)
       bands: series.flatMap((s, i) =>
-        s.below === undefined
+        s.below === undefined || s.column
           ? []
           : [{ series: [i + 1, s.below + 1] as [number, number], fill: withAlpha(cssColor(s.color), s.fill ?? 1) }],
       ),
@@ -397,6 +507,7 @@ export function TimeChart({
       <div
         ref={wrap}
         className="time-chart"
+        data-columns={columns || undefined}
         role="img"
         aria-label={ariaLabel}
         style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
