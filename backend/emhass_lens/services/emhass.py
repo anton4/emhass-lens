@@ -411,14 +411,16 @@ class EmhassService:
             "ORDER BY generated_at DESC LIMIT ?",
             (limit,),
         )
-        out = []
-        for row in rows:
-            body = json.loads(gzip.decompress(row.pop("plan_gz")))
-            row["last_run"] = json.loads(row.pop("last_run_json") or "null")
-            row["plan"] = body.get("plan") or []
-            row["emhass_schema_version"] = body.get("emhass_schema_version")
-            out.append(row)
-        return out
+        return [_plan_out(row) for row in rows]
+
+    async def plan_of_run(self, run_id: int) -> dict[str, Any] | None:
+        """The newest stored plan EMHASS made for EMHASS Lens run `run_id`, or None."""
+        row = await self.c.app_db.aquery_one(
+            "SELECT id, generated_at, fetched_at, driver, run_id, last_run_json, plan_gz FROM plan_snapshot "
+            "WHERE run_id = ? ORDER BY generated_at DESC LIMIT 1",
+            (run_id,),
+        )
+        return _plan_out(row) if row is not None else None
 
     def prune(self, keep: int = 2000, now: datetime | None = None) -> int:
         removed = self.c.app_db.execute(
@@ -453,6 +455,15 @@ class EmhassService:
 
 def parse_ts(value: Any) -> datetime | None:
     return parse_iso(str(value)) if value else None
+
+
+def _plan_out(row: dict[str, Any]) -> dict[str, Any]:
+    """A plan_snapshot row with its plan unpacked."""
+    body = json.loads(gzip.decompress(row.pop("plan_gz")))
+    row["last_run"] = json.loads(row.pop("last_run_json") or "null")
+    row["plan"] = body.get("plan") or []
+    row["emhass_schema_version"] = body.get("emhass_schema_version")
+    return row
 
 
 _PLAN_ROW_INSERT = (

@@ -14,6 +14,7 @@ import { Breakdown } from './inputs/Breakdown'
 import { MpcPreviewPanel } from './inputs/MpcPreviewPanel'
 import { PriceChart } from './inputs/PriceChart'
 import { PriceStack } from './inputs/PriceStack'
+import { SentPanel } from './inputs/SentPanel'
 
 const PROVIDERS: Record<string, string> = {
   ee_eupowerprices: 'eupowerprices.com (EE)',
@@ -75,6 +76,8 @@ export function InputsPage() {
         </div>
       </PageHead>
       <ErrorNotice error={prices.error ?? inputs.error} />
+
+      <SentPanel unit={unit} nowS={nowS} />
 
       <section className="panel">
         <div className="panel-head">

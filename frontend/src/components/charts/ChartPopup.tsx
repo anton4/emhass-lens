@@ -6,7 +6,7 @@
 import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from '../../lib/chartPopup'
-import type { CursorStore, PopupTag } from './cursorStore'
+import type { CursorStore, PopupExtra, PopupTag } from './cursorStore'
 
 const DOCK_BELOW = 520
 
@@ -17,7 +17,13 @@ export function ChartPopup({
   read,
 }: {
   store: CursorStore
-  read: () => { series: PopupSeries[]; x: number[]; timeZone?: string; tag?: (t: number) => PopupTag | null }
+  read: () => {
+    series: PopupSeries[]
+    x: number[]
+    timeZone?: string
+    tag?: (t: number) => PopupTag | null
+    extra?: (t: number) => PopupExtra[]
+  }
 }) {
   const { over, at } = useSyncExternalStore(store.subscribe, store.get)
   const box = useRef<HTMLDivElement>(null)
@@ -34,13 +40,14 @@ export function ChartPopup({
   if (!over || !at) return null
   const docked = at.width < DOCK_BELOW
   if (docked && at.pointerY === null) return null
-  const { series, x, timeZone, tag: tagFor } = read()
+  const { series, x, timeZone, tag: tagFor, extra: extraFor } = read()
   const { rows, hasThen } = popupRows(series, at.idx)
   const t = x[at.idx]
-  if (rows.length === 0 || t === undefined) return null
+  const extra = t !== undefined ? (extraFor?.(t) ?? []) : []
+  if ((rows.length === 0 && extra.length === 0) || t === undefined) return null
   const near = at.pointerY !== null ? nearestRow(at.points, at.pointerY) : null
   const anchorY = at.column?.top ?? at.points.find((p) => p.series === near)?.y ?? at.points[0]?.y ?? at.height / 2
-  const estimate = 46 + 20 * rows.length + (hasThen ? 18 : 0)
+  const estimate = 46 + 20 * (rows.length + extra.length) + (hasThen ? 18 : 0) + (rows.length && extra.length ? 6 : 0)
   const place = placePopup({ left: at.left, anchorY, width: at.width, height: at.height, popupHeight: estimate })
   const tag = tagFor?.(t) ?? null
   const ring = near !== null && !docked ? at.points.find((p) => p.series === near) : undefined
@@ -112,6 +119,22 @@ export function ChartPopup({
                 {r.describe && <i> {r.describe}</i>}
               </span>
               {hasThen && <span className="chart-pop-then">{r.then ?? ''}</span>}
+            </div>
+          ))}
+          {extra.map((r, i) => (
+            <div key={`extra-${r.name}`} className="chart-pop-row" data-rule={(i === 0 && rows.length > 0) || undefined}>
+              <span className="chart-pop-name">
+                <span
+                  className="chart-pop-square"
+                  data-hatch={r.hatch || undefined}
+                  style={r.hatch ? undefined : { background: cssColor(r.color) }}
+                />
+                {r.name}
+              </span>
+              <span className="chart-pop-value">
+                <b>{r.value}</b>
+              </span>
+              {hasThen && <span className="chart-pop-then" />}
             </div>
           ))}
         </div>

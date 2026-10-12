@@ -30,11 +30,10 @@ from emhass_lens.api.schemas import (
     PriceSlotOut,
     PricesResponse,
     PvStatus,
+    SentInputs,
 )
 from emhass_lens.core.clock import iso, parse_iso
-from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.mpc.anchor import anchor_slot, published_row
-from emhass_lens.domain.mpc.payload import build
+from emhass_lens.domain.mpc.anchor import published_row
 from emhass_lens.domain.mpc.validate import validate
 from emhass_lens.services.inputs import describe
 from emhass_lens.services.plan_now import plan_now as plan_now_service
@@ -91,22 +90,8 @@ async def inputs(c: ContainerDep) -> InputsResponse:
 @router.post("/mpc/preview")
 async def mpc_preview(c: ContainerDep) -> MpcPreview:
     """Build and check the MPC payload as if a run started now. Nothing is sent."""
-    settings = c.settings.current
-    emhass = c.extras["emhass"]
-    now = c.clock.now()
-    snapshot = await c.app_db.run(c.extras["inputs"].snapshot, now)
-    rounding = emhass.method_ts_round()
-    anchor = anchor_slot(now, rounding)
-    result = build(
-        snapshot,
-        anchor,
-        slot_floor(now),
-        settings,
-        emhass_version=emhass.version_tuple,
-        emhass_config=emhass.config,
-        model_steps=c.extras["ml"].model_steps(now),
-    )
-    issues = validate(result, snapshot, settings)
+    now, anchor, rounding, snapshot, result = await c.extras["sent_inputs"].build_now()
+    issues = validate(result, snapshot, c.settings.current)
     return MpcPreview(
         built_at=iso(now) or "",
         anchor=iso(anchor) or "",
@@ -119,6 +104,19 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
         derived=Derived(**result.derived.__dict__),
         ev_reserve=EvReserveOut(**snapshot.ev_reserve.summary()) if snapshot.ev_reserve is not None else None,
     )
+
+
+@router.get("/inputs/sent")
+async def inputs_sent(c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24) -> SentInputs:
+    """What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the
+    last `hours_back` hours measured before its anchor."""
+    return await c.extras["sent_inputs"].last_run(hours_back)
+
+
+@router.post("/inputs/sent/preview")
+async def inputs_sent_preview(c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24) -> SentInputs:
+    """The same for a payload built as if a run started now. Nothing is sent."""
+    return await c.extras["sent_inputs"].preview(hours_back)
 
 
 def _snapshot_out(row: dict[str, Any] | None) -> PlanSnapshotOut | None:

@@ -33,6 +33,7 @@ from emhass_lens.services.prices import PriceService
 from emhass_lens.services.problems import ProblemService
 from emhass_lens.services.publish import PublishService
 from emhass_lens.services.pv import PvService
+from emhass_lens.services.sent_inputs import SentInputsService
 from emhass_lens.services.sofar import SofarWriter
 from emhass_lens.services.updates import UpdateService
 from emhass_lens.settings.model import Settings
@@ -70,6 +71,7 @@ def build(c: Container) -> None:
     x["measurements"] = MeasurementService(c)
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
+    x["sent_inputs"] = SentInputsService(c)
     x["prices"].load()
     x["forecasts"].load()
     x["problems"].load()

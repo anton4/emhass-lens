@@ -788,6 +788,69 @@ class MpcPreview(BaseModel):
     ev_reserve: EvReserveOut | None = None
 
 
+class SentDeferrable(BaseModel):
+    """One deferrable load as the payload had it, beside what its entities say it would ask for when on."""
+
+    name: str
+    on: bool
+    nominal_power_w: float
+    operating_hours: float
+    end_timesteps: int  # from the anchor; 0 = no deadline, the whole horizon
+    single_constant: bool
+    configured_power_w: float | None = None
+    configured_hours: float | None = None
+    configured_end_timesteps: int | None = None
+    enabled_source: str | None = None
+
+
+class SentModel(BaseModel):
+    """How EMHASS forecasts the house load: its ML model and what it learns from."""
+
+    method: str | None = None
+    var_model: str | None = None
+    num_lags: int | None = None
+    historic_days: int | None = None
+
+
+class MeasuredSlot(BaseModel):
+    """What was measured in one slot before the anchor: W means, SOC 0–1."""
+
+    start: str
+    load: float | None = None
+    pv: float | None = None
+    soc: float | None = None
+
+
+class SentInputs(BaseModel):
+    """What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS
+    forecast for those slots, and what was measured before the anchor."""
+
+    available: bool
+    source: str  # last_run | preview
+    timezone: str
+    run_id: int | None
+    run_outcome: str | None
+    run_mode: str | None
+    sent_at: str | None
+    anchor: str | None
+    slots: list[ExplainSlot]
+    load_w: list[float | None]
+    load_source: str  # plan | sent | none
+    load_plan_generated_at: str | None
+    load_plan_run_id: int | None
+    soc_init: float | None
+    soc_final: float | None
+    soc_init_reading: Reading | None
+    soc_final_reading: Reading | None
+    model: SentModel | None
+    deferrables: list[SentDeferrable]
+    pv_sensors: int
+    pv_slots_missing: int
+    no_export_at_or_below: float | None
+    measured: list[MeasuredSlot]
+    measured_entities: dict[str, str]
+
+
 class DriverResult(BaseModel):
     ok: bool
     run_id: int | None = None

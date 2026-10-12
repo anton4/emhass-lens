@@ -29,6 +29,8 @@ export type PlanSnapshot = S['PlanSnapshotOut']
 export type EmhassStatus = S['EmhassStatusOut']
 export type EntityOption = S['EntityOption']
 export type MpcPreview = S['MpcPreview']
+export type SentInputs = S['SentInputs']
+export type SentDeferrable = S['SentDeferrable']
 
 export interface FieldError {
   loc: string

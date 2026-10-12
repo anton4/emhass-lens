@@ -37,6 +37,28 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: "What EMHASS gets" on the Inputs page (0.4.23)
+- **Why:** the owner wanted graphs for everything fed into EMHASS, not only the Nord Pool prices. Mockup approved first: https://claude.ai/artifact/WR78nvnN5kjMJhab3usymr (Plan-style popups and PV day totals added on review).
+- **Backend:** `services/sent_inputs.py` (`SentInputsService`), `domain/mpc/sent.py`.
+  - `GET /api/inputs/sent?hours_back=` reads the newest `emhass.mpc` run that has an `explain` artifact (its `request` and `inputs` too).
+  - `POST /api/inputs/sent/preview` builds one now. `build_now()` is shared with `POST /api/mpc/preview`.
+  - The house load is the one input EMHASS forecasts itself. `load_series` takes `P_Load` from the plan that run made (`EmhassService.plan_of_run`), else the newest plan. A `load_power_forecast` in the payload (extra runtime parameters) wins.
+  - `deferrables()` pairs the payload's lists with the run's described loads, so an off load still shows what it would ask for.
+  - `measured` is the `measurement` table for `hours_back` before the anchor (load, PV, SOC 0–1).
+  - `SentInputs` fields have no defaults, so the generated TS types are required.
+- **Frontend:** `pages/inputs/SentPanel.tsx`, `lib/sent.ts` (+ tests). Cards and four `TimeChart`s on sync key `sent`:
+  - prices, with tariff and export lanes;
+  - PV with P10, the EV reserve as a stacked area, and day totals;
+  - house load, with a lane per deferrable load;
+  - battery, with `soc_init` and `soc_final` marked.
+  - **Before the anchor** (Off / 24 h, remembered in localStorage) and **Last run / Preview now**.
+- **TimeChart** gained three things:
+  - `lanes`: spans drawn between the plot and the time axis. The axis's `gap` grows and its ticks go.
+  - `notes`: canvas labels and dots, set to left-aligned because uPlot leaves the axis alignment set.
+  - `popup.extra`: rows under a rule (`data-rule`), with hatched swatches for off spans.
+  - New token `--q-pv-ink` for the PV labels.
+- **Checked** in Chrome against the test suite's fake HA and EMHASS. A scratch script served the app with one live MPC run and 24 h of measurements, and the popups, lanes, labels and both switches worked. Look at it on the real HA after the release.
+
 ### 2026-10-12: local times for button entities in Settings; the HACS settings import is removed (0.4.22)
 - **Timestamps:**
   - The owner saw `2026-10-12T10:15:02.322394+00:00` beside the Sofar feed-in and apply buttons in Settings → Inverter

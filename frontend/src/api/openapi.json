@@ -4740,6 +4740,53 @@
         "title": "MeasuredPower",
         "type": "object"
       },
+      "MeasuredSlot": {
+        "description": "What was measured in one slot before the anchor: W means, SOC 0–1.",
+        "properties": {
+          "load": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load"
+          },
+          "pv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv"
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start"
+        ],
+        "title": "MeasuredSlot",
+        "type": "object"
+      },
       "MeasurementQuantity": {
         "properties": {
           "entity_id": {
@@ -7775,6 +7822,379 @@
         "title": "SecretValue",
         "type": "object"
       },
+      "SentDeferrable": {
+        "description": "One deferrable load as the payload had it, beside what its entities say it would ask for when on.",
+        "properties": {
+          "configured_end_timesteps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configured End Timesteps"
+          },
+          "configured_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configured Hours"
+          },
+          "configured_power_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configured Power W"
+          },
+          "enabled_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Source"
+          },
+          "end_timesteps": {
+            "title": "End Timesteps",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal_power_w": {
+            "title": "Nominal Power W",
+            "type": "number"
+          },
+          "on": {
+            "title": "On",
+            "type": "boolean"
+          },
+          "operating_hours": {
+            "title": "Operating Hours",
+            "type": "number"
+          },
+          "single_constant": {
+            "title": "Single Constant",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "on",
+          "nominal_power_w",
+          "operating_hours",
+          "end_timesteps",
+          "single_constant"
+        ],
+        "title": "SentDeferrable",
+        "type": "object"
+      },
+      "SentInputs": {
+        "description": "What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS\nforecast for those slots, and what was measured before the anchor.",
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "deferrables": {
+            "items": {
+              "$ref": "#/components/schemas/SentDeferrable"
+            },
+            "title": "Deferrables",
+            "type": "array"
+          },
+          "load_plan_generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Plan Generated At"
+          },
+          "load_plan_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Plan Run Id"
+          },
+          "load_source": {
+            "title": "Load Source",
+            "type": "string"
+          },
+          "load_w": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Load W",
+            "type": "array"
+          },
+          "measured": {
+            "items": {
+              "$ref": "#/components/schemas/MeasuredSlot"
+            },
+            "title": "Measured",
+            "type": "array"
+          },
+          "measured_entities": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Measured Entities",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SentModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "no_export_at_or_below": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Export At Or Below"
+          },
+          "pv_sensors": {
+            "title": "Pv Sensors",
+            "type": "integer"
+          },
+          "pv_slots_missing": {
+            "title": "Pv Slots Missing",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "run_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Mode"
+          },
+          "run_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Outcome"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/ExplainSlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "soc_final": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Final"
+          },
+          "soc_final_reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "soc_init": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Init"
+          },
+          "soc_init_reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "source",
+          "timezone",
+          "run_id",
+          "run_outcome",
+          "run_mode",
+          "sent_at",
+          "anchor",
+          "slots",
+          "load_w",
+          "load_source",
+          "load_plan_generated_at",
+          "load_plan_run_id",
+          "soc_init",
+          "soc_final",
+          "soc_init_reading",
+          "soc_final_reading",
+          "model",
+          "deferrables",
+          "pv_sensors",
+          "pv_slots_missing",
+          "no_export_at_or_below",
+          "measured",
+          "measured_entities"
+        ],
+        "title": "SentInputs",
+        "type": "object"
+      },
+      "SentModel": {
+        "description": "How EMHASS forecasts the house load: its ML model and what it learns from.",
+        "properties": {
+          "historic_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Historic Days"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "num_lags": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Lags"
+          },
+          "var_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var Model"
+          }
+        },
+        "title": "SentModel",
+        "type": "object"
+      },
       "Settings": {
         "additionalProperties": false,
         "properties": {
@@ -9464,6 +9884,98 @@
           }
         },
         "summary": "Inputs",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/inputs/sent": {
+      "get": {
+        "description": "What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the\nlast `hours_back` hours measured before its anchor.",
+        "operationId": "inputs_sent_api_inputs_sent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "hours_back",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 48,
+              "minimum": 0,
+              "title": "Hours Back",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentInputs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inputs Sent",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    "/api/inputs/sent/preview": {
+      "post": {
+        "description": "The same for a payload built as if a run started now. Nothing is sent.",
+        "operationId": "inputs_sent_preview_api_inputs_sent_preview_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "hours_back",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 48,
+              "minimum": 0,
+              "title": "Hours Back",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentInputs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inputs Sent Preview",
         "tags": [
           "data"
         ]

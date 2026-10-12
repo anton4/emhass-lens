@@ -239,6 +239,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inputs/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inputs Sent
+         * @description What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the
+         *     last `hours_back` hours measured before its anchor.
+         */
+        get: operations["inputs_sent_api_inputs_sent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/inputs/sent/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inputs Sent Preview
+         * @description The same for a payload built as if a run started now. Nothing is sent.
+         */
+        post: operations["inputs_sent_preview_api_inputs_sent_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/inverter": {
         parameters: {
             query?: never;
@@ -2906,6 +2947,20 @@ export interface components {
              */
             scale: number;
         };
+        /**
+         * MeasuredSlot
+         * @description What was measured in one slot before the anchor: W means, SOC 0–1.
+         */
+        MeasuredSlot: {
+            /** Load */
+            load?: number | null;
+            /** Pv */
+            pv?: number | null;
+            /** Soc */
+            soc?: number | null;
+            /** Start */
+            start: string;
+        };
         /** MeasurementQuantity */
         MeasurementQuantity: {
             /** Entity Id */
@@ -3997,6 +4052,100 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * SentDeferrable
+         * @description One deferrable load as the payload had it, beside what its entities say it would ask for when on.
+         */
+        SentDeferrable: {
+            /** Configured End Timesteps */
+            configured_end_timesteps?: number | null;
+            /** Configured Hours */
+            configured_hours?: number | null;
+            /** Configured Power W */
+            configured_power_w?: number | null;
+            /** Enabled Source */
+            enabled_source?: string | null;
+            /** End Timesteps */
+            end_timesteps: number;
+            /** Name */
+            name: string;
+            /** Nominal Power W */
+            nominal_power_w: number;
+            /** On */
+            on: boolean;
+            /** Operating Hours */
+            operating_hours: number;
+            /** Single Constant */
+            single_constant: boolean;
+        };
+        /**
+         * SentInputs
+         * @description What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS
+         *     forecast for those slots, and what was measured before the anchor.
+         */
+        SentInputs: {
+            /** Anchor */
+            anchor: string | null;
+            /** Available */
+            available: boolean;
+            /** Deferrables */
+            deferrables: components["schemas"]["SentDeferrable"][];
+            /** Load Plan Generated At */
+            load_plan_generated_at: string | null;
+            /** Load Plan Run Id */
+            load_plan_run_id: number | null;
+            /** Load Source */
+            load_source: string;
+            /** Load W */
+            load_w: (number | null)[];
+            /** Measured */
+            measured: components["schemas"]["MeasuredSlot"][];
+            /** Measured Entities */
+            measured_entities: {
+                [key: string]: string;
+            };
+            model: components["schemas"]["SentModel"] | null;
+            /** No Export At Or Below */
+            no_export_at_or_below: number | null;
+            /** Pv Sensors */
+            pv_sensors: number;
+            /** Pv Slots Missing */
+            pv_slots_missing: number;
+            /** Run Id */
+            run_id: number | null;
+            /** Run Mode */
+            run_mode: string | null;
+            /** Run Outcome */
+            run_outcome: string | null;
+            /** Sent At */
+            sent_at: string | null;
+            /** Slots */
+            slots: components["schemas"]["ExplainSlot"][];
+            /** Soc Final */
+            soc_final: number | null;
+            soc_final_reading: components["schemas"]["Reading"] | null;
+            /** Soc Init */
+            soc_init: number | null;
+            soc_init_reading: components["schemas"]["Reading"] | null;
+            /** Source */
+            source: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /**
+         * SentModel
+         * @description How EMHASS forecasts the house load: its ML model and what it learns from.
+         */
+        SentModel: {
+            /** Historic Days */
+            historic_days?: number | null;
+            /** Method */
+            method?: string | null;
+            /** Num Lags */
+            num_lags?: number | null;
+            /** Var Model */
+            var_model?: string | null;
+        };
         /** Settings */
         Settings: {
             /**
@@ -5010,6 +5159,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InputsResponse"];
+                };
+            };
+        };
+    };
+    inputs_sent_api_inputs_sent_get: {
+        parameters: {
+            query?: {
+                hours_back?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SentInputs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inputs_sent_preview_api_inputs_sent_preview_post: {
+        parameters: {
+            query?: {
+                hours_back?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SentInputs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

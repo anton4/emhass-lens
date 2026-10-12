@@ -6,6 +6,16 @@ export interface PopupTag {
   tone?: 'neutral' | 'blue'
 }
 
+/** A row the popup adds under the lines' rows: what a lane says at the cursor, or a value not drawn as a line. */
+export interface PopupExtra {
+  name: string
+  value: string
+  /** CSS custom property or colour of its square swatch. */
+  color: string
+  /** A hatched swatch (a span that is off). */
+  hatch?: boolean
+}
+
 /** Where the cursor is, in plot pixels; `pointerY` only on the chart under the pointer. */
 export interface CursorAt {
   idx: number

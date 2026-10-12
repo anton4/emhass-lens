@@ -24,3 +24,8 @@ export function cssColor(value: string): string {
   if (!value.startsWith('--')) return value
   return getComputedStyle(document.documentElement).getPropertyValue(value).trim() || '#888'
 }
+
+/** A CSS custom property's value ("--font-code"), for canvas text. */
+export function cssValue(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}

@@ -59,6 +59,8 @@
      and dark). The state of charge has its own teal, so it doesn't read as the battery's power; import and export
      are one violet in two clearly different shades (the dark one is what you pay). */
   --q-pv: #eda100;
+  /* text in PV's colour, dark enough to read (the PV chart's day totals) */
+  --q-pv-ink: #7a4f00;
   --q-load: #e87ba4;
   --q-batt: #2a78d6;
   --q-grid: #eb6834;
@@ -171,6 +173,7 @@
     --link: #4fc3f7;
 
     --q-pv: #c98500;
+    --q-pv-ink: #f2c46b;
     --q-load: #d55181;
     --q-batt: #3987e5;
     --q-grid: #d95926;

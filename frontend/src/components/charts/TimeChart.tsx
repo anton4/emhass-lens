@@ -10,8 +10,8 @@ import 'uplot/dist/uPlot.min.css'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
 import { fitRange, type FitOptions } from '../../lib/chartRange'
 import { ChartPopup } from './ChartPopup'
-import { createCursorStore, type CursorAt, type PopupTag } from './cursorStore'
-import { cssColor, useThemeVersion, withAlpha } from './useTheme'
+import { createCursorStore, type CursorAt, type PopupExtra, type PopupTag } from './cursorStore'
+import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
 
 export interface ChartSeries {
   label: string
@@ -62,6 +62,50 @@ export interface ChartTick {
   id?: number
 }
 
+/** A row of spans between the plot and the time axis (tariff periods, export limits, a load's window), labelled in
+ *  the y-axis gutter. */
+export interface ChartLane {
+  label: string
+  spans: { from: number; to: number; color: string; hatch?: boolean; text?: string }[]
+}
+
+/** A label on the plot at (t, value), optionally with a dot there: a day's total over its hump, a marked value. */
+export interface ChartNote {
+  t: number
+  value: number
+  text: string
+  /** Smaller, muted text after it. */
+  sub?: string
+  /** CSS custom property or colour of the text and the dot. */
+  color: string
+  dot?: 'filled' | 'ring'
+  /** Where the text sits: centred over t (default), or to its right or left. */
+  align?: 'center' | 'right' | 'left'
+}
+
+// a lane's height and the space between the plot and the first lane, CSS px
+const LANE_H = 18
+const LANE_GAP = 6
+
+/** Diagonal hatching on the sunk surface, for spans that are off. */
+function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern | string {
+  const size = Math.round(5 * dpr)
+  const tile = document.createElement('canvas')
+  tile.width = size
+  tile.height = size
+  const t = tile.getContext('2d')
+  if (!t) return cssColor('--surface-sunk')
+  t.fillStyle = cssColor('--surface-sunk')
+  t.fillRect(0, 0, size, size)
+  t.strokeStyle = cssColor('--ink-faint')
+  t.lineWidth = Math.max(1, dpr * 0.75)
+  t.beginPath()
+  t.moveTo(0, size)
+  t.lineTo(size, 0)
+  t.stroke()
+  return ctx.createPattern(tile, 'repeat') ?? cssColor('--surface-sunk')
+}
+
 interface TimeChartProps {
   x: number[]
   series: ChartSeries[]
@@ -90,12 +134,113 @@ interface TimeChartProps {
   onTick?: (tick: ChartTick) => void
   /** No legend and no y-axis labels (the y-axis keeps its width so the time axis lines up with the charts above). */
   compact?: boolean
-  /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"). */
-  popup?: { tag?: (t: number) => PopupTag | null }
+  /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"), `extra`
+   *  adds rows under the lines' rows (what a lane says there). */
+  popup?: { tag?: (t: number) => PopupTag | null; extra?: (t: number) => PopupExtra[] }
   /** Leave out uPlot's legend (the page draws its own key). */
   legend?: boolean
   /** Each x is a slot's start: the cursor reads the slot the pointer is in instead of the nearest start. */
   snapToSlot?: boolean
+  /** Rows of spans under the plot, on the same time axis. */
+  lanes?: ChartLane[]
+  /** Labels (and dots) on the plot. */
+  notes?: ChartNote[]
+}
+
+const NONE: never[] = []
+
+/** The lanes under the plot: a sunk track each, its spans (hatched when off, with their text where it fits), and its
+ *  label right-aligned in the y-axis gutter. */
+function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number) {
+  if (lanes.length === 0) return
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  const h = Math.round((LANE_H - 4) * dpr)
+  const gap = Math.max(1, Math.round(dpr))
+  const mono = cssValue('--font-code') || 'monospace'
+  const body = cssValue('--font-body') || 'sans-serif'
+  let hatch: CanvasPattern | string | null = null
+  ctx.save()
+  // uPlot leaves the axis labels' alignment set
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  lanes.forEach((lane, i) => {
+    const top = Math.round(bbox.top + bbox.height + (LANE_GAP + i * LANE_H) * dpr)
+    ctx.fillStyle = cssColor('--surface-sunk')
+    ctx.fillRect(bbox.left, top, bbox.width, h)
+    for (const span of lane.spans) {
+      const a = Math.max(bbox.left, Math.round(u.valToPos(span.from, 'x', true)))
+      const b = Math.min(right, Math.round(u.valToPos(span.to, 'x', true)))
+      if (b - a <= gap) continue
+      if (span.hatch) hatch ??= hatchPattern(ctx, dpr)
+      ctx.fillStyle = span.hatch ? (hatch ?? '') : cssColor(span.color)
+      ctx.fillRect(a + gap, top, b - a - gap, h)
+      if (span.text) {
+        ctx.font = `${11 * dpr}px ${mono}`
+        const width = ctx.measureText(span.text).width
+        if (width + 12 * dpr < b - a) {
+          if (span.hatch) {
+            // a quiet patch behind the text, so the hatching doesn't run through it
+            ctx.fillStyle = cssColor('--surface-sunk')
+            ctx.fillRect(a + gap + 2 * dpr, top + dpr, width + 6 * dpr, h - 2 * dpr)
+          }
+          ctx.fillStyle = cssColor('--ink-2')
+          ctx.fillText(span.text, a + gap + 5 * dpr, top + h / 2)
+        }
+      }
+    }
+    ctx.font = `${12 * dpr}px ${body}`
+    ctx.fillStyle = cssColor('--ink-muted')
+    ctx.textAlign = 'right'
+    ctx.fillText(lane.label, bbox.left - 8 * dpr, top + h / 2)
+    ctx.textAlign = 'left'
+  })
+  ctx.restore()
+}
+
+/** Labels on the plot: the text (and its muted sub) above the point or beside its dot, kept inside the plot. */
+function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
+  if (notes.length === 0) return
+  const { ctx, bbox } = u
+  const mono = cssValue('--font-code') || 'monospace'
+  ctx.save()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  for (const note of notes) {
+    const px = u.valToPos(note.t, 'x', true)
+    const py = u.valToPos(note.value, 'y', true)
+    if (px < bbox.left - 1 || px > bbox.left + bbox.width + 1) continue
+    const color = cssColor(note.color)
+    if (note.dot) {
+      ctx.beginPath()
+      ctx.arc(px, py, 5 * dpr, 0, Math.PI * 2)
+      ctx.fillStyle = note.dot === 'filled' ? color : cssColor('--panel')
+      ctx.fill()
+      ctx.lineWidth = 2 * dpr
+      ctx.strokeStyle = color
+      ctx.stroke()
+    }
+    const bold = `600 ${12.5 * dpr}px ${mono}`
+    const light = `400 ${11 * dpr}px ${mono}`
+    ctx.font = bold
+    const main = ctx.measureText(note.text).width
+    ctx.font = light
+    const sub = note.sub ? 6 * dpr + ctx.measureText(note.sub).width : 0
+    const width = main + sub
+    const align = note.align ?? 'center'
+    let left = align === 'center' ? px - width / 2 : align === 'right' ? px + 10 * dpr : px - 10 * dpr - width
+    left = Math.min(Math.max(left, bbox.left + 2 * dpr), bbox.left + bbox.width - width - 2 * dpr)
+    const base = Math.max(bbox.top + 13 * dpr, note.dot ? py - 9 * dpr : py - 8 * dpr)
+    ctx.font = bold
+    ctx.fillStyle = color
+    ctx.fillText(note.text, left, base)
+    if (note.sub) {
+      ctx.font = light
+      ctx.fillStyle = cssColor('--ink-muted')
+      ctx.fillText(note.sub, left + main + 6 * dpr, base)
+    }
+  }
+  ctx.restore()
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -141,15 +286,15 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
-  snapToSlot = false,
+  snapToSlot = false, lanes = NONE, notes = NONE,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
-  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup })
+  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes })
   useEffect(() => {
-    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup }
+    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes }
   })
   const [cursor] = useState(createCursorStore)
   const readPopup = useCallback(
@@ -161,6 +306,7 @@ export function TimeChart({
       x: extras.current.x,
       timeZone,
       tag: extras.current.popup?.tag,
+      extra: extras.current.popup?.extra,
     }),
     [timeZone],
   )
@@ -170,6 +316,7 @@ export function TimeChart({
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
+    lanes.length,
   ])
   const columns = series.some((s) => s.column)
 
@@ -178,6 +325,8 @@ export function TimeChart({
     if (!el) return
     const ink = cssColor('--ink-muted')
     const grid = cssColor('--chart-grid')
+    // lanes sit between the plot and the time axis's labels, which move down to make room
+    const lanesPx = lanes.length ? LANE_GAP + lanes.length * LANE_H : 0
     const stepped = uPlot.paths.stepped?.({ align: 1 })
     const hasColumns = series.some((s) => s.column)
     // One column per slot for a 'stack' or 'cap' series, read from extras so new data needs no rebuild: a gap between
@@ -321,9 +470,10 @@ export function TimeChart({
         {
           stroke: ink,
           grid: { stroke: grid, width: 1 },
-          ticks: { stroke: grid, width: 1 },
+          ticks: { stroke: grid, width: 1, show: lanesPx === 0 },
           values: (_u, splits) => axisLabels(splits, timeZone),
-          size: 44,
+          size: 44 + lanesPx,
+          gap: 5 + lanesPx,
         },
         {
           stroke: ink,
@@ -464,6 +614,8 @@ export function TimeChart({
               ctx.fillRect(Math.round(px - 1.5 * dpr), bbox.top + bbox.height * 0.2, Math.round(3 * dpr), bbox.height * 0.6)
             }
             ctx.restore()
+            drawLanes(u, extras.current.lanes, dpr)
+            drawNotes(u, extras.current.notes, dpr)
           },
         ],
       },
@@ -500,7 +652,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, shade, markers, now, ticks])
+  }, [bands, shade, markers, now, ticks, lanes, notes])
 
   return (
     <>
