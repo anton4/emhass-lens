@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.15
+
+- Plan: point at a chart and every chart shows a popup at that moment with each line's value, instead of the legend under it changing. It names the quarter-hour and whether it is measured or plan; for prices whether it is Nord Pool's or a forecast, and whose (for example "Forecast (eupowerprices.com)").
+- Plan: in the past each popup row has the measured value and, on a shaded band, what the plan said then (the dashed lines). The chart under the pointer rings the line nearest it. On a phone only the chart you touch shows its popup, across its top.
+- Plan: battery and grid values carry their sign: the battery **+** when charging and **−** when discharging, and the battery line is now drawn that way up ("Battery (+ charge)"), the grid **+** when importing and **−** when exporting. Prices in the popups have 3 decimals.
+- Plan: the charts are taller (power 300 px, state of charge and prices 210 px), and the legend is a plain key that no longer jumps as you move.
+- Colours: the battery state of charge is teal, so it no longer looks like the battery's power, on the charts and in This slot. Import and export prices are a deep and a light violet, both solid lines, on the Plan and Inputs pages.
+
 ## 0.4.14
 
 - The pages are tabs under the top bar again, instead of a sidebar, so every page gets the full width (the content may now be up to 1440 px wide). The tabs keep their groups (a thin line between them), the "exp" tags and Health's problem count; on a phone they scroll sideways. The update link moved next to the name.
