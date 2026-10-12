@@ -66,14 +66,80 @@ export function stripItems<D>(inputs: StripInput<D>[], dayStart: number, dayEnd:
     }))
 }
 
-/** For decisions made at irregular moments (the charger, the market): each holds until the next one, at most `max`
- *  seconds and at least `min`. */
-export function holdUntilNext<D>(inputs: StripInput<D>[], max: number, min = 60): StripInput<D>[] {
+/** A run of consecutive decisions with the same name: what the strip's popup shows. */
+export interface Stretch {
+  /** The first decision (unix seconds). */
+  from: number
+  /** The last decision (unix seconds). */
+  last: number
+  /** What was decided: the first input's detail, else its label. */
+  title: string | null
+  decisions: number
+  same: number
+  differs: number
+}
+
+// a quarter-hour tick that starts a second late still continues the stretch
+const STRETCH_SLACK = 60
+
+/** For decisions made at irregular moments (the charger, the market): consecutive decisions with the same label make
+ *  one mark, which holds until the next mark, at most `max` seconds after its last decision and at least `min` in all.
+ *  A label change, a missing label or a gap of more than `max` starts a new mark. A mark differs if any of its
+ *  decisions did, and opens the first that differed (else its first). Each input's detail is the popup's title. */
+export function holdStretches(inputs: StripInput<string>[], max: number, min = 60): StripInput<Stretch>[] {
   const sorted = [...inputs].sort((a, b) => a.t - b.t)
-  return sorted.map((input, i) => {
-    const next = sorted[i + 1]
-    return { ...input, span: Math.max(min, Math.min(max, next ? next.t - input.t : max)) }
+  const groups: StripInput<string>[][] = []
+  for (const input of sorted) {
+    const group = groups.at(-1)
+    const previous = group?.at(-1)
+    if (group && previous?.label && previous.label === input.label && input.t - previous.t <= max + STRETCH_SLACK) {
+      group.push(input)
+    } else {
+      groups.push([input])
+    }
+  }
+  return groups.map((group, i) => {
+    const first = group[0]!
+    const last = group.at(-1)!
+    const next = groups[i + 1]?.[0]
+    const until = Math.min(last.t + max, next?.t ?? Infinity)
+    const differing = group.find((g) => g.compare === 'mismatch')
+    const same = group.filter((g) => g.compare === 'ok').length
+    const differs = group.filter((g) => g.compare === 'mismatch').length
+    return {
+      t: first.t,
+      span: Math.max(min, until - first.t),
+      compare: differs > 0 ? 'mismatch' : same > 0 ? 'ok' : null,
+      label: first.label ?? null,
+      runId: (differing ?? first).runId ?? null,
+      detail: {
+        from: first.t,
+        last: last.t,
+        title: first.detail ?? first.label ?? null,
+        decisions: group.length,
+        same,
+        differs,
+      },
+    }
   })
+}
+
+/** How a stretch compared with the automation, in words. */
+export function stretchText(s: Stretch): string {
+  const none = s.decisions - s.same - s.differs
+  if (s.decisions === 1) {
+    return s.differs
+      ? 'The automation did something else.'
+      : s.same
+        ? 'The automation did the same.'
+        : 'Not compared with the automation.'
+  }
+  const parts = [
+    s.same > 0 && `${s.same} the same as the automation`,
+    s.differs > 0 && `${s.differs} different`,
+    none > 0 && `${none} not compared`,
+  ].filter(Boolean)
+  return `${s.decisions} decisions: ${parts.join(', ')}.`
 }
 
 // The names are 11 px monospace (about 6.6 px a character) after a 4 px tick padding.

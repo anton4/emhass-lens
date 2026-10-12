@@ -11,10 +11,11 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
+import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds, todayKey } from '../lib/days'
-import { holdUntilNext, type StripInput } from '../lib/dayStrip'
+import { holdStretches } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
@@ -46,6 +47,8 @@ function stripLabel(summary: string | null | undefined): string | null {
   if (parsed.kind === 'command') return parsed.text
   if (parsed.kind === 'none') return 'no action'
   if (parsed.kind === 'end') return 'session end'
+  if (parsed.kind === 'blocked') return 'not in control'
+  if (parsed.kind === 'ignored') return 'ignored'
   return null
 }
 
@@ -70,9 +73,9 @@ export function MarketPage() {
   const today = todayKey(tz, now)
   const todayReconciles = useRuns(runFilters('market.reconcile', today, tz, 0))
   const todayCompares = useRuns(runFilters('market.compare', today, tz, 0))
-  const strip = useMemo<StripInput[]>(
+  const strip = useMemo(
     () =>
-      holdUntilNext(
+      holdStretches(
         pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? []).map((row) => ({
           t: Date.parse(row.at) / 1000,
           compare: row.compare?.outcome,
@@ -163,6 +166,7 @@ export function MarketPage() {
             ? 'Market control is off, so nothing is decided. Switch to Shadow to compare with the automation.'
             : 'No decisions yet today.'
         }
+        detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
       />
 
       <section className="panel">

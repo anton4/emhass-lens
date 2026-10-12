@@ -37,6 +37,22 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: one day-strip mark per stretch of the same decision on the Market and EV charger pages (unreleased)
+- **Why:** the owner found that on the Market page's "Today, decision by decision" the hover outline moved around
+  inside what looked like one block, unlike the Inverter page.
+  - In a Qilowatt session the market reconciles every minute and on every command change (often 10–60 s apart).
+  - Each decision was its own mark, at least 60 s long. That is under 1 px, so the marks were drawn at the 2 px
+    minimum and overlapped.
+- **Now** `holdStretches` (`lib/dayStrip.ts`, replacing `holdUntilNext`) makes one mark of consecutive decisions with
+  the same label. A gap over 15 min (+60 s slack) or an unlabelled decision starts a new mark.
+  - A mark is amber if any of its decisions differed, and opens the first that differed (else its first).
+  - Pointing at a mark shows `StretchPopup`: its time range, what was decided, and how many decisions were the same,
+    different or not compared.
+  - The market also names `not in control` and `ignored` above the strip, so those merge too.
+- **The owner's choice:** stretches rather than quarter-hour slots (asked with mockups). Where Qilowatt changes the
+  power every minute, each change is still its own narrow mark.
+- **Checked** with unit tests only (no local market runs). Look at it on the real HA after the release.
+
 ### 2026-10-12: Runs filters: several jobs and outcomes, include or exclude (0.4.20)
 - **Why:** the owner wanted the jobs A–Z, several jobs at once, and a way to leave jobs and outcomes out.
 - **API:** `GET /api/runs` takes `job`, `outcome`, `not_job` and `not_outcome`, each repeatable.
@@ -286,7 +302,7 @@ These come from docs/PLAN.md §10:
 ### 2026-10-10 (night): redesign "D", step 3: controller pages and price breakdown (0.4.4)
 - Inverter, EV charger and Market share the D controller layout:
   - `components/controller/ControllerHead.tsx`: title, experimental tag, an on-page mode switch that writes `inverter|charger|market.mode` through `useSetControllerMode` with a confirmation (Live names the HA automation), the explanation line and the facts row.
-  - `AgreementFact` (with a bar), `CompareChip`, and `DayStrip` (built by `lib/dayStrip.ts`: `stripItems`, `stripLabels`, `stripRuns`, `holdUntilNext`) for "Today, slot by slot" (decision by decision for the charger and the market).
+  - `AgreementFact` (with a bar), `CompareChip`, and `DayStrip` (built by `lib/dayStrip.ts`: `stripItems`, `stripLabels`, `stripRuns`, `holdStretches`) for "Today, slot by slot" (decision by decision for the charger and the market).
   - The explainers in `components/*Views.tsx` are now sections with a visible numbered list (the current rule or branch tagged) and the prose under "More about decisions".
 - Price breakdown: spot in `--q-spot`, fees/network/VAT in greys (`--stack-*` tokens), VAT outlined; the legend toggles are pills.
 - Dark mode of the redesign is still unchecked (the owner asked to skip it for now).

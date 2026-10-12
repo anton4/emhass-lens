@@ -10,10 +10,11 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
+import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { todayKey } from '../lib/days'
-import { holdUntilNext, type StripInput } from '../lib/dayStrip'
+import { holdStretches } from '../lib/dayStrip'
 import {
   CHARGER_FIELD_LABELS,
   chargerFieldValue,
@@ -64,15 +65,19 @@ export function ChargerPage() {
   const today = todayKey(tz, now)
   const todayDecides = useRuns(runFilters('charger.decide', today, tz, 0))
   const todayCompares = useRuns(runFilters('charger.compare', today, tz, 0))
-  const strip = useMemo<StripInput[]>(
+  const strip = useMemo(
     () =>
-      holdUntilNext(
-        pairCompares(todayDecides.data ?? [], todayCompares.data ?? []).map((row) => ({
-          t: Date.parse(row.at) / 1000,
-          compare: row.compare?.outcome,
-          label: parseChargerSummary(row.decide?.summary)?.rule,
-          runId: row.decide?.id ?? row.compare?.id,
-        })),
+      holdStretches(
+        pairCompares(todayDecides.data ?? [], todayCompares.data ?? []).map((row) => {
+          const parsed = parseChargerSummary(row.decide?.summary)
+          return {
+            t: Date.parse(row.at) / 1000,
+            compare: row.compare?.outcome,
+            label: parsed?.rule,
+            runId: row.decide?.id ?? row.compare?.id,
+            detail: parsed?.label,
+          }
+        }),
         900,
       ),
     [todayDecides.data, todayCompares.data],
@@ -190,6 +195,7 @@ export function ChargerPage() {
             ? 'EV charger control is off, so nothing is decided. Switch to Dry run to compare with the automation.'
             : 'No decisions yet today.'
         }
+        detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
       />
 
       <div className="two-col">
