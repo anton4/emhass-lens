@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.18
+
+- Inputs: **What the import price is made of** is a column per quarter-hour instead of one filled area. Spot, fees, network and VAT are stacked with a hairline between them and a gap between quarter-hours, and the import price is a dark cap on top; when spot is below zero, the cap sits inside the column. Spot is a darker grey and fees a stronger violet, so the two no longer run together. Forecast quarter-hours are faded.
+- Inputs: pointing at either price chart rings that quarter-hour's column, and both charts read the quarter-hour the pointer is in. Before, the right half of a quarter-hour showed the next one.
+
 ## 0.4.17
 
 - Inverter: **How a rule is chosen** tags only the rule that matched. Before, "Self-use" slots tagged rules 7 and 9 at once, because both end in the same mode. The rules are grouped by what the plan's grid power picks (importing, exporting, neutral), still numbered 1–9, and each has a title of its own (three of them were all "Self-use battery or PV").
