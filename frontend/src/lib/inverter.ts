@@ -387,8 +387,6 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
     battery_min_w: -20000,
     grid_import_max_w: 18800,
     export_max_w: 15500,
-    export_only_battery_min_w: -16000,
-    force_charge_battery_min_w: -3000,
     force_charge_at_import_max: true,
     force_charge_grid_cap_above_w: 9000,
     force_charge_grid_margin_w: 1000,
@@ -404,7 +402,7 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
       id: 'force_charge',
       label: 'Force charge',
       when: 'Importing (P_grid > 100 W) and charging the battery (P_batt < −100 W)',
-      sets: `${forceGrid}; battery ${l.force_charge_battery_min_w}…${l.battery_max_w} W`,
+      sets: `${forceGrid}; ${full}`,
     },
     {
       id: 'use_bat_import',
@@ -437,7 +435,7 @@ export function rules(limits: InverterSettings['limits'] | undefined, noExportAt
         price === null
           ? 'Exporting, battery idle (export is never blocked: "No export at or below" is empty)'
           : `Exporting, battery idle, export price above ${price}`,
-      sets: `grid 0 W, battery ${l.export_only_battery_min_w}…0 W (may discharge, not charge: surplus PV is exported)`,
+      sets: `grid 0 W, battery ${l.battery_min_w}…0 W (may discharge, not charge: surplus PV is exported)`,
     },
     {
       id: 'self_use',

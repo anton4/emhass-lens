@@ -54,7 +54,7 @@ def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world:
         set_mode(client, world, "dry_run")
         decided = run_job(client, "inverter.decide")
         assert decided["outcome"] == "dry_run", decided
-        assert "'Force charge' (rule force_charge): grid 18800 W, battery -3000…20000 W" in decided["summary"]
+        assert "'Force charge' (rule force_charge): grid 18800 W, battery -20000…20000 W" in decided["summary"]
         assert world.ha_services == [] or all(not s[0].startswith("number") for s in world.ha_services)
 
         decision = client.get(f"/api/runs/{decided['id']}/artifacts/decision").json()["decision"]
@@ -62,7 +62,6 @@ def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world:
         world.set_state("number.sofar_feedin_max_power", decision["feedin_max_w"])
         world.set_state("input_select.emhass_passive_state", "Force charge")
         world.set_state("number.sofar_passive_mode_grid_power", 18800)
-        world.set_state("number.sofar_passive_mode_battery_power_min", -3000)
         prime(client, world)
         same = run_job(client, "inverter.compare")
         assert same["outcome"] == "ok", same

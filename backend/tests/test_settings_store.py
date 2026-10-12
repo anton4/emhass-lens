@@ -159,3 +159,23 @@ def test_schema_4_settings_move_the_export_block_to_the_mpc_settings(app_db, bus
         assert store.load_errors == []
         assert store.current.emhass.mpc.no_export_at_or_below == expected
         assert "low_export_price" not in store.current.inverter.limits.model_dump()
+
+
+def test_schema_5_settings_drop_the_per_mode_battery_mins(app_db, bus, clock) -> None:
+    doc = Settings().model_dump(mode="json")
+    doc["inverter"]["limits"]["battery_min_w"] = -18000
+    doc["inverter"]["limits"]["export_only_battery_min_w"] = -16000
+    doc["inverter"]["limits"]["force_charge_battery_min_w"] = -3000
+    app_db.execute(
+        "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
+        "VALUES ('x', 'ui', 5, ?, '[]')",
+        (json.dumps(doc),),
+    )
+    store = SettingsStore(db=app_db, bus=bus, clock=clock)
+    store.load()
+    assert store.load_errors == []
+    limits = store.current.inverter.limits.model_dump()
+    assert "export_only_battery_min_w" not in limits and "force_charge_battery_min_w" not in limits
+    assert limits["battery_min_w"] == -18000
+    newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
+    assert newest == {"schema_version": SCHEMA_VERSION, "source": "migration"}

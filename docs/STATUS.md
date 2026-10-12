@@ -37,6 +37,16 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: one battery min for every mode that may discharge (0.4.13)
+- **Why:** the owner's call, to simplify the settings and the logic.
+  - `force_charge_battery_min_w` (−3000) and `export_only_battery_min_w` (−16000) are removed. Force charge and self_use_pv_export use `battery_min_w` (−20000) like the other modes, and use_only_grid keeps 0.
+- **Safe because** Sofar passive mode clamps the battery to [min, max] while it chases the grid target:
+  - Force charge's target is the import max (0.4.12), so the window only matters above 18.8 kW + PV of house load, where −20000 holds the grid at the fuse limit. Market buy sessions already used `battery_min_w` in Force charge (`domain/market.py`).
+  - self_use_pv_export has grid 0 and battery max 0, so only a house load above PV + 16 kW differs.
+  - With `force_charge_at_import_max` off, the battery may now cover house load above the plan's P_grid + margin; its description says so.
+- **No fewer presses:** every mode change that moved battery min also changes grid power or battery max. There's one write at the first Force charge after the update.
+- **Settings schema 6:** `_v5_to_v6` drops both keys. Without it, `extra="forbid"` would reject the stored revision. Tested in `test_schema_5_settings_drop_the_per_mode_battery_mins`.
+
 ### 2026-10-12: Force charge holds the import max (0.4.12)
 - **Why:** runs 2791/2803 (the owner's exports): two Force charge slots in a row.
   - 02:00: P_grid 12685 W is above the 9000 W cap, so the grid target was 18800 W.

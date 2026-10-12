@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -878,7 +878,9 @@ class InverterLimits(Section):
         ge=-100000,
         le=0,
         title="Battery discharge max (negative)",
-        description="The bottom of the passive battery window: discharging is negative for Sofar.",
+        description="The bottom of the passive battery window in every mode that may discharge, Force charge and "
+        "Self-use PV and export excess to grid included (Use only grid power keeps 0): discharging is negative for "
+        "Sofar.",
         json_schema_extra=ui(unit="W"),
     )
     grid_import_max_w: int = Field(
@@ -887,32 +889,15 @@ class InverterLimits(Section):
     export_max_w: int = Field(
         default=15500, ge=0, le=100000, title="Export max (feed-in)", json_schema_extra=ui(unit="W")
     )
-    export_only_battery_min_w: int = Field(
-        default=-16000,
-        ge=-100000,
-        le=0,
-        title="Battery min while exporting PV",
-        description="How far the battery may discharge in Self-use PV and export excess to grid, where it may not "
-        "charge.",
-        json_schema_extra=ui(unit="W"),
-    )
-    force_charge_battery_min_w: int = Field(
-        default=-3000,
-        ge=-100000,
-        le=0,
-        title="Battery min while force charging",
-        description="How far the battery may discharge in Force charge, should the house use more than planned.",
-        json_schema_extra=ui(unit="W"),
-    )
     force_charge_at_import_max: bool = Field(
         default=True,
         title="Force charge at the import max",
         description="Every Force charge slot sets the grid target to Grid import max and the battery limits its own "
         "charge, so back-to-back Force charge slots write nothing (every press of the apply button is an EEPROM "
         "write). The battery may charge faster than the plan in that slot; the next plan starts from the real state "
-        "of charge. Off: follow the plan's P_grid like the automation, with the two settings below (in dry run the "
-        "comparison with the automation otherwise differs on the grid target in Force charge slots at or below the "
-        "cap).",
+        "of charge. Off: follow the plan's P_grid like the automation, with the two settings below; the battery may "
+        "then cover house load above that target (in dry run the comparison with the automation otherwise differs on "
+        "the grid target in Force charge slots at or below the cap).",
     )
     force_charge_grid_cap_above_w: int = Field(
         default=9000,

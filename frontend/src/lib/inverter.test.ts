@@ -103,6 +103,8 @@ describe('rules', () => {
       'self_use',
     ])
     expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('18800 W (the import max;')
+    expect(list.find((r) => r.id === 'force_charge')?.sets).toContain('battery -20000…20000 W')
+    expect(list.find((r) => r.id === 'self_use_pv_export')?.sets).toContain('battery -20000…0 W')
     expect(list.find((r) => r.id === 'self_use_pv_export')?.when).toContain('above 0.03 €/kWh')
   })
 
@@ -112,8 +114,6 @@ describe('rules', () => {
       battery_min_w: -20000,
       grid_import_max_w: 18800,
       export_max_w: 15500,
-      export_only_battery_min_w: -16000,
-      force_charge_battery_min_w: -3000,
       force_charge_at_import_max: false,
       force_charge_grid_cap_above_w: 9000,
       force_charge_grid_margin_w: 1000,

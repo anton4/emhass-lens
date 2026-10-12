@@ -59,8 +59,15 @@ def _v4_to_v5(doc: Doc) -> Doc:
     return doc
 
 
+def _v5_to_v6(doc: Doc) -> Doc:
+    """0.4.13: the per-mode battery mins (exporting PV, force charging) are gone; every mode that may discharge uses
+    Battery discharge max."""
+    _drop(doc, "inverter", "limits", "export_only_battery_min_w")
+    return _drop(doc, "inverter", "limits", "force_charge_battery_min_w")
+
+
 # MIGRATIONS[n] upgrades a version-n document to version n+1.
-MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5}
+MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
 
 
 def migrate(doc: Doc, from_version: int) -> tuple[Doc, int]:

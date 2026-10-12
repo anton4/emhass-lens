@@ -125,7 +125,6 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
             rule, why = "force_charge", f"importing and charging the battery; grid target {grid} W"
             if limits.force_charge_at_import_max:
                 why += " (the import max: the battery limits its own charge)"
-            bmin = limits.force_charge_battery_min_w
         elif b > BAND_W:
             rule, why, grid = "use_bat_import", "importing and discharging (use the battery, import the rest)", 0
         else:
@@ -144,7 +143,7 @@ def decide(v: PlanValues, limits: InverterLimits, no_export_at_or_below: float |
                 if threshold is None
                 else f"exporting, battery idle, price {price:.4f} €/kWh above {threshold}: export the PV"
             )
-            bmax, bmin = 0, limits.export_only_battery_min_w
+            bmax = 0
         else:
             rule, grid = "self_use", 0
             why = f"exporting, battery idle, but the price {price:.4f} €/kWh is at or below {threshold}: keep the PV"

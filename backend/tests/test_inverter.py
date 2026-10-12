@@ -19,10 +19,10 @@ def v(
     ("values", "rule", "state", "grid", "bmax", "bmin"),
     [
         # importing (P_grid > 100 W)
-        (v(4560, -6000), "force_charge", "Force charge", 5600, 20000, -3000),
-        (v(9500, -15000), "force_charge", "Force charge", 18800, 20000, -3000),
-        (v(9000, -500), "force_charge", "Force charge", 10000, 20000, -3000),  # 9000 is not above the cap
-        (v(101, -101), "force_charge", "Force charge", 1100, 20000, -3000),
+        (v(4560, -6000), "force_charge", "Force charge", 5600, 20000, -20000),
+        (v(9500, -15000), "force_charge", "Force charge", 18800, 20000, -20000),
+        (v(9000, -500), "force_charge", "Force charge", 10000, 20000, -20000),  # 9000 is not above the cap
+        (v(101, -101), "force_charge", "Force charge", 1100, 20000, -20000),
         (v(3000, 2000), "use_bat_import", "Self-use battery or PV", 0, 20000, -20000),
         (v(2500, 0), "use_only_grid", "Use only grid power", 0, 20000, 0),
         (v(2500, 100), "use_only_grid", "Use only grid power", 0, 20000, 0),  # the idle band is inclusive
@@ -32,8 +32,8 @@ def v(
         (v(-15500, 17000), "force_discharge", "Force discharge", -15500, 20000, -20000),
         (v(-4449, 6000), "force_discharge", "Force discharge", -4400, 20000, -20000),
         (v(-101, 101), "force_discharge", "Force discharge", -100, 20000, -20000),
-        (v(-3000, 0, pv=5000, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -16000),
-        (v(-3000, 50, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -16000),
+        (v(-3000, 0, pv=5000, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -20000),
+        (v(-3000, 50, price=0.05), "self_use_pv_export", "Self-use PV and export excess to grid", 0, 0, -20000),
         (v(-3000, 0, price=0.03), "self_use", "Self-use battery or PV", 0, 20000, -20000),  # not above the threshold
         (v(-3000, 0, price=None), "self_use", "Self-use battery or PV", 0, 20000, -20000),  # unknown counts as 0
         # neutral (-100…100 W)
@@ -66,7 +66,7 @@ def test_rules_match_the_automation(values, rule, state, grid, bmax, bmin) -> No
 )
 def test_force_charge_holds_the_import_max_by_default(values) -> None:
     d = decide(values, InverterLimits(), LOW)
-    assert d.targets == Targets("Force charge", 18800, 20000, -3000)
+    assert d.targets == Targets("Force charge", 18800, 20000, -20000)
     assert "the import max: the battery limits its own charge" in d.why
 
 
@@ -141,9 +141,9 @@ def test_a_feedin_limit_that_isnt_written_isnt_judged() -> None:
 
 def test_compare_reports_each_field() -> None:
     d = decide(v(4560, -6000), L, LOW)
-    same = compare(d, Observed("Force charge", 5600.0, 20000.0, -3000.0, 15500.0))
+    same = compare(d, Observed("Force charge", 5600.0, 20000.0, -20000.0, 15500.0))
     assert same["agree"] is True
-    differs = compare(d, Observed("Force charge", 5500.0, 20000.0, -3000.0, 0.0))
+    differs = compare(d, Observed("Force charge", 5500.0, 20000.0, -20000.0, 0.0))
     assert differs["agree"] is False
     assert [f["field"] for f in differs["fields"] if not f["same"]] == ["grid_power_w", "feedin_max_w"]
 
