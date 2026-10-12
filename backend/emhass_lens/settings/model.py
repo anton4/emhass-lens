@@ -1222,7 +1222,8 @@ class MarketEntities(Section):
         default="input_select.qilowatt_session_state",
         title="Session state select",
         description="Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation "
-        "kept as a fallback; followed in shadow mode.",
+        "kept as a fallback; followed in shadow mode, where a session also holds EMHASS Lens off the inverter and "
+        "its end re-applies the plan right away (Market session hold).",
         json_schema_extra=ui(widget="entity", domain="input_select"),
     )
     ha_automation: EntityId = Field(
@@ -1318,7 +1319,8 @@ class ExternalControl(Section):
         title="Hold while a market session owns the inverter",
         description="While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs "
         "are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, "
-        "the plan is re-applied right away.",
+        "the plan is re-applied right away. With Qilowatt market control on Shadow the hold is always on and "
+        "follows the market's session state select instead of the entity below.",
     )
     entity: EntityId = Field(
         default="input_select.qilowatt_session_state",

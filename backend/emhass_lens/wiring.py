@@ -478,7 +478,7 @@ def subscribe(c: Container) -> None:
     c.settings.subscribe(
         ("inputs", "pv", "parity", "inverter", "charger", "market", "external_control", "measurements"), rewatch
     )
-    c.settings.subscribe("external_control", x["external"].on_settings)
+    c.settings.subscribe(("external_control", "market.mode", "market.entities"), x["external"].on_settings)
     c.settings.subscribe("measurements", x["measurements"].on_settings)
 
     def on_market_time(old: Settings, new: Settings, paths: list[str]) -> None:
@@ -510,7 +510,7 @@ def subscribe(c: Container) -> None:
     c.settings.subscribe(("emhass.mode", "emhass.mpc.auto"), x["mpc"].note_driver_change)
 
     ha.on_state(lambda entity_id: entity_id == c.settings.current.forecast.fi.entity, x["forecasts"].on_fi_state)
-    ha.on_state(lambda entity_id: entity_id == c.settings.current.external_control.entity, x["external"].on_state)
+    ha.on_state(lambda entity_id: entity_id in x["external"].entities(), x["external"].on_state)
     charger_entities = lambda: c.settings.current.charger.entities  # noqa: E731
     ha.on_state(lambda entity_id: entity_id == charger_entities().deferrable_sensor, x["charger"].on_deferrable_state)
     ha.on_state(

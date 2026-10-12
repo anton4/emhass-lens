@@ -161,7 +161,9 @@ Nothing is written while the inverter isn't in passive mode, while the automatio
 
 ## During a market session (mFRR)
 
-When an aggregator such as Qilowatt takes the inverter for a Kratt or Fusebox activation, EMHASS Lens can stand back and take over again the moment the session ends. Turn it on under **Settings → Market session hold**:
+When an aggregator such as Qilowatt takes the inverter for a Kratt or Fusebox activation, EMHASS Lens can stand back and take over again the moment the session ends.
+
+With **Qilowatt market control** on **Shadow**, the hold is always on. It follows the market's **Session state select**, which the automation sets to `buy` or `sell` while it drives the inverter, so there is nothing to turn on. The market source alone isn't used: a command below the start threshold opens no session, and the source still names Kratt or Fusebox after a session ends. With market control on Live, EMHASS Lens runs the sessions and hands the inverter back itself. Without market control, turn the hold on under **Settings → Market session hold**:
 
 - **Session entity** and **busy values**: the entity your market automation maintains, for example `input_select.qilowatt_session_state` with the values `buy` and `sell`.
 - While the entity shows a busy value, MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. The Health page's *Driving EMHASS* card and `binary_sensor.emhass_lens_hold` show the hold.

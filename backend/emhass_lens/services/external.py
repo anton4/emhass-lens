@@ -5,6 +5,10 @@ select is 'buy' or 'sell'), EMHASS Lens builds MPC payloads but doesn't send the
 touch the inverter. The moment the session ends it re-applies the plan: one publish, one inverter decision, and
 only the registers that differ are written. Optionally MPC runs again afterwards; that re-plan is published but
 doesn't touch the inverter in the same slot, so a session end never costs more than one inverter write.
+
+With Qilowatt market control in shadow mode the automation runs the sessions, so the hold always follows the
+market's session select, whatever the hold's own settings say. In live mode the App runs the sessions itself and
+hands the inverter back on its own.
 """
 
 import asyncio
@@ -31,13 +35,27 @@ class ExternalControlService:
         self.last_hold: dict[str, Any] | None = None
         self.last_resume: dict[str, Any] | None = None
 
+    def follows_market(self) -> bool:
+        """Market control in shadow: the automation runs the sessions and keeps the market's session select."""
+        market = self.c.extras.get("market")
+        select = self.c.settings.current.market.entities.session_select
+        return market is not None and market.mode == "shadow" and bool(select)
+
+    def source(self) -> tuple[str, list[str]] | None:
+        """(entity, busy values) the hold follows, or None when there is no hold."""
+        if self.c.boot.safe_mode:
+            return None
+        if self.follows_market():
+            return self.c.settings.current.market.entities.session_select, ["buy", "sell"]
+        s = self.c.settings.current.external_control
+        return (s.entity, s.busy_values) if s.enabled and s.entity else None
+
     def enabled(self) -> bool:
-        return self.c.settings.current.external_control.enabled and not self.c.boot.safe_mode
+        return self.source() is not None
 
     def entities(self) -> set[str]:
-        if not self.enabled():
-            return set()
-        return {self.c.settings.current.external_control.entity} - {""}
+        source = self.source()
+        return {source[0]} if source else set()
 
     def _market_holds(self) -> bool:
         market = self.c.extras.get("market")
@@ -51,19 +69,22 @@ class ExternalControlService:
     def hold_text(self) -> str:
         if not self.busy and self._market_holds():
             return f"the App's own market session, {self.c.extras['market'].session_text()}"
-        return f"{self.c.settings.current.external_control.entity} is {self.busy_value!r}"
+        source = self.source()
+        return f"{source[0] if source else 'the session entity'} is {self.busy_value!r}"
 
     def is_busy_state(self, state: dict[str, Any] | None) -> bool:
-        if state is None:
+        source = self.source()
+        if state is None or source is None:
             return False
-        values = {v.lower() for v in self.c.settings.current.external_control.busy_values}
-        return str(state.get("state", "")).lower() in values
+        return str(state.get("state", "")).lower() in {v.lower() for v in source[1]}
 
     # --- listeners ---------------------------------------------------------------------------------------------
     async def on_state(self, entity_id: str, state: dict[str, Any] | None) -> None:
         market = self.c.extras.get("market")
-        if market is not None and market.mode == "live":
-            return  # the App runs the sessions itself and hands the inverter back on its own
+        if market is not None and market.mode == "live":  # the App runs the sessions and hands the inverter back
+            if self.busy:
+                await self._clear("the App runs the market sessions itself")
+            return
         if not self.enabled():
             if self.busy:
                 await self._clear("the hold is turned off")
@@ -88,8 +109,14 @@ class ExternalControlService:
         await self._refresh_outputs()
 
     async def on_settings(self, old: Settings, new: Settings, paths: list[str]) -> None:
-        if not self.enabled() and self.busy:
-            await self._clear("the hold is turned off")
+        if not self.enabled():
+            if self.busy:
+                await self._clear("the hold is turned off")
+            return
+        source = self.source()
+        state = self.c.extras["ha"].state(source[0]) if source else None
+        if source and state is not None:  # the entity may already be watched (and busy) for the market controller
+            await self.on_state(source[0], state)
 
     async def _clear(self, why: str) -> None:
         log.info("Hold cleared: %s", why)
@@ -182,11 +209,11 @@ class ExternalControlService:
         finish("ok", f"Resumed {local:%H:%M}: re-applied the plan" + (", then re-planned" if replanned else ""))
 
     def status(self) -> dict[str, Any]:
-        s = self.c.settings.current.external_control
+        source = self.source()
         return {
-            "enabled": self.enabled(),
+            "enabled": source is not None,
             "busy": self.busy,
-            "entity": s.entity,
+            "entity": source[0] if source else self.c.settings.current.external_control.entity,
             "value": self.busy_value if self.busy else None,
             "since": iso(self.busy_since) if self.busy else None,
             "last_hold": self.last_hold,

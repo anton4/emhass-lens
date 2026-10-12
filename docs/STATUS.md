@@ -37,6 +37,24 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: in market shadow mode the hold follows the market's session select (unreleased)
+- **Why:** the owner sent runs 3267 and 3281 (inverter live, market shadow, two Kratt sell sessions at 13:07–13:14).
+  - At a session end the automation writes the safe passive state but not the feed-in limit (`domain/market.py`). So 3000 W and 3800 W stayed behind.
+  - The hold was off, so the drift check set 3000 W back 1m45s later (13:11:30), and the slot decision at 13:15:02 fixed 3800 W.
+  - A drift restore after every session also counts toward the 3-per-hour fight limit.
+  - The owner wanted the hold to come from the market setup, not from a separate setting.
+- **Change** (`services/external.py`):
+  - `source()` returns the (entity, busy values) the hold follows.
+  - With market control on Shadow, that's always `market.entities.session_select` with buy/sell, whatever `external_control.enabled` says. Otherwise the hold's own settings apply, as before.
+  - The source isn't `sensor.qw_source` being kratt/fusebox. A command below the start gate (kratt frrup 600 W at 13:10:55) has no session, and the source is still kratt after a below-gate end.
+- **Wiring:**
+  - The state listener matches `external.entities()`.
+  - `on_settings` also runs on `market.mode` and `market.entities`. It picks up a select that is already busy.
+  - Switching market to Live clears a hold (the App hands back itself) without a resume.
+- **Health:** `external.entity_missing` checks the followed entity, and links to the market settings when that's the select.
+- **Settings:** the descriptions of the session select and the hold's switch say so; `openapi.json` and `schema.d.ts` are regenerated.
+- **Tests:** three new tests in `test_external_control.py`: a shadow session holds and hands back with the switch off; leaving shadow; the missing select. 393 backend tests, ruff, pyright. Frontend checks and e2e were not run (descriptions only).
+
 ### 2026-10-12: the price breakdown as columns (0.4.18)
 - **Why:** the owner found the stacked areas hard to read: the grey spot ran together into one shape.
   - Canvas with the options: https://claude.ai/artifact/4573i4QumxjxRGf1XRitmn. The owner picked B: quarter-hour columns, part gaps, a clearer palette.

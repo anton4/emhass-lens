@@ -230,19 +230,21 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
 
     # Market session hold
     external = x.get("external")
-    if external is not None and external.enabled() and ha.connected:
-        entity = settings.external_control.entity
-        if entity and ha.state(entity) is None:
-            out.append(
-                Problem(
-                    "external.entity_missing",
-                    "warning",
-                    "The market session entity isn't found",
-                    f"{entity} has no state in Home Assistant, so sessions can't hold the inverter",
-                    "Check Settings → Market session hold.",
-                    "#/settings?section=external_control",
-                )
+    source = external.source() if external is not None else None
+    if external is not None and source is not None and ha.connected and ha.state(source[0]) is None:
+        market_select = external.follows_market()
+        out.append(
+            Problem(
+                "external.entity_missing",
+                "warning",
+                "The market session entity isn't found",
+                f"{source[0]} has no state in Home Assistant, so sessions can't hold the inverter",
+                "Check Settings → Qilowatt market control → Session state select."
+                if market_select
+                else "Check Settings → Market session hold.",
+                "#/settings?section=market" if market_select else "#/settings?section=external_control",
             )
+        )
 
     # Qilowatt market control
     market = x.get("market")

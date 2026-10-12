@@ -2101,7 +2101,7 @@ export interface components {
             busy_values?: string[];
             /**
              * Hold while a market session owns the inverter
-             * @description While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, the plan is re-applied right away.
+             * @description While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, the plan is re-applied right away. With Qilowatt market control on Shadow the hold is always on and follows the market's session state select instead of the entity below.
              * @default false
              */
             enabled: boolean;
@@ -2801,7 +2801,7 @@ export interface components {
             pv_sensor: string;
             /**
              * Session state select
-             * @description Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation kept as a fallback; followed in shadow mode.
+             * @description Mirrored in live mode (none / buy / sell) for dashboards and the Home Assistant automation kept as a fallback; followed in shadow mode, where a session also holds EMHASS Lens off the inverter and its end re-applies the plan right away (Market session hold).
              * @default input_select.qilowatt_session_state
              */
             session_select: string;

@@ -214,3 +214,80 @@ def test_repeated_and_missing_states(tmp_path: Path, world: World) -> None:
         assert "external.entity_missing" in keys
     finally:
         client.__exit__(None, None, None)
+
+
+def shadow_client(tmp_path: Path, world: World, clock: FakeClock) -> TestClient:
+    """Market control in shadow (the automation runs the sessions) and the hold's own switch left off."""
+    return live_client(
+        tmp_path,
+        world,
+        clock,
+        external_control={"enabled": False, "entity": "input_select.somewhere_else", "handback_wait_s": 1},
+        inverter={"mode": "live"},
+        market={"mode": "shadow"},
+    )
+
+
+def patch_settings(client: TestClient, changes: dict) -> None:
+    rev = client.get("/api/settings").json()["revision"]
+    saved = client.patch("/api/settings", json={"base_revision": rev, "changes": changes})
+    assert saved.status_code == 200, saved.text
+
+
+def test_a_shadow_market_session_holds_and_hands_back_without_the_hold_switch(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = shadow_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        hold = client.get("/api/emhass").json()["mpc"]["hold"]
+        assert hold["enabled"] is True and hold["entity"] == SESSION  # the market's select, not the hold's entity
+        set_session(client, world, "sell")
+        world.set_state(ENABLE, "off")
+        prime(client, world)
+        assert client.get("/api/emhass").json()["mpc"]["held"] is True
+        decide = manual_run(client, "inverter.decide")
+        assert decide["outcome"] == "noop" and "market session holds the inverter" in decide["summary"]
+
+        services_before = len(world.ha_services)
+        decides_before = newest_id(client, "inverter.decide")
+        world.set_state(ENABLE, "on")
+        prime(client, world)
+        set_session(client, world, "none")
+        resume = wait_for_run(client, "external.resume", 0)
+        assert resume["outcome"] == "ok", resume
+        assert resume["summary"].startswith("Resumed 14:13: re-applied the plan")
+        assert wait_for_run(client, "inverter.decide", decides_before)["outcome"] == "ok"
+        presses = [s[1]["entity_id"] for s in world.ha_services[services_before:] if s[0] == "button/press"]
+        assert presses.count(APPLY_BUTTON) <= 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_leaving_shadow_ends_the_hold_without_a_resume(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = shadow_client(tmp_path, world, clock)
+    try:
+        set_session(client, world, "sell")
+        assert client.get("/api/emhass").json()["mpc"]["held"] is True
+        patch_settings(client, {"market": {"mode": "live"}})  # the App runs the sessions and hands back itself
+        assert client.get("/api/emhass").json()["mpc"]["held"] is False
+        patch_settings(client, {"market": {"mode": "shadow"}})  # the select still says sell: held again
+        assert client.get("/api/emhass").json()["mpc"]["held"] is True
+        patch_settings(client, {"market": {"mode": "off"}})  # no market control and the hold's switch is off
+        mpc = client.get("/api/emhass").json()["mpc"]
+        assert mpc["held"] is False and mpc["hold"]["enabled"] is False
+        assert client.get("/api/runs", params={"job": "external.resume"}).json() == []
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_missing_market_select_points_at_the_market_settings(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = shadow_client(tmp_path, world, clock)
+    try:
+        set_session(client, world, None)
+        run_job(client, "health.evaluate")
+        [problem] = [p for p in client.get("/api/problems").json()["active"] if p["key"] == "external.entity_missing"]
+        assert SESSION in problem["detail"] and problem["link"] == "#/settings?section=market"
+    finally:
+        client.__exit__(None, None, None)
