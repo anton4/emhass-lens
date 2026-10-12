@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.23
+
+- Inputs: a new **What EMHASS gets** section at the top charts everything the newest MPC run sent, from its anchor to the end of the horizon. It shows the import and export prices with the tariff period and export limit under them, the Solcast PV forecast and its P10 with each day's total in kWh, and EMHASS's house load forecast with each deferrable load's window. It also shows the battery's state of charge now and its target. Cards sum it up with the payload keys they stand for. **Preview now** shows a payload built now instead, without sending it.
+- Inputs: **Before the anchor: 24 h measured** puts the last day as measured in front of it: the house load from your load sensor, PV and the battery. Pointing at any chart shows the Plan page's popup on every chart at once.
+- API: `GET /api/inputs/sent` (the newest run's payload slot by slot, with EMHASS's load forecast and `hours_back` hours measured) and `POST /api/inputs/sent/preview`.
+
 ## 0.4.22
 
 - Settings: a button entity shows when it was last pressed in the App's timezone, e.g. "pressed Mon, Oct 12, 13:15:02". Before, it showed Home Assistant's UTC time as stored (`2026-10-12T10:15:02.322394+00:00`), three hours off in Tallinn's summer. This covers the inverter's apply and feed-in buttons, the EV charger's start and stop buttons, and timestamp sensors.
