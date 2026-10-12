@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.11
+
+- Inverter: **Today, slot by slot** is coloured by the passive state each slot set, so you can see where the mode changes: force charge blue, use only grid power slate, self-use lavender (dotted where export is restricted), charge battery and export striped, PV export aqua and force discharge orange. Slots where EMHASS Lens wasn't in control (for example an mFRR session) are hatched. A key above the strip counts the slots per state. In live mode the strip used to be all grey, because only dry run compares with the automation.
+- Inverter: point at a slot (or tap it on a phone) to see what it set on the Sofar inverter: passive state, grid power, battery min, battery max and feed-in max. Values that changed since the slot before are tagged, a feed-in limit left as it is shows the last one set and since when, and in dry run a row turns amber with what the automation set where it differed. Click the slot to open its decision, as before.
+- Inverter: the line under the strip shows the comparison in dry run (light green the same, amber different) and the slots that wrote to the inverter in live.
+
 ## 0.4.10
 
 - MPC: EMHASS's **battery charge power derating** (`battery_charge_power_derating`) is left out of the plans. EMHASS gives every derating step a yes/no variable per slot. With two steps, a 52-hour plan took the solver over 2 minutes on the HA host (20 s instead of 0.3 s on a fast computer), so runs stopped at their time limit with no plan, often several in a row in the evening. The battery's BMS tapers the charge anyway, and every quarter-hour's plan starts from the real state of charge. To plan with it anyway, add `battery_charge_power_derating` under Settings → EMHASS → Extra runtime parameters.
