@@ -8,6 +8,12 @@ describe('fitRange', () => {
     expect(b).toBeCloseTo(21)
   })
 
+  it('keeps zero in view for a stacked chart', () => {
+    const [a, b] = fitRange(10, 20, { pad: 0.1, zero: true })
+    expect(a).toBeCloseTo(-2)
+    expect(b).toBeCloseTo(22)
+  })
+
   it('keeps negative to positive power as it is', () => {
     const [a, b] = fitRange(-3000, 5000, { pad: 0.1 })
     expect(a).toBeCloseTo(-3800)

@@ -8,8 +8,7 @@ import {
   midnights,
   originLabel,
   periodLabel,
-  stackExtent,
-  stackSegments,
+  stackLayers,
   type PricePart,
 } from './prices'
 import { batteryDirection, formatAge, formatPower, formatPrice, gridDirection } from './units'
@@ -73,30 +72,27 @@ describe('price breakdown stacking', () => {
   const all = new Set<PricePart>(['spot', 'fees', 'network', 'vat'])
 
   it('stacks the shown parts on top of each other without gaps', () => {
-    expect(stackSegments(c, all)).toEqual([
-      { key: 'spot', from: 0, to: 10 },
-      { key: 'fees', from: 10, to: 12 },
-      { key: 'network', from: 12, to: 15 },
-      { key: 'vat', from: 15, to: 19 },
-    ])
-    expect(stackSegments(c, new Set<PricePart>(['fees', 'vat']))).toEqual([
-      { key: 'fees', from: 0, to: 2 },
-      { key: 'vat', from: 2, to: 6 },
-    ])
-    expect(stackSegments(c, new Set<PricePart>())).toEqual([])
+    expect(stackLayers([c], all)).toEqual({
+      spot: { lo: [0], hi: [10] },
+      fees: { lo: [10], hi: [12] },
+      network: { lo: [12], hi: [15] },
+      vat: { lo: [15], hi: [19] },
+    })
+  })
+
+  it('leaves a hidden part as a layer of no thickness where it would start', () => {
+    expect(stackLayers([c], new Set<PricePart>(['fees', 'vat']))).toEqual({
+      spot: { lo: [0], hi: [0] },
+      fees: { lo: [0], hi: [2] },
+      network: { lo: [2], hi: [2] },
+      vat: { lo: [2], hi: [6] },
+    })
   })
 
   it('draws a negative spot below zero and stacks the rest from zero', () => {
-    const negative = { ...c, spot: -5 }
-    expect(stackSegments(negative, new Set<PricePart>(['spot', 'network']))).toEqual([
-      { key: 'spot', from: 0, to: -5 },
-      { key: 'network', from: 0, to: 3 },
-    ])
-    expect(stackExtent([negative], all)).toEqual({ min: -5, max: 9 })
-  })
-
-  it('scales to the shown parts only', () => {
-    expect(stackExtent([c, { ...c, vat: 6 }], new Set<PricePart>(['vat']))).toEqual({ min: 0, max: 6 })
-    expect(stackExtent([c], new Set<PricePart>())).toEqual({ min: 0, max: 0.0001 })
+    const layers = stackLayers([{ ...c, spot: -5 }], new Set<PricePart>(['spot', 'network']))
+    expect(layers.spot).toEqual({ lo: [0], hi: [-5] })
+    expect(layers.fees).toEqual({ lo: [0], hi: [0] })
+    expect(layers.network).toEqual({ lo: [0], hi: [3] })
   })
 })

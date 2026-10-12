@@ -31,6 +31,16 @@ export interface ChartSeries {
   popupLabel?: string
   /** A word for the value's direction in the popup ("charging"). */
   describe?: (value: number) => string
+  /** Fill down to series `below` (its index) instead of to zero: a stacked area, solid unless `fill` says otherwise. */
+  below?: number
+  /** What the popup shows when `values` are stacked sums. */
+  readout?: (number | null)[]
+  /** Only the edge another series fills down to: no line, no popup row, no cursor dot. */
+  helper?: boolean
+  /** A part switched off: faded in the popup, no cursor dot. */
+  muted?: boolean
+  /** The popup's last row, under a rule. */
+  total?: boolean
 }
 
 /** A mark at one moment, drawn as a short bar (MPC runs on the plan's time axis). */
@@ -74,6 +84,8 @@ interface TimeChartProps {
   compact?: boolean
   /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"). */
   popup?: { tag?: (t: number) => PopupTag | null }
+  /** Leave out uPlot's legend (the page draws its own key). */
+  legend?: boolean
 }
 
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
@@ -118,7 +130,7 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
-  shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup,
+  shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -130,15 +142,20 @@ export function TimeChart({
   })
   const [cursor] = useState(createCursorStore)
   const readPopup = useCallback(
-    () => ({ series: extras.current.series, x: extras.current.x, timeZone, tag: extras.current.popup?.tag }),
+    () => ({
+      series: extras.current.series.map((s) => ({ ...s, area: s.below !== undefined || Boolean(s.fill) })),
+      x: extras.current.x,
+      timeZone,
+      tag: extras.current.popup?.tag,
+    }),
     [timeZone],
   )
 
   const zoomable = Boolean(onZoom)
   const withPopup = Boolean(popup) && !compact
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then]), height, yRange, fit, zoomable, syncKey,
-    timeZone, theme, compact, Boolean(yFormat), withPopup,
+    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted]), height,
+    yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend,
   ])
 
   useEffect(() => {
@@ -161,7 +178,8 @@ export function TimeChart({
       const points: CursorAt['points'] = []
       u.series.forEach((s, i) => {
         const meta = extras.current.series[i - 1]
-        if (i === 0 || !s.show || !meta || meta.then) return
+        // lines that aren't drawn (helpers, parts switched off) can't be the one nearest the pointer
+        if (i === 0 || !s.show || !meta || meta.then || meta.helper || meta.width === 0) return
         const v = u.data[i]?.[idx]
         if (v !== null && v !== undefined) points.push({ series: i - 1, y: u.valToPos(v, 'y') })
       })
@@ -186,7 +204,7 @@ export function TimeChart({
         // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
         bind: zoomable ? { dblclick: () => null } : undefined,
       },
-      legend: { show: !compact, live: !withPopup },
+      legend: { show: !compact && legend, live: !withPopup },
       scales: {
         x: { time: true },
         y: yRange
@@ -219,15 +237,15 @@ export function TimeChart({
         { label: 'Time', value: (_u, v) => (v === null ? '—' : readoutTime(v, timeZone)) },
         ...series.map((s, i) => ({
           label: s.label,
-          stroke: cssColor(s.color),
-          width: s.width ?? 2,
+          stroke: s.helper ? 'transparent' : cssColor(s.color),
+          width: s.helper ? 0 : (s.width ?? 2),
           dash: s.dash,
-          fill: s.fill ? withAlpha(cssColor(s.color), s.fill) : undefined,
-          fillTo: s.fill ? 0 : undefined,
+          fill: s.fill && s.below === undefined ? withAlpha(cssColor(s.color), s.fill) : undefined,
+          fillTo: s.fill && s.below === undefined ? 0 : undefined,
           paths: s.step === false ? undefined : stepped,
           points: { show: false },
           spanGaps: false,
-          class: s.then ? 'is-then' : undefined,
+          class: s.then ? 'is-then' : s.helper || s.muted || s.width === 0 ? 'is-helper' : undefined,
           value: (_u: uPlot, v: number | null) => {
             if (v === null || v === undefined) return '—'
             const format = extras.current.series[i]?.format
@@ -235,6 +253,12 @@ export function TimeChart({
           },
         })),
       ],
+      // stacked areas: each fills down to the series below it
+      bands: series.flatMap((s, i) =>
+        s.below === undefined
+          ? []
+          : [{ series: [i + 1, s.below + 1] as [number, number], fill: withAlpha(cssColor(s.color), s.fill ?? 1) }],
+      ),
       hooks: {
         ready: [
           (u) => {

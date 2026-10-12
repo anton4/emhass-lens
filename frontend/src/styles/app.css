@@ -1943,6 +1943,35 @@ button.diff-locate {
   border-top: 1.5px dashed currentColor;
 }
 
+.chart-pop-square {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* a part switched off, and the total under a rule (the price breakdown) */
+.chart-pop-row[data-muted] {
+  opacity: 0.5;
+}
+
+.chart-pop-row[data-total] {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--divider);
+  border-radius: 0;
+}
+
+.chart-pop-row[data-total] .chart-pop-name,
+.chart-pop-row[data-total] b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.time-chart .u-cursor-pt.is-helper {
+  display: none;
+}
+
 /* a ring round the dot of the line nearest the pointer */
 .chart-pop-ring {
   position: absolute;
@@ -1957,41 +1986,6 @@ button.diff-locate {
 
 .price-stack {
   width: 100%;
-  margin-bottom: 16px;
-}
-
-.price-stack svg {
-  display: block;
-  max-width: 100%;
-  touch-action: pan-y;
-}
-
-.stack-readout {
-  min-height: 1.6em;
-  font-size: var(--step--1);
-  margin-bottom: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.stack-grid {
-  stroke: var(--chart-grid);
-  stroke-width: 1;
-}
-
-.stack-axis {
-  stroke: var(--chart-axis);
-  stroke-width: 1;
-}
-
-.stack-now {
-  stroke: var(--chart-now);
-  stroke-width: 1;
-}
-
-.stack-tick {
-  fill: var(--ink-muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 
 .legend {
@@ -2044,11 +2038,6 @@ button.diff-locate {
 .legend-toggle[aria-pressed='false'] .legend-swatch {
   background: transparent !important;
   box-shadow: inset 0 0 0 1.5px currentColor;
-}
-
-.stack-empty {
-  fill: var(--ink-muted);
-  font-size: var(--step--1);
 }
 
 /* ---------- Phase 1: cards, readings ---------- */

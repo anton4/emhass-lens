@@ -10,9 +10,19 @@ export interface PopupSeries {
   /** The plan at the time for the series just before this one: its value goes in that row's "planned then" column. */
   then?: boolean
   values: (number | null)[]
+  /** What the popup shows when the drawn values are stacked sums. */
+  readout?: (number | null)[]
   format?: (value: number) => string
   /** A word for the value's direction ("charging"). */
   describe?: (value: number) => string
+  /** Only the edge another series fills down to: no row. */
+  helper?: boolean
+  /** A part switched off: its row is faded. */
+  muted?: boolean
+  /** The total, last under a rule. */
+  total?: boolean
+  /** Drawn as an area: a square swatch. */
+  area?: boolean
 }
 
 export interface PopupRow {
@@ -21,6 +31,9 @@ export interface PopupRow {
   name: string
   color: string
   dashed: boolean
+  area: boolean
+  muted: boolean
+  total: boolean
   value: string
   describe: string
   /** The plan at the time, formatted; null when there is none. */
@@ -33,9 +46,9 @@ const known = (v: number | null | undefined): v is number => v !== null && v !==
 export function popupRows(series: PopupSeries[], idx: number): { rows: PopupRow[]; hasThen: boolean } {
   const rows: PopupRow[] = []
   series.forEach((s, i) => {
-    if (s.then) return
+    if (s.then || s.helper) return
     const partner = series[i + 1]?.then ? series[i + 1] : undefined
-    const value = s.values[idx]
+    const value = (s.readout ?? s.values)[idx]
     const then = partner?.values[idx]
     if (!known(value) && !known(then)) return
     const format = (v: number, by: PopupSeries) => (by.format ? by.format(v) : String(v))
@@ -44,6 +57,9 @@ export function popupRows(series: PopupSeries[], idx: number): { rows: PopupRow[
       name: s.popupLabel ?? s.label,
       color: s.color,
       dashed: Boolean(s.dash?.length),
+      area: Boolean(s.area),
+      muted: Boolean(s.muted),
+      total: Boolean(s.total),
       value: known(value) ? format(value, s) : '—',
       describe: known(value) && s.describe ? s.describe(value) : '',
       then: known(then) && partner ? format(then, partner) : null,

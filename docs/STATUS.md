@@ -37,6 +37,35 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-12: Inputs, prices and their breakdown on one time axis (0.4.16)
+- **Why:** the owner wanted:
+  - the Inputs page in the Plan page's price colours;
+  - the price chart and the breakdown below each other;
+  - one cursor with Plan's popups across both.
+
+  Canvas: https://claude.ai/artifact/6iQyQPsfVZQVkkbXotb5Po (approved as drawn).
+- **Layout** (`pages/InputsPage.tsx`):
+  - One Prices section: a day switch (All days + each day loaded), then the price chart, then the breakdown, then the table of the chosen day.
+  - Nord Pool and Price forecast come after.
+  - Both charts share `syncKey="prices"` and one zoom (`snapWindow`); a day's button zooms to `dayBounds`.
+- **Breakdown** (`pages/inputs/PriceStack.tsx`) is now a `TimeChart` over every slot, replacing the hand-drawn SVG of one day:
+  - Stacked step areas from `lib/prices.ts` `stackLayers`, which replaces `stackSegments`/`stackExtent` and keeps their rule: spot from zero, the rest from `max(spot, 0)`, a hidden part as a zero-thickness layer.
+  - `TimeChart` gained the series fields:
+    - `below`: uPlot `bands` fill to that series;
+    - `readout`: the popup's value when drawn values are sums;
+    - `helper`: the stack base, with no row and no dot;
+    - `muted`: a part switched off, faded in the popup;
+    - `total`: the import row under a rule.
+  - It also gained `legend={false}`, and `fit.zero` keeps zero in view.
+  - Popup tags: the rate (`periodLabel` + " rate") on the breakdown, the origin (`originLabel`) on prices. 3 decimals in €/kWh, 1 in c/kWh.
+- **Colours:** `--stack-fees` / `--stack-network` / `--stack-vat` are now violets from light to deep (#ddd4f7, #9f86e3, #5e43c2; dark #3b2f66, #6c55b8, #9f8af0).
+- **Checked** with the mock API:
+  - hover syncs both charts;
+  - forecast and night-rate tags;
+  - the negative spot dips below zero;
+  - Today zooms both;
+  - Spot switched off restacks from zero and fades its row.
+
 ### 2026-10-12: a value popup on every Plan chart, taller charts, new colours (0.4.15)
 - **Why:** the owner wanted the values next to the cursor instead of in the legend, slightly taller charts, and clearer colours (the state of charge in the battery's blue, the red price with the dotted green one). Canvas: https://claude.ai/artifact/BSj6NXeucdtCoZPA3Z5v4z. The owner picked B (a popup on every chart at once), colour option 2, and battery + for charging.
 - **Popup** (`components/charts/ChartPopup.tsx`, store in `cursorStore.ts`, logic in `lib/chartPopup.ts`):

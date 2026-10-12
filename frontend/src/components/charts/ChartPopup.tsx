@@ -77,12 +77,22 @@ export function ChartPopup({
             </div>
           )}
           {rows.map((r) => (
-            <div key={r.series} className="chart-pop-row" data-near={r.series === near || undefined}>
+            <div
+              key={r.series}
+              className="chart-pop-row"
+              data-near={r.series === near || undefined}
+              data-muted={r.muted || undefined}
+              data-total={r.total || undefined}
+            >
               <span className="chart-pop-name">
-                <span
-                  className="chart-pop-swatch"
-                  style={{ borderTopColor: cssColor(r.color), borderTopStyle: r.dashed ? 'dashed' : 'solid' }}
-                />
+                {r.area ? (
+                  <span className="chart-pop-square" style={{ background: cssColor(r.color) }} />
+                ) : (
+                  <span
+                    className="chart-pop-swatch"
+                    style={{ borderTopColor: cssColor(r.color), borderTopStyle: r.dashed ? 'dashed' : 'solid' }}
+                  />
+                )}
                 {r.name}
               </span>
               <span className="chart-pop-value">

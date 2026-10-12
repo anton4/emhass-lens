@@ -5,6 +5,8 @@ import { LabelledLamp, Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
 import { InputsView } from '../components/Readings'
 import { useNow } from '../components/useNow'
+import { snapWindow } from '../lib/chartRange'
+import { dayBounds, shiftDay } from '../lib/days'
 import { formatCountdown, formatTime } from '../lib/format'
 import { localDay, localDays, slotsOfDay } from '../lib/prices'
 import type { PriceUnit } from '../lib/units'
@@ -21,6 +23,15 @@ const PROVIDERS: Record<string, string> = {
 const dayLabel = (day: string) =>
   new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${day}T12:00:00`))
 
+/** A day's [start, end) in unix seconds, in the tariff time zone. */
+function dayRange(day: string, timeZone: string): [number, number] {
+  const { since, until } = dayBounds(day, timeZone)
+  return [Date.parse(since) / 1000, Date.parse(until) / 1000]
+}
+
+// the price chart and the breakdown share one cursor (and their popups) and one zoom
+const SYNC = 'prices'
+
 export function InputsPage() {
   const prices = usePrices(1)
   const inputs = useInputs()
@@ -34,6 +45,20 @@ export function InputsPage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const day = chosen && days.includes(chosen) ? chosen : days.includes(today) ? today : (days[0] ?? null)
   const daySlots = useMemo(() => (data && day ? slotsOfDay(data.slots, day, tz) : []), [data, day, tz])
+  // null shows every day; a day's button zooms both charts to it, a drag to any window
+  const [zoom, setZoom] = useState<[number, number] | null>(null)
+  const zoomTo = (range: [number, number] | null) => setZoom(range && snapWindow(range, 900))
+  const showDay = (d: string) => {
+    setChosen(d)
+    setZoom(dayRange(d, tz))
+  }
+  const isShown = (d: string) => {
+    if (!zoom) return false
+    const [a, b] = dayRange(d, tz)
+    return zoom[0] === a && zoom[1] === b
+  }
+  const dayName = (d: string) =>
+    d === today ? 'Today' : d === shiftDay(today, -1) ? 'Yesterday' : d === shiftDay(today, 1) ? 'Tomorrow' : dayLabel(d)
   const nordpool = data?.nordpool
   const forecast = data?.forecast
 
@@ -53,24 +78,68 @@ export function InputsPage() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Prices</h2>
-          {data && (
-            <span className="muted">
-              {data.package === 'custom' ? 'Custom network rates' : data.package.replace('vork', 'Võrk ')} · times in {tz}
-            </span>
+          <div className="panel-title-row">
+            <h2>Prices</h2>
+            {data && (
+              <span className="muted">
+                {data.package === 'custom' ? 'Custom network rates' : data.package.replace('vork', 'Võrk ')} · times in {tz}
+              </span>
+            )}
+          </div>
+          {days.length > 0 && (
+            <div className="segmented" role="group" aria-label="Days shown">
+              <button type="button" aria-pressed={zoom === null} onClick={() => setZoom(null)}>
+                All days
+              </button>
+              {days.map((d) => (
+                <button key={d} type="button" aria-pressed={isShown(d)} onClick={() => showDay(d)}>
+                  {dayName(d)}
+                </button>
+              ))}
+            </div>
           )}
         </div>
         <div className="panel-body">
           {data && data.slots.length > 0 ? (
-            <>
-              <PriceChart data={data} unit={unit} nowS={nowS} />
-              {data.forecast_until && <p className="chart-note">Shaded: forecast prices until {formatTime(data.forecast_until, now)}.</p>}
-              {data.gaps.length > 0 && (
-                <div className="notice" data-color="amber">
-                  Gaps in the published prices: {data.gaps.map(([a, b]) => `${formatTime(a, now)} → ${formatTime(b, now)}`).join(', ')}
-                </div>
+            <div className="chart-stack">
+              <p className="chart-note chart-zoom">
+                Point at a chart to read both at that quarter-hour. Drag across one to zoom in; double-click to see every
+                day again.
+              </p>
+              <section className="chart-block">
+                <h3>Import, export and spot</h3>
+                <PriceChart data={data} unit={unit} nowS={nowS} syncKey={SYNC} xRange={zoom} onZoom={zoomTo} />
+                {data.forecast_until && (
+                  <p className="chart-note">Shaded: forecast prices until {formatTime(data.forecast_until, now)}.</p>
+                )}
+                {data.gaps.length > 0 && (
+                  <div className="notice" data-color="amber">
+                    Gaps in the published prices:{' '}
+                    {data.gaps.map(([a, b]) => `${formatTime(a, now)} → ${formatTime(b, now)}`).join(', ')}
+                  </div>
+                )}
+              </section>
+              <section className="chart-block">
+                <h3>What the import price is made of</h3>
+                <PriceStack
+                  slots={data.slots}
+                  unit={unit}
+                  timeZone={tz}
+                  nowS={nowS}
+                  syncKey={SYNC}
+                  xRange={zoom}
+                  onZoom={zoomTo}
+                />
+              </section>
+              {day && (
+                <details className="more breakdown-more">
+                  <summary>
+                    {dayName(day)}, every quarter-hour as a table ({daySlots.length} rows)
+                  </summary>
+                  <Breakdown slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
+                </details>
               )}
-            </>
+            </div>
           ) : (
             prices.isSuccess && <Empty title="No prices yet">The Nord Pool job fetches them; see its status below.</Empty>
           )}
@@ -141,28 +210,6 @@ export function InputsPage() {
           </div>
         </section>
       </div>
-
-      {data && day && (
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Price breakdown</h2>
-            <div className="segmented" role="group" aria-label="Day">
-              {days.map((d) => (
-                <button key={d} type="button" aria-pressed={d === day} onClick={() => setChosen(d)}>
-                  {d === today ? 'Today' : dayLabel(d)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="panel-body">
-            <PriceStack slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
-            <details className="more breakdown-more">
-              <summary>Every quarter-hour as a table ({daySlots.length} rows)</summary>
-              <Breakdown slots={daySlots} unit={unit} timeZone={tz} nowS={nowS} />
-            </details>
-          </div>
-        </section>
-      )}
 
       <section className="panel">
         <div className="panel-head">

@@ -7,19 +7,21 @@ export interface FitOptions {
   minSpan?: number
   /** Limits the axis never goes past (e.g. 0–100 for a percentage); null = open. */
   clamp?: [number | null, number | null]
+  /** Keep zero in view (a stacked chart that fills from zero). */
+  zero?: boolean
 }
 
 export function fitRange(
   min: number | null | undefined,
   max: number | null | undefined,
-  { pad = 0.08, minSpan = 0, clamp }: FitOptions = {},
+  { pad = 0.08, minSpan = 0, clamp, zero = false }: FitOptions = {},
 ): [number, number] {
   const lo = clamp?.[0] ?? null
   const hi = clamp?.[1] ?? null
   if (min === null || min === undefined || max === null || max === undefined) return [lo ?? 0, hi ?? 1]
 
-  let a = min
-  let b = max
+  let a = zero ? Math.min(min, 0) : min
+  let b = zero ? Math.max(max, 0) : max
   if (b - a < minSpan) {
     const centre = (a + b) / 2
     a = centre - minSpan / 2

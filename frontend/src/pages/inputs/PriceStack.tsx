@@ -1,17 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PriceSlot } from '../../api/types'
-import { importComponents, localTime, periodLabel, PRICE_PARTS, stackExtent, stackSegments, type PricePart } from '../../lib/prices'
-import { formatPrice, priceFactor, type PriceUnit } from '../../lib/units'
+import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
+import { forecastRanges, importComponents, midnights, periodLabel, PRICE_PARTS, stackLayers, type PricePart } from '../../lib/prices'
+import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
 
-// Spot in its own grey (as on every chart); what is added on top of it in the import price's reds, light to dark,
+// Spot in its own grey (as on every chart); what is added on top of it in the import price's violets, light to deep,
 // so neighbours always differ in lightness.
 const PARTS: readonly { key: PricePart; label: string; color: string }[] = [
-  { key: 'spot', label: 'Spot', color: 'var(--q-spot)' },
-  { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: 'var(--stack-fees)' },
-  { key: 'network', label: 'Network', color: 'var(--stack-network)' },
-  { key: 'vat', label: 'VAT', color: 'var(--stack-vat)' },
+  { key: 'spot', label: 'Spot', color: '--q-spot' },
+  { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: '--stack-fees' },
+  { key: 'network', label: 'Network', color: '--stack-network' },
+  { key: 'vat', label: 'VAT', color: '--stack-vat' },
 ]
-const COLORS = Object.fromEntries(PARTS.map((p) => [p.key, p.color])) as Record<PricePart, string>
 
 // The parts shown are remembered in this browser only; blocked storage just means all four.
 const STORAGE_KEY = 'emhass-lens.price-breakdown.parts'
@@ -34,28 +34,32 @@ function saveShown(shown: Set<PricePart>) {
   }
 }
 
-const PAD = { top: 10, right: 8, bottom: 22, left: 52 }
-
-/** 1, 2 or 5 × a power of ten, at least `rough`. */
-function niceStep(rough: number): number {
-  const power = 10 ** Math.floor(Math.log10(Math.max(rough, 1e-9)))
-  for (const m of [1, 2, 5, 10]) if (m * power >= rough) return m * power
-  return 10 * power
-}
-
-function niceTicks(min: number, max: number, count: number): number[] {
-  const step = niceStep((max - min) / count)
-  const out: number[] = []
-  for (let v = Math.ceil(min / step) * step; v <= max + step / 1e6; v += step) out.push(Number(v.toFixed(10)))
+/** A step series on the price chart's grid: one value per slot and the last one again at the closing point. */
+function closed(values: number[], factor: number): (number | null)[] {
+  const out: (number | null)[] = values.map((v) => v * factor)
+  out.push(out[out.length - 1] ?? null)
   return out
 }
-const HEIGHT = 220
 
-/** What each quarter-hour's import price is made of: spot, fees, network and VAT, stacked. */
-export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]; unit: PriceUnit; timeZone: string; nowS: number }) {
-  const wrap = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(800)
-  const [hover, setHover] = useState<number | null>(null)
+/** What each quarter-hour's import price is made of: spot, fees, network and VAT stacked on the price chart's time
+ *  axis, with the import price on top; the cursor, the zoom and the popup go along with the price chart. */
+export function PriceStack({
+  slots,
+  unit,
+  timeZone,
+  nowS,
+  syncKey,
+  xRange,
+  onZoom,
+}: {
+  slots: PriceSlot[]
+  unit: PriceUnit
+  timeZone: string
+  nowS: number
+  syncKey: string
+  xRange: [number, number] | null
+  onZoom: (range: [number, number] | null) => void
+}) {
   const [shown, setShown] = useState<Set<PricePart>>(loadShown)
   useEffect(() => saveShown(shown), [shown])
   const toggle = (key: PricePart) =>
@@ -66,97 +70,76 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
       return next
     })
 
-  useLayoutEffect(() => {
-    const el = wrap.current
-    if (!el) return
-    const observer = new ResizeObserver(() => setWidth(el.clientWidth))
-    observer.observe(el)
-    setWidth(el.clientWidth)
-    return () => observer.disconnect()
-  }, [])
-
-  const f = priceFactor(unit)
-  const parts = useMemo(() => slots.map(importComponents), [slots])
-  const { min: rawMin, max: rawMax } = stackExtent(parts, shown)
-  const step = niceStep((rawMax - rawMin) / 4)
-  const max = Math.ceil(rawMax / step) * step
-  const min = Math.floor(rawMin / step) * step
-  const plotW = Math.max(10, width - PAD.left - PAD.right)
-  const plotH = HEIGHT - PAD.top - PAD.bottom
-  const y = (v: number) => PAD.top + ((max - v) / (max - min)) * plotH
-  const band = plotW / Math.max(1, slots.length)
-  const barW = Math.max(1, Math.min(24, band - 2))
-  const ticks = niceTicks(min, max, 4)
-  const hovered = hover !== null ? slots[hover] : undefined
-  const hoveredParts = hover !== null ? parts[hover] : undefined
+  const chart = useMemo(() => {
+    const f = priceFactor(unit)
+    const fmt = unit === 'cents' ? (v: number) => `${v.toFixed(1)} c/kWh` : (v: number) => `${v.toFixed(3)} €/kWh`
+    const x = slots.map((s) => Date.parse(s.start) / 1000)
+    const last = slots[slots.length - 1]
+    if (last) x.push(Date.parse(last.end) / 1000)
+    const parts = slots.map(importComponents)
+    const layers = stackLayers(parts, shown)
+    const part = (key: PricePart, below: number | undefined): ChartSeries => ({
+      label: PARTS.find((p) => p.key === key)!.label,
+      popupLabel: key === 'fees' ? 'Fees' : undefined,
+      color: PARTS.find((p) => p.key === key)!.color,
+      values: closed(layers[key].hi, f),
+      readout: closed(
+        parts.map((p) => p[key]),
+        f,
+      ),
+      below,
+      fill: below === undefined ? 1 : undefined,
+      width: shown.has(key) ? 1 : 0,
+      muted: !shown.has(key),
+      format: fmt,
+    })
+    const all = PRICE_PARTS.every((p) => shown.has(p))
+    const series: ChartSeries[] = [
+      part('spot', undefined),
+      // the edge the other parts stack from: the top of a positive spot, zero under a negative one
+      { label: 'Stack base', color: '--q-spot', values: closed(layers.fees.lo, f), helper: true },
+      part('fees', 1),
+      part('network', 2),
+      part('vat', 3),
+      {
+        label: 'Import',
+        color: '--q-import',
+        values: closed(
+          parts.map((p) => p.total),
+          f,
+        ),
+        width: all ? 2 : 0,
+        total: true,
+        format: fmt,
+      },
+    ]
+    const periods = new Map(slots.map((s) => [Date.parse(s.start) / 1000, s.period]))
+    const tag = (t: number) => {
+      const period = periods.get(t)
+      return period ? { text: `${periodLabel(period)} rate` } : null
+    }
+    return { x, series, tag, bands: forecastRanges(slots), markers: midnights(slots, timeZone), minSpan: 0.01 * f }
+  }, [slots, unit, shown, timeZone])
 
   return (
-    <div className="price-stack" ref={wrap}>
-      <div className="stack-readout" aria-live="polite">
-        {hovered && hoveredParts ? (
-          <>
-            <strong>{localTime(hovered.start, timeZone)}</strong> {periodLabel(hovered.period)} ·{' '}
-            {PARTS.map((p, i) => (
-              <span key={p.key} className={shown.has(p.key) ? undefined : 'muted'}>
-                {i > 0 && ' + '}
-                {p.key === 'fees' ? 'Fees' : p.label} {formatPrice(hoveredParts[p.key], unit, false)}
-              </span>
-            ))}{' '}
-            = <strong>{formatPrice(hoveredParts.total, unit)}</strong>
-          </>
-        ) : (
-          <span className="muted">Point at a bar to see what the price is made of.</span>
-        )}
-      </div>
-      <svg width={width} height={HEIGHT} role="img" aria-label="Import price components per quarter-hour" onPointerLeave={() => setHover(null)}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} className="stack-grid" />
-            <text x={PAD.left - 6} y={y(t)} className="stack-tick" textAnchor="end" dominantBaseline="middle">
-              {(t * f).toFixed(unit === 'cents' ? (step * 100 < 1 ? 1 : 0) : step < 0.01 ? 3 : 2)}
-            </text>
-          </g>
-        ))}
-        {slots.map((slot, i) => {
-          const p = parts[i]
-          if (!p) return null
-          const x = PAD.left + i * band + (band - barW) / 2
-          const segments = stackSegments(p, shown)
-          const current = Date.parse(slot.start) / 1000 <= nowS && nowS < Date.parse(slot.end) / 1000
-          return (
-            <g
-              key={slot.start}
-              onPointerEnter={() => setHover(i)}
-              opacity={hover === null || hover === i ? 1 : 0.55}
-            >
-              <rect x={PAD.left + i * band} y={PAD.top} width={band} height={plotH} fill="transparent" />
-              {segments.map((s) => {
-                const top = y(Math.max(s.from, s.to))
-                const bottom = y(Math.min(s.from, s.to))
-                const h = bottom - top - 2 // 2 px surface gap between segments
-                if (h <= 0.5) return null
-                return (
-                  <rect key={s.key} x={x} y={top + 1} width={barW} height={h} fill={COLORS[s.key]} rx={barW >= 6 ? 1 : 0} />
-                )
-              })}
-              {current && <line x1={x + barW / 2} x2={x + barW / 2} y1={PAD.top} y2={PAD.top + plotH} className="stack-now" />}
-            </g>
-          )
-        })}
-        <line x1={PAD.left} x2={width - PAD.right} y1={y(0)} y2={y(0)} className="stack-axis" />
-        {shown.size === 0 && (
-          <text x={PAD.left + plotW / 2} y={PAD.top + plotH / 2} className="stack-empty" textAnchor="middle" dominantBaseline="middle">
-            Choose at least one part below.
-          </text>
-        )}
-        {slots.map((slot, i) =>
-          i % 12 === 0 ? (
-            <text key={slot.start} x={PAD.left + i * band + band / 2} y={HEIGHT - 6} className="stack-tick" textAnchor="middle">
-              {localTime(slot.start, timeZone)}
-            </text>
-          ) : null,
-        )}
-      </svg>
+    <div className="price-stack">
+      <TimeChart
+        x={chart.x}
+        series={chart.series}
+        ariaLabel="What each quarter-hour's import price is made of: spot, fees, network and VAT, stacked. The table below has every value."
+        syncKey={syncKey}
+        timeZone={timeZone}
+        yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
+        fit={{ minSpan: chart.minSpan, zero: true }}
+        xRange={xRange}
+        onZoom={onZoom}
+        bands={chart.bands}
+        markers={chart.markers}
+        now={nowS}
+        height={240}
+        popup={{ tag: chart.tag }}
+        legend={false}
+      />
       <ul className="legend" role="group" aria-label="Parts shown in the chart">
         {PARTS.map((p) => (
           <li key={p.key}>
@@ -167,10 +150,7 @@ export function PriceStack({ slots, unit, timeZone, nowS }: { slots: PriceSlot[]
               title={shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}
               onClick={() => toggle(p.key)}
             >
-              <span
-                className="legend-swatch"
-                style={{ background: p.color, color: p.color }}
-              />
+              <span className="legend-swatch" style={{ background: `var(${p.color})`, color: `var(${p.color})` }} />
               {p.label}
             </button>
           </li>

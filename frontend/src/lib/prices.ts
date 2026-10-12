@@ -70,36 +70,30 @@ export type PricePart = 'spot' | 'fees' | 'network' | 'vat'
 
 export const PRICE_PARTS: readonly PricePart[] = ['spot', 'fees', 'network', 'vat']
 
-/**
- * The bar pieces of one slot for the parts shown: spot from zero (down when negative), the other
- * shown parts stacked upward from the top of the positive spot (or from zero when spot is hidden).
- */
-export function stackSegments(c: Components, shown: ReadonlySet<PricePart>): { key: PricePart; from: number; to: number }[] {
-  const out: { key: PricePart; from: number; to: number }[] = []
-  let base = 0
-  if (shown.has('spot')) {
-    out.push({ key: 'spot', from: 0, to: c.spot })
-    base = Math.max(c.spot, 0)
+/** The breakdown's layers, slot by slot: each part's lower and upper edge. Spot goes from zero (down when
+ *  negative), the other shown parts stack upward from the top of a positive spot (or from zero when spot is
+ *  hidden); a hidden part is a layer of no thickness where it would start. */
+export function stackLayers(
+  list: Components[],
+  shown: ReadonlySet<PricePart>,
+): Record<PricePart, { lo: number[]; hi: number[] }> {
+  const out = {
+    spot: { lo: [] as number[], hi: [] as number[] },
+    fees: { lo: [] as number[], hi: [] as number[] },
+    network: { lo: [] as number[], hi: [] as number[] },
+    vat: { lo: [] as number[], hi: [] as number[] },
   }
-  for (const key of ['fees', 'network', 'vat'] as const) {
-    if (!shown.has(key)) continue
-    out.push({ key, from: base, to: base + c[key] })
-    base += c[key]
-  }
-  return out
-}
-
-/** The value range the shown stacks need; zero always stays in view. */
-export function stackExtent(list: Components[], shown: ReadonlySet<PricePart>): { min: number; max: number } {
-  let min = 0
-  let max = 0.0001
   for (const c of list) {
-    for (const s of stackSegments(c, shown)) {
-      min = Math.min(min, s.from, s.to)
-      max = Math.max(max, s.from, s.to)
+    out.spot.lo.push(0)
+    out.spot.hi.push(shown.has('spot') ? c.spot : 0)
+    let base = shown.has('spot') ? Math.max(c.spot, 0) : 0
+    for (const key of ['fees', 'network', 'vat'] as const) {
+      out[key].lo.push(base)
+      if (shown.has(key)) base += c[key]
+      out[key].hi.push(base)
     }
   }
-  return { min, max }
+  return out
 }
 
 /** Contiguous [start, end] ranges (unix seconds) where the price is a forecast. */
