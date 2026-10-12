@@ -280,6 +280,46 @@ def test_a_feedin_limit_that_wasnt_written_is_not_drift(tmp_path: Path, world: W
         client.__exit__(None, None, None)
 
 
+def test_a_feedin_limit_left_by_a_sell_session_is_kept_while_it_covers_the_plan(tmp_path: Path, world: World) -> None:
+    world.set_state(FEEDIN, 3000)  # what a Kratt sell session left
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        clock.set(SLOT_START)
+        published = datetime(2026, 10, 9, 11, 15, tzinfo=UTC)  # the plan exports 2770 W; export is never blocked
+        for name, value in (("p_grid", -2770), ("p_batt", 0), ("p_pv", 3867)):
+            world.set_state(f"sensor.{name}_forecast", value, updated=published)
+        prime(client, world)
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        assert "feed-in 3000 W" in run["summary"]
+        decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
+        assert decision["feedin_floor_w"] == 2800 and "kept: 3000 W" in decision["feedin_why"]
+        touched = [s[1].get("entity_id") for s in world.ha_services]
+        assert FEEDIN not in touched and FEEDIN_BUTTON not in touched
+        prime(client, world)
+
+        world.set_state(FEEDIN, 3800)  # another session, still enough: not drift
+        prime(client, world)
+        for _ in range(3):
+            clock.advance(130)
+            run_job(client, "inverter.verify")
+        assert drift_runs(client) == []
+
+        world.set_state(FEEDIN, 2000)  # too low for the plan's export: set back to the export max
+        prime(client, world)
+        for _ in range(3):
+            clock.advance(130)
+            run_job(client, "inverter.verify")
+        [fixed] = drift_runs(client)
+        assert fixed["summary"].startswith("Drift: feed-in limit 2000 W, expected 3000 W; set back"), fixed
+        assert float(world.ha_states[FEEDIN]["state"]) == 15500
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_the_check_leaves_the_inverter_alone_when_it_isnt_ours(tmp_path: Path, world: World) -> None:
     client, clock, target = applied(tmp_path, world)
     try:

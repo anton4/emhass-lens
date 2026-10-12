@@ -141,6 +141,56 @@ def test_a_feedin_limit_that_isnt_written_isnt_judged() -> None:
     assert "feedin_max_w" not in [f["field"] for f in result["fields"]]
 
 
+# runs 3267 and 3281: after a Kratt sell session the limit was 3000 W and 3800 W, the plan's spare PV 2770 W and 1008 W
+RUN_3267 = v(0, -2770.09, pv=3867, price=0.13987, soc=0.9032910767)
+RUN_3281 = v(0, -1008.33, pv=2664, price=0.1414, soc=0.9032910767)
+
+
+def held(feedin: float | None) -> Observed:
+    return Observed("Self-use battery or PV", 0.0, 20000.0, -20000.0, feedin)
+
+
+@pytest.mark.parametrize(
+    ("values", "current", "feedin", "floor", "why"),
+    [
+        (RUN_3267, 3000.0, 3000, 2800, "kept: 3000 W is at least the 2800 W that can reach the grid (2770 W of PV"),
+        (RUN_3281, 3800.0, 3800, 1100, "kept: 3800 W is at least the 1100 W"),
+        (RUN_3267, 2000.0, 15500, 2800, "written: 2770 W of PV to spare"),  # below what can reach the grid
+        (RUN_3267, 16000.0, 15500, 2800, "written:"),  # above the export max
+        (RUN_3267, None, 15500, 2800, "written:"),  # a drift correction: the plan's own
+        (v(-5000, 6000, price=0.05), 3000.0, 15500, 5000, "written: the plan exports 5000 W"),
+        (v(-5000, 6000, price=0.05), 5000.0, 5000, 5000, "kept: 5000 W"),
+    ],
+)
+def test_a_feedin_limit_that_lets_out_what_can_reach_the_grid_is_kept(values, current, feedin, floor, why) -> None:
+    d = decide(values, L, LOW, held(current) if current is not None else None)
+    assert (d.feedin_max_w, d.feedin_floor_w, d.feedin_range) == (feedin, floor, (floor, 15500))
+    assert why in d.feedin_why
+
+
+@pytest.mark.parametrize(
+    ("values", "feedin"),
+    [
+        (v(0, -2770, pv=3867, price=0.02, soc=0.95), 0),  # cheap: export must stay blocked
+        (v(0, 0, pv=5000, c=400, price=0.05, soc=1.0), 15500),  # the plan curtails: the export max exactly
+    ],
+)
+def test_cheap_and_curtailed_slots_keep_an_exact_feedin_limit(values, feedin) -> None:
+    d = decide(values, L, LOW, held(3000.0))
+    assert (d.feedin_max_w, d.feedin_floor_w, d.feedin_range) == (feedin, None, (feedin, feedin))
+
+
+def test_any_feedin_limit_in_the_range_compares_as_the_same() -> None:
+    d = decide(RUN_3267, L, LOW, held(15500.0))
+    assert d.feedin_max_w == 15500 and d.feedin_range == (2800, 15500)
+    assert compare(d, held(3000.0))["agree"] is True
+    differs = compare(d, held(2000.0))
+    assert differs["agree"] is False
+    assert [f for f in differs["fields"] if not f["same"]] == [
+        {"field": "feedin_max_w", "decided": 15500, "observed": 2000.0, "same": False}
+    ]
+
+
 def test_compare_reports_each_field() -> None:
     d = decide(v(4560, -6000), L, LOW)
     same = compare(d, Observed("Force charge", 5600.0, 20000.0, -20000.0, 15500.0))

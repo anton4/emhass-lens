@@ -263,7 +263,8 @@ class InverterService:
         if not self.c.extras["ha"].connected or self.preconditions():
             return  # not ours to correct: a market session, another inverter mode, the enable switch off
         if self.applied_this_slot() and self.last_decision is not None:
-            result = compare_targets(self.last_decision.targets, self.last_decision.feedin_target, self.observed())
+            decision = self.last_decision  # a feed-in limit someone else set within the decision's range isn't drift
+            result = compare_targets(decision.targets, decision.feedin_target, self.observed(), decision.feedin_range)
             differing = {
                 r["field"]: (r["observed"], r["decided"])
                 for r in result["fields"]

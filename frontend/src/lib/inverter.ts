@@ -18,10 +18,12 @@ export interface InverterDecision {
   label: string
   why: string
   targets: InverterTargets | null // null only in runs made before 0.2.11
-  feedin_max_w: number // the limit for the slot's export price
+  feedin_max_w: number // the limit for the slot's export price (or the one kept, see feedin_floor_w)
   feedin_why: string
   notes?: string[]
   feedin_needed?: boolean // false: nothing can reach the grid, the limit is left as it is (missing before 0.4.8)
+  feedin_floor_w?: number | null // export allowed: any limit from here to feedin_ceiling_w serves the slot (missing in older runs)
+  feedin_ceiling_w?: number | null
 }
 
 /** status.last: the newest decision. */

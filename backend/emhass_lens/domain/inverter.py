@@ -10,7 +10,8 @@ P_batt > 0 discharges the battery, P_grid > 0 imports from the grid.
 Two deliberate differences, both because every press of a Sofar button is an EEPROM write:
 - The automation writes the price's feed-in limit every slot. Here the limit is only written when something can
   reach the grid in the slot (the plan exports, curtails PV, or has PV to spare with the battery nearly full);
-  otherwise it is left as it is.
+  otherwise it is left as it is. When export is allowed, a limit already at or above what can reach the grid (e.g.
+  the one a market sell session left) is kept too.
 - The automation's Force charge grid target follows P_grid below a cap, so back-to-back Force charge slots press the
   apply button just to change it. Here Force charge sets the import max by default and the battery limits its own
   charge, so those slots write nothing (`force_charge_at_import_max` off restores the automation's rule).
@@ -87,11 +88,23 @@ class Decision:
     notes: list[str] = field(default_factory=list)
     feedin_needed: bool = True  # False: nothing can reach the grid, so the limit is left as it is
     branch: str = ""  # which of the rules matched (BRANCHES); two of them end in the mode self_use
+    feedin_floor_w: int | None = None  # export allowed: any limit from here up to the ceiling serves the slot
+    feedin_ceiling_w: int | None = None
 
     @property
     def feedin_target(self) -> int | None:
         """The feed-in limit to write and judge; None leaves it as it is."""
         return self.feedin_max_w if self.feedin_needed else None
+
+    @property
+    def feedin_range(self) -> tuple[int, int] | None:
+        """The feed-in limits that serve the slot: from the floor to the export max when export is allowed, exactly
+        the target otherwise; None when the limit is left as it is."""
+        if not self.feedin_needed:
+            return None
+        if self.feedin_floor_w is not None and self.feedin_ceiling_w is not None:
+            return self.feedin_floor_w, self.feedin_ceiling_w
+        return self.feedin_max_w, self.feedin_max_w
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -163,8 +176,8 @@ def decide(
     v: PlanValues, limits: InverterLimits, no_export_at_or_below: float | None, held: Observed | None = None
 ) -> Decision:
     """`no_export_at_or_below` (Settings → EMHASS → MPC) blocks export in cheap slots; None never blocks. `held` is
-    what the registers show now: a battery cap there is kept while it is within the slack above the plan (None:
-    always the plan's)."""
+    what the registers show now: a battery cap there is kept while it is within the slack above the plan, and a
+    feed-in limit while export is allowed and it lets out what can reach the grid (None: always the plan's)."""
     g, b, pv, c = v.p_grid, v.p_batt, v.p_pv, v.p_pv_curtailment
     threshold = no_export_at_or_below
     notes: list[str] = []
@@ -246,15 +259,42 @@ def decide(
     else:
         feedin, feedin_why = limits.export_max_w, "export allowed" if threshold is not None else "export never blocked"
     needed, need_why = feedin_need(v, limits.battery_full_soc_pct / 100)
-    feedin_why += f"; written: {need_why}" if needed else f"; left as it is: {need_why}"
+    floor = ceiling = None
+    if needed and not cheap and c <= 0:  # export allowed: any limit that lets out what can reach the grid will do
+        ceiling = limits.export_max_w
+        floor = min(ceiling, math.ceil(max(-g, -(b + g), 0.0) / 100) * 100)
+    current = held.feedin_max_w if held is not None else None
+    if floor is not None and ceiling is not None and current is not None and floor - 0.5 <= current <= ceiling + 0.5:
+        feedin = round(current)
+        feedin_why += f"; kept: {feedin} W is at least the {floor} W that can reach the grid ({need_why})"
+    else:
+        feedin_why += f"; written: {need_why}" if needed else f"; left as it is: {need_why}"
     label = LABELS[rule]
     branch = "self_use_keep_pv" if rule == "self_use" and g < -BAND_W else rule
     targets = Targets(label, grid, bmax, bmin)
-    return Decision(rule, label, f"{why} ({vals})", targets, feedin, feedin_why, notes, needed, branch)
+    return Decision(
+        rule,
+        label,
+        f"{why} ({vals})",
+        targets,
+        feedin,
+        feedin_why,
+        notes,
+        needed,
+        branch,
+        feedin_floor_w=floor,
+        feedin_ceiling_w=ceiling,
+    )
 
 
-def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Observed) -> dict[str, Any]:
-    """Field-by-field agreement between targets (None: not judged) and what the entities show."""
+def compare_targets(
+    targets: Targets | None,
+    feedin_w: int | None,
+    observed: Observed,
+    feedin_range: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """Field-by-field agreement between targets (None: not judged) and what the entities show. `feedin_range`: the
+    feed-in limits that count as the same (default: exactly `feedin_w`)."""
     rows = []
     if targets is not None:
         for name, want, got in (
@@ -266,7 +306,9 @@ def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Obs
             same = (want == got) if isinstance(want, str) else (got is not None and abs(float(got) - want) < 0.5)
             rows.append({"field": name, "decided": want, "observed": got, "same": same})
     if feedin_w is not None:
-        same_feedin = observed.feedin_max_w is not None and abs(observed.feedin_max_w - feedin_w) < 0.5
+        low, high = feedin_range or (feedin_w, feedin_w)
+        got_feedin = observed.feedin_max_w
+        same_feedin = got_feedin is not None and low - 0.5 < got_feedin < high + 0.5
         rows.append(
             {"field": "feedin_max_w", "decided": feedin_w, "observed": observed.feedin_max_w, "same": same_feedin}
         )
@@ -274,5 +316,6 @@ def compare_targets(targets: Targets | None, feedin_w: int | None, observed: Obs
 
 
 def compare(decision: Decision, observed: Observed) -> dict[str, Any]:
-    """Field-by-field agreement between a decision and what the entities show (the feed-in only where it's written)."""
-    return compare_targets(decision.targets, decision.feedin_target, observed)
+    """Field-by-field agreement between a decision and what the entities show (the feed-in only where it's written,
+    and any limit in its range)."""
+    return compare_targets(decision.targets, decision.feedin_target, observed, decision.feedin_range)

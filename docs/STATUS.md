@@ -53,6 +53,34 @@ These come from docs/PLAN.md §10:
   power every minute, each change is still its own narrow mark.
 - **Checked** with unit tests only (no local market runs). Look at it on the real HA after the release.
 
+### 2026-10-12: keep a feed-in limit that already covers the slot (unreleased)
+- **Why:** the owner found the feed-in presses in runs 3267 and 3281 excessive. The export price was fine, and the spare PV went into the battery.
+  - Kratt sell sessions had left 3000 W and 3800 W. The plan's spare PV was 2770 W and 1008 W.
+  - `feedin_need()` (0.4.8) said the limit mattered (plan SOC 90.3 % ≥ 90 %), and then only exactly 15500 W would do.
+- **Audit of the paths that press the feed-in button, and what changed:**
+
+  | Path | Before | Now |
+  |---|---|---|
+  | Plan decision (slot, publish, resume, market hand-off, catch-up) | needed → exactly 15500 / 0 W | export allowed: a held limit in [floor, export max] is kept; else 15500 W. Cheap (0 W) and curtailment (15500 W) stay exact |
+  | Drift check | exact match | the decision's range, so a sufficient value is not drift; a lower one is set back to 15500 W |
+  | Dry-run compare | exact | the range |
+  | Sofar writer | writes what differs | unchanged |
+  | Market live sell | deadband + cooldown, mirrors the automation | unchanged (mFRR over-delivery cap, shadow parity) |
+  | Market end without a fresh plan | leaves feed-in | unchanged |
+- **Code:**
+  - `domain/inverter.py`:
+    - `Decision.feedin_floor_w` / `feedin_ceiling_w` and the property `feedin_range`.
+    - The floor is the larger of the plan's export and its spare PV, rounded up to 100 W, with no margin; the ceiling is `export_max_w`.
+    - `decide()` keeps `held.feedin_max_w` within the range, with "kept: …" in `feedin_why`. A drift correction (`held=None`) writes the export max.
+    - `compare_targets(..., feedin_range)`.
+  - `services/inverter.py`: `verify_job` passes the range.
+  - `frontend/src/lib/inverter.ts`: the two optional fields.
+- **Tests:**
+  - `test_inverter.py`: runs 3267/3281 kept, below the floor, above the export max, drift, cheap, curtailment, compare.
+  - `test_inverter_service.py`: a sell leftover is kept live, a sufficient change isn't drift, a lower one is set back.
+  - Results: 404 backend tests, ruff, pyright; frontend typecheck, lint and 190 tests. e2e not run.
+- **For the owner:** "Battery counts as nearly full at" (90 %) is conservative; the battery was 92 % and still charging at 13:46.
+
 ### 2026-10-12: Runs filters: several jobs and outcomes, include or exclude (0.4.20)
 - **Why:** the owner wanted the jobs A–Z, several jobs at once, and a way to leave jobs and outcomes out.
 - **API:** `GET /api/runs` takes `job`, `outcome`, `not_job` and `not_outcome`, each repeatable.
