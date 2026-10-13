@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { api, query } from '../api/client'
+import { api, apiUrl, query } from '../api/client'
 import { useJobs, useRuns, useStatus } from '../api/queries'
 import type { RunSummary } from '../api/types'
 import { MultiFilter, type MultiOption } from '../components/MultiFilter'
@@ -16,6 +16,7 @@ import { localInputToIso, shiftDay, todayKey } from '../lib/days'
 import { formatDateTime, formatDuration } from '../lib/format'
 import { nextSort, sortRows, type SortDir } from '../lib/sort'
 import { isTimelineWindow, type TimelineWindow } from '../lib/runLanes'
+import { MAX_DOWNLOAD, span, tickState, toggled } from '../lib/runPick'
 
 const PAGE = 100
 /** Columns the server orders by (run id, which follows the start time); the rest sort the loaded rows. */
@@ -56,6 +57,9 @@ export function RunsPage() {
   const [moreKey, setMoreKey] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
   const [noMore, setNoMore] = useState(false)
+  // Ticked runs by id, so they stay ticked through refetches, filter changes and loading more
+  const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set())
+  const anchor = useRef<number | null>(null)
   const filterKey = JSON.stringify([job, outcome, since, until, order])
   if (moreKey !== filterKey) {
     setMoreKey(filterKey)
@@ -121,6 +125,25 @@ export function RunsPage() {
               : outcomeLabel(run.outcome),
         sortDir,
       )
+
+  const shownIds = shown.map((run) => run.id)
+  const shownTicks = tickState(shownIds, ticked)
+  const tick = (id: number, on: boolean, range: boolean) => {
+    // Read the anchor now: React may run the updater after it has moved to this row
+    const ids = range ? span(shownIds, anchor.current, id) : [id]
+    anchor.current = id
+    setTicked((prev) => toggled(prev, ids, on))
+  }
+  const tickAll = (on: boolean) => {
+    setTicked((prev) => toggled(prev, shownIds, on))
+    anchor.current = null
+  }
+  const clearTicks = () => {
+    setTicked(new Set())
+    anchor.current = null
+  }
+  const hiddenTicks = ticked.size - shownIds.filter((id) => ticked.has(id)).length
+  const tickedQuery = query({ id: [...ticked].sort((a, b) => a - b).map(String) })
 
   const loadMore = async () => {
     const last = loaded[loaded.length - 1]?.id
@@ -214,6 +237,20 @@ export function RunsPage() {
             <table className="runs-table">
               <thead>
                 <tr>
+                  <th className="tick">
+                    <label>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all shown runs"
+                        checked={shownTicks === 'all'}
+                        ref={(el) => {
+                          if (el) el.indeterminate = shownTicks === 'some'
+                        }}
+                        disabled={shownIds.length === 0}
+                        onChange={(e) => tickAll(e.target.checked)}
+                      />
+                    </label>
+                  </th>
                   <SortableTh label="Run" sortKey="id" sort={sort} onSort={onSort} />
                   <SortableTh label="Job" sortKey="job" sort={sort} onSort={onSort} />
                   <SortableTh label="Started" sortKey="started" sort={sort} onSort={onSort} />
@@ -230,6 +267,17 @@ export function RunsPage() {
                     aria-selected={run.id === previewed || undefined}
                     onClick={() => pick(run.id)}
                   >
+                    <td className="tick" onClick={(e) => e.stopPropagation()}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select run ${run.id}`}
+                          checked={ticked.has(run.id)}
+                          // A checkbox's change comes from its click, which says whether shift was held
+                          onChange={(e) => tick(run.id, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
+                        />
+                      </label>
+                    </td>
                     <td className="num">
                       <Link to={`/runs/${run.id}`} onClick={(e) => e.stopPropagation()}>
                         {run.id}
@@ -256,6 +304,29 @@ export function RunsPage() {
               </tbody>
             </table>
           </div>
+          {ticked.size > 0 && (
+            <div className="run-pick-bar" role="region" aria-label="Selected runs">
+              <span>
+                {ticked.size === 1 ? '1 run selected' : `${ticked.size} runs selected`}
+                {hiddenTicks > 0 && <span className="muted">, {hiddenTicks} of them not shown</span>}
+              </span>
+              {ticked.size > MAX_DOWNLOAD ? (
+                <span className="muted">Untick some: at most {MAX_DOWNLOAD} runs per download</span>
+              ) : (
+                <>
+                  <a className="button" href={apiUrl(`/api/runs/logs${tickedQuery}`)} download>
+                    Download logs (.log)
+                  </a>
+                  <a className="button" href={apiUrl(`/api/runs/bundles${tickedQuery}`)} download>
+                    Download bundles (.zip)
+                  </a>
+                </>
+              )}
+              <button type="button" className="quiet" onClick={clearTicks}>
+                Clear
+              </button>
+            </div>
+          )}
           {runs.isSuccess && loaded.length === 0 && (
             <Empty title={filtered ? 'No runs match the filters' : 'No runs yet'}>
               {filtered ? (

@@ -37,6 +37,25 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: download several runs at once from the Runs page (0.4.28)
+- **Why:** the owner wanted to tick runs in the list and download their logs together, instead of opening each run
+  for its **Download bundle**.
+- **UI (Runs page):**
+  - A tick box before every run, and a select-all box in the header that covers the rows shown (indeterminate when
+    some are ticked). Shift-click ticks or unticks a range.
+  - Ticks are kept by run id, so they survive refetches, filter changes and *Load older runs*. A sticky bar under the
+    list says how many are ticked (and how many of them the filters hide) and offers **Download logs (.log)**,
+    **Download bundles (.zip)** and **Clear**.
+  - The phone card layout gets the tick box as its first column.
+- **API:**
+  - `GET /api/runs/logs?id=…&id=…` gives one text file: per run, oldest first, a `# Run <id> · <job> · started … ·
+    <outcome>` header and its lines in the Logs page's download format.
+  - `GET /api/runs/bundles?id=…` gives a zip of `emhass-lens-run-<id>.json`, each the same as that run's
+    `/bundle`. It's compressed off the event loop.
+  - Both take at most 200 runs (`MAX_DOWNLOAD`, matching `lib/runPick.ts`), so the URL fits behind Ingress. They
+    skip runs already removed, and return 404 when none is left.
+
+
 ### 2026-10-13: This slot judges battery and grid by what the inverter does with the PV and load now (0.4.27)
 - **Why:** the owner's 11:30 slot (PV export, grid target 0 W, battery −20…0 kW) showed *Battery and grid differ
   from the plan* with nothing wrong.

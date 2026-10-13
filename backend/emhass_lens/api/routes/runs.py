@@ -1,4 +1,7 @@
+import asyncio
+import io
 import json
+import zipfile
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -9,6 +12,12 @@ from emhass_lens.api.schemas import LogEntry, RunDetail, RunSummary, RunTimeline
 from emhass_lens.core.clock import iso, parse_iso
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
+
+# The most runs one download of several takes: their ids must fit in a URL behind Ingress, and the zip is built in
+# memory. The Runs page has the same limit.
+MAX_DOWNLOAD = 200
+
+RunIds = Annotated[list[int], Query(alias="id", description="A run id; repeat for several")]
 
 
 def utc_bound(value: str | None, name: str) -> str | None:
@@ -79,6 +88,72 @@ async def run_timeline(
     return RunTimeline(since=start, until=end, bucket_s=bucket_s, cells=[RunTimelineCell(**cell) for cell in cells])
 
 
+def picked(ids: list[int]) -> list[int]:
+    """The runs of a download of several, oldest first and each once."""
+    unique = sorted(set(ids))
+    if len(unique) > MAX_DOWNLOAD:
+        raise HTTPException(400, f"At most {MAX_DOWNLOAD} runs per download")
+    return unique
+
+
+def attachment(found: list[int], ext: str) -> dict[str, str]:
+    name = f"emhass-lens-run-{found[0]}" if len(found) == 1 else f"emhass-lens-runs-{found[0]}-{found[-1]}"
+    return {"Content-Disposition": f'attachment; filename="{name}.{ext}"'}
+
+
+def dump(bundle: dict[str, Any]) -> str:
+    return json.dumps(bundle, ensure_ascii=False, indent=2, default=str)
+
+
+def log_line(entry: LogEntry) -> str:
+    """A log line as the Logs page downloads it."""
+    run = f" run={entry.run_id}" if entry.run_id else ""
+    exc = f"\n{entry.exc}" if entry.exc else ""
+    return f"{entry.ts} {entry.level:<7} [{entry.component}]{run} {entry.msg}{exc}"
+
+
+@router.get("/bundles")
+async def runs_bundles(c: ContainerDep, ids: RunIds) -> Response:
+    """The bundles of several runs in one zip, an emhass-lens-run-<id>.json each. Runs already removed are left
+    out."""
+    buffer = io.BytesIO()
+    found: list[int] = []
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+
+        def write(name: str, bundle: dict[str, Any]) -> None:
+            archive.writestr(name, dump(bundle))
+
+        for run_id in picked(ids):
+            bundle = await bundle_of(c, run_id)
+            if bundle is None:
+                continue
+            # Off the event loop: a zip of many MPC runs takes a while to compress
+            await asyncio.to_thread(write, f"emhass-lens-run-{run_id}.json", bundle)
+            found.append(run_id)
+    if not found:
+        raise HTTPException(404, "None of these runs is kept any more")
+    return Response(buffer.getvalue(), media_type="application/zip", headers=attachment(found, "zip"))
+
+
+@router.get("/logs")
+async def runs_logs_text(c: ContainerDep, ids: RunIds) -> Response:
+    """The log lines of several runs as one text file, oldest run first, each under a header line. Runs already
+    removed are left out."""
+    parts: list[str] = []
+    found: list[int] = []
+    for run_id in picked(ids):
+        run = await c.recorder.get(run_id)
+        if run is None:
+            continue
+        lines = [log_line(entry) for entry in await run_logs(c, run_id)]
+        header = f"# Run {run_id} · {run['job']} · started {run['started_at']} · {run['outcome']}"
+        parts.append("\n".join([header, *(lines or ["(no log lines kept for this run)"])]))
+        found.append(run_id)
+    if not found:
+        raise HTTPException(404, "None of these runs is kept any more")
+    return Response("\n\n".join(parts) + "\n", media_type="text/plain", headers=attachment(found, "log"))
+
+
 @router.get("/{run_id}")
 async def get_run(c: ContainerDep, run_id: int) -> RunDetail:
     run = await c.recorder.get(run_id)
@@ -105,25 +180,23 @@ async def run_logs(c: ContainerDep, run_id: int) -> list[LogEntry]:
     return [LogEntry(**row) for row in rows + fresh]
 
 
+async def bundle_of(c: ContainerDep, run_id: int) -> dict[str, Any] | None:
+    """Everything about one run: the run, its artifacts and its log lines. None when there is no such run."""
+    run = await c.recorder.get(run_id)
+    if run is None:
+        return None
+    artifacts = {a["kind"]: await c.recorder.artifact(run_id, a["kind"]) for a in run["artifacts"]}
+    logs = [entry.model_dump() for entry in await run_logs(c, run_id)]
+    return {"emhass_lens_version": c.boot.version, "run": run, "artifacts": artifacts, "logs": logs}
+
+
 @router.get("/{run_id}/bundle")
 async def run_bundle(c: ContainerDep, run_id: int) -> Response:
     """Everything about one run in a single JSON file, for bug reports."""
-    run = await c.recorder.get(run_id)
-    if run is None:
+    bundle = await bundle_of(c, run_id)
+    if bundle is None:
         raise HTTPException(404, f"No run {run_id}")
-    artifacts = {a["kind"]: await c.recorder.artifact(run_id, a["kind"]) for a in run["artifacts"]}
-    logs = [entry.model_dump() for entry in await run_logs(c, run_id)]
-    body = json.dumps(
-        {"emhass_lens_version": c.boot.version, "run": run, "artifacts": artifacts, "logs": logs},
-        ensure_ascii=False,
-        indent=2,
-        default=str,
-    )
-    return Response(
-        body,
-        media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="emhass-lens-run-{run_id}.json"'},
-    )
+    return Response(dump(bundle), media_type="application/json", headers=attachment([run_id], "json"))
 
 
 @router.post("/{run_id}/pin", dependencies=[Writable])

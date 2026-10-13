@@ -11188,6 +11188,98 @@
         ]
       }
     },
+    "/api/runs/bundles": {
+      "get": {
+        "description": "The bundles of several runs in one zip, an emhass-lens-run-<id>.json each. Runs already removed are left\nout.",
+        "operationId": "runs_bundles_api_runs_bundles_get",
+        "parameters": [
+          {
+            "description": "A run id; repeat for several",
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "A run id; repeat for several",
+              "items": {
+                "type": "integer"
+              },
+              "title": "Id",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Runs Bundles",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/runs/logs": {
+      "get": {
+        "description": "The log lines of several runs as one text file, oldest run first, each under a header line. Runs already\nremoved are left out.",
+        "operationId": "runs_logs_text_api_runs_logs_get",
+        "parameters": [
+          {
+            "description": "A run id; repeat for several",
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "A run id; repeat for several",
+              "items": {
+                "type": "integer"
+              },
+              "title": "Id",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Runs Logs Text",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/runs/timeline": {
       "get": {
         "description": "Run counts per job, outcome and `bucket_s`-second bucket of [since, until), for the Runs page timeline: a\nday can hold more runs than one page of the list.",

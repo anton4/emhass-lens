@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.28
+
+- Runs: a tick box before every run to download several at once. The box in the header ticks or unticks all the runs shown, and shift-click ticks a range. Ticked runs stay ticked when you change the filters or load older runs.
+  - While runs are ticked, a bar under the list offers **Download logs (.log)**, the log lines of every ticked run in one text file, oldest run first, each under a line naming the run, and **Download bundles (.zip)**, each run's JSON bundle (the same as **Download bundle** on its page) in one zip. Up to 200 runs at a time.
+- API: `GET /api/runs/logs?id=…&id=…` (text) and `GET /api/runs/bundles?id=…&id=…` (zip), for up to 200 runs. Runs already removed are left out.
+
 ## 0.4.27
 
 - Plan: This slot judges the **Battery** and **Grid** by what the inverter does with the PV and house load as they are now. The inverter holds the grid at its target, and the battery covers the rest within its window; what the battery can't take goes to the grid.
