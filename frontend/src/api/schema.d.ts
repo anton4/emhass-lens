@@ -289,7 +289,8 @@ export interface paths {
         };
         /**
          * Inverter Status
-         * @description Inverter control (experimental): the last decision, the last comparison with the automation, agreement.
+         * @description Inverter control (experimental): the last decision, the last comparison with the automation, agreement, and
+         *     every press of the Sofar buttons (ours and anyone else's).
          */
         get: operations["inverter_status_api_inverter_get"];
         put?: never;
@@ -1189,6 +1190,22 @@ export interface components {
              * @default false
              */
             stale: boolean;
+        };
+        /**
+         * ButtonPress
+         * @description One press of a Sofar button, whoever pressed it.
+         */
+        ButtonPress: {
+            /** At */
+            at: string;
+            /** Button */
+            button: string | null;
+            /** Entity Id */
+            entity_id: string;
+            /** Run Id */
+            run_id: number | null;
+            /** Source */
+            source: string;
         };
         /** ChargeModeInfo */
         ChargeModeInfo: {
@@ -2641,6 +2658,10 @@ export interface components {
             mode: string;
             /** Preconditions */
             preconditions: string | null;
+            /** Presses */
+            presses: components["schemas"]["ButtonPress"][];
+            wear_24h: components["schemas"]["WearStats"];
+            wear_7d: components["schemas"]["WearStats"];
         };
         /** IssueOut */
         IssueOut: {

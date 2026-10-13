@@ -928,6 +928,28 @@ class DriftStatus(BaseModel):
     fighting: dict[str, Any] | None = None  # {field, since, count} while corrections are paused
 
 
+class WearStats(BaseModel):
+    """Presses of the Sofar apply and feed-in buttons (EEPROM wear), ours and anyone's."""
+
+    hours: int
+    apply_presses: int
+    feedin_presses: int
+    our_commits: int
+    presses_not_ours: int
+    last_apply_at: str | None
+    last_feedin_at: str | None
+
+
+class ButtonPress(BaseModel):
+    """One press of a Sofar button, whoever pressed it."""
+
+    at: str
+    entity_id: str
+    button: str | None  # apply | feedin; None for a button that is no longer configured
+    source: str  # lens | automation | user | unknown
+    run_id: int | None  # the EMHASS Lens run that pressed it
+
+
 class InverterStatus(BaseModel):
     drift: DriftStatus | None = None
     mode: str
@@ -936,6 +958,9 @@ class InverterStatus(BaseModel):
     preconditions: str | None
     agreement_24h: Agreement
     agreement_7d: Agreement
+    wear_24h: WearStats
+    wear_7d: WearStats
+    presses: list[ButtonPress]  # the last 7 days, newest first
 
 
 class MarketSession(BaseModel):
@@ -948,18 +973,6 @@ class MarketSession(BaseModel):
     updated_at: str
     ended_at: str | None = None
     end_reason: str | None = None
-
-
-class WearStats(BaseModel):
-    """Presses of the Sofar apply and feed-in buttons (EEPROM wear), ours and anyone's."""
-
-    hours: int
-    apply_presses: int
-    feedin_presses: int
-    our_commits: int
-    presses_not_ours: int
-    last_apply_at: str | None
-    last_feedin_at: str | None
 
 
 class WatchdogFinding(BaseModel):

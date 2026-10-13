@@ -4179,6 +4179,19 @@ button.icon-button {
   pointer-events: none;
 }
 
+/* a moment over the marks (a button press): a dot on the top edge, ringed so it shows on every fill */
+.day-strip-tick {
+  position: absolute;
+  top: -5px;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 /* the comparison or the writes, under the marks they belong to */
 .day-strip-band {
   position: relative;
@@ -4351,6 +4364,12 @@ button.icon-button {
   border-radius: 1px;
 }
 
+.day-strip-swatch.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
 /* the popup under a mark: under the strip, kept inside it at the ends */
 .day-strip-caret {
   position: absolute;
@@ -4499,6 +4518,33 @@ button.icon-button {
 
 .slot-pop-auto {
   color: var(--on-amber);
+}
+
+.slot-pop-presses {
+  margin: 10px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--frame);
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.slot-pop-presses > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.slot-pop-presses .num {
+  font-family: var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+/* who pressed a Sofar button, after the mark's colour (Inverter page) */
+.press-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .slot-pop-note {

@@ -1,4 +1,5 @@
 import { formatClock } from '../../lib/format'
+import { pressButton, pressColor, pressWho } from '../../lib/presses'
 import {
   FIELD_LABELS,
   fieldValue,
@@ -20,7 +21,7 @@ const ACTION_CHIP: Record<DecisionAction['kind'], { text: string; color: LampCol
 }
 
 /** One slot of the inverter's day strip: the five Sofar settings it set (or would set), which changed since the slot
- *  before, and where the automation set something else. */
+ *  before, where the automation set something else, and who pressed the Sofar buttons in it. */
 export function InverterSlotPopup({ detail, timeZone }: { detail: SlotDetail; timeZone?: string }) {
   const clock = (ms: number) => formatClock(new Date(ms).toISOString(), timeZone).slice(0, 5)
   const t = detail.targets
@@ -79,6 +80,19 @@ export function InverterSlotPopup({ detail, timeZone }: { detail: SlotDetail; ti
         <p className="slot-pop-note">{detail.summary ?? 'No decision recorded for this slot.'}</p>
       )}
       {note && <p className="slot-pop-note">{note}</p>}
+      {detail.presses && detail.presses.length > 0 && (
+        <ul className="slot-pop-presses" aria-label="Button presses in this slot">
+          {detail.presses.map((p, i) => (
+            <li key={`${p.at}-${i}`}>
+              <span className="day-strip-swatch dot" style={{ background: pressColor(p) }} />
+              <span className="num">{formatClock(p.at, timeZone)}</span>
+              <span>
+                {pressButton(p)} pressed by {pressWho(p)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

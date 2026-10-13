@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useInverterDecide } from '../api/actions'
 import { useInverter, useRuns, useSettings, useStatus } from '../api/queries'
@@ -10,13 +10,24 @@ import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
 import { InverterSlotPopup } from '../components/controller/InverterSlotPopup'
+import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { todayKey } from '../lib/days'
+import { dayBounds, todayKey } from '../lib/days'
 import type { StripInput } from '../lib/dayStrip'
 import { driftText } from '../lib/drift'
-import { formatSlotDate } from '../lib/format'
+import { formatDateTime, formatSlotDate } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
+import {
+  PRESS_COLOR,
+  pressButton,
+  pressColor,
+  pressCounts,
+  pressedOutside,
+  pressesInSlot,
+  pressTicks,
+  pressWho,
+} from '../lib/presses'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
 import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
@@ -32,7 +43,7 @@ import {
   type InverterLast,
   type SlotDetail,
 } from '../lib/inverter'
-import type { RunSummary } from '../api/types'
+import type { ButtonPress, RunSummary } from '../api/types'
 
 const MODES = [
   { id: 'off', text: 'Off' },
@@ -56,14 +67,23 @@ export function InverterPage() {
   const last = (data?.last ?? null) as InverterLast | null
   const lastCompare = (data?.last_compare ?? null) as InverterComparison | null
   const limits = settings.data?.settings.inverter.limits
+  const presses = data?.presses
 
   const today = todayKey(tz, now)
   const todayDecides = useRuns(runFilters('inverter.decide', today, tz, 0))
   const todayCompares = useRuns(runFilters('inverter.compare', today, tz, 0))
   const strip = useMemo(
-    () => inverterStrip(mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? [])),
-    [todayDecides.data, todayCompares.data],
+    () =>
+      inverterStrip(mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? [])).map((input) =>
+        input.detail
+          ? { ...input, detail: { ...input.detail, presses: pressesInSlot(presses ?? [], input.detail.slot) } }
+          : input,
+      ),
+    [todayDecides.data, todayCompares.data, presses],
   )
+  const ticks = useMemo(() => pressTicks(presses ?? []), [presses])
+  const bounds = dayBounds(today, tz)
+  const pressesToday = pressCounts(presses ?? [], bounds.since, bounds.until)
 
   return (
     <>
@@ -128,6 +148,7 @@ export function InverterPage() {
             {drift.detail && <div className="cell-sub">{drift.detail}</div>}
           </dd>
         </div>
+        <WearFacts day={data?.wear_24h} week={data?.wear_7d} />
       </ControllerHead>
       <ErrorNotice error={inverter.error ?? decide.error} />
 
@@ -140,9 +161,10 @@ export function InverterPage() {
             ? 'Inverter control is off, so nothing is decided. Switch to Dry run to compare with the automation slot by slot.'
             : 'No decisions yet today.'
         }
-        legend={<StripKey strip={strip} />}
+        legend={<StripKey strip={strip} presses={pressesToday} />}
         footer={<StripLine strip={strip} />}
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
+        ticks={ticks}
       />
 
       <div className="two-col">
@@ -218,6 +240,7 @@ export function InverterPage() {
       />
 
       <InverterHistory timeZone={tz} />
+      <PressHistory presses={presses} timeZone={tz} />
     </>
   )
 }
@@ -323,8 +346,8 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
   )
 }
 
-/** What the strip's colours mean, with how many slots each today. */
-function StripKey({ strip }: { strip: StripInput<SlotDetail>[] }) {
+/** What the strip's colours mean, with how many slots each today, and the button presses marked on it. */
+function StripKey({ strip, presses }: { strip: StripInput<SlotDetail>[]; presses: { outside: number; lens: number } }) {
   return (
     <>
       {inverterLegend(strip).map((k) => (
@@ -333,6 +356,18 @@ function StripKey({ strip }: { strip: StripInput<SlotDetail>[] }) {
           {k.text} <span className="num">{k.count}</span>
         </span>
       ))}
+      {presses.outside > 0 && (
+        <span className="day-strip-key-item">
+          <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.outside }} />
+          Pressed outside EMHASS Lens <span className="num">{presses.outside}</span>
+        </span>
+      )}
+      {presses.lens > 0 && (
+        <span className="day-strip-key-item">
+          <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.lens }} />
+          Pressed by EMHASS Lens <span className="num">{presses.lens}</span>
+        </span>
+      )}
     </>
   )
 }
@@ -358,6 +393,79 @@ function StripLine({ strip }: { strip: StripInput<SlotDetail>[] }) {
         </span>
       ))}
     </>
+  )
+}
+
+/** Every press of the Sofar apply and feed-in buttons in the last 7 days: ours (with the run) and anyone else's. */
+function PressHistory({ presses, timeZone }: { presses: ButtonPress[] | undefined; timeZone?: string }) {
+  const [outsideOnly, setOutsideOnly] = useState(false)
+  const all = presses ?? []
+  const outside = all.filter(pressedOutside)
+  const shown = outsideOnly ? outside : all
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Button presses</h2>
+        <span className="muted">
+          The last 7 days{all.length >= 200 ? ', the latest 200' : ''}: {all.length} presses, {outside.length} outside
+          EMHASS Lens
+        </span>
+      </div>
+      <div className="panel-body">
+        <div className="toolbar list-controls">
+          <label className="check">
+            <input type="checkbox" checked={outsideOnly} onChange={(e) => setOutsideOnly(e.target.checked)} />
+            Only outside EMHASS Lens
+          </label>
+        </div>
+      </div>
+      {shown.length === 0 ? (
+        <div className="panel-body">
+          <Empty title={all.length === 0 ? 'No presses seen in the last 7 days' : 'None outside EMHASS Lens'}>
+            {all.length === 0
+              ? 'A press of the apply or feed-in button shows up here, whoever pressed it.'
+              : 'Every press in the last 7 days was made by EMHASS Lens.'}
+          </Empty>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Button</th>
+                <th>Pressed by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((p, i) => (
+                <tr key={`${p.at}-${p.entity_id}-${i}`}>
+                  <td className="num">{formatDateTime(p.at, timeZone)}</td>
+                  <td>{pressButton(p)}</td>
+                  <td>
+                    <span className="press-who">
+                      <span className="day-strip-swatch dot" style={{ background: pressColor(p) }} />
+                      {p.run_id ? (
+                        <Link to={`/runs/${p.run_id}`}>
+                          {pressWho(p, true)}, run {p.run_id}
+                        </Link>
+                      ) : (
+                        pressWho(p, true)
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="panel-body cell-sub">
+        Every press writes the inverter's EEPROM. Who pressed comes from Home Assistant: an automation, or a user in the
+        UI or through a script. Presses while EMHASS Lens wasn't running aren't counted. Times in{' '}
+        {timeZone ?? "your browser's timezone"}.
+      </div>
+    </section>
   )
 }
 

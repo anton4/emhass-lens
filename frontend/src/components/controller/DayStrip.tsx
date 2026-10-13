@@ -19,6 +19,7 @@ import {
   type StripInput,
   type StripItem,
   type StripState,
+  type StripTick,
 } from '../../lib/dayStrip'
 import { formatClock } from '../../lib/format'
 import { Lamp } from '../Lamp'
@@ -39,7 +40,7 @@ const STATE_TEXT: Record<StripState, string> = {
 /** Today's decisions on a 00–24 axis: green where the automation did the same, amber where it differed, grey where
  *  nothing was compared (or the page's own fills, with the comparison on a line under them); the rule is named where
  *  it changes, and a click opens the decision. With `detail`, pointing at a mark (or focusing or tapping it) opens a
- *  popup with what it did. */
+ *  popup with what it did. `ticks` mark moments over the marks (e.g. button presses). */
 export function DayStrip<D = unknown>({
   inputs,
   span,
@@ -49,6 +50,7 @@ export function DayStrip<D = unknown>({
   legend,
   footer,
   detail,
+  ticks,
 }: {
   inputs: StripInput<D>[]
   /** How long one decision holds, in seconds (a slot: 900). */
@@ -63,6 +65,8 @@ export function DayStrip<D = unknown>({
   footer?: ReactNode
   /** The popup for a mark; without it the mark has a plain tooltip. */
   detail?: (item: StripItem<D>) => ReactNode
+  /** Moments marked over the strip; the page says what they are (in the legend and the popup). */
+  ticks?: StripTick[]
 }) {
   const navigate = useNavigate()
   const now = useNow(60_000)
@@ -238,6 +242,16 @@ export function DayStrip<D = unknown>({
                       }}
                     />
                   ))}
+                  {ticks
+                    ?.filter((tick) => tick.t >= start && tick.t < end)
+                    .map((tick, i) => (
+                      <span
+                        key={`${tick.t}-${i}`}
+                        className="day-strip-tick"
+                        style={{ left: `${((tick.t - start) / (end - start)) * 100}%`, background: tick.color }}
+                        aria-hidden="true"
+                      />
+                    ))}
                   <span className="day-strip-now" style={{ left: `${nowX * 100}%` }} aria-hidden="true" />
                 </div>
                 {hasBand && (

@@ -416,3 +416,76 @@ def test_a_drifted_cap_is_set_back_even_within_the_slack(tmp_path: Path, world: 
         assert float(world.ha_states[BMIN]["state"]) == -1500
     finally:
         client.__exit__(None, None, None)
+
+
+APPLY_BUTTON = "button.sofar_passive_mode_battery_charge_discharge"
+BY_AUTOMATION = {"id": "a", "parent_id": "t", "user_id": None}  # Home Assistant's context of the press
+BY_USER = {"id": "b", "parent_id": None, "user_id": "u"}
+
+
+def push_button(client: TestClient, world: World, entity: str, stamp: str, context: dict | None = None) -> None:
+    """What the WebSocket delivers when a button is pressed: its state is the time of the press."""
+    state = dict(world.set_state(entity, stamp), context=context or {})
+    portal = client.portal
+    assert portal is not None
+    portal.call(client.app.state.container.extras["ha"]._set_state, entity, state)  # type: ignore[attr-defined]
+
+
+def test_presses_say_who_pressed_the_buttons(tmp_path: Path, world: World) -> None:
+    client = live_client(tmp_path, world, FakeClock(START))
+    try:
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T09:00:00+00:00")  # as first seen: not a press
+        push_button(client, world, FEEDIN_BUTTON, "2026-10-09T09:00:00+00:00")
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T11:05:00+00:00", BY_AUTOMATION)
+        push_button(client, world, FEEDIN_BUTTON, "2026-10-09T11:06:00+00:00", BY_USER)
+        push_button(client, world, FEEDIN_BUTTON, "2026-10-09T11:07:00+00:00")
+        status = client.get("/api/inverter").json()
+        assert [(p["at"], p["button"], p["source"], p["run_id"]) for p in status["presses"]] == [
+            ("2026-10-09T11:07:00.000+00:00", "feedin", "unknown", None),
+            ("2026-10-09T11:06:00.000+00:00", "feedin", "user", None),
+            ("2026-10-09T11:05:00.000+00:00", "apply", "automation", None),
+        ]
+        wear = status["wear_24h"]
+        assert (wear["apply_presses"], wear["feedin_presses"], wear["presses_not_ours"]) == (1, 2, 3)
+        assert wear["last_feedin_at"] == "2026-10-09T11:07:00.000+00:00"
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_press_by_emhass_lens_names_its_run(tmp_path: Path, world: World) -> None:
+    client = live_client(tmp_path, world, FakeClock(START))
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T09:00:00+00:00")
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        pressed = world.ha_states[APPLY_BUTTON]["state"]
+        # Home Assistant names the App's own user; the press is still ours, by the run that pressed it
+        push_button(client, world, APPLY_BUTTON, pressed, {"id": "c", "parent_id": None, "user_id": "supervisor"})
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T11:14:00+00:00", BY_USER)
+        presses = client.get("/api/inverter").json()["presses"]
+        assert [(p["source"], p["run_id"]) for p in presses] == [("user", None), ("lens", run["id"])]
+        wear = client.get("/api/inverter").json()["wear_24h"]
+        assert (wear["apply_presses"], wear["our_commits"], wear["presses_not_ours"]) == (2, 1, 1)
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_presses_recorded_before_the_source_was_kept_are_ours_next_to_a_commit(app_db) -> None:
+    app_db.execute("ALTER TABLE sofar_press DROP COLUMN source")
+    app_db.execute("ALTER TABLE sofar_press DROP COLUMN run_id")
+    app_db.execute("PRAGMA user_version = 5")
+    app_db.execute(
+        "INSERT INTO sofar_commit (at, owner, register_group)"
+        " VALUES ('2026-10-09T11:00:01.000+00:00', 'plan', 'passive')"
+    )
+    app_db.execute(
+        "INSERT INTO sofar_commit (at, owner, register_group, ok)"
+        " VALUES ('2026-10-09T12:00:01.000+00:00', 'plan', 'passive', 0)"
+    )
+    for at in ("2026-10-09T11:00:00.500+00:00", "2026-10-09T11:05:00.000+00:00", "2026-10-09T12:00:00.000+00:00"):
+        app_db.execute("INSERT INTO sofar_press (at, entity_id) VALUES (?, ?)", (at, APPLY_BUTTON))
+    app_db.migrate()
+    rows = app_db.query("SELECT at, source FROM sofar_press ORDER BY at")
+    assert [r["source"] for r in rows] == ["lens", "unknown", "unknown"]

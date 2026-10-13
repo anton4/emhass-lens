@@ -39,6 +39,14 @@ export interface StripItem<D = unknown> {
   detail?: D
 }
 
+/** A moment marked over the strip's marks (e.g. a button press). */
+export interface StripTick {
+  /** Unix seconds. */
+  t: number
+  /** CSS colour of the mark. */
+  color: string
+}
+
 export interface StripLabel {
   x: number
   text: string

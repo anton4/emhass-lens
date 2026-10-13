@@ -230,6 +230,54 @@
         "title": "BackupStatus",
         "type": "object"
       },
+      "ButtonPress": {
+        "description": "One press of a Sofar button, whoever pressed it.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "button": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Button"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "entity_id",
+          "button",
+          "source",
+          "run_id"
+        ],
+        "title": "ButtonPress",
+        "type": "object"
+      },
       "ChargeModeInfo": {
         "properties": {
           "current": {
@@ -3863,6 +3911,19 @@
               }
             ],
             "title": "Preconditions"
+          },
+          "presses": {
+            "items": {
+              "$ref": "#/components/schemas/ButtonPress"
+            },
+            "title": "Presses",
+            "type": "array"
+          },
+          "wear_24h": {
+            "$ref": "#/components/schemas/WearStats"
+          },
+          "wear_7d": {
+            "$ref": "#/components/schemas/WearStats"
           }
         },
         "required": [
@@ -3871,7 +3932,10 @@
           "last_compare",
           "preconditions",
           "agreement_24h",
-          "agreement_7d"
+          "agreement_7d",
+          "wear_24h",
+          "wear_7d",
+          "presses"
         ],
         "title": "InverterStatus",
         "type": "object"
@@ -10227,7 +10291,7 @@
     },
     "/api/inverter": {
       "get": {
-        "description": "Inverter control (experimental): the last decision, the last comparison with the automation, agreement.",
+        "description": "Inverter control (experimental): the last decision, the last comparison with the automation, agreement, and\nevery press of the Sofar buttons (ours and anyone else's).",
         "operationId": "inverter_status_api_inverter_get",
         "responses": {
           "200": {

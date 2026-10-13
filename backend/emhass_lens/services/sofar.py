@@ -4,7 +4,8 @@ controller.
 Every press of the apply button writes registers that persist to EEPROM (a wear event), so this is the one place
 that reads what the registers show, works out the minimal calls, presses the buttons, reads back, and remembers when
 each register group was last committed (in memory and in app.db, so a cooldown survives a restart). It also logs
-every press of the two buttons that Home Assistant reports, ours or anyone's, so the wear is visible.
+every press of the two buttons that Home Assistant reports, ours or anyone's, and who pressed, so the wear is
+visible.
 """
 
 import asyncio
@@ -26,6 +27,7 @@ log = logging.getLogger("emhass_lens.sofar")
 
 Call = dict[str, Any]  # {"service": "number.set_value", "entity_id": ..., "value": ...} or {"option": ...}
 GROUPS = ("passive", "feedin")
+OUR_PRESS_S = 30  # a press seen this soon after we pressed that button is ours
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class SofarWriter:
         self.lock = asyncio.Lock()  # one commit at a time, whoever owns the decision
         self.last_commit: dict[str, datetime] = {}
         self._press_seen: dict[str, str] = {}
+        self._our_press: dict[str, tuple[datetime, int]] = {}  # button → when we pressed it, in which run
 
     def load(self) -> None:
         rows = self.c.app_db.query("SELECT register_group, MAX(at) AS at FROM sofar_commit GROUP BY register_group")
@@ -203,10 +206,15 @@ class SofarWriter:
                 if index == 1 and feedin_settle_s > 0 and groups[0][1]:
                     await self.c.clock.wait(asyncio.Event(), feedin_settle_s)  # the inverter digests the feed-in first
                 for call in calls:
+                    pressing = call["service"] == "button.press"
+                    if pressing:  # before the call: Home Assistant may report the press before the call returns
+                        self._our_press[call["entity_id"]] = (self.c.clock.now(), ctx.run.id)
                     result = await self.call(ha, call)
                     done.append(result)
                     if not result["ok"]:
                         failed_groups.add(group)
+                        if pressing:
+                            self._our_press.pop(call["entity_id"], None)
                 if group not in failed_groups:
                     await self._log_commit(owner, group, targets, feedin_w, ctx.run.id)
             ctx.run.artifact("calls", done)
@@ -265,7 +273,8 @@ class SofarWriter:
 
     # --- wear -----
     async def on_button_state(self, entity_id: str, state: dict[str, Any] | None) -> None:
-        """Every change of a button's state is one press (its state is the time of the last press)."""
+        """Every change of a button's state is one press (its state is the time of the last press). It is ours when
+        we pressed that button within OUR_PRESS_S; otherwise Home Assistant's context says who pressed."""
         stamp = str((state or {}).get("state") or "")
         if not stamp or stamp in ("unknown", "unavailable") or self._press_seen.get(entity_id) == stamp:
             self._press_seen[entity_id] = stamp
@@ -274,15 +283,22 @@ class SofarWriter:
         self._press_seen[entity_id] = stamp
         if first:
             return  # the state as first seen (startup, re-watch) isn't a new press
+        now = self.c.clock.now()
+        source, run_id = _press_source(state), None
+        ours = self._our_press.pop(entity_id, None)
+        if ours is not None and (now - ours[0]).total_seconds() <= OUR_PRESS_S:
+            source, run_id = "lens", ours[1]
         await self.c.app_db.aexecute(
-            "INSERT INTO sofar_press (at, entity_id) VALUES (?, ?)", (iso(self.c.clock.now()), entity_id)
+            "INSERT INTO sofar_press (at, entity_id, source, run_id) VALUES (?, ?, ?, ?)",
+            (iso(_pressed_at(state) or now), entity_id, source, run_id),  # a press seen late keeps its own time
         )
 
     async def wear(self, hours: int) -> dict[str, Any]:
         e = self._e()
         since = iso(self.c.clock.now() - timedelta(hours=hours))
         presses = await self.c.app_db.aquery(
-            "SELECT entity_id, COUNT(*) AS n, MAX(at) AS last FROM sofar_press WHERE at >= ? GROUP BY entity_id",
+            "SELECT entity_id, COUNT(*) AS n, SUM(source != 'lens') AS not_ours, MAX(at) AS last FROM sofar_press"
+            " WHERE at >= ? GROUP BY entity_id",
             (since,),
         )
         commits = await self.c.app_db.aquery(
@@ -291,24 +307,45 @@ class SofarWriter:
         )
         by_entity = {r["entity_id"]: r for r in presses}
         by_group = {r["register_group"]: r["n"] for r in commits}
-        apply_n = by_entity.get(e.apply_button, {}).get("n", 0)
-        feedin_n = by_entity.get(e.feedin_button, {}).get("n", 0)
+        buttons = (e.apply_button, e.feedin_button)
         return {
             "hours": hours,
-            "apply_presses": apply_n,
-            "feedin_presses": feedin_n,
+            "apply_presses": by_entity.get(e.apply_button, {}).get("n", 0),
+            "feedin_presses": by_entity.get(e.feedin_button, {}).get("n", 0),
             "our_commits": by_group.get("passive", 0) + by_group.get("feedin", 0),
-            "presses_not_ours": max(0, apply_n - by_group.get("passive", 0))
-            + max(0, feedin_n - by_group.get("feedin", 0)),
+            "presses_not_ours": sum(by_entity.get(b, {}).get("not_ours") or 0 for b in buttons),
             "last_apply_at": by_entity.get(e.apply_button, {}).get("last"),
             "last_feedin_at": by_entity.get(e.feedin_button, {}).get("last"),
         }
+
+    async def presses(self, hours: int, limit: int = 200) -> list[dict[str, Any]]:
+        """The presses of the last `hours`, newest first: when, which button (apply, feedin; None for a button no
+        longer configured), who pressed (lens, automation, user, unknown) and, for ours, the run."""
+        e = self._e()
+        since = iso(self.c.clock.now() - timedelta(hours=hours))
+        rows = await self.c.app_db.aquery(
+            "SELECT at, entity_id, source, run_id FROM sofar_press WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?",
+            (since, limit),
+        )
+        buttons = {e.apply_button: "apply", e.feedin_button: "feedin"}
+        return [{**row, "button": buttons.get(row["entity_id"])} for row in rows]
 
     def prune(self, now: datetime) -> int:
         cut = iso(now - timedelta(days=self.c.settings.current.storage.retention.runs_days))
         n = self.c.app_db.execute("DELETE FROM sofar_press WHERE at < ?", (cut,)).rowcount
         n += self.c.app_db.execute("DELETE FROM sofar_commit WHERE at < ?", (cut,)).rowcount
         return n
+
+
+def _press_source(state: dict[str, Any] | None) -> str:
+    """Who pressed, from the state's context: an automation (it has a parent context), a user (in the UI, or through a
+    script they ran), or not known."""
+    context = (state or {}).get("context") or {}
+    if context.get("parent_id"):
+        return "automation"
+    if context.get("user_id"):
+        return "user"
+    return "unknown"
 
 
 def _pressed_at(state: dict[str, Any] | None) -> datetime | None:

@@ -37,6 +37,29 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: the Inverter page shows every Sofar button press and who made it (unreleased)
+- **Why:** the owner asked whether the Inverter page shows presses of the passive and feed-in buttons made outside
+  EMHASS Lens. Before this change it didn't. `sofar_press` recorded them, but only the Market page showed counts, and
+  "not ours" was presses minus our commits.
+- **Backend:**
+  - App migration 0006 adds `source` (`lens` | `automation` | `user` | `unknown`) and `run_id` to `sofar_press`.
+    Old rows are backfilled as `lens` where an ok commit lies within 30 s.
+  - `SofarWriter.commit` marks each button just before it presses it. `on_button_state` counts a press within 30 s of
+    that mark as ours, with the run.
+  - Otherwise the HA state's `context` decides: `parent_id` set means an automation, `user_id` set means a user (the UI
+    or a script they ran).
+  - A press is stored at the button's own timestamp, so a press seen only on reconnect keeps its real time.
+  - `presses_not_ours` counts presses with a source other than `lens`, which is exact now.
+  - `GET /api/inverter` adds `wear_24h`, `wear_7d` and `presses` (7 days, newest first, at most 200).
+- **UI (Inverter page):**
+  - The header shows *Inverter writes* (`WearFacts`, moved to `components/controller/`).
+  - The day strip takes `ticks`: a dot on the top edge per press, red when made outside EMHASS Lens.
+  - The strip's key counts today's presses, and a slot's popup lists its presses.
+  - A new **Button presses** panel has an *Only outside EMHASS Lens* filter, and each EMHASS Lens press links to its
+    run.
+- **Not yet verified on the real Home Assistant:** that the WebSocket `new_state` carries `context` with `parent_id`
+  for automation presses and `user_id` for UI presses (that is HA's documented behaviour).
+
 ### 2026-10-13: download several runs at once from the Runs page (0.4.28)
 - **Why:** the owner wanted to tick runs in the list and download their logs together, instead of opening each run
   for its **Download bundle**.
@@ -54,7 +77,6 @@ These come from docs/PLAN.md §10:
     `/bundle`. It's compressed off the event loop.
   - Both take at most 200 runs (`MAX_DOWNLOAD`, matching `lib/runPick.ts`), so the URL fits behind Ingress. They
     skip runs already removed, and return 404 when none is left.
-
 
 ### 2026-10-13: This slot judges battery and grid by what the inverter does with the PV and load now (0.4.27)
 - **Why:** the owner's 11:30 slot (PV export, grid target 0 W, battery −20…0 kW) showed *Battery and grid differ

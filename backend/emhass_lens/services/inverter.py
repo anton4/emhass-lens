@@ -304,6 +304,7 @@ class InverterService:
         }
 
     async def status(self) -> dict[str, Any]:
+        writer = self.c.extras["sofar"]
         return {
             "drift": self.drift_status(),
             "mode": self.mode,
@@ -312,6 +313,9 @@ class InverterService:
             "preconditions": self.preconditions() if self.mode != "off" else None,
             "agreement_24h": await self.agreement(24),
             "agreement_7d": await self.agreement(24 * 7),
+            "wear_24h": await writer.wear(24),
+            "wear_7d": await writer.wear(24 * 7),
+            "presses": await writer.presses(24 * 7),
         }
 
 

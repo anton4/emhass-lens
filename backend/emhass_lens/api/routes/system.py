@@ -161,7 +161,8 @@ async def outputs_status(c: ContainerDep) -> OutputsStatus:
 
 @router.get("/inverter")
 async def inverter_status(c: ContainerDep) -> InverterStatus:
-    """Inverter control (experimental): the last decision, the last comparison with the automation, agreement."""
+    """Inverter control (experimental): the last decision, the last comparison with the automation, agreement, and
+    every press of the Sofar buttons (ours and anyone else's)."""
     return InverterStatus(**await c.extras["inverter"].status())
 
 

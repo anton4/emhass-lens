@@ -2,7 +2,7 @@
 // show decisions, comparisons and agreement. See backend/emhass_lens/domain/inverter.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { Agreement, InverterSettings, RunSummary } from '../api/types'
+import type { Agreement, ButtonPress, InverterSettings, RunSummary } from '../api/types'
 import type { StripInput } from './dayStrip'
 
 export interface InverterTargets {
@@ -238,6 +238,8 @@ export interface SlotDetail {
   /** Where the automation set something else: field → what it set. */
   differs: Record<string, string>
   compare: string | null // the compare run's outcome: ok, mismatch, noop
+  /** The Sofar button presses within the slot, oldest first: ours and anyone else's. */
+  presses?: ButtonPress[]
 }
 
 const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
