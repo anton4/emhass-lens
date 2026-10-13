@@ -12,6 +12,17 @@ It replaces the [homeassistant-ee-nordpool](https://github.com/anton4/homeassist
 > - Plan: [docs/PLAN.md](docs/PLAN.md).
 > - Progress: [docs/STATUS.md](docs/STATUS.md).
 
+## Screenshots
+
+[![The Plan timeline: measured and planned power, battery state of charge and prices over the last day and the horizon](docs/screenshots/plan-timeline.png)](docs/screenshots/plan-timeline.png)
+
+*The plan, next to what actually happened: power flows, battery state of charge and the import and export prices EMHASS planned against. Left of the now line is measured, right of it is planned.*
+
+| | |
+|---|---|
+| [![The current slot: power flows between PV, grid, battery, house and EV](docs/screenshots/plan.png)](docs/screenshots/plan.png)<br>**Now:** what this quarter-hour should do and what it is doing | [![Inputs: every value sent to EMHASS, with its source](docs/screenshots/inputs.png)](docs/screenshots/inputs.png)<br>**Inputs:** every value EMHASS gets, with its source and age |
+| [![A single MPC run: pipeline timings, checks and derived values](docs/screenshots/run.png)](docs/screenshots/run.png)<br>**A run:** its timings, checks, payload and EMHASS's response | [![The runs list and timeline of every job](docs/screenshots/runs.png)](docs/screenshots/runs.png)<br>**Runs:** every job, including the ones that were skipped or refused |
+
 ## Install as a Home Assistant App
 
 1. **Settings → Apps → App store → ⋮ → Repositories**, add `https://github.com/anton4/emhass-lens`.
@@ -45,7 +56,8 @@ cd frontend && npm ci && npm run dev                                            
 | `Dockerfile` | One image: built UI plus backend |
 | `.github/workflows/` | CI, and the per-architecture image build pushed to ghcr.io |
 | `scripts/make-local-addon.sh` | Build a local App folder that the Supervisor compiles itself |
-| `docs/` | Plan and progress |
+| `scripts/readme_screenshots.py` | Retake the README screenshots from a running App |
+| `docs/` | Plan and progress; `docs/screenshots/` holds the README images |
 
 ## Development
 

@@ -31,6 +31,7 @@ cd backend && uv sync && uv run pytest -q && uv run ruff check . && uv run ruff 
 cd backend && EMHASS_LENS_DATA_DIR=./data TZ=Europe/Tallinn uv run python -m emhass_lens   # API + UI on :8099
 cd frontend && npm ci && npm run dev        # UI on :5173, proxies /api to :8099
 cd frontend && npm run typecheck && npm run lint && npm test && npm run build
+uv run scripts/readme_screenshots.py --base http://localhost:8099   # retake docs/screenshots (check each image before committing)
 # after changing API routes or response models:
 cd backend && uv run python -m emhass_lens.openapi_dump ../frontend/src/api/openapi.json && cd ../frontend && npm run gen:api
 ```
