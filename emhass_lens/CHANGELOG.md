@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.26
+
+- Plan: the **Battery** and **EV** boxes in This slot show the state of charge beside the power. On a phone it goes at the end of the line under the power.
+  - Battery: the measured state of charge, amber when it differs from the plan. Previous slot shows the quarter-hour mean. Next slot, or a slot with no SoC sensor, shows the plan's state of charge for the end of the slot.
+  - EV: the car's battery level from Settings → EV charger control → Charger entities → Car battery level, with the target in the hover text. It shows on This slot while EV charger control isn't Off.
+- API: the `charger` block of `GET /api/plan/now` has `soc` and `target_soc` (%).
+
 ## 0.4.25
 
 - Market: during a sell, the feed-in limit is changed only when it has to be. While selling, the inverter exports the lower of the grid target and the feed-in limit.
