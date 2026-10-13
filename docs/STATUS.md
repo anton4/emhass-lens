@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-13: This slot judges battery and grid by what the inverter does with the PV and load now (unreleased)
+### 2026-10-13: This slot judges battery and grid by what the inverter does with the PV and load now (0.4.27)
 - **Why:** the owner's 11:30 slot (PV export, grid target 0 W, battery −20…0 kW) showed *Battery and grid differ
   from the plan* with nothing wrong.
   - **Measured:** PV 5.00 kW (forecast 4.41), house 558 W (forecast 1.35 kW), grid −4.25 kW (plan −2.92), battery

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.27
+
+- Plan: This slot judges the **Battery** and **Grid** by what the inverter does with the PV and house load as they are now. The inverter holds the grid at its target, and the battery covers the rest within its window; what the battery can't take goes to the grid.
+  - In PV export (the battery may not charge) more PV or less house load than forecast is exported, and no longer shows as *Battery and grid differ from the plan*. In a force discharge or self-use the battery still covers the difference.
+  - The settings are the inverter's registers now, or for Previous slot what the inverter rules give its plan row. With inverter control Off the grid is judged against the plan, as before.
+  - In a force charge at the import max the battery is expected to charge at all it takes, as the inverter does with that grid target.
+- Plan: the Grid and Battery boxes show **expected …** under the plan when that is off the plan; it is what the measurement is judged against. When all does what is expected but that is off the plan, the chip at the top is blue and says why, for example *More PV and less house load than forecast*. A PV or house forecast that missed by 300 W or more is blue.
+- Plan: the "Plan:" line keeps "PV" in capitals.
+- API: in `GET /api/plan/now` the grid's `expected` is filled in too while inverter control isn't Off.
+
 ## 0.4.26
 
 - Plan: the **Battery** and **EV** boxes in This slot show the state of charge beside the power. On a phone it goes at the end of the line under the power.
