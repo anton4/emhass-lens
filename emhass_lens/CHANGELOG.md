@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.30
+
+- Runs: **Download logs (.log)** now shows, for each run, its summary and how long it took under the line naming it, its log lines, and then everything it stored, as JSON (the same as the run's **Artifacts** tab). Most market reconciles write no log lines, so their file used to say little more than *no log lines kept*. A .log of many EMHASS MPC runs is large; the .zip is smaller.
+
 ## 0.4.29
 
 - Inverter: every press of the Sofar apply and feed-in buttons is shown, with who made it: EMHASS Lens (linked to its run), an automation, or a user (in the UI or through a script). Every press writes the inverter's EEPROM.
