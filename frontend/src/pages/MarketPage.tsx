@@ -31,6 +31,7 @@ import {
   type MarketComparison,
   type MarketLast,
   type MarketSensors,
+  watchdogText,
 } from '../lib/market'
 import type { RunSummary } from '../api/types'
 
@@ -64,6 +65,7 @@ export function MarketPage() {
   const [confirmEnd, setConfirmEnd] = useState(false)
   const data = market.data
   const tz = status.data?.timezone
+  const watchdog = watchdogText(data?.watchdog, now, tz)
   const writable = status.data?.writable ?? false
   const last = (data?.last ?? null) as MarketLast | null
   const lastCompare = (data?.last_compare ?? null) as MarketComparison | null
@@ -99,7 +101,8 @@ export function MarketPage() {
         liveNotice={
           <>
             <strong>EMHASS Lens runs the market sessions.</strong> Make sure the automation "Qilowatt: Master Market
-            Controller" is off, or both will write to the inverter.
+            Controller" is off, or both will write to the inverter. Its session watchdog replaces "Qilowatt: Session
+            Watchdog", which you can turn off too.
           </>
         }
         writable={writable}
@@ -148,6 +151,13 @@ export function MarketPage() {
         <AgreementFact title="Agreement, 24 h" agreement={data?.agreement_24h} per="decision" />
         <AgreementFact title="Agreement, 7 days" agreement={data?.agreement_7d} per="decision" />
         <WearFacts day={data?.wear_24h} week={data?.wear_7d} />
+        <div>
+          <dt>Watchdog</dt>
+          <dd>
+            <LabelledLamp color={watchdog.color} text={watchdog.text} />
+            {watchdog.detail && <div className="cell-sub">{watchdog.detail}</div>}
+          </dd>
+        </div>
       </ControllerHead>
       <ErrorNotice error={market.error ?? reconcile.error} />
       {data?.notice && (

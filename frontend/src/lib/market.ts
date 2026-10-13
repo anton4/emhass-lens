@@ -2,7 +2,8 @@
 // decisions, comparisons, sessions and the write throttle. See backend/emhass_lens/domain/market.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { MarketSettings, RunSummary } from '../api/types'
+import type { MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
+import { formatTime } from './format'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
 
@@ -200,4 +201,35 @@ export function marketGuards(thresholds: MarketSettings['thresholds'] | undefine
 export function sessionText(session: { direction: string; power_w: number | null; source: string | null } | null | undefined): string {
   if (!session) return 'none'
   return `${session.direction} ${session.power_w ?? '?'} W (${session.source ?? '?'})`
+}
+
+const WATCHDOG_KINDS: Record<string, string> = {
+  stale: 'Session stuck',
+  long_session: 'Long session',
+  emhass_off: 'EMHASS left off',
+}
+
+function duration(seconds: number): string {
+  return seconds % 3600 === 0 ? `${seconds / 3600} h` : `${Math.round(seconds / 60)} min`
+}
+
+/** The session watchdog in one fact: off, what it finds now, or what it watches for. */
+export function watchdogText(
+  w: MarketWatchdogStatus | null | undefined,
+  now: Date = new Date(),
+  tz?: string,
+): { color: LampColor; text: string; detail: string | null } {
+  if (!w || !w.enabled) return { color: 'neutral', text: 'Off', detail: 'Turned off under Settings → Qilowatt market control.' }
+  if (w.mode === 'off') return { color: 'neutral', text: 'Off', detail: 'Watches while market control is on.' }
+  const finding = w.findings.find((f) => f.severity === 'error') ?? w.findings[0]
+  if (finding) {
+    const message = finding.message.charAt(0).toUpperCase() + finding.message.slice(1)
+    return { color: finding.severity === 'error' ? 'red' : 'amber', text: WATCHDOG_KINDS[finding.kind] ?? finding.kind, detail: message }
+  }
+  const last = w.checked_at ? `last check ${formatTime(w.checked_at, now, tz)} · ` : ''
+  const clears = w.mode === 'live' ? `clears a session after ${duration(w.stale_after_s)} without a source` : 'records only'
+  const acted = w.last_action
+    ? ` · last: ${String(w.last_action.summary ?? '')} (${formatTime(String(w.last_action.at ?? ''), now, tz)})`
+    : ''
+  return { color: 'green', text: 'Every minute', detail: `${last}${clears}, warns after ${duration(w.long_session_s)}${acted}` }
 }

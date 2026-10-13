@@ -289,6 +289,44 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                         "#/market",
                     )
                 )
+    watchdog = x.get("market_watchdog")
+    if watchdog is not None and market is not None and market.active():
+        fresh = watchdog.checked_at is not None and now - watchdog.checked_at <= timedelta(minutes=3)
+        titles = {
+            "stale": "A market session looks stuck",
+            "long_session": "A market session has been open a long time",
+            "emhass_off": "The EMHASS switch is off with the inverter forced",
+        }
+        hints = {
+            "stale": "In Live the session watchdog clears it within a minute; in Shadow the Home Assistant "
+            "automations should. Check the Market page.",
+            "long_session": "Make sure this is expected.",
+            "emhass_off": "No market session is open: turn the EMHASS switch back on if nothing should hold the "
+            "inverter.",
+        }
+        for f in watchdog.findings if fresh else []:
+            out.append(
+                Problem(
+                    f"market.watchdog.{f.kind}",
+                    f.severity,
+                    titles[f.kind] if f.kind in titles else str(f.kind),
+                    f.message[:1].upper() + f.message[1:],
+                    hints.get(f.kind),
+                    "#/market",
+                )
+            )
+        why = watchdog.not_checking(now) if market.mode == "live" else None
+        if why:
+            out.append(
+                Problem(
+                    "market.watchdog.off",
+                    "warning",
+                    "The market session watchdog isn't watching",
+                    f"Market control is live, but {why}",
+                    'Turn it on, or keep the Home Assistant automation "Qilowatt: Session Watchdog" running.',
+                    "#/settings?section=market",
+                )
+            )
     if market is not None and c.boot.safe_mode and market.session is not None:
         out.append(
             Problem(

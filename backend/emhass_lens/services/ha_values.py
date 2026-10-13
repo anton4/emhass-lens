@@ -52,3 +52,16 @@ def last_updated(state: dict[str, Any] | None) -> datetime | None:
     if not state:
         return None
     return parse_iso(str(state.get("last_updated"))) if state.get("last_updated") else None
+
+
+def changed_at(state: dict[str, Any] | None) -> datetime | None:
+    """HA's last_changed (else last_updated): when the value itself last changed (`states.x.last_changed`)."""
+    if not state:
+        return None
+    for key in ("last_changed", "last_updated"):
+        if state.get(key):
+            try:
+                return parse_iso(str(state[key]))
+            except ValueError:
+                return None
+    return None

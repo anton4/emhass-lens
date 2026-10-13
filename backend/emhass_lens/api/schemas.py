@@ -959,6 +959,29 @@ class WearStats(BaseModel):
     last_feedin_at: str | None
 
 
+class WatchdogFinding(BaseModel):
+    kind: str  # stale | long_session | emhass_off
+    severity: str  # error | warning
+    direction: str | None
+    since: str | None
+    age_s: int
+    episode: str
+    message: str
+
+
+class MarketWatchdogStatus(BaseModel):
+    """The session watchdog: the safety net next to the market control (the HA "Qilowatt: Session Watchdog")."""
+
+    enabled: bool
+    mode: str  # the market mode while the watchdog is on, else off
+    stale_after_s: int
+    long_session_s: int
+    emhass_off_s: int
+    checked_at: str | None
+    findings: list[WatchdogFinding]
+    last_action: dict[str, Any] | None  # {at, run_id, outcome, summary} of the last run that acted or reported
+
+
 class MarketStatus(BaseModel):
     mode: str
     session: MarketSession | None
@@ -971,6 +994,7 @@ class MarketStatus(BaseModel):
     wear_24h: WearStats
     wear_7d: WearStats
     notice: str | None
+    watchdog: MarketWatchdogStatus | None
 
 
 class MarketReconcileRequest(BaseModel):

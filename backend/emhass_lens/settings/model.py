@@ -707,7 +707,7 @@ class Notifications(Section):
         pattern=r"^$|^notify\.[a-z0-9_]+$",
         title="Mobile notify service",
         description="e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. "
-        "Used by the EV charger control.",
+        "Used by the EV charger control, the market control and its session watchdog.",
     )
 
 
@@ -1281,6 +1281,40 @@ class MarketThresholds(Section):
     )
 
 
+class MarketWatchdog(Section):
+    enabled: bool = Field(
+        default=True,
+        title="Session watchdog",
+        description="Every minute, independently of the market decisions: in Live, clear a session whose source "
+        "has been gone too long and hand the inverter back to the plan; in Live and Shadow, report a long session "
+        "and the EMHASS switch left off with the inverter forced. Replaces the automation "
+        '"Qilowatt: Session Watchdog".',
+    )
+    stale_after_s: int = Field(
+        default=600,
+        ge=60,
+        le=3600,
+        title="Clear a session when the source is gone for",
+        description="The market controller ends such a session after 5 minutes itself; this is the safety net.",
+        json_schema_extra=ui(unit="s"),
+    )
+    long_session_s: int = Field(
+        default=10800,
+        ge=900,
+        le=86400,
+        title="Warn about a session open for",
+        json_schema_extra=ui(unit="s"),
+    )
+    emhass_off_s: int = Field(
+        default=600,
+        ge=60,
+        le=7200,
+        title="Warn when the EMHASS switch is off with no session for",
+        description="Only while the inverter is in Force charge or Force discharge.",
+        json_schema_extra=ui(unit="s"),
+    )
+
+
 class Market(Section):
     mode: Literal["off", "shadow", "live"] = Field(
         default="off",
@@ -1311,6 +1345,7 @@ class Market(Section):
         default=MarketEntities(), title="Market entities", json_schema_extra=ui(advanced=True)
     )
     thresholds: MarketThresholds = Field(default=MarketThresholds(), title="Thresholds")
+    watchdog: MarketWatchdog = Field(default=MarketWatchdog(), title="Session watchdog")
 
 
 class ExternalControl(Section):

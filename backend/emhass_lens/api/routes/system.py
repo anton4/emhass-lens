@@ -198,7 +198,7 @@ async def charger_mode(c: ContainerDep, request: Request, body: ChargeModeReques
 @router.get("/market")
 async def market_status(c: ContainerDep) -> MarketStatus:
     """Qilowatt market control (experimental): the session, the last decision and comparison, agreement, wear."""
-    return MarketStatus(**await c.extras["market"].status())
+    return MarketStatus(**await c.extras["market"].status(), watchdog=c.extras["market_watchdog"].status())
 
 
 @router.post("/market/reconcile", dependencies=[Writable], status_code=202)

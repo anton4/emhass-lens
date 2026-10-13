@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '../api/types'
-import { decisionRef, marketFieldValue, marketGuards, pairMarketCompares, parseReconcileSummary } from './market'
+import {
+  decisionRef,
+  marketFieldValue,
+  marketGuards,
+  pairMarketCompares,
+  parseReconcileSummary,
+  watchdogText,
+} from './market'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
   return { id, job, trigger: 'event', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
@@ -41,5 +48,54 @@ describe('marketGuards and values', () => {
     expect(guards[2]?.text).toContain('180 s')
     expect(marketFieldValue('grid_power_w', -5000)).toBe('-5000 W')
     expect(marketFieldValue('session', 'sell')).toBe('sell')
+  })
+})
+
+describe('watchdogText', () => {
+  const now = new Date('2026-10-10T14:00:00Z')
+  const base = {
+    enabled: true,
+    mode: 'live',
+    stale_after_s: 600,
+    long_session_s: 10800,
+    emhass_off_s: 600,
+    checked_at: '2026-10-10T13:59:40Z',
+    findings: [],
+    last_action: null,
+  }
+
+  it('is off when turned off or while market control is', () => {
+    expect(watchdogText(null).text).toBe('Off')
+    expect(watchdogText({ ...base, enabled: false }).detail).toBe('Turned off under Settings → Qilowatt market control.')
+    expect(watchdogText({ ...base, mode: 'off' }).color).toBe('neutral')
+  })
+
+  it('says what it watches for, and in Shadow that it only records', () => {
+    expect(watchdogText(base, now, 'Europe/Tallinn')).toEqual({
+      color: 'green',
+      text: 'Every minute',
+      detail: 'last check 16:59:40 · clears a session after 10 min without a source, warns after 3 h',
+    })
+    const shadow = watchdogText({ ...base, mode: 'shadow', checked_at: null }, now, 'Europe/Tallinn')
+    expect(shadow.detail).toBe('records only, warns after 3 h')
+    const acted = watchdogText(
+      { ...base, last_action: { at: '2026-10-10T13:20:00Z', run_id: 7, outcome: 'ok', summary: 'Reported: x' } },
+      now,
+      'Europe/Tallinn',
+    )
+    expect(acted.detail?.endsWith(' · last: Reported: x (16:20:00)')).toBe(true)
+  })
+
+  it('shows the worst finding first', () => {
+    const findings = [
+      { kind: 'long_session', severity: 'warning', direction: 'sell', since: null, age_s: 11000, episode: 'l', message: 'sell session from kratt has been open for 3.1 h' },
+      { kind: 'stale', severity: 'error', direction: 'sell', since: null, age_s: 700, episode: 's', message: 'sell session: qw_source has been "none" for 11 min' },
+    ]
+    expect(watchdogText({ ...base, findings }, now)).toEqual({
+      color: 'red',
+      text: 'Session stuck',
+      detail: 'Sell session: qw_source has been "none" for 11 min',
+    })
+    expect(watchdogText({ ...base, findings: findings.slice(0, 1) }, now).color).toBe('amber')
   })
 })

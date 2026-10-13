@@ -2752,6 +2752,16 @@ export interface components {
              *     }
              */
             thresholds: components["schemas"]["MarketThresholds"];
+            /**
+             * Session watchdog
+             * @default {
+             *       "emhass_off_s": 600,
+             *       "enabled": true,
+             *       "long_session_s": 10800,
+             *       "stale_after_s": 600
+             *     }
+             */
+            watchdog: components["schemas"]["MarketWatchdog"];
         };
         /** MarketEntities */
         MarketEntities: {
@@ -2853,6 +2863,7 @@ export interface components {
                 [key: string]: unknown;
             };
             session: components["schemas"]["MarketSession"] | null;
+            watchdog: components["schemas"]["MarketWatchdogStatus"] | null;
             wear_24h: components["schemas"]["WearStats"];
             wear_7d: components["schemas"]["WearStats"];
         };
@@ -2925,6 +2936,56 @@ export interface components {
              * @default 300
              */
             unavailable_timeout_s: number;
+        };
+        /** MarketWatchdog */
+        MarketWatchdog: {
+            /**
+             * Warn when the EMHASS switch is off with no session for
+             * @description Only while the inverter is in Force charge or Force discharge.
+             * @default 600
+             */
+            emhass_off_s: number;
+            /**
+             * Session watchdog
+             * @description Every minute, independently of the market decisions: in Live, clear a session whose source has been gone too long and hand the inverter back to the plan; in Live and Shadow, report a long session and the EMHASS switch left off with the inverter forced. Replaces the automation "Qilowatt: Session Watchdog".
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Warn about a session open for
+             * @default 10800
+             */
+            long_session_s: number;
+            /**
+             * Clear a session when the source is gone for
+             * @description The market controller ends such a session after 5 minutes itself; this is the safety net.
+             * @default 600
+             */
+            stale_after_s: number;
+        };
+        /**
+         * MarketWatchdogStatus
+         * @description The session watchdog: the safety net next to the market control (the HA "Qilowatt: Session Watchdog").
+         */
+        MarketWatchdogStatus: {
+            /** Checked At */
+            checked_at: string | null;
+            /** Emhass Off S */
+            emhass_off_s: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Findings */
+            findings: components["schemas"]["WatchdogFinding"][];
+            /** Last Action */
+            last_action: {
+                [key: string]: unknown;
+            } | null;
+            /** Long Session S */
+            long_session_s: number;
+            /** Mode */
+            mode: string;
+            /** Stale After S */
+            stale_after_s: number;
         };
         /** MeasuredPower */
         MeasuredPower: {
@@ -3249,7 +3310,7 @@ export interface components {
         Notifications: {
             /**
              * Mobile notify service
-             * @description e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control.
+             * @description e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control, the market control and its session watchdog.
              * @default
              */
             mobile_service: string;
@@ -4388,6 +4449,12 @@ export interface components {
              *           "kratt"
              *         ],
              *         "unavailable_timeout_s": 300
+             *       },
+             *       "watchdog": {
+             *         "emhass_off_s": 600,
+             *         "enabled": true,
+             *         "long_session_s": 10800,
+             *         "stale_after_s": 600
              *       }
              *     }
              */
@@ -4826,6 +4893,23 @@ export interface components {
             started_at: string;
             /** Version */
             version: string;
+        };
+        /** WatchdogFinding */
+        WatchdogFinding: {
+            /** Age S */
+            age_s: number;
+            /** Direction */
+            direction: string | null;
+            /** Episode */
+            episode: string;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+            /** Severity */
+            severity: string;
+            /** Since */
+            since: string | null;
         };
         /**
          * WearStats

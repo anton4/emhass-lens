@@ -24,6 +24,7 @@ from emhass_lens.services.history import PlanHistoryService
 from emhass_lens.services.inputs import InputsService
 from emhass_lens.services.inverter import InverterService
 from emhass_lens.services.market import MarketService
+from emhass_lens.services.market_watchdog import MarketWatchdog
 from emhass_lens.services.measurements import MeasurementService
 from emhass_lens.services.ml import MlService
 from emhass_lens.services.mpc import MpcService
@@ -65,6 +66,7 @@ def build(c: Container) -> None:
     x["inverter"] = InverterService(c)
     x["charger"] = ChargerService(c)
     x["market"] = MarketService(c)
+    x["market_watchdog"] = MarketWatchdog(c)
     x["catchup"] = CatchUpService(c)
     x["http_updates"] = make_client("github", timeout=15, transport=transport)
     x["updates"] = UpdateService(c, x["http_updates"])
@@ -355,6 +357,21 @@ def register_jobs(c: Container) -> None:
             func=x["market"].compare_job,
             record=x["market"].compare_active,
             grace=timedelta(minutes=5),
+        )
+    )
+    s.add(
+        Job(
+            id="market.watchdog",
+            title="Market session watchdog",
+            description="A safety net next to the market control, sharing none of its logic: clears a session whose "
+            "source has been gone too long (Live) and reports a long session or the EMHASS switch left off with "
+            "the inverter forced. Checks every minute; records a run only when something needs attention.",
+            trigger=Periodic(60, 40),
+            func=x["market_watchdog"].job,
+            record=False,
+            mode=lambda: x["market_watchdog"].mode,
+            coalesce=True,
+            grace=timedelta(seconds=45),
         )
     )
     s.add(

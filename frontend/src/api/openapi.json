@@ -4247,6 +4247,16 @@
               "unavailable_timeout_s": 300
             },
             "title": "Thresholds"
+          },
+          "watchdog": {
+            "$ref": "#/components/schemas/MarketWatchdog",
+            "default": {
+              "emhass_off_s": 600,
+              "enabled": true,
+              "long_session_s": 10800,
+              "stale_after_s": 600
+            },
+            "title": "Session watchdog"
           }
         },
         "title": "Market",
@@ -4526,6 +4536,16 @@
               }
             ]
           },
+          "watchdog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketWatchdogStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "wear_24h": {
             "$ref": "#/components/schemas/WearStats"
           },
@@ -4544,7 +4564,8 @@
           "agreement_7d",
           "wear_24h",
           "wear_7d",
-          "notice"
+          "notice",
+          "watchdog"
         ],
         "title": "MarketStatus",
         "type": "object"
@@ -4706,6 +4727,118 @@
           }
         },
         "title": "MarketThresholds",
+        "type": "object"
+      },
+      "MarketWatchdog": {
+        "additionalProperties": false,
+        "properties": {
+          "emhass_off_s": {
+            "default": 600,
+            "description": "Only while the inverter is in Force charge or Force discharge.",
+            "maximum": 7200.0,
+            "minimum": 60.0,
+            "title": "Warn when the EMHASS switch is off with no session for",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "enabled": {
+            "default": true,
+            "description": "Every minute, independently of the market decisions: in Live, clear a session whose source has been gone too long and hand the inverter back to the plan; in Live and Shadow, report a long session and the EMHASS switch left off with the inverter forced. Replaces the automation \"Qilowatt: Session Watchdog\".",
+            "title": "Session watchdog",
+            "type": "boolean"
+          },
+          "long_session_s": {
+            "default": 10800,
+            "maximum": 86400.0,
+            "minimum": 900.0,
+            "title": "Warn about a session open for",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          },
+          "stale_after_s": {
+            "default": 600,
+            "description": "The market controller ends such a session after 5 minutes itself; this is the safety net.",
+            "maximum": 3600.0,
+            "minimum": 60.0,
+            "title": "Clear a session when the source is gone for",
+            "type": "integer",
+            "ui": {
+              "unit": "s"
+            }
+          }
+        },
+        "title": "MarketWatchdog",
+        "type": "object"
+      },
+      "MarketWatchdogStatus": {
+        "description": "The session watchdog: the safety net next to the market control (the HA \"Qilowatt: Session Watchdog\").",
+        "properties": {
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "emhass_off_s": {
+            "title": "Emhass Off S",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/WatchdogFinding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "last_action": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Action"
+          },
+          "long_session_s": {
+            "title": "Long Session S",
+            "type": "integer"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "stale_after_s": {
+            "title": "Stale After S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "mode",
+          "stale_after_s",
+          "long_session_s",
+          "emhass_off_s",
+          "checked_at",
+          "findings",
+          "last_action"
+        ],
+        "title": "MarketWatchdogStatus",
         "type": "object"
       },
       "MeasuredPower": {
@@ -5495,7 +5628,7 @@
         "properties": {
           "mobile_service": {
             "default": "",
-            "description": "e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control.",
+            "description": "e.g. notify.mobile_app_my_phone (Developer tools → Actions). Empty: no phone messages. Used by the EV charger control, the market control and its session watchdog.",
             "pattern": "^$|^notify\\.[a-z0-9_]+$",
             "title": "Mobile notify service",
             "type": "string"
@@ -8438,6 +8571,12 @@
                   "kratt"
                 ],
                 "unavailable_timeout_s": 300
+              },
+              "watchdog": {
+                "emhass_off_s": 600,
+                "enabled": true,
+                "long_session_s": 10800,
+                "stale_after_s": 600
               }
             },
             "title": "Qilowatt market control (experimental)"
@@ -9405,6 +9544,63 @@
           "started_at"
         ],
         "title": "VersionInfo",
+        "type": "object"
+      },
+      "WatchdogFinding": {
+        "properties": {
+          "age_s": {
+            "title": "Age S",
+            "type": "integer"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "episode": {
+            "title": "Episode",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "direction",
+          "since",
+          "age_s",
+          "episode",
+          "message"
+        ],
+        "title": "WatchdogFinding",
         "type": "object"
       },
       "WearStats": {

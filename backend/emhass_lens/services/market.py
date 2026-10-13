@@ -14,6 +14,7 @@ Sessions are stored in app.db, so a restart continues or ends them from the curr
 """
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -21,7 +22,15 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.market import MarketDecision, MarketInputs, compare_expected, decide, expected_after
+from emhass_lens.domain.inverter import Targets
+from emhass_lens.domain.market import (
+    STATES,
+    MarketDecision,
+    MarketInputs,
+    compare_expected,
+    decide,
+    expected_after,
+)
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.ha_values import num, text
@@ -34,6 +43,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("emhass_lens.market")
 
 FEEDIN_SETTLE_S = 5.0  # the automation waits 5 s between the feed-in and the passive-mode registers
+HANDOFF_WAIT_S = 20.0  # how long a hand-off waits for an inverter decision that is already running
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,8 @@ class MarketService:
         self._wake = asyncio.Event()
         self._seen: dict[str, str] = {}
         self._connects = 0
+        # one actor at a time: a recorded reconcile and the session watchdog may both end a session
+        self.act_lock = asyncio.Lock()
 
     # --- mode and state -------------------------------------------------------------------------------------------
     @property
@@ -269,7 +281,6 @@ class MarketService:
         return self.active() and self.session is not None
 
     async def reconcile_job(self, ctx: JobContext) -> None:
-        now = self.c.clock.now()
         trigger_entity = str(
             ctx.params.get("trigger_entity") or ("reconcile" if ctx.trigger == "schedule" else "manual")
         )
@@ -278,6 +289,7 @@ class MarketService:
         if ctx.run is None:  # an unrecorded probe: a minute tick with no session open
             if not self.active():
                 return
+            now = self.c.clock.now()
             decision, inputs = self._decide(now, kind, trigger_entity)
             self.last = self._last(decision, inputs, trigger_entity, now, None)
             if decision.action != "none" or decision.anomaly:
@@ -285,6 +297,12 @@ class MarketService:
                     "market.reconcile", {"trigger_entity": trigger_entity, "promoted": True}, trigger="event"
                 )
             return
+        async with self.act_lock:
+            await self._reconcile(ctx, kind, trigger_entity, force_end)
+
+    async def _reconcile(self, ctx: JobContext, kind: str, trigger_entity: str, force_end: bool) -> None:
+        assert ctx.run is not None
+        now = self.c.clock.now()
         if not self.active():
             decision, inputs = self._decide(now, kind, trigger_entity, force_end)
             ctx.run.outcome, ctx.run.summary = "noop", f"Market control is off; would: {decision.why}"
@@ -411,7 +429,11 @@ class MarketService:
     # --- live -----
     async def _apply(self, ctx: JobContext, decision: MarketDecision, inputs: MarketInputs, now: datetime) -> None:
         assert ctx.run is not None
-        writer, ha = self.c.extras["sofar"], self.c.extras["ha"]
+        if decision.action not in ("buy", "sell"):
+            # a session end: hand the inverter straight back to the plan, one write at most
+            await self.end_and_hand_back(ctx, reason=decision.end_reason, message=decision.message, now=now)
+            return
+        writer = self.c.extras["sofar"]
         e, inv = self._e(), self.c.settings.current.inverter.entities
         before: list[dict[str, Any]] = []
         want_session = decision.session_after or "none"
@@ -423,51 +445,79 @@ class MarketService:
         if want_enable and inv.enable_boolean and text(self._state(inv.enable_boolean)) != want_enable:
             before.append({"service": f"input_boolean.turn_{want_enable}", "entity_id": inv.enable_boolean})
 
-        if decision.action in ("buy", "sell"):
-            targets = decision.targets if decision.needs_update else None
-            feedin = decision.feedin_w if decision.feedin_write else None
-            writer.check_limits(decision.targets, feedin)
-            if self.session is None or self.session.direction != decision.action:
-                await self._start_session(decision, inputs, ctx.run.id, now)
-            else:
-                await self._touch_session(decision, now)
-            result = await writer.commit(
-                ctx,
-                owner="market",
-                targets=targets,
-                feedin_w=feedin,
-                feedin_first=True,
-                feedin_settle_s=FEEDIN_SETTLE_S,
-                before_calls=before,
-            )
-            if not result.ok:
-                ctx.run.outcome, ctx.run.error = "error", result.error
-            parts = []
-            if result.wrote_passive and decision.targets is not None:
-                t = decision.targets
-                parts.append(f"set '{t.state}', grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W")
-            if result.wrote_feedin:
-                parts.append(f"feed-in {decision.feedin_w} W")
-            ctx.run.summary = f"{decision.message}: " + ("; ".join(parts) if parts else "registers unchanged")
-            return
+        targets = decision.targets if decision.needs_update else None
+        feedin = decision.feedin_w if decision.feedin_write else None
+        writer.check_limits(decision.targets, feedin)
+        if self.session is None or self.session.direction != decision.action:
+            await self._start_session(decision, inputs, ctx.run.id, now)
+        else:
+            await self._touch_session(decision, now)
+        result = await writer.commit(
+            ctx,
+            owner="market",
+            targets=targets,
+            feedin_w=feedin,
+            feedin_first=True,
+            feedin_settle_s=FEEDIN_SETTLE_S,
+            before_calls=before,
+        )
+        if not result.ok:
+            ctx.run.outcome, ctx.run.error = "error", result.error
+        parts = []
+        if result.wrote_passive and decision.targets is not None:
+            t = decision.targets
+            parts.append(f"set '{t.state}', grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W")
+        if result.wrote_feedin:
+            parts.append(f"feed-in {decision.feedin_w} W")
+        ctx.run.summary = f"{decision.message}: " + ("; ".join(parts) if parts else "registers unchanged")
 
-        # a session end: hand the inverter straight back to the plan, one write at most
-        reason = decision.end_reason
+    def _handback_calls(self) -> list[dict[str, Any]]:
+        """The session select back to none and the EMHASS switch back on, where they differ."""
+        e, inv = self._e(), self.c.settings.current.inverter.entities
+        calls: list[dict[str, Any]] = []
+        if e.session_select and (text(self._state(e.session_select)) or "none") != "none":
+            calls.append({"service": "input_select.select_option", "entity_id": e.session_select, "option": "none"})
+        if inv.enable_boolean and text(self._state(inv.enable_boolean)) != "on":
+            calls.append({"service": "input_boolean.turn_on", "entity_id": inv.enable_boolean})
+        return calls
+
+    async def end_and_hand_back(
+        self, ctx: JobContext, *, reason: str, message: str, now: datetime, owner: str = "market"
+    ) -> bool:
+        """End the session (if the App has one open), clear the select, turn the EMHASS switch back on and hand the
+        inverter to the plan: one inverter decision, one write at most. The automation's safe state is only the
+        fallback when no fresh plan exists; only what differs is written, so registers that are already safe cost
+        no EEPROM write. Shared by the controller's session end and the session watchdog. True when handed back."""
+        assert ctx.run is not None
+        writer, ha = self.c.extras["sofar"], self.c.extras["ha"]
         await self._close_session(reason, ctx.run.id, now)
-        done = [await writer.call(ha, call) for call in before]
+        done = [await writer.call(ha, call) for call in self._handback_calls()]
+        failed = [c for c in done if not c["ok"]]
         await writer.refresh()  # the plan-driven decision checks the enable switch from the cache
         handed = await self._hand_off(ctx, now)
         if handed:
             ctx.run.artifact("calls", done)
-            ctx.run.summary = f"{decision.message} Handed the inverter back to the plan."
-            return
-        targets = decision.targets if decision.needs_update else None
-        result = await writer.commit(ctx, owner="market", targets=targets, feedin_w=None, before_calls=[])
-        ctx.run.artifact("handback_calls", done)
-        if not result.ok:
-            ctx.run.outcome, ctx.run.error = "error", result.error
-        what = "set the safe state" if result.wrote_passive else "the registers were already safe"
-        ctx.run.summary = f"{decision.message} No fresh plan to hand back to: {what}."
+            ctx.run.summary = f"{message} Handed the inverter back to the plan."
+        else:
+            limits = self.c.settings.current.inverter.limits
+            safe = Targets(STATES["end"], 0, limits.battery_max_w, limits.battery_min_w)
+            result = await writer.commit(ctx, owner=owner, targets=safe, feedin_w=None, before_calls=[])
+            ctx.run.artifact("handback_calls", done)
+            if not result.ok:
+                ctx.run.outcome, ctx.run.error = "error", result.error
+            pressed = any(c["service"] == "button.press" and c["ok"] for c in result.calls)
+            what = (
+                "set the safe state"
+                if pressed
+                else "set the state select; the registers were already safe"
+                if result.wrote_passive
+                else "the registers were already safe"
+            )
+            ctx.run.summary = f"{message} No fresh plan to hand back to: {what}."
+        if failed:
+            ctx.run.outcome = "error"
+            ctx.run.error = "; ".join(f"{c['service']} {c['entity_id']}: {c.get('error', '')}" for c in failed)
+        return handed
 
     async def _hand_off(self, ctx: JobContext, now: datetime) -> bool:
         """Let the plan-driven decision write this slot's targets. True when it applied them."""
@@ -475,6 +525,12 @@ class MarketService:
         inverter = self.c.extras["inverter"]
         if inverter.mode != "live":
             return False
+        decide_job = self.c.scheduler.jobs.get("inverter.decide")
+        if decide_job is not None and decide_job.running:
+            # a decision already running (the quarter-hour, a drift fix, a catch-up) would make ours a skip
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(HANDOFF_WAIT_S), decide_job.lock:
+                    pass
         await self.c.scheduler.run_now("inverter.decide", {"after_market": True})
         last = inverter.last_apply
         handed = bool(last and last["ok"] and last["run_id"] > ctx.run.id and last["slot"] == iso(slot_floor(now)))
@@ -512,12 +568,11 @@ class MarketService:
     async def _close_session(self, reason: str, run_id: int | None, now: datetime) -> None:
         if self.session is None:
             return
-        ended = self.session
+        ended, self.session = self.session, None  # before the await, so a concurrent end finds it closed
         await self.c.app_db.aexecute(
             "UPDATE market_session SET ended_at = ?, end_reason = ?, end_run_id = ? WHERE id = ?",
             (iso(now), reason, run_id, ended.id),
         )
-        self.session = None
         log.info("Market session %d ended (%s)", ended.id, reason)
         self.c.bus.publish("market.session", {"event": "ended", "reason": reason, **ended.as_dict()})
 

@@ -21,7 +21,7 @@ Then open Claude Code in the repo and say something like "continue EMHASS Lens f
 | 5. Inverter control in the App (optional) | done, experimental: off by default; dry run compares with your automation. Rules follow the template version of the automation (2026-10-10) |
 | 5c. Hold and resume around market sessions (mFRR) | done, released in 0.3.0: off by default (Settings → Market session hold); the plan is re-applied with at most one inverter write when a session ends |
 | 6. EV charger control in the App | done, released in 0.3.0, experimental: off by default; dry run compares with the automation "EV Charging: Combined EMHASS & Excess Solar" |
-| 7. Qilowatt market controller in the App | done, released in 0.3.0, experimental: off by default; shadow compares with the automation; live runs the sessions behind one Sofar writer and hands the inverter back to the plan with one write. Go live only after Phase 5 is live |
+| 7. Qilowatt market controller in the App | done, released in 0.3.0, experimental: off by default; shadow compares with the automation; live runs the sessions behind one Sofar writer and hands the inverter back to the plan with one write. Go live only after Phase 5 is live. The session watchdog (0.4.24) replaces the HA "Qilowatt: Session Watchdog" |
 
 ## Decisions for the owner (left open on purpose)
 - **License:** the repo has no LICENSE file yet (the old repo didn't either). Pick one (MIT is common for HA Apps).
@@ -36,6 +36,46 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-13: the market session watchdog (0.4.24)
+- **Why:** the owner wants to switch market control to Live and turn off both HA automations, "Qilowatt: Master Market Controller" and "Qilowatt: Session Watchdog".
+  - The HA watchdog (every 5 min) has three branches: clear a stale session (source not kratt/fusebox for 10 min), notify about a 3 h session, notify about EMHASS left off with the inverter forced.
+  - The App's `decide()` already ends a lost-source session after 5 min. But nothing independent caught a bug, a stuck run or a refusal (e.g. `qilowatt_automation` off), which was the HA watchdog's whole point.
+  - The owner chose "port everything, disable HA". Accepted risk: nothing in the App ends a session while the App itself is down. The Dockerfile HEALTHCHECK plus the App's Watchdog toggle restarts a hung App, and the session is restored and ended on reconnect.
+- **Pure check:** `domain/market_watchdog.py` `check()` returns findings `stale` / `long_session` / `emhass_off`, each with an episode key.
+  - It shares no logic with `domain/market.py`, only the `STATES` labels.
+  - A missing `qw_source` counts from the session start.
+  - `stale` is an error in Live and a warning in Shadow.
+  - `services/ha_values.changed_at()` reads `last_changed`.
+- **Service:** `services/market_watchdog.py` `MarketWatchdog`, job `market.watchdog`.
+  - The job runs `Periodic(60, 40)` with `record=False` and `coalesce`. The probe promotes itself to an event run when something is due.
+  - A recorded run re-reads over REST and checks again.
+  - **Live, stale:** `MarketService.end_and_hand_back(reason="watchdog", owner="watchdog")`, with a phone message at most every 5 min per episode.
+  - **Shadow:** `dry_run` only.
+  - **long_session / emhass_off:** one message per episode, de-duplicated in memory, so a restart may repeat one.
+- **Market service:**
+  - `act_lock`: a recorded reconcile (now `_reconcile`) holds it. The watchdog waits up to 120 s for it, then acts anyway.
+  - `_close_session` clears `self.session` before its await, so two concurrent ends close a session once.
+  - The end tail of `_apply` became `end_and_hand_back()` with `_handback_calls()`.
+    - The safe-state fallback always passes the targets, so the state select is fixed even when the registers were safe.
+    - A failed select or switch call now makes the run an error.
+  - `_hand_off` waits up to 20 s for an `inverter.decide` that is already running, so the hand-off isn't skipped into the fallback.
+- **Health:**
+  - `market.watchdog.<kind>` for findings checked within 3 min.
+  - In Live, `market.watchdog.off` when it's disabled, paused or hasn't checked for 3 min.
+- **Settings:** `market.watchdog` (enabled, stale_after_s 600, long_session_s 10800, emhass_off_s 600), with no schema bump. The `mobile_service` description names the market.
+- **API and UI:**
+  - `MarketStatus.watchdog` (`MarketWatchdogStatus`, `WatchdogFinding`).
+  - A "Watchdog" fact on the Market page (`watchdogText` in `lib/market.ts`).
+  - The Live confirmation names the Session Watchdog.
+- **Checked:**
+  - Backend: 428 tests (17 new in `tests/test_market_watchdog.py`), ruff and pyright.
+  - Frontend: typecheck, lint, 203 tests and the build.
+  - Not yet seen on the real HA.
+- **For the owner, when going Live** (DOCS "Moving the automation over"):
+  1. Set the Mobile notify service.
+  2. Turn on the App's Watchdog toggle.
+  3. Turn off both HA automations.
 
 ### 2026-10-12: "What EMHASS gets" on the Inputs page (0.4.23)
 - **Why:** the owner wanted graphs for everything fed into EMHASS, not only the Nord Pool prices. Mockup approved first: https://claude.ai/artifact/WR78nvnN5kjMJhab3usymr (Plan-style popups and PV day totals added on review).
