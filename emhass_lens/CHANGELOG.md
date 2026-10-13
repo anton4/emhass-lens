@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.25
+
+- Market: during a sell, the feed-in limit is changed only when it has to be. While selling, the inverter exports the lower of the grid target and the feed-in limit.
+  - A limit at or above the command is left as it is. A lower one is raised to the sell cap at once, instead of waiting out the feed-in cooldown while the market gets less than it asked for.
+  - The limit follows the command only when the battery can't take the spare PV: it is at or above the new threshold **Sell: the battery can't take spare PV from** (97 %), and PV minus the house load exceeds the command by more than the deadband.
+  - In the Kratt session of 13 October the limit would have stayed at 15500 W. That makes 10 inverter button presses instead of 17, with no feed-in presses, and about 60 % less under- and over-delivery.
+  - Each decision on the Market page says what the automation would have written. In Shadow a sell's feed-in limit isn't compared.
+- Settings: Qilowatt market control → Market entities → **House load now** (default `sensor.sofar_active_power_load_sys_watt`). The Market page shows it beside the battery and PV.
+- Market (Shadow): the minute check judges the cooldown at the automation's own minute tick, 15 s earlier. A cooldown that ran out in between no longer shows as a mismatch.
+- Market: the session watchdog logs its reports (long session, EMHASS left off, Shadow's would-clear) on the Logs page; a run with nothing wrong reads "All clear: …".
+
 ## 0.4.24
 
 - Market: a **session watchdog** takes over from the Home Assistant automation "Qilowatt: Session Watchdog". It runs every minute as its own job, separate from the market control.
