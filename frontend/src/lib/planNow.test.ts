@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NowQuantity } from '../api/types'
-import { byKey, expectedText, inverterParts, powerDiffers } from './planNow'
+import { byKey, evSensor, expectedText, inverterParts, powerDiffers } from './planNow'
 
 const q = (key: string, measured: number | null, extra: Partial<NowQuantity> = {}): NowQuantity => ({ key, measured, sign_hint: false, ...extra })
 
@@ -14,6 +14,15 @@ describe('this slot, measured now', () => {
     expect(expectedText(grid)).toBe('expected 4.44 kW exporting with the house load and PV now')
     expect(expectedText(q('grid', 1))).toBeNull()
     expect(expectedText(q('pv', 1, { expected: 5 }))).toBeNull()
+  })
+
+  it('dates the EV box by the charger entity its power last changed from', () => {
+    expect(evSensor(null)).toBeUndefined()
+    expect(evSensor({ power_w: 0, state_raw: 1 })).toBeUndefined()
+    const ev = evSensor({ power_w: 5520, state_raw: 4, entity: 'number.limit', age_s: 120 })
+    expect(ev).toMatchObject({ key: 'ev', entity: 'number.limit', age_s: 120 })
+    expect(expectedText(ev)).toBeNull()
+    expect(ev?.differs).toBeUndefined()
   })
 
   it('counts a power as off by the backend rule: over 300 W and 15 %', () => {

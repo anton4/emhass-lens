@@ -470,6 +470,9 @@ class ChargerNow(BaseModel):
     power_w: float | None = None  # while charging its current limit in W (charger.limits.w_per_amp), else 0
     soc: float | None = None  # the car's battery level, %
     target_soc: float | None = None  # %
+    # the charger entity power_w last changed from (the charging state, or the current limit while it charges)
+    entity: str | None = None
+    age_s: float | None = None  # seconds since that entity was last updated
 
 
 class PlanNow(BaseModel):

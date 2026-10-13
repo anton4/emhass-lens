@@ -133,7 +133,8 @@ export function NowSlot({
               without inverter control the grid is compared with the plan and the battery takes the difference. An
               amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from where the plan expects it
               now). A blue chip at the top means all of it does what is expected and says which forecasts moved it off
-              the plan. The EV's power is its charger's current limit while it charges.
+              the plan. The EV's power is its charger's current limit while it charges; its time is when the
+              charging state (or, while it charges, the current limit) last changed.
             </details>
           ) : (
             <p className="chart-note">

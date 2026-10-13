@@ -1,6 +1,6 @@
 // The Plan page's this slot: what is measured now next to the plan, and what the inverter is set to.
 
-import type { InverterNow, NowQuantity } from '../api/types'
+import type { ChargerNow, InverterNow, NowQuantity } from '../api/types'
 import { batteryDirection, formatPower, gridDirection, isNumber } from './units'
 
 export type NowByKey = Partial<Record<'batt' | 'grid' | 'pv' | 'load' | 'soc', NowQuantity>>
@@ -9,6 +9,12 @@ export function byKey(quantities: NowQuantity[] | null | undefined): NowByKey {
   const out: NowByKey = {}
   for (const q of quantities ?? []) out[q.key as keyof NowByKey] = q
   return out
+}
+
+/** The EV box's sensor, for its age and hover text: the charger entity its power last changed from. Never judged. */
+export function evSensor(charger: ChargerNow | null | undefined): NowQuantity | undefined {
+  if (!charger?.entity) return undefined
+  return { key: 'ev', entity: charger.entity, age_s: charger.age_s, sign_hint: false }
 }
 
 /** A power is off when it is this far off and this share of the larger of the two (domain/plan_now.py's rule). */

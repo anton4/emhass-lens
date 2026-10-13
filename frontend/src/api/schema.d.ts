@@ -1436,8 +1436,12 @@ export interface components {
         };
         /** ChargerNow */
         ChargerNow: {
+            /** Age S */
+            age_s?: number | null;
             /** Current Limit A */
             current_limit_a?: number | null;
+            /** Entity */
+            entity?: string | null;
             /** Power W */
             power_w?: number | null;
             /** Soc */

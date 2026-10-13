@@ -699,6 +699,17 @@
       },
       "ChargerNow": {
         "properties": {
+          "age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age S"
+          },
           "current_limit_a": {
             "anyOf": [
               {
@@ -709,6 +720,17 @@
               }
             ],
             "title": "Current Limit A"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity"
           },
           "power_w": {
             "anyOf": [

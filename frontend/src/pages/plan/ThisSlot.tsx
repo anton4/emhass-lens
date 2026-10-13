@@ -6,7 +6,7 @@ import { useNow } from '../../components/useNow'
 import { modeTone } from '../../lib/inverter'
 import { formatClock } from '../../lib/format'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
-import { expectedText, inverterParts, type NowByKey } from '../../lib/planNow'
+import { evSensor, expectedText, inverterParts, type NowByKey } from '../../lib/planNow'
 import {
   agreement,
   flowHeadline,
@@ -429,7 +429,7 @@ export function ThisSlot({
                 layout={layout}
                 narrow={narrow}
                 withDeferrable={withDeferrable}
-                q={node.key === 'ev' ? undefined : quantities?.[node.key]}
+                q={node.key === 'ev' ? evSensor(charger) : quantities?.[node.key]}
                 socQ={node.key === 'batt' ? quantities?.soc : undefined}
                 past={past}
                 fetchedAt={fetchedAt}

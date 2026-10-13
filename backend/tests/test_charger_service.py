@@ -201,9 +201,10 @@ def test_live_starts_the_car_and_reads_back(tmp_path: Path, world: World) -> Non
 
 
 def test_the_plan_page_shows_the_chargers_power(tmp_path: Path, world: World) -> None:
-    """While charging, the charger's power is its current limit (690 W per A); plugged in but idle, 0 W."""
-    world.set_state(STATE, 4)
-    world.set_state(LIMIT, 8)
+    """While charging, the charger's power is its current limit (690 W per A); plugged in but idle, 0 W. Its age is
+    the newest of the entities it comes from: the charging state, and the current limit only while charging."""
+    world.set_state(STATE, 4, updated=START - timedelta(minutes=10))
+    world.set_state(LIMIT, 8, updated=START - timedelta(minutes=2))
     client = client_for(tmp_path, world, FakeClock(START))
     try:
         prime(client, world)
@@ -213,10 +214,14 @@ def test_the_plan_page_shows_the_chargers_power(tmp_path: Path, world: World) ->
             "power_w": 8 * 690.0,
             "soc": 50.0,
             "target_soc": 80.0,
+            "entity": LIMIT,
+            "age_s": 120.0,
         }
-        world.set_state(STATE, 1)
+        world.set_state(STATE, 1, updated=START - timedelta(minutes=5))
         prime(client, world)
-        assert client.get("/api/plan/now").json()["charger"]["power_w"] == 0.0
+        charger = client.get("/api/plan/now").json()["charger"]
+        assert charger["power_w"] == 0.0
+        assert (charger["entity"], charger["age_s"]) == (STATE, 300.0)
     finally:
         client.__exit__(None, None, None)
 

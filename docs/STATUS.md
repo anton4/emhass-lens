@@ -37,6 +37,13 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: the Plan page's EV box shows how old its value is (0.4.31)
+- **Why:** the owner noticed the EV box was the only one in *This slot* without the age in its top-right corner.
+- **Change:** `charger_now` (services/plan_now.py) adds `entity` and `age_s`: the newest `last_updated` of the
+  charging-state sensor and, while charging (state 4), the current-limit number, which is what `power_w` follows.
+  The frontend turns it into a `NowQuantity` (`evSensor` in lib/planNow.ts) so `FlowBox` shows the age and the hover
+  text as for the Measurements sensors; still never judged.
+
 ### 2026-10-13: the multi-run .log has each run's summary and artifacts (0.4.30)
 - **Why:** the owner downloaded ten `market.reconcile` runs. The .zip was full, but the .log had two lines. Nothing
   was lost: those runs log only when a session starts or ends, and what they decided is in the run's summary and its

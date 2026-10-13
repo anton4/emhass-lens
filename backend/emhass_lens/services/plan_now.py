@@ -69,13 +69,20 @@ def charger_now(c: Container) -> dict[str, Any] | None:
     if charger is None or charger.mode == "off":
         return None
     observed = charger.observed()
-    car_soc = c.settings.current.charger.entities.car_soc_sensor
+    e = c.settings.current.charger.entities
+    ha = c.extras["ha"]
+    # power_w follows the charging state, and the current limit while the car charges: the newest of them dates it
+    sources = [e.charging_state_sensor] + ([e.current_limit_number] if observed.state_raw == 4 else [])
+    stamps = [(stamp, entity) for entity in sources if entity and (stamp := last_updated(ha.state(entity)))]
+    newest = max(stamps, default=None)
     return {
         "current_limit_a": observed.current_limit_a,
         "state_raw": observed.state_raw,
         "power_w": deferrable_now(c),
-        "soc": num(c.extras["ha"].state(car_soc)) if car_soc else None,
+        "soc": num(ha.state(e.car_soc_sensor)) if e.car_soc_sensor else None,
         "target_soc": observed.target_soc,
+        "entity": newest[1] if newest else None,
+        "age_s": (c.clock.now() - newest[0]).total_seconds() if newest else None,
     }
 
 
