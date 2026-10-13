@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.32
+
+- Plan: a more compact top. The plan's facts (Planned at, Solve took, Horizon, Total cost function) share one row with the **Previous slot / This slot / Next slot** switch, and the slot's times (and when it was published and read) move to the line under its headline.
+  - *Made for* and *Times in* are gone. A plan EMHASS Lens didn't request gets a notice instead: amber when someone else requested it, blue when the HACS integration did.
+  - The power flow is left-aligned, with the battery's state of charge and the prices right beside it on a wide screen.
+
 ## 0.4.31
 
 - Plan: the **EV** box in *This slot* shows how long ago its value last changed in its top-right corner, like the other boxes, with the entity and the time in the hover text. It is when the charger's charging state last changed, or, while the car charges, the current limit if that changed later.
