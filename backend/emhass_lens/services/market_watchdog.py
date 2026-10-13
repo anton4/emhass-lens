@@ -147,7 +147,12 @@ class MarketWatchdog:
             },
         )
         if not findings:
-            run.outcome, run.summary = "noop", "All clear (the situation resolved before the re-check)"
+            run.outcome = "noop"
+            run.summary = (
+                "All clear: resolved before the re-check"
+                if ctx.params.get("promoted")
+                else "All clear: no session stuck, none open too long, EMHASS switch fine"
+            )
             return
 
         parts: list[str] = []
@@ -159,6 +164,9 @@ class MarketWatchdog:
             _, self.findings = self._check(now)  # what's left after the clear, for Health and the Market page
         elif stale is not None and self._due(stale):
             run.outcome = "dry_run"
+            log.warning(
+                "Session watchdog: would clear a stale %s (Shadow: the automations run the sessions)", stale.message
+            )
             parts.append(f"Would clear a stale {stale.message}")
             notes.append(await self._send(f"{TITLE}: would clear a stale {stale.message}.", dry_run=True))
             self._handled[stale.episode] = now
@@ -167,6 +175,7 @@ class MarketWatchdog:
                 continue
             if f.kind == "long_session" and stale is not None and live:
                 continue  # that session was just cleared
+            log.info("Session watchdog: reported: %s%s", f.message, "" if live else " (Shadow: no message sent)")
             parts.append(f"Reported: {f.message}")
             notes.append(await self._send(_report(f), dry_run=not live))
             self._handled[f.episode] = now
@@ -222,7 +231,7 @@ class MarketWatchdog:
             return "it is turned off in Settings → Qilowatt market control → Session watchdog"
         job = self.c.scheduler.jobs.get(JOB_ID)
         if job is not None and job.paused:
-            return "its job is paused under Runs → Jobs"
+            return "its job is paused (Health → Jobs)"
         last = self.checked_at or self.created_at
         if self.c.extras["ha"].connected and now - last > timedelta(minutes=3):
             return f"its last check was {int((now - last).total_seconds() // 60)} min ago"

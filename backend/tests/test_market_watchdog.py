@@ -165,6 +165,10 @@ def problems(client) -> dict[str, dict]:
     return {p["key"]: p for p in client.get("/api/problems").json()["active"]}
 
 
+def run_logs(client, run_id: int) -> list[dict]:
+    return client.get("/api/logs", params={"run_id": run_id, "component": "market.watchdog"}).json()
+
+
 def start_selling(client, world: World) -> None:
     before = newest_id(client, "market.reconcile")
     push(client, world, POWER, 5000)
@@ -270,6 +274,9 @@ def test_shadow_records_what_it_would_clear_and_writes_nothing(
         assert would["outcome"] == "dry_run", would
         assert would["summary"] == 'Would clear a stale sell session: qw_source has been "unavailable" for 11 min'
         assert device_calls(world, n) == [] and notifies(world, n) == []
+        [line] = run_logs(client, would["id"])
+        assert line["level"] == "WARNING" and line["component"] == "market.watchdog"
+        assert line["msg"].startswith("Session watchdog: would clear a stale sell session")
         found = problems(client)["market.watchdog.stale"]
         assert found["severity"] == "warning" and found["title"] == "A market session looks stuck"
         assert "market.watchdog.off" not in problems(client)
@@ -295,6 +302,9 @@ def test_a_long_session_is_reported_once(
         [message] = notifies(world, n)
         assert message["message"].endswith("Not intervening, just make sure this is expected.")
         assert device_calls(world, n) == []
+        assert [line["msg"] for line in run_logs(client, reported["id"])] == [
+            "Session watchdog: reported: sell session from kratt has been open for 3.0 h"
+        ]
         assert problems(client)["market.watchdog.long_session"]["severity"] == "warning"
         m = len(world.ha_services)
         assert manual_run(client, "market.watchdog")["outcome"] == "noop"
@@ -316,6 +326,7 @@ def test_the_emhass_switch_left_off_is_reported_once_per_episode(
         n = len(world.ha_services)
         early = manual_run(client, "market.watchdog")
         assert early["outcome"] == "noop" and notifies(world, n) == []
+        assert early["summary"] == "All clear: no session stuck, none open too long, EMHASS switch fine"
         world.set_state(ENABLE, "off", updated=START - timedelta(minutes=11))
         prime(client, world)
         reported = manual_run(client, "market.watchdog")
@@ -379,9 +390,13 @@ def test_off_disabled_or_disconnected_does_nothing(
         assert client.get("/api/market").json()["watchdog"]["mode"] == "off"
         warned = problems(client)["market.watchdog.off"]
         assert "turned off" in warned["detail"]
+        assert container(client).extras["market_watchdog"].not_checking(clock.now()).startswith("it is turned off")
         rev = client.get("/api/settings").json()["revision"]
         changes = {"market": {"watchdog": {"enabled": True}}}
         assert client.patch("/api/settings", json={"base_revision": rev, "changes": changes}).status_code == 200
+        assert client.post("/api/jobs/market.watchdog/pause").status_code == 200
+        assert problems(client)["market.watchdog.off"]["detail"].endswith("its job is paused (Health → Jobs)")
+        assert client.post("/api/jobs/market.watchdog/resume").status_code == 200
         container(client).extras["ha"].connected = False
         refused = manual_run(client, "market.watchdog")
         assert refused["outcome"] == "refused" and "Not connected" in refused["summary"]
