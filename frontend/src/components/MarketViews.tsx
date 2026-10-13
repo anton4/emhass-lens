@@ -1,5 +1,5 @@
 import type { MarketSession, MarketSettings, WearStats } from '../api/types'
-import { marketGuards, sessionText, type MarketDecision, type MarketSensors } from '../lib/market'
+import { marketGuards, parityFeedinText, sessionText, type MarketDecision, type MarketSensors } from '../lib/market'
 import { formatTime } from '../lib/format'
 import { Lamp, LabelledLamp } from './Lamp'
 
@@ -23,6 +23,7 @@ export function ActionChip({ action }: { action: string }) {
 /** A market decision: the command, what it sets (or would set), and the throttle reasoning. */
 export function MarketDecisionView({ decision, sessionBefore }: { decision: MarketDecision; sessionBefore?: string | null }) {
   const t = decision.targets
+  const parityFeedin = parityFeedinText(decision)
   return (
     <>
       <div className="decision-head">
@@ -68,6 +69,7 @@ export function MarketDecisionView({ decision, sessionBefore }: { decision: Mark
                   <td>
                     Feed-in max
                     <div className="cell-sub">{decision.feedin_why}</div>
+                    {parityFeedin && <div className="cell-sub">{parityFeedin}</div>}
                   </td>
                   <td className="num">{decision.feedin_w} W</td>
                   <td>{decision.feedin_write ? 'yes' : 'no'}</td>
@@ -137,10 +139,11 @@ export function CommandFacts({ sensors, session, tz }: { sensors: MarketSensors 
         </dd>
       </div>
       <div>
-        <dt>Battery · PV</dt>
+        <dt>Battery · PV · house</dt>
         <dd>
           {sensors?.soc_pct !== null && sensors?.soc_pct !== undefined ? `${Math.round(sensors.soc_pct)} %` : '—'} ·{' '}
-          {sensors?.pv_w !== null && sensors?.pv_w !== undefined ? `${Math.round(sensors.pv_w)} W` : '—'}
+          {sensors?.pv_w !== null && sensors?.pv_w !== undefined ? `${Math.round(sensors.pv_w)} W` : '—'} ·{' '}
+          {sensors?.load_w !== null && sensors?.load_w !== undefined ? `${Math.round(sensors.load_w)} W` : '—'}
         </dd>
       </div>
     </dl>
@@ -171,7 +174,7 @@ export function MarketExplainer({ thresholds }: { thresholds: MarketSettings['th
     <section className="panel">
       <div className="panel-head">
         <h2>How sessions are run</h2>
-        <span className="muted">Three guards keep inverter writes rare</span>
+        <span className="muted">Four guards keep inverter writes rare</span>
       </div>
       <div className="panel-body">
         <ol className="rule-steps">
@@ -188,8 +191,18 @@ export function MarketExplainer({ thresholds }: { thresholds: MarketSettings['th
             A Kratt or Fusebox activation arrives through Qilowatt as a source, a command and a power limit. On every
             change (after a short settle time), every minute and at start-up, the wanted inverter state is derived from
             the current values and reconciled with the registers, exactly like the Home Assistant automation "Qilowatt:
-            Master Market Controller". Every press of the inverter's apply button wears its EEPROM, so the three guards
-            above suppress writes that aren't worth it.
+            Master Market Controller". Every press of the inverter's apply and feed-in buttons wears its EEPROM, so the
+            guards above suppress writes that aren't worth it.
+          </p>
+          <h3 className="sub-head">Where EMHASS Lens differs from the automation</h3>
+          <p>
+            The automation sets the feed-in limit to the commanded power on every sell, on its own cooldown. A limit
+            held below a rising command caps the export, so the market gets less than it asked for; one above the
+            command only matters when spare PV can't go into the battery. EMHASS Lens leaves a limit that lets the
+            command out, raises a lower one at once, and follows the command only when the battery can't take the
+            spare PV (at or above Sell: the battery can't take spare PV from) and the PV beyond the house is above
+            the command plus the deadband. Each decision says what the automation would have written. In Shadow a sell's
+            feed-in limit isn't compared.
           </p>
           <h3 className="sub-head">Modes</h3>
           <ul>

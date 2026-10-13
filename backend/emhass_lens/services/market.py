@@ -135,6 +135,7 @@ class MarketService:
             e.powerlimit_sensor,
             e.soc_sensor,
             e.pv_sensor,
+            e.house_load_sensor,
             e.enable_boolean,
             e.session_select,
             e.ha_automation,
@@ -250,6 +251,13 @@ class MarketService:
         else:
             ha_session = text(self._state(e.session_select))  # shadow follows what the automation keeps
             session = ha_session if ha_session in ("buy", "sell") else None
+        since = writer.last_commit_age_s("passive", now)
+        since_feedin = writer.last_commit_age_s("feedin", now)
+        if self.mode == "shadow" and kind in ("reconcile", "promoted"):
+            # our minute tick runs reconcile_offset_s after the automation's: judge the cooldown at its tick
+            offset = self.c.settings.current.market.reconcile_offset_s
+            since = None if since is None else max(0.0, since - offset)
+            since_feedin = None if since_feedin is None else max(0.0, since_feedin - offset)
         return MarketInputs(
             source=text(src),
             mode=text(self._state(e.mode_sensor)),
@@ -262,11 +270,12 @@ class MarketService:
             cur_battery_max_w=regs.battery_max_w,
             cur_battery_min_w=regs.battery_min_w,
             cur_feedin_w=regs.feedin_max_w,
-            since_commit_s=writer.last_commit_age_s("passive", now),
-            since_feedin_commit_s=writer.last_commit_age_s("feedin", now),
+            since_commit_s=since,
+            since_feedin_commit_s=since_feedin,
             trigger_kind=kind,
             trigger_entity=trigger_entity,
             force_end=force_end,
+            load_w=num(self._state(e.house_load_sensor)),
         )
 
     def _decide(
@@ -646,6 +655,7 @@ class MarketService:
                 "powerlimit_w": num(self._state(e.powerlimit_sensor)),
                 "soc_pct": num(self._state(e.soc_sensor)),
                 "pv_w": num(self._state(e.pv_sensor)),
+                "load_w": num(self._state(e.house_load_sensor)),
                 "ha_session": text(self._state(e.session_select)),
                 "enable_boolean": text(self._state(inv.enable_boolean)),
                 "settle_pending": self._settle_due is not None,

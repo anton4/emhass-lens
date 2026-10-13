@@ -1213,6 +1213,14 @@ class MarketEntities(Section):
         title="PV power now",
         json_schema_extra=ui(widget="entity", domain="sensor"),
     )
+    house_load_sensor: EntityId = Field(
+        default="sensor.sofar_active_power_load_sys_watt",
+        title="House load now",
+        description="With PV power now, how much PV the house leaves. During a sell, the feed-in limit only follows "
+        "the command when that spare PV exceeds the command plus the deadband and the battery is at or above "
+        "Sell: the battery can't take spare PV from. Empty: all PV counts as spare.",
+        json_schema_extra=ui(widget="entity", domain="sensor"),
+    )
     enable_boolean: EntityId = Field(
         default="input_boolean.qilowatt_automation",
         title="Enabled when on",
@@ -1246,6 +1254,17 @@ class MarketThresholds(Section):
     deadband_w: int = Field(default=300, ge=0, le=50000, title="Deadband", json_schema_extra=ui(unit="W"))
     deadband_pct: float = Field(default=0.15, ge=0, le=1, title="Deadband as a share of the target")
     min_soc: float = Field(default=10, ge=0, le=100, title="No selling below", json_schema_extra=ui(unit="%"))
+    sell_full_soc_pct: float = Field(
+        default=97,
+        ge=50,
+        le=100,
+        title="Sell: the battery can't take spare PV from",
+        description="While selling, the inverter exports the lower of the grid target and the feed-in limit. The "
+        "limit is only lowered to the command when the battery is at or above this and the PV beyond the house "
+        "exceeds the command plus the deadband; below it the battery takes the spare PV. Otherwise a limit at or "
+        "above the command is left as it is (every press of the feed-in button is an EEPROM write).",
+        json_schema_extra=ui(unit="%"),
+    )
     settle_s: float = Field(
         default=2,
         ge=0,

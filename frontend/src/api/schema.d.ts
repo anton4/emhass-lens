@@ -2693,6 +2693,7 @@ export interface components {
              * @default {
              *       "enable_boolean": "input_boolean.qilowatt_automation",
              *       "ha_automation": "",
+             *       "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
              *       "mode_sensor": "sensor.qw_mode",
              *       "powerlimit_sensor": "sensor.qw_powerlimit",
              *       "pv_sensor": "sensor.sofar_pv_power_total_watt",
@@ -2738,6 +2739,7 @@ export interface components {
              *       "low_pv_w": 100,
              *       "min_soc": 10,
              *       "sell_cap_w": 15500,
+             *       "sell_full_soc_pct": 97,
              *       "sell_modes": [
              *         "sell",
              *         "mfrrup",
@@ -2776,6 +2778,12 @@ export interface components {
              * @default
              */
             ha_automation: string;
+            /**
+             * House load now
+             * @description With PV power now, how much PV the house leaves. During a sell, the feed-in limit only follows the command when that spare PV exceeds the command plus the deadband and the battery is at or above Sell: the battery can't take spare PV from. Empty: all PV counts as spare.
+             * @default sensor.sofar_active_power_load_sys_watt
+             */
+            house_load_sensor: string;
             /**
              * Market command
              * @default sensor.qw_mode
@@ -2921,6 +2929,12 @@ export interface components {
              * @default 15500
              */
             sell_cap_w: number;
+            /**
+             * Sell: the battery can't take spare PV from
+             * @description While selling, the inverter exports the lower of the grid target and the feed-in limit. The limit is only lowered to the command when the battery is at or above this and the PV beyond the house exceeds the command plus the deadband; below it the battery takes the spare PV. Otherwise a limit at or above the command is left as it is (every press of the feed-in button is an EEPROM write).
+             * @default 97
+             */
+            sell_full_soc_pct: number;
             /** Sell commands */
             sell_modes?: string[];
             /**
@@ -4412,6 +4426,7 @@ export interface components {
              *       "entities": {
              *         "enable_boolean": "input_boolean.qilowatt_automation",
              *         "ha_automation": "",
+             *         "house_load_sensor": "sensor.sofar_active_power_load_sys_watt",
              *         "mode_sensor": "sensor.qw_mode",
              *         "powerlimit_sensor": "sensor.qw_powerlimit",
              *         "pv_sensor": "sensor.sofar_pv_power_total_watt",
@@ -4438,6 +4453,7 @@ export interface components {
              *         "low_pv_w": 100,
              *         "min_soc": 10,
              *         "sell_cap_w": 15500,
+             *         "sell_full_soc_pct": 97,
              *         "sell_modes": [
              *           "sell",
              *           "mfrrup",

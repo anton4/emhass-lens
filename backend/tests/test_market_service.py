@@ -359,3 +359,52 @@ def test_a_burst_settles_into_one_reconcile(tmp_path: Path, world: World) -> Non
         assert len(runs) == 1
     finally:
         client.__exit__(None, None, None)
+
+
+def test_a_live_sell_leaves_a_feedin_limit_that_lets_the_command_out(tmp_path: Path, world: World) -> None:
+    """The automation writes the commanded power to the feed-in limit; with the battery taking the spare PV, the
+    limit already at the sell cap lets the command out, so only the apply button is pressed."""
+    world.set_state(FEEDIN, 15500)
+    world.set_state("sensor.sofar_pv_power_total_watt", 3000)
+    world.set_state("sensor.sofar_active_power_load_sys_watt", 800)
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, "live")
+    try:
+        n = len(world.ha_services)
+        before = newest_id(client, "market.reconcile")
+        push(client, world, POWER, 5000)
+        push(client, world, MODE, "mfrrup")
+        started = wait_for_run(client, "market.reconcile", before, summary="Kratt sell 5000W: set")
+        assert started["outcome"] == "ok", started
+        assert "feed-in" not in started["summary"]
+        assert presses(world, FEEDIN_BUTTON, n) == 0 and presses(world, APPLY, n) == 1
+        artifact = client.get(f"/api/runs/{started['id']}/artifacts/market_decision").json()
+        decision = artifact["decision"]
+        assert (decision["feedin_w"], decision["feedin_write"]) == (15500, False)
+        assert (decision["parity_feedin_w"], decision["parity_feedin_write"]) == (5000, True)
+        assert artifact["inputs"]["load_w"] == 800
+        assert client.get("/api/market").json()["sensors"]["load_w"] == 800
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_shadow_judges_the_cooldown_at_the_automations_minute_tick(tmp_path: Path, world: World) -> None:
+    """Our minute tick runs reconcile_offset_s (15 s) after the automation's: a cooldown that ran out in between
+    must not count, or the decision writes where the automation still held (run 4381, 2026-10-13)."""
+    pressed = START - timedelta(seconds=186)
+    world.set_state(APPLY, pressed.isoformat(), updated=pressed)
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, "shadow")
+    try:
+        market = container(client).extras["market"]
+        assert market.inputs(clock.now(), "qw", POWER).since_commit_s == pytest.approx(186)
+        assert market.inputs(clock.now(), "promoted", "reconcile").since_commit_s == pytest.approx(171)
+        world.set_state(SESSION, "sell")
+        world.set_state(GRID, -1800)
+        world.set_state(MODE, "frrup")
+        world.set_state(POWER, 1000)
+        prime(client, world)
+        decision, _ = market._decide(clock.now(), "promoted", "reconcile")
+        assert decision.throttle.cooldown_block is True and decision.needs_update is False
+    finally:
+        client.__exit__(None, None, None)

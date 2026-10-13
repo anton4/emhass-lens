@@ -10,6 +10,15 @@ the registers, with three guards against needless writes to the Sofar's EEPROM:
 2. A proportional deadband: max(deadband_w, deadband_pct × |target|).
 3. A cooldown between commits, bypassed for session edges, wrong battery rails and big changes. Session ends
    are never throttled.
+
+One deliberate difference, because every press of the feed-in button is an EEPROM write: the automation sets the
+feed-in limit to the commanded power on every sell (on its own cooldown). The meter exports the lower of the grid
+target and the feed-in limit, so a limit held below a rising command under-delivers, and one above it only lets out
+PV that the battery can't take. Here the limit follows the command only when that can happen: the battery is at or
+above `sell_full_soc_pct` (97 %; it still takes ~900 W at 93 %) and the PV beyond the house exceeds the command by
+more than the deadband. Otherwise a held limit at or above the command is kept, and a lower one is raised to the sell
+cap at once. The automation's value is still computed (`parity_feedin_w`) and shown, and a sell's feed-in isn't compared
+in shadow mode.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -40,6 +49,7 @@ class MarketInputs:
     trigger_kind: str  # qw | soc | reconcile | manual | startup | reconnect | settings | promoted
     trigger_entity: str
     force_end: bool = False  # the kill switch: end the session whatever the command
+    load_w: float | None = None  # the house load now; None -> 0 (all PV counts as spare)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -82,9 +92,63 @@ class MarketDecision:
     notify: str | None
     why: str
     notes: list[str] = field(default_factory=list)
+    parity_feedin_w: int | None = None  # what the automation would set the feed-in limit to
+    parity_feedin_write: bool = False  # and whether it would write it now
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def sell_feedin(
+    cmd: int,
+    held: float | None,
+    soc: float,
+    pv: float,
+    load: float | None,
+    since_feedin_s: float,
+    initial: bool,
+    t: MarketThresholds,
+) -> tuple[int, bool, str]:
+    """The feed-in limit during a sell: (limit, write it, why). `cmd` is the commanded export, already capped."""
+    house = 0.0 if load is None else load
+    spare = pv - house
+    deadband = max(float(t.deadband_w), t.deadband_pct * cmd)
+    full = t.sell_full_soc_pct
+    pv_text = f"PV {pv:.0f} W, house {house:.0f} W" if load is not None else f"PV {pv:.0f} W, house load unknown"
+    if soc >= full and spare > cmd + deadband:
+        why = (
+            f"SOC {soc:g} % ≥ {full:g} % and the PV beyond the house ({spare:.0f} W; {pv_text}) exceeds the command "
+            f"by more than {deadband:.0f} W"
+        )
+        if held is None or held < cmd - 0.5:
+            return cmd, True, f"capped at the commanded {cmd} W: {why}"
+        if held - cmd > deadband:
+            if initial or since_feedin_s >= t.cooldown_s:
+                return cmd, True, f"lowered to the commanded {cmd} W: {why}"
+            return (
+                round(held),
+                False,
+                f"kept {held:.0f} W for now: cooldown ({since_feedin_s:.0f} s < {t.cooldown_s} s) before lowering it "
+                f"to {cmd} W; {why}",
+            )
+        return round(held), False, f"kept {held:.0f} W: within {deadband:.0f} W above the commanded {cmd} W; {why}"
+    if spare <= 0:
+        reason = f"no PV to spare ({pv_text})"
+    elif soc < full:
+        reason = f"the battery takes the spare PV (SOC {soc:g} % < {full:g} %)"
+    else:
+        reason = (
+            f"the PV beyond the house ({spare:.0f} W; {pv_text}) doesn't exceed the command by more than "
+            f"{deadband:.0f} W"
+        )
+    if held is not None and held >= cmd - 0.5:
+        return round(held), False, f"kept {held:.0f} W: at least the commanded {cmd} W; {reason}"
+    now = "unknown" if held is None else f"{held:.0f} W"
+    return (
+        t.sell_cap_w,
+        True,
+        f"raised to the sell cap {t.sell_cap_w} W: {now} is below the commanded {cmd} W; {reason}",
+    )
 
 
 def decide(
@@ -166,18 +230,13 @@ def decide(
         grid = -min(qw_power, t.sell_cap_w)
     else:
         grid = 0
+    # the automation's feed-in: the commanded power while selling (the sell cap when there's no PV)
     if action == "sell":
-        if pv < t.low_pv_w:
-            feedin, feedin_why = t.sell_cap_w, f"PV {pv:.0f} W is below {t.low_pv_w} W: the export maximum"
-        else:
-            feedin, feedin_why = min(qw_power, t.sell_cap_w), "the commanded power, capped at the export maximum"
+        parity_feedin = t.sell_cap_w if pv < t.low_pv_w else min(qw_power, t.sell_cap_w)
     elif action == "end":
-        feedin, feedin_why = (
-            0,
-            "computed but never written at a session end (the automation writes feed-in only while selling)",
-        )
+        parity_feedin = 0
     else:
-        feedin, feedin_why = qw_power, "the commanded power (not written while buying)"
+        parity_feedin = qw_power
 
     cur_grid = -99999.0 if i.cur_grid_w is None else i.cur_grid_w
     cur_bmax = -99999.0 if i.cur_battery_max_w is None else i.cur_battery_max_w
@@ -220,14 +279,24 @@ def decide(
         grid_delta, eff_deadband, rails_wrong, i.since_commit_s, bypass, bypass_reasons, cooldown_block, reasons
     )
 
-    feedin_deadband = max(float(t.deadband_w), t.deadband_pct * abs(feedin))
+    parity_deadband = max(float(t.deadband_w), t.deadband_pct * abs(parity_feedin))
     since_feedin = 99999.0 if i.since_feedin_commit_s is None else i.since_feedin_commit_s
-    feedin_write = (
+    parity_feedin_write = (
         action == "sell"
         and (pv >= t.low_pv_w or is_initial_sell)
-        and abs(cur_feedin - feedin) > feedin_deadband
+        and abs(cur_feedin - parity_feedin) > parity_deadband
         and (is_initial_sell or since_feedin > t.cooldown_s)
     )
+    if action == "sell":
+        feedin, feedin_write, feedin_why = sell_feedin(
+            min(qw_power, t.sell_cap_w), i.cur_feedin_w, soc, pv, i.load_w, since_feedin, is_initial_sell, t
+        )
+    elif action == "end":
+        feedin, feedin_write = 0, False
+        feedin_why = "computed but never written at a session end (the automation writes feed-in only while selling)"
+    else:
+        feedin, feedin_write = qw_power, False
+        feedin_why = "the commanded power (not written while buying)"
 
     if action == "end":
         message = (
@@ -268,6 +337,8 @@ def decide(
         message,
         notify,
         why,
+        parity_feedin_w=parity_feedin if action != "none" else None,
+        parity_feedin_write=parity_feedin_write,
     )
 
 
@@ -289,7 +360,8 @@ class Expected:
 
 
 def expected_after(d: MarketDecision, i: MarketInputs) -> Expected:
-    """None means "not judged" (e.g. a cooldown-blocked write leaves the register as it was)."""
+    """None means "not judged" (e.g. a cooldown-blocked write leaves the register as it was). A sell's feed-in limit
+    isn't judged: EMHASS Lens deliberately writes it less often than the automation."""
     t = d.targets
     write = d.needs_update and t is not None
     return Expected(
@@ -299,7 +371,7 @@ def expected_after(d: MarketDecision, i: MarketInputs) -> Expected:
         grid_power_w=float(t.grid_power_w) if write and t is not None else i.cur_grid_w,
         battery_max_w=float(t.battery_max_w) if write and t is not None else i.cur_battery_max_w,
         battery_min_w=float(t.battery_min_w) if write and t is not None else i.cur_battery_min_w,
-        feedin_max_w=float(d.feedin_w) if d.feedin_write and d.feedin_w is not None else i.cur_feedin_w,
+        feedin_max_w=None if d.action == "sell" else i.cur_feedin_w,
     )
 
 

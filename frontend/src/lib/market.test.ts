@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { RunSummary } from '../api/types'
+import type { MarketSettings, RunSummary } from '../api/types'
 import {
   decisionRef,
   marketFieldValue,
   marketGuards,
   pairMarketCompares,
+  parityFeedinText,
   parseReconcileSummary,
   watchdogText,
+  type MarketDecision,
 } from './market'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
@@ -43,11 +45,54 @@ describe('pairMarketCompares', () => {
 describe('marketGuards and values', () => {
   it('names the guards with the configured thresholds', () => {
     const guards = marketGuards(undefined)
-    expect(guards).toHaveLength(4)
+    expect(guards).toHaveLength(5)
     expect(guards[0]?.text).toContain('1000 W')
     expect(guards[2]?.text).toContain('180 s')
+    expect(guards[3]?.text).toContain('raised to 15500 W at once')
+    expect(guards[3]?.text).toContain('at 97 % or more')
+    const custom: MarketSettings['thresholds'] = {
+      enter_w: 1000,
+      exit_w: 400,
+      cooldown_s: 180,
+      big_change_w: 2500,
+      deadband_w: 300,
+      deadband_pct: 0.15,
+      min_soc: 10,
+      sell_full_soc_pct: 99,
+      settle_s: 2,
+      unavailable_timeout_s: 300,
+      low_pv_w: 100,
+      buy_cap_w: 18200,
+      sell_cap_w: 15500,
+      buy_modes: ['buy'],
+      sell_modes: ['sell'],
+      sources: ['kratt'],
+    }
+    expect(marketGuards(custom)[3]?.text).toContain('at 99 % or more')
     expect(marketFieldValue('grid_power_w', -5000)).toBe('-5000 W')
     expect(marketFieldValue('session', 'sell')).toBe('sell')
+  })
+})
+
+describe('parityFeedinText', () => {
+  const base = {
+    action: 'sell',
+    feedin_w: 15500,
+    feedin_write: false,
+    parity_feedin_w: 1800,
+    parity_feedin_write: true,
+  } as unknown as MarketDecision
+  it('names what the automation would do where it differs', () => {
+    expect(parityFeedinText(base)).toBe('The automation would write 1800 W.')
+    expect(parityFeedinText({ ...base, feedin_write: true, parity_feedin_write: false, parity_feedin_w: 4200 })).toBe(
+      'The automation would leave it for now (its target: 4200 W).',
+    )
+  })
+  it('says nothing where they agree, outside a sell, or for old decisions', () => {
+    expect(parityFeedinText({ ...base, parity_feedin_write: false })).toBeNull()
+    expect(parityFeedinText({ ...base, feedin_write: true, feedin_w: 1800 })).toBeNull()
+    expect(parityFeedinText({ ...base, action: 'buy' })).toBeNull()
+    expect(parityFeedinText({ ...base, parity_feedin_w: undefined })).toBeNull()
   })
 })
 

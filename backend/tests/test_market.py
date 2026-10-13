@@ -1,4 +1,5 @@
-"""The market rules must match the HA automation 'Qilowatt: Master Market Controller' guard for guard."""
+"""The market rules must match the HA automation 'Qilowatt: Master Market Controller' guard for guard, except for the
+feed-in limit during a sell, which EMHASS Lens writes far less often (the automation's value is kept as parity_*)."""
 
 from emhass_lens.domain.market import Expected, MarketInputs, compare_expected, decide, expected_after
 from emhass_lens.settings.model import InverterLimits, MarketThresholds
@@ -65,11 +66,11 @@ def test_a_buy_and_the_grid_caps() -> None:
     assert capped.targets.grid_power_w == -15500 and capped.feedin_w == 15500  # type: ignore[union-attr]
 
 
-def test_fusebox_sell_follows_the_command_and_feedin_targets() -> None:
+def test_fusebox_sell_follows_the_command_and_the_automations_feedin_targets() -> None:
     plain = decide(inp(source="fusebox", mode="mfrrup", powerlimit_w=5000), T, L)
-    assert plain.targets.grid_power_w == -5000 and plain.feedin_w == 15500  # type: ignore[union-attr]
-    assert decide(sell(pv_power_w=3000), T, L).feedin_w == 5000
-    assert decide(sell(pv_power_w=50), T, L).feedin_w == 15500
+    assert plain.targets.grid_power_w == -5000 and plain.parity_feedin_w == 15500  # type: ignore[union-attr]
+    assert decide(sell(pv_power_w=3000), T, L).parity_feedin_w == 5000
+    assert decide(sell(pv_power_w=50), T, L).parity_feedin_w == 15500
 
 
 def test_the_enter_gate_blocks_small_commands_and_a_small_flip_ends_the_session() -> None:
@@ -147,18 +148,97 @@ def test_low_soc_source_loss_and_bad_powerlimits() -> None:
     assert ended.action == "end" and ended.end_reason == "below_gate" and ended.anomaly is False
 
 
-def test_feedin_writes_only_while_selling() -> None:
-    assert decide(sell(cur_feedin_w=0, since_feedin_commit_s=5), T, L).feedin_write is True  # initial: no cooldown
-    assert decide(sell(cur_feedin_w=15500), T, L).feedin_write is False
+def test_the_automation_writes_feedin_only_while_selling() -> None:
+    assert decide(sell(cur_feedin_w=0, since_feedin_commit_s=5), T, L).parity_feedin_write is True  # initial
+    assert decide(sell(cur_feedin_w=15500), T, L).parity_feedin_write is False
     cooled = decide(
         sell(session="sell", cur_grid_w=-5000, pv_power_w=3000, cur_feedin_w=15500, since_feedin_commit_s=60), T, L
     )
-    assert cooled.feedin_write is False
+    assert cooled.parity_feedin_write is False
     due = decide(
         sell(session="sell", cur_grid_w=-5000, pv_power_w=3000, cur_feedin_w=15500, since_feedin_commit_s=200), T, L
     )
-    assert due.feedin_write is True and due.feedin_w == 5000
-    assert decide(sell(session="sell", cur_grid_w=-5000, pv_power_w=50, cur_feedin_w=0), T, L).feedin_write is False
+    assert due.parity_feedin_write is True and due.parity_feedin_w == 5000
+    low_pv = decide(sell(session="sell", cur_grid_w=-5000, pv_power_w=50, cur_feedin_w=0), T, L)
+    assert low_pv.parity_feedin_write is False
+    assert decide(inp(mode="mfrrdown", powerlimit_w=5000, cur_feedin_w=0), T, L).feedin_write is False
+
+
+# --- EMHASS Lens's own feed-in rule during a sell (the session of 2026-10-13, Kratt frrup, SOC 92-93 %) -----------
+
+
+def selling(**kw) -> MarketInputs:
+    return sell(**{"session": "sell", "soc_pct": 93.0, "cur_grid_w": -1800, "since_commit_s": 999, **kw})
+
+
+def test_a_sell_keeps_a_feedin_limit_that_lets_the_command_out() -> None:
+    # run 4368: 1800 W commanded, PV 1600 W, house ~550 W: the automation writes 1800 W, the limit at 15500 W will do
+    d = decide(selling(powerlimit_w=1800, pv_power_w=1600, load_w=550), T, L)
+    assert (d.feedin_w, d.feedin_write) == (15500, False)
+    assert (
+        d.feedin_why == "kept 15500 W: at least the commanded 1800 W; the battery takes the spare PV (SOC 93 % < 97 %)"
+    )
+    assert (d.parity_feedin_w, d.parity_feedin_write) == (1800, True)
+    # around run 4429: the battery covers part of the house, nothing to spare
+    none = decide(selling(powerlimit_w=5900, pv_power_w=2400, load_w=2500, cur_feedin_w=5900), T, L)
+    assert none.feedin_write is False and "no PV to spare (PV 2400 W, house 2500 W)" in none.feedin_why
+
+
+def test_a_feedin_limit_below_the_command_is_raised_to_the_sell_cap_at_once() -> None:
+    # run 4396: 4200 W commanded with the limit at 2600 W, 25 s after the last feed-in write: the automation waited
+    # for its cooldown and exported 2600 W for three minutes
+    d = decide(
+        selling(powerlimit_w=4200, pv_power_w=1700, load_w=600, cur_feedin_w=2600, since_feedin_commit_s=25), T, L
+    )
+    assert (d.feedin_w, d.feedin_write) == (15500, True)
+    assert d.feedin_why.startswith("raised to the sell cap 15500 W: 2600 W is below the commanded 4200 W")
+    assert d.parity_feedin_write is False
+    unknown = decide(selling(cur_feedin_w=None), T, L)
+    assert (unknown.feedin_w, unknown.feedin_write) == (15500, True) and "unknown is below" in unknown.feedin_why
+
+
+def test_the_feedin_limit_is_never_lowered_while_the_battery_can_take_the_spare_pv() -> None:
+    # the battery still took 620-900 W at 93 % (2026-10-13 06:09-06:14): below 97 % nothing is lowered, even in sun
+    sunny = decide(selling(powerlimit_w=2000, pv_power_w=6000, load_w=1000, cur_feedin_w=15500), T, L)
+    assert (sunny.feedin_w, sunny.feedin_write) == (15500, False)
+    assert "the battery takes the spare PV (SOC 93 % < 97 %)" in sunny.feedin_why
+    # run 4408: 1000 W commanded, PV 1700 W, house ~680 W, the limit at 2600 W: kept
+    kept = decide(selling(powerlimit_w=1000, pv_power_w=1700, load_w=680, cur_feedin_w=2600), T, L)
+    assert (kept.feedin_w, kept.feedin_write) == (2600, False)
+    room = decide(selling(powerlimit_w=1000, pv_power_w=6000, load_w=200, soc_pct=85.0), T, L)
+    assert room.feedin_write is False and "the battery takes the spare PV (SOC 85 % < 97 %)" in room.feedin_why
+
+
+def test_the_feedin_limit_follows_the_command_only_with_a_full_battery_and_pv_to_spare() -> None:
+    def full(**kw) -> MarketInputs:
+        return selling(**{"soc_pct": 98.0, "powerlimit_w": 1000, "pv_power_w": 1700, **kw})
+
+    # 1020 W to spare is within the command and the deadband: kept
+    assert decide(full(load_w=680, cur_feedin_w=2600), T, L).feedin_write is False
+    # with the house at 200 W, 1500 W to spare could go out on top of the command
+    capped = decide(full(load_w=200, cur_feedin_w=2600, since_feedin_commit_s=204), T, L)
+    assert (capped.feedin_w, capped.feedin_write) == (1000, True)
+    assert capped.feedin_why.startswith("lowered to the commanded 1000 W: SOC 98 % ≥ 97 %")
+    waiting = decide(full(load_w=200, cur_feedin_w=2600, since_feedin_commit_s=60), T, L)
+    assert (waiting.feedin_w, waiting.feedin_write) == (2600, False) and "cooldown (60 s < 180 s)" in waiting.feedin_why
+    near = decide(full(load_w=200, cur_feedin_w=1200), T, L)
+    assert (near.feedin_w, near.feedin_write) == (1200, False) and "within 300 W above" in near.feedin_why
+    # a cap below a rising command is raised at once, cooldown or not: to the command while PV is to spare ...
+    rising = decide(
+        full(powerlimit_w=1500, pv_power_w=3000, load_w=200, cur_feedin_w=1000, since_feedin_commit_s=10), T, L
+    )
+    assert (rising.feedin_w, rising.feedin_write) == (1500, True) and rising.feedin_why.startswith("capped at")
+    # ... and to the sell cap once it isn't (like run 4412: 5900 W commanded right after a 1000 W limit)
+    up = decide(full(powerlimit_w=5900, pv_power_w=1800, load_w=200, cur_feedin_w=1000, since_feedin_commit_s=30), T, L)
+    assert (up.feedin_w, up.feedin_write) == (15500, True)
+    # an unknown house load counts all PV as spare; a session start lowers it without waiting
+    blind = decide(full(), T, L)
+    assert (blind.feedin_w, blind.feedin_write) == (1000, True) and "house load unknown" in blind.feedin_why
+    start = decide(sell(soc_pct=98.0, powerlimit_w=1000, pv_power_w=1700, since_feedin_commit_s=5), T, L)
+    assert (start.feedin_w, start.feedin_write) == (1000, True)
+    # the threshold is a setting
+    lower = MarketThresholds(sell_full_soc_pct=90)
+    assert decide(selling(powerlimit_w=1000, pv_power_w=1700, load_w=200, cur_feedin_w=2600), lower, L).feedin_write
 
 
 def test_rounding_unknown_registers_sources_and_the_kill_switch() -> None:
@@ -180,6 +260,8 @@ def test_expected_after_and_compare() -> None:
     ended = inp(session="sell", cur_grid_w=-5000, since_commit_s=5)
     e2 = expected_after(decide(ended, T, L), ended)
     assert (e2.session, e2.enable_boolean, e2.grid_power_w, e2.feedin_max_w) == ("none", "on", 0.0, 15500.0)
+    selling_now = sell(pv_power_w=3000)
+    assert expected_after(decide(selling_now, T, L), selling_now).feedin_max_w is None  # deliberately not judged
     observed = {
         "session": "none",
         "enable_boolean": "on",

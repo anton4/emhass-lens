@@ -42,6 +42,8 @@ export interface MarketDecision {
   notify: string | null
   why: string
   notes?: string[]
+  parity_feedin_w?: number | null // what the automation would set the feed-in limit to (since 0.4.25)
+  parity_feedin_write?: boolean
 }
 
 /** status.last and the `market_decision` artifact (which also carries `inputs`). */
@@ -70,6 +72,7 @@ export interface MarketSensors {
   powerlimit_w: number | null
   soc_pct: number | null
   pv_w: number | null
+  load_w?: number | null
   ha_session: string | null
   enable_boolean: string | null
   settle_pending: boolean
@@ -169,6 +172,7 @@ export function marketGuards(thresholds: MarketSettings['thresholds'] | undefine
     deadband_w: 300,
     deadband_pct: 0.15,
     min_soc: 10,
+    sell_full_soc_pct: 97,
     settle_s: 2,
     unavailable_timeout_s: 300,
     low_pv_w: 100,
@@ -192,10 +196,23 @@ export function marketGuards(thresholds: MarketSettings['thresholds'] | undefine
       text: `At most one write per ${t.cooldown_s} s, except for a session start or end, a direction change, wrong battery rails, or a change of at least ${t.big_change_w} W. A session end is never throttled.`,
     },
     {
+      title: 'Feed-in limit only when it matters',
+      text: `While selling, the inverter exports the lower of the grid target and the feed-in limit. A limit at or above the command is left as it is, and a lower one is raised to ${t.sell_cap_w} W at once. The limit follows the command only when the battery can't take the spare PV: at ${t.sell_full_soc_pct} % or more, with the PV beyond the house above the command plus the deadband.`,
+    },
+    {
       title: 'Also',
       text: `No selling below ${t.min_soc} % battery; a lost source ends the session after ${t.unavailable_timeout_s} s; commands settle for ${t.settle_s} s before they are read; buy targets cap at ${t.buy_cap_w} W (Fusebox always gets the cap) and sell targets at ${t.sell_cap_w} W; sources ${(t.sources ?? []).join(', ')}; buy commands ${(t.buy_modes ?? []).join(', ')}; sell commands ${(t.sell_modes ?? []).join(', ')}.`,
     },
   ]
+}
+
+/** What the automation would do with the feed-in limit where EMHASS Lens decided otherwise (sells only). */
+export function parityFeedinText(d: MarketDecision): string | null {
+  if (d.action !== 'sell' || d.parity_feedin_w === undefined || d.parity_feedin_w === null) return null
+  if (d.parity_feedin_write === d.feedin_write && (!d.feedin_write || d.parity_feedin_w === d.feedin_w)) return null
+  return d.parity_feedin_write
+    ? `The automation would write ${d.parity_feedin_w} W.`
+    : `The automation would leave it for now (its target: ${d.parity_feedin_w} W).`
 }
 
 export function sessionText(session: { direction: string; power_w: number | null; source: string | null } | null | undefined): string {

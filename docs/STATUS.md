@@ -37,6 +37,51 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: the feed-in limit during a market sell changes only when it has to (0.4.25)
+- **Why:** the owner found the apply and feed-in buttons pressed far too often in a Kratt frrup session, with the
+  market on Shadow.
+  - The evidence: `runs_json_log/` (runs 4368–4471, not committed) and an HA history export for 06:09–06:44 UTC.
+  - The session ran 06:20–06:43 UTC. `qw_powerlimit` changed 15 times (1000–5900 W).
+  - The automation pressed apply 10 times and feed-in 7 times. Lens agreed in 36 of 37 compares.
+- **Findings:**
+  - **The meter exports min(grid target, feed-in limit).** When the automation's feed-in cooldown held the limit
+    below a rising command, Kratt got 2600 W instead of 4200 W (06:27–06:30), and about 1000 W instead of 5900 W
+    (06:30:54–06:34).
+  - **The battery discharged nearly all session**, so there was no spare PV for the limit to stop.
+  - **The apply presses follow real command changes.** A 60–90 s hold saves at most 2 presses and doubles the
+    delivery error, so the passive guards are unchanged.
+  - **Run 4381 (mismatch)** came from the 15 s gap between the automation's minute tick and ours.
+- **The owner's rule: change the limit only when absolutely necessary.** The 09:20 commands didn't need it to move
+  from 15500 W at all, and the data agrees:
+  - Spare PV (PV − house) went above the command by at most about 50–100 W, for about 30 s twice.
+  - The battery took 620–900 W at 93 % (06:09–06:14).
+  - With the limit above the command, export followed the grid target (06:38–06:41).
+- **The rule** is `domain/market.sell_feedin()`:
+  - Keep a held limit that is at least the command; raise a lower one to `sell_cap_w` at once.
+  - Follow the command only when SOC ≥ `market.thresholds.sell_full_soc_pct` (97 %) and PV − house load is more than
+    the command plus the deadband (max(300 W, 15 %)). Lowering waits for the cooldown (except at a session start);
+    raising never does.
+  - The first version used the inverter's 90 % "nearly full". The owner then chose a separate near-full threshold,
+    because 90 % would still cap on a sunny day at 92 % with the battery able to take the PV.
+  - The deadband margin keeps 17 W of spare PV (06:30:22) from costing two presses.
+  - The automation's value is kept as `MarketDecision.parity_feedin_w` and `parity_feedin_write`. `expected_after`
+    doesn't judge a sell's feed-in.
+- **Replay through the new `decide()`:**
+  - 17 → 10 presses (apply 10, feed-in 7 → 0); |delivered − commanded| 0.33 → 0.14 kWh. The limit stays at
+    15500 W throughout (the automation left 1000 W).
+  - The same without the house load sensor, and even with the battery at 98 %.
+- **Also:**
+  - `MarketEntities.house_load_sensor` (default `sensor.sofar_active_power_load_sys_watt`), `MarketInputs.load_w`,
+    and `sensors.load_w` in the status.
+  - In Shadow, minute ticks (`reconcile` and `promoted`) subtract `reconcile_offset_s` from both cooldown ages.
+  - Frontend: `parityFeedinText()` (lib/market.ts) under the Feed-in max row, a fourth guard "Feed-in limit only when
+    it matters" (with `sell_full_soc_pct`), a "Where EMHASS Lens differs" paragraph, and the house load beside
+    battery · PV.
+  - The CHANGELOG also carries the watchdog-logging fix c17b939 from another session.
+- **Checked:** backend 434 tests, ruff, pyright; frontend typecheck, lint, 205 tests, build; e2e 24/24.
+- **Look at it on the real HA:** the next sell session in Shadow should show "The automation would write N W" under a
+  kept limit.
+
 ### 2026-10-13: the market session watchdog (0.4.24)
 - **Why:** the owner wants to switch market control to Live and turn off both HA automations, "Qilowatt: Master Market Controller" and "Qilowatt: Session Watchdog".
   - The HA watchdog (every 5 min) has three branches: clear a stale session (source not kratt/fusebox for 10 min), notify about a 3 h session, notify about EMHASS left off with the inverter forced.
@@ -150,7 +195,7 @@ These come from docs/PLAN.md §10:
   | Drift check | exact match | the decision's range, so a sufficient value is not drift; a lower one is set back to 15500 W |
   | Dry-run compare | exact | the range |
   | Sofar writer | writes what differs | unchanged |
-  | Market live sell | deadband + cooldown, mirrors the automation | unchanged (mFRR over-delivery cap, shadow parity) |
+  | Market live sell | deadband + cooldown, mirrors the automation | unchanged here; since 0.4.25 kept while ≥ the command (see 2026-10-13) |
   | Market end without a fresh plan | leaves feed-in | unchanged |
 - **Code:**
   - `domain/inverter.py`:
