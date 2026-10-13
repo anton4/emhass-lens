@@ -697,8 +697,8 @@ export interface paths {
         };
         /**
          * Runs Logs Text
-         * @description The log lines of several runs as one text file, oldest run first, each under a header line. Runs already
-         *     removed are left out.
+         * @description Several runs as one text file, oldest run first: each under a header line and its summary, with its log
+         *     lines and then its artifacts as JSON. Runs already removed are left out.
          */
         get: operations["runs_logs_text_api_runs_logs_get"];
         put?: never;

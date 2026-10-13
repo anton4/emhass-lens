@@ -101,8 +101,8 @@ def attachment(found: list[int], ext: str) -> dict[str, str]:
     return {"Content-Disposition": f'attachment; filename="{name}.{ext}"'}
 
 
-def dump(bundle: dict[str, Any]) -> str:
-    return json.dumps(bundle, ensure_ascii=False, indent=2, default=str)
+def dump(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
 
 
 def log_line(entry: LogEntry) -> str:
@@ -110,6 +110,17 @@ def log_line(entry: LogEntry) -> str:
     run = f" run={entry.run_id}" if entry.run_id else ""
     exc = f"\n{entry.exc}" if entry.exc else ""
     return f"{entry.ts} {entry.level:<7} [{entry.component}]{run} {entry.msg}{exc}"
+
+
+def run_log_section(run: dict[str, Any], entries: list[LogEntry], artifacts: dict[str, Any]) -> str:
+    """One run in the .log of several: a header naming the run, its summary, its log lines, then each artifact as
+    JSON under a `## <kind>` line. Most market reconciles write no log lines; what they did is in the artifacts."""
+    took = f" · took {run['duration_ms']} ms" if run.get("duration_ms") is not None else ""
+    header = f"# Run {run['id']} · {run['job']} · started {run['started_at']}{took} · {run['outcome']}"
+    summary = [f"# {line}" for line in (run.get("summary") or "").splitlines()]
+    lines = [log_line(entry) for entry in entries] or ["(no log lines kept for this run)"]
+    shown = [f"## {kind}\n{dump(data)}" for kind, data in artifacts.items()]
+    return "\n".join([header, *summary, *lines, *shown])
 
 
 @router.get("/bundles")
@@ -137,17 +148,17 @@ async def runs_bundles(c: ContainerDep, ids: RunIds) -> Response:
 
 @router.get("/logs")
 async def runs_logs_text(c: ContainerDep, ids: RunIds) -> Response:
-    """The log lines of several runs as one text file, oldest run first, each under a header line. Runs already
-    removed are left out."""
+    """Several runs as one text file, oldest run first: each under a header line and its summary, with its log
+    lines and then its artifacts as JSON. Runs already removed are left out."""
     parts: list[str] = []
     found: list[int] = []
     for run_id in picked(ids):
         run = await c.recorder.get(run_id)
         if run is None:
             continue
-        lines = [log_line(entry) for entry in await run_logs(c, run_id)]
-        header = f"# Run {run_id} · {run['job']} · started {run['started_at']} · {run['outcome']}"
-        parts.append("\n".join([header, *(lines or ["(no log lines kept for this run)"])]))
+        entries, artifacts = await run_logs(c, run_id), await artifacts_of(c, run)
+        # Off the event loop: the artifacts of many MPC runs take a while to format
+        parts.append(await asyncio.to_thread(run_log_section, run, entries, artifacts))
         found.append(run_id)
     if not found:
         raise HTTPException(404, "None of these runs is kept any more")
@@ -180,12 +191,17 @@ async def run_logs(c: ContainerDep, run_id: int) -> list[LogEntry]:
     return [LogEntry(**row) for row in rows + fresh]
 
 
+async def artifacts_of(c: ContainerDep, run: dict[str, Any]) -> dict[str, Any]:
+    """A run's artifacts by kind, the newest of each kind."""
+    return {a["kind"]: await c.recorder.artifact(run["id"], a["kind"]) for a in run["artifacts"]}
+
+
 async def bundle_of(c: ContainerDep, run_id: int) -> dict[str, Any] | None:
     """Everything about one run: the run, its artifacts and its log lines. None when there is no such run."""
     run = await c.recorder.get(run_id)
     if run is None:
         return None
-    artifacts = {a["kind"]: await c.recorder.artifact(run_id, a["kind"]) for a in run["artifacts"]}
+    artifacts = await artifacts_of(c, run)
     logs = [entry.model_dump() for entry in await run_logs(c, run_id)]
     return {"emhass_lens_version": c.boot.version, "run": run, "artifacts": artifacts, "logs": logs}
 

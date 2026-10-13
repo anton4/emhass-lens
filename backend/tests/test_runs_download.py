@@ -21,12 +21,17 @@ def test_bundles_and_logs_of_several_runs(tmp_path: Path) -> None:
 
         async def make(job: str) -> int:
             async with c.recorder.start(job) as run:
-                log.warning("hello from %s", job)
+                if job != "test.quiet":
+                    log.warning("hello from %s", job)
                 run.artifact("request", {"job": job})
+                run.summary = f"did {job}"
                 run.outcome = "ok"
             return run.id
 
-        a, b, other = (client.portal.call(make, job) for job in ("test.a", "test.b", "test.other"))  # type: ignore[union-attr]
+        a, b, quiet, other = (
+            client.portal.call(make, job)  # type: ignore[union-attr]
+            for job in ("test.a", "test.b", "test.quiet", "test.other")
+        )
         missing = other + 1000
 
         resp = client.get("/api/runs/bundles", params={"id": [b, a, missing, a]})
@@ -50,6 +55,23 @@ def test_bundles_and_logs_of_several_runs(tmp_path: Path) -> None:
         assert text.index(f"# Run {b} · test.b") < text.index("hello from test.b")
         assert f"WARNING [test] run={a} hello from test.a" in text
         assert "test.other" not in text
+        # Under the header: what the run did, its log lines, then its artifacts as JSON
+        header_a = next(line for line in text.splitlines() if line.startswith(f"# Run {a} "))
+        assert " · took " in header_a and header_a.endswith(" ms · ok")
+        assert text.index(header_a) < text.index("# did test.a") < text.index("hello from test.a")
+        artifact_a = '## request\n{\n  "job": "test.a"\n}'
+        assert text.index("hello from test.a") < text.index(artifact_a) < text.index(f"# Run {b} ")
+
+        # A run that wrote no log lines still says what it did and shows what it stored
+        resp = client.get("/api/runs/logs", params={"id": [quiet]})
+        assert resp.text.splitlines()[1:] == [
+            "# did test.quiet",
+            "(no log lines kept for this run)",
+            "## request",
+            "{",
+            '  "job": "test.quiet"',
+            "}",
+        ]
 
         single = client.get("/api/runs/logs", params={"id": [other]})
         assert single.headers["content-disposition"] == f'attachment; filename="emhass-lens-run-{other}.log"'

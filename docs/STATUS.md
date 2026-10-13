@@ -37,6 +37,14 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: the multi-run .log has each run's summary and artifacts (0.4.30)
+- **Why:** the owner downloaded ten `market.reconcile` runs. The .zip was full, but the .log had two lines. Nothing
+  was lost: those runs log only when a session starts or ends, and what they decided is in the run's summary and its
+  `market_decision` artifact, which the .log left out.
+- **Change:** `GET /api/runs/logs` writes, per run, the header (now with `took <n> ms`), the summary as `# …` lines,
+  the log lines, then each artifact as `## <kind>` and indented JSON (the bundle's `artifacts`, newest per kind,
+  via the shared `artifacts_of`). Formatting runs off the event loop, like the zip.
+
 ### 2026-10-13: the Inverter page shows every Sofar button press and who made it (unreleased)
 - **Why:** the owner asked whether the Inverter page shows presses of the passive and feed-in buttons made outside
   EMHASS Lens. Before this change it didn't. `sofar_press` recorded them, but only the Market page showed counts, and
