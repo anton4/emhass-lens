@@ -467,6 +467,8 @@ class ChargerNow(BaseModel):
     current_limit_a: float | None = None
     state_raw: int | None = None
     power_w: float | None = None  # while charging its current limit in W (charger.limits.w_per_amp), else 0
+    soc: float | None = None  # the car's battery level, %
+    target_soc: float | None = None  # %
 
 
 class PlanNow(BaseModel):

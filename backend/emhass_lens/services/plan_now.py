@@ -68,7 +68,14 @@ def charger_now(c: Container) -> dict[str, Any] | None:
     if charger is None or charger.mode == "off":
         return None
     observed = charger.observed()
-    return {"current_limit_a": observed.current_limit_a, "state_raw": observed.state_raw, "power_w": deferrable_now(c)}
+    car_soc = c.settings.current.charger.entities.car_soc_sensor
+    return {
+        "current_limit_a": observed.current_limit_a,
+        "state_raw": observed.state_raw,
+        "power_w": deferrable_now(c),
+        "soc": num(c.extras["ha"].state(car_soc)) if car_soc else None,
+        "target_soc": observed.target_soc,
+    }
 
 
 def soc_limits(c: Container) -> dict[str, float | None]:

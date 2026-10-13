@@ -97,6 +97,29 @@ describe('the boxes', () => {
     expect(unplugged.find((n) => n.key === 'ev')).toMatchObject({ direction: 'unplugged', plan: 'plan 0 W' })
   })
 
+  it('puts the state of charge beside the battery and the EV', () => {
+    const charger = { state_raw: 4, current_limit_a: 6, power_w: 4140, soc: 58, target_soc: 80 }
+    const soc = (opts: Parameters<typeof flowNodes>[2]) =>
+      Object.fromEntries(flowNodes(NIGHT, v(0, 0, 0, 0, null), opts).map((n) => [n.key, n.soc]))
+    const measured = soc({ deferrable: 'EV', charger, soc: { measured: 0.643, planned: 0.7, differs: true } })
+    expect(measured.batt).toEqual({ text: '64 %', measured: true, note: 'State of charge', differs: true })
+    expect(measured.ev).toEqual({
+      text: '58 %',
+      measured: true,
+      note: "The car's battery level, target 80 %",
+      differs: false,
+    })
+    expect([measured.pv, measured.grid, measured.load]).toEqual([null, null, null])
+    // no sensor (or the next slot): the plan's at the end of the slot, never judged
+    const planned = soc({ deferrable: 'Deferrable', soc: { measured: null, planned: 0.7, differs: true } })
+    expect(planned.batt).toMatchObject({ text: '70 %', measured: false, differs: false })
+    expect(planned.ev).toBeNull() // no charger: no car to read
+    expect(soc({ deferrable: 'EV', charger: { ...charger, soc: null }, soc: { measured: null, planned: null } })).toMatchObject({
+      batt: null,
+      ev: null,
+    })
+  })
+
   it('leaves the deferrable box out when the plan has none, and adds the curtailment to PV', () => {
     const measured = { pv: 8700, grid: null, batt: null, load: null, ev: null }
     const nodes = flowNodes(v(9000, -2000, 0, 1000, null), measured, {

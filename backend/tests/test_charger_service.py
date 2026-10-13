@@ -211,6 +211,8 @@ def test_the_plan_page_shows_the_chargers_power(tmp_path: Path, world: World) ->
             "current_limit_a": 8.0,
             "state_raw": 4,
             "power_w": 8 * 690.0,
+            "soc": 50.0,
+            "target_soc": 80.0,
         }
         world.set_state(STATE, 1)
         prime(client, world)

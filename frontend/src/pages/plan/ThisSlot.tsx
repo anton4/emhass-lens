@@ -45,8 +45,10 @@ function sensorAge(
 function FlowBox({
   node,
   layout,
+  narrow,
   withDeferrable,
   q,
+  socQ,
   past,
   fetchedAt,
   now,
@@ -54,8 +56,12 @@ function FlowBox({
 }: {
   node: FlowNode
   layout: FlowLayout
+  /** No room beside the big number: the state of charge goes at the end of the direction line. */
+  narrow: boolean
   withDeferrable: boolean
   q: NowQuantity | undefined
+  /** The battery's state-of-charge sensor, for the hover text. */
+  socQ?: NowQuantity
   past: boolean
   fetchedAt: number
   now: Date
@@ -64,6 +70,17 @@ function FlowBox({
   const at = node.key === 'load' && !withDeferrable ? layout.at.loadAlone : layout.at[node.key]
   const differs = node.measured ? q?.differs : null
   const { age, title } = sensorAge(q, past, fetchedAt, now, tz)
+  const socSensor = node.soc?.measured && socQ?.entity ? sensorAge(socQ, past, fetchedAt, now, tz).title : undefined
+  const soc = node.soc && (
+    <span
+      className="flow-node-soc"
+      data-differs={node.soc.differs || undefined}
+      title={socSensor ? `${node.soc.note} · ${socSensor}` : node.soc.note}
+    >
+      <span className="visually-hidden">state of charge </span>
+      {node.soc.text}
+    </span>
+  )
   return (
     <div
       className="flow-node"
@@ -85,10 +102,18 @@ function FlowBox({
           <Lamp color={differs ? 'amber' : 'green'} label={differs ? 'differs from the plan' : 'as planned'} />
         )}
       </div>
-      <div className="flow-node-value" title={title}>
-        {node.value ?? '—'}
+      <div className="flow-node-row">
+        <span className="flow-node-value" title={title}>
+          {node.value ?? '—'}
+        </span>
+        {!narrow && soc}
       </div>
-      {node.direction && <div className="flow-node-dir">{node.direction}</div>}
+      {(node.direction || (narrow && soc)) && (
+        <div className="flow-node-dir">
+          <span>{node.direction}</span>
+          {narrow && soc}
+        </div>
+      )}
       {node.plan && (
         <div className="flow-node-plan" title={node.plan}>
           {node.plan}
@@ -269,7 +294,16 @@ export function ThisSlot({
   const headline = flowHeadline(shown, users)
   const planHeadline = flowHeadline(planned, users)
   const agree = agreement(quantities)
-  const nodes = flowNodes(planned, measured, { deferrable, curtailed: num(row, 'P_PV_curtailment'), charger })
+  const nodes = flowNodes(planned, measured, {
+    deferrable,
+    curtailed: num(row, 'P_PV_curtailment'),
+    charger,
+    soc: {
+      measured: isNumber(quantities?.soc?.measured) ? quantities.soc.measured : null,
+      planned: socOf(row),
+      differs: quantities?.soc?.differs,
+    },
+  })
   const segments = flowSegments(shown, layout, withDeferrable)
   const boxes = segments.map((s) => ({ s, ...segmentBox(s, layout) }))
   const tone = inverter?.in_control && inverter.state ? modeTone(inverter.state) : null
@@ -380,8 +414,10 @@ export function ThisSlot({
                 key={node.key}
                 node={node}
                 layout={layout}
+                narrow={narrow}
                 withDeferrable={withDeferrable}
                 q={node.key === 'ev' ? undefined : quantities?.[node.key]}
+                socQ={node.key === 'batt' ? quantities?.soc : undefined}
                 past={past}
                 fetchedAt={fetchedAt}
                 now={clock}

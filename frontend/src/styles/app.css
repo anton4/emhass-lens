@@ -2753,8 +2753,16 @@ tr[data-current] td:first-child {
   white-space: nowrap;
 }
 
-.flow-node-value {
+/* the big number, and the state of charge beside it (on the narrow flow, at the end of the direction line) */
+.flow-node-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin-top: 2px;
+}
+
+.flow-node-value {
+  min-width: 0;
   font-family: var(--font-code);
   font-size: 22px;
   font-weight: 500;
@@ -2763,11 +2771,34 @@ tr[data-current] td:first-child {
   line-height: 1.2;
 }
 
+.flow-node-soc {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-code);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.flow-node-soc[data-differs] {
+  color: var(--on-amber);
+  font-weight: 600;
+}
+
 .flow-node-dir {
-  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   font-size: var(--step--1);
   font-weight: 500;
   color: var(--ink-2);
+}
+
+.flow-node-dir > span:first-child {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2802,6 +2833,10 @@ tr[data-current] td:first-child {
 
 .flow[data-size='narrow'] .flow-node-dir {
   font-size: 12px;
+}
+
+.flow[data-size='narrow'] .flow-node-soc {
+  font-size: 11.5px;
 }
 
 .flow[data-size='narrow'] .flow-node-plan {

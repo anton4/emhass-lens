@@ -1381,8 +1381,12 @@ export interface components {
             current_limit_a?: number | null;
             /** Power W */
             power_w?: number | null;
+            /** Soc */
+            soc?: number | null;
             /** State Raw */
             state_raw?: number | null;
+            /** Target Soc */
+            target_soc?: number | null;
         };
         /** ChargerStatus */
         ChargerStatus: {

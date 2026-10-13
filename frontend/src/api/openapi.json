@@ -673,6 +673,17 @@
             ],
             "title": "Power W"
           },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc"
+          },
           "state_raw": {
             "anyOf": [
               {
@@ -683,6 +694,17 @@
               }
             ],
             "title": "State Raw"
+          },
+          "target_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Soc"
           }
         },
         "title": "ChargerNow",

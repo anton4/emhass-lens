@@ -8,7 +8,7 @@ import { dayKey } from './format'
 import { deferrableColumns, num } from './plan'
 import type { NowByKey } from './planNow'
 import { IDLE_W } from './planSummary'
-import { formatPower, isNumber } from './units'
+import { formatFraction, formatPower, isNumber } from './units'
 
 export type FlowKey = 'pv' | 'grid' | 'batt' | 'load' | 'ev'
 export type FlowValues = Record<FlowKey, number | null>
@@ -114,6 +114,43 @@ export interface FlowNode {
    *  "forecast" when the big number is the plan; PV's curtailment after it. */
   plan: string | null
   idle: boolean
+  /** The state of charge beside the power: the battery's, or the car's in the EV box. */
+  soc: NodeSoc | null
+}
+
+export interface NodeSoc {
+  text: string
+  /** Read from a sensor (else it is the plan's, for the end of the slot). */
+  measured: boolean
+  /** What it is, for its hover text. */
+  note: string
+  differs: boolean
+}
+
+/** The battery's measured state of charge (0–1), else the plan's at the end of the slot. */
+function batterySoc(soc: { measured: number | null; planned: number | null; differs?: boolean | null }): NodeSoc | null {
+  const measured = isNumber(soc.measured)
+  const value = measured ? soc.measured : soc.planned
+  if (!isNumber(value)) return null
+  return {
+    text: formatFraction(value, 0),
+    measured,
+    note: measured ? 'State of charge' : 'State of charge the plan expects at the end of the slot',
+    differs: measured && soc.differs === true,
+  }
+}
+
+/** The car's battery level (%), from its sensor under the charger's entities. */
+function carSoc(charger: ChargerNow | null | undefined): NodeSoc | null {
+  const soc = charger?.soc
+  if (!isNumber(soc)) return null
+  const target = charger?.target_soc
+  return {
+    text: formatFraction(soc / 100, 0),
+    measured: true,
+    note: `The car's battery level${isNumber(target) ? `, target ${Math.round(target)} %` : ''}`,
+    differs: false,
+  }
 }
 
 const QUANTITY: Record<FlowKey, string> = {
@@ -124,11 +161,17 @@ const QUANTITY: Record<FlowKey, string> = {
   ev: '--q-ev',
 }
 
-/** One box per quantity; the deferrable load's only when the plan has one (`deferrable` names it). */
+/** One box per quantity; the deferrable load's only when the plan has one (`deferrable` names it). `soc` is the
+ *  battery's state of charge (0–1): measured, the plan's at the end of the slot, and whether it differs. */
 export function flowNodes(
   plan: FlowValues,
   measured: FlowValues,
-  opts: { deferrable: string | null; curtailed?: number | null; charger?: ChargerNow | null },
+  opts: {
+    deferrable: string | null
+    curtailed?: number | null
+    charger?: ChargerNow | null
+    soc?: { measured: number | null; planned: number | null; differs?: boolean | null }
+  },
 ): FlowNode[] {
   const labels: Record<FlowKey, string | null> = {
     pv: 'PV',
@@ -168,6 +211,7 @@ export function flowNodes(
       measured: m !== null,
       plan: planText,
       idle: shown === null || Math.abs(shown) < IDLE_W,
+      soc: key === 'batt' && opts.soc ? batterySoc(opts.soc) : key === 'ev' ? carSoc(opts.charger) : null,
     })
   }
   return nodes
