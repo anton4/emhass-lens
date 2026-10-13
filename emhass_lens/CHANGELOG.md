@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.29
+
+- Inverter: every press of the Sofar apply and feed-in buttons is shown, with who made it: EMHASS Lens (linked to its run), an automation, or a user (in the UI or through a script). Every press writes the inverter's EEPROM.
+  - The header shows how many presses there were in the last 24 hours and 7 days, as the Market page does.
+  - Today's strip marks each press with a dot on its top edge: red for a press made outside EMHASS Lens, dark for its own. Point at a slot to see its presses.
+  - A new **Button presses** panel lists the last 7 days, with *Only outside EMHASS Lens* to hide EMHASS Lens's own.
+- Market: *not ours* in the inverter write counts is now exact, instead of the presses minus EMHASS Lens's writes. Presses recorded by earlier versions count as EMHASS Lens's when one of its writes came within 30 seconds.
+- API: `GET /api/inverter` adds `wear_24h`, `wear_7d` and `presses` (the last 7 days, newest first).
+
 ## 0.4.28
 
 - Runs: a tick box before every run to download several at once. The box in the header ticks or unticks all the runs shown, and shift-click ticks a range. Ticked runs stay ticked when you change the filters or load older runs.
