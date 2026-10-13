@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.24
+
+- Market: a **session watchdog** takes over from the Home Assistant automation "Qilowatt: Session Watchdog". It runs every minute as its own job, separate from the market control.
+  - In Live, it ends a session whose source has been gone for 10 minutes, if the market control didn't end it itself, for example because `input_boolean.qilowatt_automation` was turned off mid-session. The session select goes back to `none`, the EMHASS switch comes back on and the inverter is handed back to the plan, or set to self-use when there is no fresh plan. Only the registers that differ are written.
+  - It sends a phone message about a session open for 3 hours, and about the EMHASS switch left off for 10 minutes with the inverter in Force charge or Force discharge but no session open.
+  - In Shadow it only records what it would clear.
+  - Its findings show on the Health page and as a **Watchdog** fact on the Market page.
+  - Its settings are under Settings → Qilowatt market control → Session watchdog.
+  - Once market control is Live, turn off "Qilowatt: Session Watchdog" together with "Qilowatt: Master Market Controller", and turn on **Watchdog** on the App's Info tab.
+- Market: when a session ends without a fresh plan to hand back to, the inverter's state select is set to self-use even if the registers were already safe. The App and the watchdog can no longer both end the same session at once.
+- API: `GET /api/market` has a `watchdog` block.
+
 ## 0.4.23
 
 - Inputs: a new **What EMHASS gets** section at the top charts everything the newest MPC run sent, from its anchor to the end of the horizon. It shows the import and export prices with the tariff period and export limit under them, the Solcast PV forecast and its P10 with each day's total in kWh, and EMHASS's house load forecast with each deferrable load's window. It also shows the battery's state of charge now and its target. Cards sum it up with the payload keys they stand for. **Preview now** shows a payload built now instead, without sending it.
