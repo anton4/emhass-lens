@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.31
+
+- Plan: the **EV** box in *This slot* shows how long ago its value last changed in its top-right corner, like the other boxes, with the entity and the time in the hover text. It is when the charger's charging state last changed, or, while the car charges, the current limit if that changed later.
+- API: `GET /api/plan/now` adds `entity` and `age_s` to `charger`.
+
 ## 0.4.30
 
 - Runs: **Download logs (.log)** now shows, for each run, its summary and how long it took under the line naming it, its log lines, and then everything it stored, as JSON (the same as the run's **Artifacts** tab). Most market reconciles write no log lines, so their file used to say little more than *no log lines kept*. A .log of many EMHASS MPC runs is large; the .zip is smaller.
