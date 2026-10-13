@@ -441,7 +441,8 @@ class PlanResponse(BaseModel):
 class NowQuantity(BaseModel):
     key: str  # batt | grid | pv | load | soc
     plan: float | None = None
-    expected: float | None = None  # battery: the plan for the load and PV now; soc: where it should be now
+    # battery, grid: where the inverter settles with the load and PV now; soc: where it should be now
+    expected: float | None = None
     measured: float | None = None
     entity: str | None = None
     age_s: float | None = None

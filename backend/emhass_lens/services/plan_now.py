@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso
 from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.plan_now import Reading, compare, row_for
+from emhass_lens.domain.inverter import Targets
+from emhass_lens.domain.plan_now import Reading, compare, row_for, row_targets
 from emhass_lens.services.ha_values import last_updated, num
 from emhass_lens.services.measurements import FIELDS, QUANTITIES
 
@@ -78,14 +79,40 @@ def charger_now(c: Container) -> dict[str, Any] | None:
     }
 
 
+def _emhass_config_number(c: Container, name: str) -> float | None:
+    value = (c.extras["emhass"].config or {}).get(name)
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
 def soc_limits(c: Container) -> dict[str, float | None]:
     """EMHASS's battery state-of-charge limits (0–1) from its config: the plan stays between them."""
-    config = c.extras["emhass"].config or {}
-    out: dict[str, float | None] = {}
-    for key, name in (("soc_min", "battery_minimum_state_of_charge"), ("soc_max", "battery_maximum_state_of_charge")):
-        value = config.get(name)
-        out[key] = float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
-    return out
+    return {
+        "soc_min": _emhass_config_number(c, "battery_minimum_state_of_charge"),
+        "soc_max": _emhass_config_number(c, "battery_maximum_state_of_charge"),
+    }
+
+
+def battery_power_limits(c: Container) -> tuple[float | None, float | None]:
+    """EMHASS's battery charge and discharge power maxima (W) from its config."""
+    return (
+        _emhass_config_number(c, "battery_charge_power_max"),
+        _emhass_config_number(c, "battery_discharge_power_max"),
+    )
+
+
+def slot_targets(c: Container, row: dict[str, Any], inverter: dict[str, Any] | None) -> Targets | None:
+    """The inverter's passive settings for judging battery and grid in a slot: what its registers show now
+    (`inverter`, from inverter_now) when they are all known, else what the inverter rules give the plan row. None
+    while inverter control is off: then nothing says how the inverter splits the load."""
+    control = c.extras.get("inverter")
+    if control is None or control.mode == "off":
+        return None
+    regs = inverter or {}
+    grid, bmax, bmin = (regs.get(k) for k in ("grid_power_w", "battery_max_w", "battery_min_w"))
+    if isinstance(grid, int | float) and isinstance(bmax, int | float) and isinstance(bmin, int | float):
+        return Targets(str(regs.get("state") or ""), round(grid), round(bmax), round(bmin))
+    settings = c.settings.current
+    return row_targets(row, settings.inverter.limits, settings.emhass.mpc.no_export_at_or_below)
 
 
 def deferrable_now(c: Container) -> float | None:
@@ -120,7 +147,8 @@ async def ended_slot(
     for quantity in QUANTITIES:
         hit = means.get(quantity, {}).get(iso(start) or "")
         readings[quantity] = Reading(hit[0] if hit else None, getattr(m, FIELDS[quantity]).entity or None, None)
-    return compare(row, _row_before(plan, index), readings, 0.5)
+    targets = slot_targets(c, row, None)  # the registers then aren't kept: what the rules gave the row
+    return compare(row, _row_before(plan, index), readings, 0.5, None, targets, battery_power_limits(c))
 
 
 async def plan_now(c: Container) -> dict[str, Any]:
@@ -132,6 +160,7 @@ async def plan_now(c: Container) -> dict[str, Any]:
     following = row_for(plans, slot + SLOT)
     earlier = row_for(plans, slot - SLOT)
     published = c.extras["publish"].last_published_at
+    inverter = inverter_now(c)
     out: dict[str, Any] = {
         "slot_start": iso(slot),
         "slot_end": iso(slot + SLOT),
@@ -145,7 +174,7 @@ async def plan_now(c: Container) -> dict[str, Any]:
         "prev_row": earlier[1] if earlier else None,
         "prev_quantities": await ended_slot(c, earlier, slot - SLOT),
         "quantities": [],
-        "inverter": inverter_now(c),
+        "inverter": inverter,
         "charger": charger_now(c),
         **soc_limits(c),
     }
@@ -157,6 +186,14 @@ async def plan_now(c: Container) -> dict[str, Any]:
         row=row,
         plan_generated_at=plan.get("generated_at"),
         plan_run_id=plan.get("run_id"),
-        quantities=compare(row, _row_before(plan, index), measured_now(c), fraction, deferrable_now(c)),
+        quantities=compare(
+            row,
+            _row_before(plan, index),
+            measured_now(c),
+            fraction,
+            deferrable_now(c),
+            slot_targets(c, row, inverter),
+            battery_power_limits(c),
+        ),
     )
     return out

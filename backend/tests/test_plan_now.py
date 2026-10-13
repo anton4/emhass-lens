@@ -4,7 +4,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from emhass_lens.core.clock import FakeClock
-from emhass_lens.domain.plan_now import Reading, battery_expected, compare, power_differs, row_for, soc_expected
+from emhass_lens.domain.inverter import Targets
+from emhass_lens.domain.plan_now import (
+    Reading,
+    battery_expected,
+    compare,
+    inverter_expected,
+    net_demand,
+    power_differs,
+    row_for,
+    row_targets,
+    soc_expected,
+)
+from emhass_lens.settings.model import InverterLimits
 from tests.test_inverter_service import set_mode
 from tests.test_inverter_service import world as inverter_world  # noqa: F401  (fixture)
 from tests.test_phase1 import prime, run_job
@@ -92,6 +104,67 @@ def test_the_battery_is_judged_against_the_plan_for_the_load_and_pv_now() -> Non
     assert battery_expected(row, {}, None) == 1570  # nothing measured: the plan as it is
 
 
+def readings(**values: float | None) -> dict[str, Reading]:
+    return {k: Reading(v, f"sensor.{k}", 10.0) for k, v in values.items()}
+
+
+# The owner's 11:30 slot on 13 Oct: PV export (grid target 0 W, the battery may discharge but not charge)
+PV_EXPORT = Targets("Self-use PV and export excess to grid", 0, 0, -20000)
+PV_EXPORT_ROW = {
+    "P_batt": 0.0,
+    "P_grid": -2920.0,
+    "P_PV": 4410.0,
+    "P_Load": 1350.0,
+    "P_deferrable0": 0.0,
+    "P_PV_curtailment": 0.0,
+    "unit_prod_price": 0.1858,
+    "SOC_opt": 0.88,
+}
+
+
+def test_more_pv_than_forecast_goes_to_the_grid_when_the_battery_may_not_charge() -> None:
+    """Measured 5.00 kW PV, 558 W house, grid -4.25 kW, battery 0 W: the extra PV is exported, as it should be."""
+    measured = readings(pv=5000.0, load=558.0, grid=-4250.0, batt=0.0, soc=0.87)
+    got = {q["key"]: q for q in compare(PV_EXPORT_ROW, None, measured, 0.5, 0.0, PV_EXPORT, (20000.0, 20000.0))}
+    assert got["batt"]["expected"] == 0 and got["batt"]["differs"] is False
+    assert got["grid"]["expected"] == 558 - 5000 and got["grid"]["differs"] is False
+    # without the inverter's settings the battery was expected to take the PV, and both were flagged
+    old = {q["key"]: q for q in compare(PV_EXPORT_ROW, None, measured, 0.5, 0.0)}
+    assert old["batt"]["differs"] is True and old["grid"]["differs"] is True and old["grid"]["expected"] is None
+
+
+def test_less_pv_than_the_house_needs_comes_from_the_battery_in_pv_export() -> None:
+    """A cloud: the grid target is 0 W, so the battery covers what the PV doesn't and nothing is imported."""
+    measured = readings(pv=400.0, load=1300.0)
+    assert inverter_expected(net_demand(PV_EXPORT_ROW, measured, None) or 0.0, PV_EXPORT) == (900.0, 0.0)
+    # with some PV to spare it is exported and the battery stays idle
+    assert inverter_expected(-1200.0, PV_EXPORT) == (0.0, -1200.0)
+
+
+def test_a_force_discharge_holds_the_grid_and_the_battery_takes_the_difference() -> None:
+    """The owner's 11:15 slot: grid target -15.5 kW; PV 5.20 kW, house 2.60 kW, battery 13.16 kW."""
+    row = {"P_batt": 13140.0, "P_grid": -15500.0, "P_PV": 4130.0, "P_Load": 1250.0, "unit_prod_price": 0.2194}
+    targets = Targets("Self-use battery or PV", -15500, 20000, -20000)
+    measured = readings(pv=5200.0, load=2600.0, grid=-15490.0, batt=13160.0)
+    got = {q["key"]: q for q in compare(row, None, measured, 0.5, None, targets)}
+    assert got["batt"]["expected"] == 2600 - 5200 + 15500 and got["batt"]["differs"] is False
+    assert got["grid"]["expected"] == -15500 and got["grid"]["differs"] is False
+
+
+def test_a_force_charge_at_the_import_max_is_held_to_what_the_battery_takes() -> None:
+    targets = Targets("Force charge", 17000, 20000, -20000)
+    assert inverter_expected(1000.0, targets) == (-16000.0, 17000.0)
+    assert inverter_expected(1000.0, targets, (10000.0, 20000.0)) == (-10000.0, 11000.0)
+
+
+def test_the_rules_give_a_plan_row_its_passive_settings() -> None:
+    limits = InverterLimits()
+    targets = row_targets(PV_EXPORT_ROW, limits, 0.04)
+    assert targets is not None
+    assert (targets.grid_power_w, targets.battery_max_w, targets.battery_min_w) == (0, 0, limits.battery_min_w)
+    assert row_targets({"P_PV": 100.0}, limits, None) is None
+
+
 def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
     tmp_path: Path,
     inverter_world: World,  # noqa: F811
@@ -106,8 +179,11 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         clock.set(datetime(2026, 10, 9, 11, 16, 0, tzinfo=UTC))
         assert run_job(client, "inverter.decide")["outcome"] == "ok"
         row = client.get("/api/plan").json()["current"]["rows"][0]
+        # the plan charges 3 kW with 2 kW from the grid: a Force charge, whose grid target is the import max, so the
+        # inverter imports that and the battery takes all it can (20 kW, less the 1 kW the house is short of PV)
+        import_max = InverterLimits().grid_import_max_w
         world.set_state("sensor.batt_w", row["P_batt"] + 1500)
-        world.set_state("sensor.grid_w", row["P_grid"])
+        world.set_state("sensor.grid_w", import_max)
         prime(client, world)
 
         now = client.get("/api/plan/now").json()
@@ -115,7 +191,8 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         assert now["row"]["timestamp"] == row["timestamp"] and now["plan_run_id"] is not None
         quantities = {q["key"]: q for q in now["quantities"]}
         assert quantities["batt"]["differs"] is True and quantities["batt"]["entity"] == "sensor.batt_w"
-        assert quantities["grid"]["differs"] is False
+        assert quantities["batt"]["expected"] == row["P_Load"] - row["P_PV"] - import_max
+        assert quantities["grid"]["expected"] == import_max and quantities["grid"]["differs"] is False
         assert quantities["pv"]["measured"] is None or quantities["pv"]["entity"] == "sensor.sofar_pv_power_total_watt"
         inverter = now["inverter"]
         assert inverter["mode"] == "live" and inverter["in_control"] is True
@@ -132,7 +209,7 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
             "INSERT OR REPLACE INTO measurement (slot_utc, quantity, value, coverage, entity_id) VALUES (?,?,?,?,?)",
             [
                 ("2026-10-09T11:15:00.000+00:00", "batt", row["P_batt"] + 1500, 1.0, "sensor.batt_w"),
-                ("2026-10-09T11:15:00.000+00:00", "grid", row["P_grid"], 1.0, "sensor.grid_w"),
+                ("2026-10-09T11:15:00.000+00:00", "grid", import_max, 1.0, "sensor.grid_w"),
             ],
         )
         before = client.get("/api/plan/now").json()
@@ -141,6 +218,7 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         ended = {q["key"]: q for q in before["prev_quantities"]}
         assert ended["batt"]["measured"] == row["P_batt"] + 1500 and ended["batt"]["differs"] is True
         assert ended["grid"]["differs"] is False and ended["grid"]["entity"] == "sensor.grid_w"
+        assert ended["grid"]["expected"] == import_max  # no registers kept: what the rules gave the row
         assert ended["load"]["measured"] is None and ended["batt"]["age_s"] is None
     finally:
         client.__exit__(None, None, None)

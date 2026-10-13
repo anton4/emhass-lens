@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NowQuantity } from '../api/types'
-import { byKey, expectedText, inverterParts } from './planNow'
+import { byKey, expectedText, inverterParts, powerDiffers } from './planNow'
 
 const q = (key: string, measured: number | null, extra: Partial<NowQuantity> = {}): NowQuantity => ({ key, measured, sign_hint: false, ...extra })
 
@@ -10,7 +10,17 @@ describe('this slot, measured now', () => {
     const batt = q('batt', 720, { expected: 744, entity: 'sensor.batt', age_s: 20 })
     expect(expectedText(batt)).toBe('expected 744 W discharging with the house load and PV now')
     expect(expectedText(batt, true)).toBe('expected 744 W discharging with the measured house load and PV')
-    expect(expectedText(q('grid', 1, { expected: 5 }))).toBeNull()
+    const grid = q('grid', -4250, { expected: -4442 })
+    expect(expectedText(grid)).toBe('expected 4.44 kW exporting with the house load and PV now')
+    expect(expectedText(q('grid', 1))).toBeNull()
+    expect(expectedText(q('pv', 1, { expected: 5 }))).toBeNull()
+  })
+
+  it('counts a power as off by the backend rule: over 300 W and 15 %', () => {
+    expect(powerDiffers(-2920, -4442)).toBe(true)
+    expect(powerDiffers(5000, 5600)).toBe(false) // 600 W, but only 11 %
+    expect(powerDiffers(0, 250)).toBe(false)
+    expect(powerDiffers(null, 100)).toBe(false)
   })
 
   it('lists what the inverter is set to', () => {

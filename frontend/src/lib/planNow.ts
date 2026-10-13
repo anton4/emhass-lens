@@ -1,7 +1,7 @@
 // The Plan page's this slot: what is measured now next to the plan, and what the inverter is set to.
 
 import type { InverterNow, NowQuantity } from '../api/types'
-import { batteryDirection, formatPower, isNumber } from './units'
+import { batteryDirection, formatPower, gridDirection, isNumber } from './units'
 
 export type NowByKey = Partial<Record<'batt' | 'grid' | 'pv' | 'load' | 'soc', NowQuantity>>
 
@@ -11,11 +11,22 @@ export function byKey(quantities: NowQuantity[] | null | undefined): NowByKey {
   return out
 }
 
-/** "expected 744 W discharging with the house load and PV now" for the battery; null otherwise. */
+/** A power is off when it is this far off and this share of the larger of the two (domain/plan_now.py's rule). */
+export const POWER_W = 300
+const POWER_SHARE = 0.15
+
+export function powerDiffers(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (!isNumber(a) || !isNumber(b)) return false
+  const gap = Math.abs(a - b)
+  return gap > POWER_W && gap > POWER_SHARE * Math.max(Math.abs(a), Math.abs(b))
+}
+
+/** "expected 744 W discharging with the house load and PV now" for the battery or the grid; null otherwise. */
 export function expectedText(q: NowQuantity | undefined, past = false): string | null {
-  if (!q || q.key !== 'batt' || !isNumber(q.expected)) return null
+  if (!q || (q.key !== 'batt' && q.key !== 'grid') || !isNumber(q.expected)) return null
   const given = past ? 'the measured house load and PV' : 'the house load and PV now'
-  return `expected ${formatPower(Math.abs(q.expected))} ${batteryDirection(q.expected).toLowerCase()} with ${given}`
+  const way = (q.key === 'batt' ? batteryDirection(q.expected) : gridDirection(q.expected)).toLowerCase()
+  return `expected ${formatPower(Math.abs(q.expected))} ${way} with ${given}`
 }
 
 /** The pieces of the "Inverter set to" line. */

@@ -6,7 +6,7 @@
 import type { ChargerNow, PlanPrice, PlanRow } from '../api/types'
 import { dayKey } from './format'
 import { deferrableColumns, num } from './plan'
-import type { NowByKey } from './planNow'
+import { POWER_W, powerDiffers, type NowByKey } from './planNow'
 import { IDLE_W } from './planSummary'
 import { formatFraction, formatPower, isNumber } from './units'
 
@@ -88,17 +88,52 @@ const JUDGED = [
   ['soc', 'SOC'],
 ] as const
 
-/** "as planned", or which of what the inverter controls differs from the plan; null when nothing was judged. */
-export function agreement(now: NowByKey | undefined): { color: 'green' | 'amber'; text: string } | null {
+/** "a", "a and b", "a, b and c". */
+function listWords(words: string[]): string {
+  return words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+}
+
+const upperFirst = (text: string) => `${text[0]!.toUpperCase()}${text.slice(1)}`
+
+/** The forecasts that missed by at least POWER_W, in words ("More PV and less house load than forecast"); null when
+ *  none did. The EV is EMHASS's schedule rather than a forecast: "the EV charges more than planned". */
+export function forecastMiss(plan: FlowValues, measured: FlowValues): string | null {
+  const gap = (key: FlowKey) => {
+    const p = plan[key]
+    const m = measured[key]
+    return p !== null && m !== null && Math.abs(m - p) >= POWER_W ? m - p : null
+  }
+  const words: string[] = []
+  const pv = gap('pv')
+  if (pv !== null) words.push(pv > 0 ? 'more PV' : 'less PV')
+  const load = gap('load')
+  if (load !== null) words.push(load > 0 ? 'more house load' : 'less house load')
+  const parts = words.length ? [`${listWords(words)} than forecast`] : []
+  const ev = gap('ev')
+  if (ev !== null) parts.push(`the EV charges ${ev > 0 ? 'more' : 'less'} than planned`)
+  return parts.length ? upperFirst(parts.join('; ')) : null
+}
+
+export interface Agreement {
+  color: 'green' | 'amber' | 'blue'
+  text: string
+}
+
+/** Whether what the inverter controls does what the plan means now: "as planned"; amber, naming what doesn't; or
+ *  blue when it all does what is expected but that is off the plan, saying why (the forecasts that missed, from
+ *  `plan` and `measured`, else the inverter's settings). Null when nothing was judged. */
+export function agreement(now: NowByKey | undefined, plan?: FlowValues, measured?: FlowValues): Agreement | null {
   const judged = JUDGED.filter(([key]) => typeof now?.[key]?.differs === 'boolean')
   if (judged.length === 0) return null
   const off = judged.filter(([key]) => now?.[key]?.differs).map(([, name]) => name)
-  if (off.length === 0) return { color: 'green', text: 'as planned' }
-  const list = off.length === 1 ? off[0]! : `${off.slice(0, -1).join(', ')} and ${off[off.length - 1]}`
-  return {
-    color: 'amber',
-    text: `${list[0]!.toUpperCase()}${list.slice(1)} ${off.length === 1 ? 'differs' : 'differ'} from the plan`,
+  if (off.length > 0) {
+    const verb = off.length === 1 ? 'differs' : 'differ'
+    return { color: 'amber', text: `${upperFirst(listWords(off))} ${verb} from the plan` }
   }
+  const moved = (['batt', 'grid'] as const).some((key) => powerDiffers(now?.[key]?.expected, now?.[key]?.plan))
+  if (!moved) return { color: 'green', text: 'as planned' }
+  const why = plan && measured ? forecastMiss(plan, measured) : null
+  return { color: 'blue', text: why ?? 'As expected for the inverter’s settings' }
 }
 
 export interface FlowNode {
@@ -113,6 +148,12 @@ export interface FlowNode {
   /** The plan under a measured value ("plan 12.69 kW", with its direction when that differs), or "planned" /
    *  "forecast" when the big number is the plan; PV's curtailment after it. */
   plan: string | null
+  /** Battery and grid: where the inverter settles with the PV and load now ("4.44 kW", with its direction when
+   *  that differs), when that is off the plan; it is what the measured value is judged against. */
+  expected: string | null
+  /** PV and house load: how far the measured value is off the forecast ("590 W more than forecast"), when by at
+   *  least POWER_W. */
+  gap: string | null
   idle: boolean
   /** The state of charge beside the power: the battery's, or the car's in the EV box. */
   soc: NodeSoc | null
@@ -162,7 +203,8 @@ const QUANTITY: Record<FlowKey, string> = {
 }
 
 /** One box per quantity; the deferrable load's only when the plan has one (`deferrable` names it). `soc` is the
- *  battery's state of charge (0–1): measured, the plan's at the end of the slot, and whether it differs. */
+ *  battery's state of charge (0–1): measured, the plan's at the end of the slot, and whether it differs.
+ *  `expected` is where the battery and the grid should be with the PV and load now (the API's `expected`). */
 export function flowNodes(
   plan: FlowValues,
   measured: FlowValues,
@@ -171,6 +213,7 @@ export function flowNodes(
     curtailed?: number | null
     charger?: ChargerNow | null
     soc?: { measured: number | null; planned: number | null; differs?: boolean | null }
+    expected?: { batt?: number | null; grid?: number | null }
   },
 ): FlowNode[] {
   const labels: Record<FlowKey, string | null> = {
@@ -202,6 +245,17 @@ export function flowNodes(
       planText = word === 'plan' ? 'planned' : 'forecast' // nothing measured: the big number is the plan
     }
     if (planText && curtailed) planText += `, ${curtailed}`
+    const e = key === 'batt' || key === 'grid' ? opts.expected?.[key] : null
+    let expected: string | null = null
+    if (isNumber(e) && p !== null && powerDiffers(e, p)) {
+      const expectedDir = direction(key, e)
+      expected = `${formatPower(Math.abs(e))}${expectedDir && expectedDir !== flow ? ` ${expectedDir}` : ''}`
+    }
+    const off = (key === 'pv' || key === 'load') && m !== null && p !== null ? m - p : null
+    const gap =
+      off !== null && Math.abs(off) >= POWER_W
+        ? `${formatPower(Math.abs(off))} ${off > 0 ? 'more' : 'less'} than forecast`
+        : null
     nodes.push({
       key,
       label,
@@ -210,6 +264,8 @@ export function flowNodes(
       direction: dir,
       measured: m !== null,
       plan: planText,
+      expected,
+      gap,
       idle: shown === null || Math.abs(shown) < IDLE_W,
       soc: key === 'batt' && opts.soc ? batterySoc(opts.soc) : key === 'ev' ? carSoc(opts.charger) : null,
     })

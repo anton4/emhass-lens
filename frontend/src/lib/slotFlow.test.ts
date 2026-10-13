@@ -6,6 +6,7 @@ import {
   flowHeadline,
   flowNodes,
   flowSegments,
+  forecastMiss,
   measuredValues,
   NARROW_FLOW,
   planValues,
@@ -52,6 +53,32 @@ describe('judged against the plan', () => {
     expect(agreement(byKey([q('grid', 1, { differs: true }), q('pv', 1)]))?.text).toBe('Grid differs from the plan')
     expect(agreement(byKey([q('pv', 1), q('load', 1)]))).toBeNull() // forecasts are never judged
     expect(agreement(undefined)).toBeNull()
+  })
+
+  // the owner's 11:30 slot on 13 Oct: PV export, 590 W more PV and 792 W less house load than forecast
+  const PLAN = v(4410, -2920, 0, 1350)
+  const MEASURED = v(5000, -4250, 0, 558)
+
+  it('is blue and names the forecasts when all does what is expected but that is off the plan', () => {
+    const now = byKey([
+      q('batt', 0, { plan: 0, expected: 0, differs: false }),
+      q('grid', -4250, { plan: -2920, expected: -4442, differs: false }),
+      q('pv', 5000, { plan: 4410 }),
+      q('load', 558, { plan: 1350 }),
+    ])
+    expect(agreement(now, PLAN, MEASURED)).toEqual({ color: 'blue', text: 'More PV and less house load than forecast' })
+    // the inverter's settings moved it (a force charge at the import max), not the forecasts
+    expect(agreement(now, PLAN, PLAN)).toEqual({ color: 'blue', text: 'As expected for the inverter’s settings' })
+    // within 300 W and 15 % of the plan: as planned
+    const close = byKey([q('grid', -3000, { plan: -2920, expected: -3100, differs: false })])
+    expect(agreement(close, PLAN, MEASURED)).toEqual({ color: 'green', text: 'as planned' })
+  })
+
+  it('words the forecasts that missed by 300 W or more', () => {
+    expect(forecastMiss(PLAN, v(4500, 0, 0, 1900))).toBe('More house load than forecast')
+    expect(forecastMiss(v(0, 0, 0, 1000, 0), v(0, 0, 0, 1000, 4140))).toBe('The EV charges more than planned')
+    expect(forecastMiss(PLAN, v(3000, 0, 0, 1350, null))).toBe('Less PV than forecast')
+    expect(forecastMiss(PLAN, { pv: null, grid: null, batt: null, load: 1500, ev: null })).toBeNull()
   })
 })
 
@@ -118,6 +145,24 @@ describe('the boxes', () => {
       batt: null,
       ev: null,
     })
+  })
+
+  it('shows where battery and grid should be when that is off the plan, and how far a forecast missed', () => {
+    const nodes = flowNodes(v(4410, -2920, 0, 1350), v(5000, -4250, 0, 558), {
+      deferrable: null,
+      expected: { batt: 0, grid: -4442 },
+    })
+    const by = Object.fromEntries(nodes.map((n) => [n.key, n]))
+    expect(by.grid).toMatchObject({ plan: 'plan 2.92 kW', expected: '4.44 kW', gap: null })
+    expect(by.batt).toMatchObject({ plan: 'plan 0 W', expected: null })
+    expect(by.pv).toMatchObject({ plan: 'forecast 4.41 kW', gap: '590 W more than forecast', expected: null })
+    expect(by.load).toMatchObject({ gap: '792 W less than forecast' })
+    // the battery expected to charge while it idles: the direction is part of it
+    const charging = flowNodes(v(4410, -2920, 0, 1350), v(5000, -4250, 0, 558), {
+      deferrable: null,
+      expected: { batt: -1382 },
+    })
+    expect(charging.find((n) => n.key === 'batt')?.expected).toBe('1.38 kW charging')
   })
 
   it('leaves the deferrable box out when the plan has none, and adds the curtailment to PV', () => {

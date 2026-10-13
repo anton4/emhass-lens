@@ -37,6 +37,33 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: This slot judges battery and grid by what the inverter does with the PV and load now (unreleased)
+- **Why:** the owner's 11:30 slot (PV export, grid target 0 W, battery −20…0 kW) showed *Battery and grid differ
+  from the plan* with nothing wrong.
+  - **Measured:** PV 5.00 kW (forecast 4.41), house 558 W (forecast 1.35 kW), grid −4.25 kW (plan −2.92), battery
+    0 W (plan 0 W).
+  - **Battery:** it was judged against a hidden 1.38 kW charge, because the old rule let the battery take every
+    forecast error.
+  - **Grid:** it was judged against the plan, although the extra export was exactly the extra PV and the missing load.
+- **The rule** is `domain/plan_now.inverter_expected()`:
+  - `N = load + deferrable − PV` (measured, else forecast).
+  - The battery covers `N − grid target` within its window: −battery_max … −battery_min in EMHASS signs, narrowed by
+    EMHASS's battery power maxima. The grid gets the rest.
+  - So in PV export the extra PV is exported, while in a force discharge or self-use the battery covers the
+    difference.
+  - **Where the targets come from:** the Sofar registers now. For the previous slot, or when a register is unknown,
+    they come from `decide()` on the plan row. With inverter control off it is the old rule: grid against the plan,
+    and the battery takes the difference.
+  - **Force charge at the import max:** the battery is now expected to charge at all it takes, not at the plan's
+    rate. That's what the inverter does with that grid target.
+- **UI:**
+  - The Grid and Battery boxes show "expected …" under the plan when that is off the plan. The box grows rather than
+    cut it off.
+  - A PV or house forecast that missed by 300 W or more is blue.
+  - When all does what is expected but that is off the plan, the chip is blue and names why: "More PV and less house
+    load than forecast", or "As expected for the inverter's settings".
+  - The "Plan:" line keeps "PV" in capitals.
+
 ### 2026-10-13: the feed-in limit during a market sell changes only when it has to (0.4.25)
 - **Why:** the owner found the apply and feed-in buttons pressed far too often in a Kratt frrup session, with the
   market on Shadow.

@@ -85,8 +85,10 @@ function FlowBox({
     <div
       className="flow-node"
       data-differs={differs || undefined}
+      data-expected={node.expected ? true : undefined}
       data-idle={node.idle || undefined}
-      style={{ left: at.x, top: at.y, width: layout.node.w, height: layout.node.h }}
+      // a box with an expected line may grow into the room above the house and EV boxes rather than cut it off
+      style={{ left: at.x, top: at.y, width: layout.node.w, [node.expected ? 'minHeight' : 'height']: layout.node.h }}
     >
       <div className="flow-node-head">
         <span className="flow-node-name">
@@ -99,7 +101,7 @@ function FlowBox({
           </span>
         )}
         {typeof differs === 'boolean' && (
-          <Lamp color={differs ? 'amber' : 'green'} label={differs ? 'differs from the plan' : 'as planned'} />
+          <Lamp color={differs ? 'amber' : 'green'} label={differs ? 'differs from what is expected' : 'as expected'} />
         )}
       </div>
       <div className="flow-node-row">
@@ -115,8 +117,17 @@ function FlowBox({
         </div>
       )}
       {node.plan && (
-        <div className="flow-node-plan" title={node.plan}>
+        <div
+          className="flow-node-plan"
+          data-gap={node.gap ? true : undefined}
+          title={node.gap ? `${node.plan} · ${node.gap}` : node.plan}
+        >
           {node.plan}
+        </div>
+      )}
+      {node.expected && (
+        <div className="flow-node-expected" title={expectedText(q, past) ?? undefined}>
+          {narrow ? '≈' : 'expected'} {node.expected}
         </div>
       )}
     </div>
@@ -293,7 +304,7 @@ export function ThisSlot({
   const users = charger ? 'the EV' : 'the deferrable load'
   const headline = flowHeadline(shown, users)
   const planHeadline = flowHeadline(planned, users)
-  const agree = agreement(quantities)
+  const agree = agreement(quantities, planned, measured)
   const nodes = flowNodes(planned, measured, {
     deferrable,
     curtailed: num(row, 'P_PV_curtailment'),
@@ -303,11 +314,13 @@ export function ThisSlot({
       planned: socOf(row),
       differs: quantities?.soc?.differs,
     },
+    expected: { batt: quantities?.batt?.expected, grid: quantities?.grid?.expected },
   })
   const segments = flowSegments(shown, layout, withDeferrable)
   const boxes = segments.map((s) => ({ s, ...segmentBox(s, layout) }))
   const tone = inverter?.in_control && inverter.state ? modeTone(inverter.state) : null
-  const lowerFirst = (text: string) => `${text[0]!.toLowerCase()}${text.slice(1)}`
+  // "The battery covers…" reads "the battery covers…" mid-line; "PV covers…" keeps its capitals
+  const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? `${text[0]!.toLowerCase()}${text.slice(1)}` : text)
 
   return (
     <div className="slot">

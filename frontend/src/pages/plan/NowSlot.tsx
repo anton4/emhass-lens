@@ -127,9 +127,13 @@ export function NowSlot({
               The big numbers come from the sensors under{' '}
               <Link to="/settings?section=measurements">Settings → Measurements</Link>, the plan is the line under
               them, and the time next to a name is how long ago that sensor last changed. House load and PV are
-              forecasts and aren't judged. The battery is compared with what the plan means for the load and PV now,
-              the grid with the plan; an amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from
-              where the plan expects it now). The EV's power is its charger's current limit while it charges.
+              forecasts and aren't judged; one that missed by 300 W or more is blue. The battery and the grid are
+              compared with where the inverter's settings put them with the load and PV now (in PV export the battery
+              may not charge, so extra PV goes to the grid), shown as <em>expected</em> when that is off the plan;
+              without inverter control the grid is compared with the plan and the battery takes the difference. An
+              amber mark means a difference of more than 300 W and 15 % (SoC: 2 points from where the plan expects it
+              now). A blue chip at the top means all of it does what is expected and says which forecasts moved it off
+              the plan. The EV's power is its charger's current limit while it charges.
             </details>
           ) : (
             <p className="chart-note">

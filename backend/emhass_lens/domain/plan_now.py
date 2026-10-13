@@ -12,6 +12,8 @@ from typing import Any
 
 from emhass_lens.core.clock import parse_iso
 from emhass_lens.core.slots import slot_floor
+from emhass_lens.domain.inverter import PlanValues, Targets, decide
+from emhass_lens.settings.model import InverterLimits
 
 POWER_W = 300.0  # a power differs when it is this far off ...
 POWER_SHARE = 0.15  # ... and this share of the larger of the two
@@ -76,6 +78,13 @@ def deferrable_of(row: dict[str, Any]) -> float | None:
     return sum(known) if known else None
 
 
+def _now_or_plan(measured: dict[str, Reading], key: str, row: dict[str, Any]) -> float | None:
+    reading = measured.get(key)
+    if reading is not None and reading.value is not None:
+        return reading.value
+    return _num(row.get(COLUMNS[key]))
+
+
 def battery_expected(row: dict[str, Any], measured: dict[str, Reading], deferrable_now: float | None) -> float | None:
     """What the plan means for the battery with the house load, PV and deferrable loads as they are now. With a grid
     target the inverter holds the grid and the battery covers the rest (P_PV + P_batt + P_grid = P_Load + P_def), so
@@ -96,18 +105,69 @@ def battery_expected(row: dict[str, Any], measured: dict[str, Reading], deferrab
     return expected
 
 
+def net_demand(row: dict[str, Any], measured: dict[str, Reading], deferrable_now: float | None) -> float | None:
+    """What the house and the deferrable loads need beyond the PV now (W; negative: PV to spare), from what is
+    measured, else the plan's forecasts. The battery and the grid together cover it: P_batt + P_grid."""
+    load, pv = _now_or_plan(measured, "load", row), _now_or_plan(measured, "pv", row)
+    if load is None or pv is None:
+        return None
+    deferrable = deferrable_now if deferrable_now is not None else deferrable_of(row)
+    return load + (deferrable or 0.0) - pv
+
+
+def inverter_expected(
+    demand: float, targets: Targets, batt_limits: tuple[float | None, float | None] = (None, None)
+) -> tuple[float, float]:
+    """(battery, grid) where a Sofar in passive mode settles for `demand` (net_demand): it holds the grid at its target
+    and the battery covers the rest, within the battery window; what the battery can't take goes to the grid. The
+    window is −battery_max … −battery_min in EMHASS's signs (Sofar counts charging as positive), narrowed by EMHASS's
+    `batt_limits` (charge max, discharge max), so a force charge at the import max is held to what the battery takes."""
+    lo, hi = float(-targets.battery_max_w), float(-targets.battery_min_w)
+    charge_max, discharge_max = batt_limits
+    if charge_max is not None:
+        lo = max(lo, -charge_max)
+    if discharge_max is not None:
+        hi = min(hi, discharge_max)
+    battery = min(hi, max(lo, demand - targets.grid_power_w))
+    return battery, demand - battery
+
+
+def row_targets(row: dict[str, Any], limits: InverterLimits, no_export_at_or_below: float | None) -> Targets | None:
+    """The passive settings the inverter rules give a plan row (what the automation and EMHASS Lens set for it)."""
+    batt, grid = _num(row.get(COLUMNS["batt"])), _num(row.get(COLUMNS["grid"]))
+    if batt is None or grid is None:
+        return None
+    values = PlanValues(
+        p_batt=batt,
+        p_grid=grid,
+        p_pv=_num(row.get(COLUMNS["pv"])) or 0.0,
+        p_pv_curtailment=_num(row.get("P_PV_curtailment")) or 0.0,
+        export_price=_num(row.get("unit_prod_price")),
+        soc=soc_of(row),
+    )
+    return decide(values, limits, no_export_at_or_below).targets
+
+
 def compare(
     row: dict[str, Any],
     prev_row: dict[str, Any] | None,
     measured: dict[str, Reading],
     fraction: float,
     deferrable_now: float | None = None,
+    targets: Targets | None = None,
+    batt_limits: tuple[float | None, float | None] = (None, None),
 ) -> list[dict[str, Any]]:
     """Plan against measured, per quantity: {key, plan, expected, measured, entity, age_s, differs, sign_hint}.
 
-    Only what the inverter controls is judged: the grid against the plan, the battery against what the plan means
-    for the load and PV now, the SoC against where the plan expects it. House load and PV are forecasts: shown, never
-    judged (`differs` None). EMHASS's signs (battery + discharge, grid + import)."""
+    Only what the inverter controls is judged, against what the plan means with the house load, PV and deferrable
+    loads as they are now. With the inverter's passive `targets` the battery and the grid are both judged against
+    where the inverter settles (inverter_expected): in PV export the battery can't charge, so more PV than forecast
+    goes to the grid. Without them the grid is judged against the plan and the battery takes every difference. The SoC
+    is judged against where the plan expects it. House load and PV are forecasts: shown, never judged (`differs`
+    None). EMHASS's signs (battery + discharge, grid + import)."""
+    settled = None
+    if targets is not None and (demand := net_demand(row, measured, deferrable_now)) is not None:
+        settled = inverter_expected(demand, targets, batt_limits)
     out: list[dict[str, Any]] = []
     for key, column in COLUMNS.items():
         plan = _num(row.get(column))
@@ -123,9 +183,10 @@ def compare(
             "sign_hint": False,
         }
         if key == "grid":
-            entry["differs"] = power_differs(plan, reading.value)
+            entry["expected"] = settled[1] if settled is not None else None
+            entry["differs"] = power_differs(settled[1] if settled is not None else plan, reading.value)
         elif key == "batt":
-            expected = battery_expected(row, measured, deferrable_now)
+            expected = settled[0] if settled is not None else battery_expected(row, measured, deferrable_now)
             entry["expected"] = expected
             entry["differs"] = power_differs(expected, reading.value)
             entry["sign_hint"] = bool(
