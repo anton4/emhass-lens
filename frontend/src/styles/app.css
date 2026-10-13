@@ -2615,9 +2615,12 @@ tr[data-current] td:first-child {
   padding-top: 22px;
 }
 
+/* the flow's column is no wider than its wide layout (WIDE_FLOW.width in lib/slotFlow.ts), so the state of charge and
+   the prices sit right beside it rather than at the far edge */
 @media (min-width: 1180px) {
   .slot-body {
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 720px) 300px;
+    justify-content: start;
   }
 }
 
@@ -2625,10 +2628,10 @@ tr[data-current] td:first-child {
   overflow: hidden;
 }
 
-/* scaled down (transform) when even the narrow layout doesn't fit */
+/* left-aligned; scaled down (transform) when even the narrow layout doesn't fit */
 .flow {
   position: relative;
-  margin: 0 auto;
+  margin: 0;
   transform-origin: 0 0;
 }
 
@@ -3565,6 +3568,18 @@ th[aria-sort='descending'] .sort-mark {
 
 .facts-inline dd .lamp {
   vertical-align: 1px;
+}
+
+/* Plan page: the plan's facts and the slot switch share one head row, ruled once by the head */
+.plan-head {
+  align-items: center;
+}
+
+.plan-head > .facts-inline {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .swatch {

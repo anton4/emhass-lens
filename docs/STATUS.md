@@ -37,6 +37,18 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-13: a more compact top of the Plan page (0.4.32)
+- **Why:** the owner found the facts row and the *This slot* head two rows too many, *Made for* and *Times in* not
+  worth a place, and the flow centred with the SoC and prices far off at the right edge.
+- **Head:** PlanPage passes its facts `<dl>` (Planned at, Solve took, Horizon, Total cost function) to `NowSlot`
+  (`facts` prop), which shows it in its `panel-head plan-head` beside the slot switch; the slot title is a
+  visually-hidden `h2`. The slot's times, published and read go to `ThisSlot`'s line under the headline (`when` prop;
+  the line is now parts joined with " · "), or into the no-plan message.
+- **Driver:** a plan whose `driver` isn't `app` gets a notice above (amber for `external` with EXTERNAL_PLAN_NOTE,
+  blue for `legacy`) instead of the *Made for* fact.
+- **Layout:** `.flow` is left-aligned; from 1180 px the slot body is `minmax(0, 720px) 300px` (720 = WIDE_FLOW.width),
+  so the side column sits 48 px after the flow. Checked on the e2e stack at 390, 900 and 1190 px: no side scroll.
+
 ### 2026-10-13: the Plan page's EV box shows how old its value is (0.4.31)
 - **Why:** the owner noticed the EV box was the only one in *This slot* without the age in its top-right corner.
 - **Change:** `charger_now` (services/plan_now.py) adds `entity` and `age_s`: the newest `last_updated` of the

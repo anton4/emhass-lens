@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { ChargerNow, InverterNow, NowQuantity, PlanPrice, PlanRow } from '../../api/types'
 import { LabelledLamp, Lamp } from '../../components/Lamp'
@@ -257,6 +257,7 @@ export function ThisSlot({
   socMax,
   prices,
   slotStart,
+  when,
   fetchedAt,
   tz,
 }: {
@@ -275,6 +276,8 @@ export function ThisSlot({
   socMax?: number | null
   prices: PlanPrice[]
   slotStart: string
+  /** The slot's times (and for this slot when it was published and read), first on the line under the headline. */
+  when?: ReactNode
   fetchedAt: number
   tz: string
 }) {
@@ -321,6 +324,25 @@ export function ThisSlot({
   const tone = inverter?.in_control && inverter.state ? modeTone(inverter.state) : null
   // "The battery covers…" reads "the battery covers…" mid-line; "PV covers…" keeps its capitals
   const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? `${text[0]!.toLowerCase()}${text.slice(1)}` : text)
+  const line = [
+    when,
+    anyMeasured && planHeadline !== headline && (
+      <>
+        <strong>Plan:</strong> {lowerFirst(planHeadline)}
+      </>
+    ),
+    plan?.generatedAt && (
+      <>
+        planned {formatClock(plan.generatedAt, tz)}
+        {plan.runId && (
+          <>
+            {' · '}
+            <Link to={`/runs/${plan.runId}`}>run #{plan.runId}</Link>
+          </>
+        )}
+      </>
+    ),
+  ].filter(Boolean)
 
   return (
     <div className="slot">
@@ -339,25 +361,14 @@ export function ThisSlot({
           </span>
         )}
       </div>
-      {(anyMeasured || plan?.generatedAt) && (
+      {line.length > 0 && (
         <p className="slot-line">
-          {anyMeasured && planHeadline !== headline && (
-            <>
-              <strong>Plan:</strong> {lowerFirst(planHeadline)}
-              {plan?.generatedAt && ' · '}
-            </>
-          )}
-          {plan?.generatedAt && (
-            <>
-              planned {formatClock(plan.generatedAt, tz)}
-              {plan.runId && (
-                <>
-                  {' · '}
-                  <Link to={`/runs/${plan.runId}`}>run #{plan.runId}</Link>
-                </>
-              )}
-            </>
-          )}
+          {line.map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 && ' · '}
+              {part}
+            </Fragment>
+          ))}
         </p>
       )}
       {inverter && (

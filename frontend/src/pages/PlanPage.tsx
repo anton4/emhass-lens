@@ -119,68 +119,71 @@ export function PlanPage() {
           {runNote} <Link to="/runs?job=emhass.mpc">MPC runs</Link> show what EMHASS Lens sent and EMHASS's full answer.
         </div>
       )}
-
-      <dl className="facts facts-inline">
-        <div>
-          <dt>Planned at</dt>
-          <dd>
-            <span title={runNote ?? `EMHASS said: ${status ?? 'nothing'}`}>
-              <Lamp
-                color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'}
-                label={`EMHASS said: ${status ?? 'nothing'}`}
-              />
-            </span>{' '}
-            <time dateTime={current.generated_at}>{formatTime(current.generated_at, now, tz)}</time>
-            {current.run_id && (
-              <>
-                {' · '}
-                <Link to={`/runs/${current.run_id}`}>run {current.run_id}</Link>
-              </>
-            )}
-          </dd>
+      {current.driver === 'legacy' ? (
+        <div className="notice" role="note">
+          <strong>Requested by the HACS integration:</strong> its Auto MPC switch was on when EMHASS Lens picked this
+          plan up.
         </div>
-        <div>
-          <dt>Made for</dt>
-          <dd>
-            {DRIVERS[current.driver] ?? current.driver}
-            {current.driver === 'external' && (
-              <div className="cell-sub">
-                {EXTERNAL_PLAN_NOTE} <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it was
-                picked up.
+      ) : (
+        current.driver !== 'app' && (
+          <div className="notice" data-color="amber" role="note">
+            <strong>Requested by {DRIVERS[current.driver] ?? current.driver}.</strong> {EXTERNAL_PLAN_NOTE}{' '}
+            <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it was picked up.
+          </div>
+        )
+      )}
+
+      <NowSlot
+        columns={data.columns}
+        prices={data.prices}
+        tz={tz}
+        now={now}
+        facts={
+          <dl className="facts facts-inline">
+            <div>
+              <dt>Planned at</dt>
+              <dd>
+                <span title={runNote ?? `EMHASS said: ${status ?? 'nothing'}`}>
+                  <Lamp
+                    color={status === 'ok' ? 'green' : status ? 'amber' : 'neutral'}
+                    label={`EMHASS said: ${status ?? 'nothing'}`}
+                  />
+                </span>{' '}
+                <time dateTime={current.generated_at}>{formatTime(current.generated_at, now, tz)}</time>
+                {current.run_id && (
+                  <>
+                    {' · '}
+                    <Link to={`/runs/${current.run_id}`}>run {current.run_id}</Link>
+                  </>
+                )}
+              </dd>
+            </div>
+            {duration !== null && (
+              <div>
+                <dt>Solve took</dt>
+                <dd>{formatDuration(duration)}</dd>
               </div>
             )}
-          </dd>
-        </div>
-        {duration !== null && (
-          <div>
-            <dt>Solve took</dt>
-            <dd>{formatDuration(duration)}</dd>
-          </div>
-        )}
-        <div>
-          <dt>Horizon</dt>
-          <dd>
-            {rows.length} slots, {formatSlot(first ? String(first) : null, now, tz)} →{' '}
-            {formatSlot(last ? String(last) : null, now, tz)}
-          </dd>
-        </div>
-        {costFun && (
-          <div>
-            <dt>Total cost function</dt>
-            <dd
-              title={`Σ ${costFun.column} over the ${rows.length} slots of this plan, which EMHASS publishes as sensor.total_cost_fun_value (positive is money in)`}
-            >
-              {formatEur(costFun.value)} <span className="muted">{costFun.method}</span>
-            </dd>
-          </div>
-        )}
-        <div>
-          <dt>Times in</dt>
-          <dd>{tz}</dd>
-        </div>
-      </dl>
-
-      <NowSlot columns={data.columns} prices={data.prices} tz={tz} now={now} />
+            <div>
+              <dt>Horizon</dt>
+              <dd>
+                {rows.length} slots, {formatSlot(first ? String(first) : null, now, tz)} →{' '}
+                {formatSlot(last ? String(last) : null, now, tz)}
+              </dd>
+            </div>
+            {costFun && (
+              <div>
+                <dt>Total cost function</dt>
+                <dd
+                  title={`Σ ${costFun.column} over the ${rows.length} slots of this plan, which EMHASS publishes as sensor.total_cost_fun_value (positive is money in)`}
+                >
+                  {formatEur(costFun.value)} <span className="muted">{costFun.method}</span>
+                </dd>
+              </div>
+            )}
+          </dl>
+        }
+      />
 
       <section className="panel">
         <div className="panel-head">

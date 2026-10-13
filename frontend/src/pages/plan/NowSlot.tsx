@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { usePlanNow } from '../../api/queries'
 import type { PlanPrice, PlanRow } from '../../api/types'
@@ -10,19 +10,22 @@ import { ThisSlot } from './ThisSlot'
 type Which = 'prev' | 'now' | 'next'
 const TITLE: Record<Which, string> = { prev: 'Previous slot', now: 'This slot', next: 'Next slot' }
 const NO_PLAN: Record<Which, string> = {
-  prev: 'No stored plan covers the previous quarter-hour.',
-  now: 'No stored plan covers this quarter-hour.',
-  next: 'No stored plan covers the next quarter-hour yet.',
+  prev: 'No stored plan covers the previous quarter-hour',
+  now: 'No stored plan covers this quarter-hour',
+  next: 'No stored plan covers the next quarter-hour yet',
 }
 
 /** The plan row in force for this quarter-hour (or the previous or next one) as a flow: what is measured now (or the
- *  quarter-hour means for the slot that has ended) with the plan under it, and what the inverter is set to. */
+ *  quarter-hour means for the slot that has ended) with the plan under it, and what the inverter is set to. The
+ *  plan's facts share the head row with the slot switch; the slot's own times go under its headline. */
 export function NowSlot({
+  facts,
   columns,
   prices,
   tz,
   now,
 }: {
+  facts: ReactNode
   columns: string[]
   prices: PlanPrice[]
   tz: string
@@ -42,25 +45,24 @@ export function NowSlot({
   const fetchedAt = planNow.dataUpdatedAt
   // the state of charge starts where the slot before ended
   const fromRow = (which === 'now' ? d?.prev_row : which === 'next' ? d?.row : undefined) as PlanRow | null | undefined
+  const when = start && end && (
+    <>
+      {formatClock(start, tz)}–{formatClock(end, tz)}
+      {isNow && d?.published_at && <> · published {formatClock(d.published_at, tz)}</>}
+      {which === 'prev' && anyMeasured && <> · quarter-hour means</>}
+      {isNow && fetchedAt > 0 && (
+        <span title="When this page last read the sensors, the plan and the inverter; it reads them every 10 s">
+          {' '}
+          · read {formatClock(new Date(fetchedAt).toISOString(), tz)}
+        </span>
+      )}
+    </>
+  )
   return (
     <section className="panel">
-      <div className="panel-head">
-        <div className="panel-title-row">
-          <h2>{TITLE[which]}</h2>
-          {start && end && (
-            <span className="muted">
-              {formatClock(start, tz)}–{formatClock(end, tz)}
-              {isNow && d?.published_at && <> · published {formatClock(d.published_at, tz)}</>}
-              {which === 'prev' && anyMeasured && <> · quarter-hour means</>}
-              {isNow && fetchedAt > 0 && (
-                <span title="When this page last read the sensors, the plan and the inverter; it reads them every 10 s">
-                  {' '}
-                  · read {formatClock(new Date(fetchedAt).toISOString(), tz)}
-                </span>
-              )}
-            </span>
-          )}
-        </div>
+      <div className="panel-head plan-head">
+        <h2 className="visually-hidden">{TITLE[which]}</h2>
+        {facts}
         {d && (
           <div className="segmented" role="group" aria-label="Which slot">
             {(['prev', 'now', 'next'] as const).map((w) => (
@@ -93,6 +95,7 @@ export function NowSlot({
             socMax={d?.soc_max}
             prices={prices}
             slotStart={start}
+            when={when}
             fetchedAt={fetchedAt}
             tz={tz}
           />
@@ -100,6 +103,7 @@ export function NowSlot({
           d && (
             <p className="muted" style={{ margin: 0 }}>
               {NO_PLAN[which]}
+              {start && end && ` (${formatClock(start, tz)}–${formatClock(end, tz)})`}.
             </p>
           )
         )}

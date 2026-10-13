@@ -204,7 +204,7 @@ export function lastRunNote(
   return note
 }
 
-/** What "made for someone else" means. */
+/** Why a plan was requested by someone else. */
 export const EXTERNAL_PLAN_NOTE =
   "EMHASS Lens didn't send the request that made this plan: EMHASS's own web UI, a Home Assistant automation or " +
   'script, or the HACS integration with its Auto MPC switch off made it. Before 0.3.9 it could also be a ' +
