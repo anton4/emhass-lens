@@ -1249,7 +1249,14 @@ class MarketThresholds(Section):
         default=2500, ge=0, le=50000, title="Bypass the cooldown for changes of", json_schema_extra=ui(unit="W")
     )
     deadband_w: int = Field(default=300, ge=0, le=50000, title="Deadband", json_schema_extra=ui(unit="W"))
-    deadband_pct: float = Field(default=0.15, ge=0, le=1, title="Deadband as a share of the target")
+    deadband_pct: float = Field(
+        default=0.15,
+        ge=0,
+        le=1,
+        title="Deadband as a share of the target",
+        description="For a fresh change only: a gap of more than the deadband in W that holds for the cooldown is "
+        "written anyway.",
+    )
     min_soc: float = Field(default=10, ge=0, le=100, title="No selling below", json_schema_extra=ui(unit="%"))
     sell_full_soc_pct: float = Field(
         default=97,

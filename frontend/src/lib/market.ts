@@ -20,6 +20,8 @@ export interface MarketThrottle {
   bypass_reasons: string[]
   cooldown_block: boolean
   reasons: string[]
+  gap_for_s?: number | null // how long the grid target has been more than deadband_w off (since 0.4.39)
+  gap_held?: boolean // the gap outlasted the cooldown, so deadband_w applied instead of the proportional deadband
 }
 
 export interface MarketDecision {
@@ -48,6 +50,7 @@ export interface MarketDecision {
   notes?: string[]
   parity_feedin_w?: number | null // what the automation would set the feed-in limit to (since 0.4.25)
   parity_feedin_write?: boolean
+  parity_needs_update?: boolean // whether the automation would write the registers now (since 0.4.39)
 }
 
 /** status.last and the `market_decision` artifact (which also carries `inputs`). */
@@ -193,7 +196,7 @@ export function marketGuards(thresholds: MarketSettings['thresholds'] | undefine
     },
     {
       title: 'Proportional deadband',
-      text: `The grid target is rewritten only when it moves by more than max(${t.deadband_w} W, ${Math.round(t.deadband_pct * 100)} % of the target).`,
+      text: `The grid target is rewritten only when it moves by more than max(${t.deadband_w} W, ${Math.round(t.deadband_pct * 100)} % of the target); a gap of more than ${t.deadband_w} W that holds for ${t.cooldown_s} s is written anyway.`,
     },
     {
       title: 'Cooldown',

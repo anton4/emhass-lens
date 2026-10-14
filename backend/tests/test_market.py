@@ -1,5 +1,6 @@
 """The market rules must match the HA automation 'Qilowatt: Master Market Controller' guard for guard, except for the
-feed-in limit during a sell, which EMHASS Lens writes far less often (the automation's value is kept as parity_*)."""
+feed-in limit during a sell, which EMHASS Lens writes far less often, and a gap only the proportional deadband hides,
+which EMHASS Lens writes once it holds for the cooldown (the automation's calls are kept as parity_*)."""
 
 from datetime import UTC, datetime
 
@@ -103,6 +104,30 @@ def test_continuing_uses_the_exit_gate_the_deadband_and_the_cooldown() -> None:
     assert outside.needs_update is True
     floor = decide(inp(session="sell", cur_grid_w=-1000, mode="mfrrup", powerlimit_w=1000, since_commit_s=999), T, L)
     assert floor.throttle.effective_deadband_w == 300
+
+
+def test_a_gap_the_deadband_hides_is_written_once_it_holds_for_the_cooldown() -> None:
+    """2026-10-14 (runs 5631-5646): Kratt raised a sell from 9400 W to 10600 W. 1200 W is inside 15 % of 10600 W, so
+    the automation's rule held -9400 W for the ten minutes left of the command."""
+    morning = {"session": "sell", "cur_grid_w": -9400, "mode": "frrup", "powerlimit_w": 10600, "since_commit_s": 200}
+    for fresh in (None, 22):
+        d = decide(inp(**morning, gap_for_s=fresh), T, L)
+        assert d.needs_update is False and d.parity_needs_update is False and d.throttle.gap_held is False
+        assert d.throttle.effective_deadband_w == 1590
+        assert any("written at 180 s if it stays" in r for r in d.throttle.reasons)
+    held = decide(inp(**morning, gap_for_s=202), T, L)
+    assert held.needs_update is True and held.throttle.gap_held is True and held.throttle.effective_deadband_w == 300
+    assert held.targets is not None and held.targets.grid_power_w == -10600
+    assert "gap held 202 s ≥ 180 s: deadband 300 W" in held.throttle.reasons
+    assert held.parity_needs_update is False  # the automation would still hold it ...
+    assert expected_after(held, inp(**morning, gap_for_s=202)).grid_power_w == -9400  # ... and shadow judges that
+    # a gap within deadband_w is never written, and the cooldown still holds a held gap
+    assert decide(inp(**{**morning, "powerlimit_w": 9600}, gap_for_s=999), T, L).needs_update is False
+    cooling = decide(inp(**{**morning, "since_commit_s": 60}, gap_for_s=202), T, L)
+    assert cooling.needs_update is False and cooling.throttle.cooldown_block is True
+    # beyond the proportional deadband both write at once, held or not
+    big = decide(inp(**{**morning, "powerlimit_w": 12000}), T, L)
+    assert big.needs_update and big.parity_needs_update and big.throttle.gap_held is False
 
 
 def test_the_cooldown_bypasses() -> None:

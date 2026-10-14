@@ -87,6 +87,7 @@ class MarketService:
         self._wake = asyncio.Event()
         self._seen: dict[str, str] = {}
         self._connects = 0
+        self._gap_since: datetime | None = None  # when the grid target last drifted more than deadband_w off
         # one actor at a time: a recorded reconcile and the session watchdog may both end a session
         self.act_lock = asyncio.Lock()
 
@@ -278,13 +279,25 @@ class MarketService:
             trigger_entity=trigger_entity,
             force_end=force_end,
             load_w=num(self._state(e.house_load_sensor)),
+            gap_for_s=None if self._gap_since is None else (now - self._gap_since).total_seconds(),
         )
 
     def _decide(
         self, now: datetime, kind: str, trigger_entity: str, force_end: bool = False
     ) -> tuple[MarketDecision, MarketInputs]:
         inputs = self.inputs(now, kind, trigger_entity, force_end)
-        return decide(inputs, self._t(), self.c.settings.current.inverter.limits), inputs
+        decision = decide(inputs, self._t(), self.c.settings.current.inverter.limits)
+        self._track_gap(decision, now)
+        return decision, inputs
+
+    def _track_gap(self, d: MarketDecision, now: datetime) -> None:
+        """Start the gap clock when the grid target drifts more than deadband_w off the registers and nothing is
+        written; a write, a closed gap or the end of the command stops it. In memory: a restart starts it again."""
+        open_gap = d.action in ("buy", "sell") and not d.needs_update and d.throttle.grid_delta_w > self._t().deadband_w
+        if not open_gap:
+            self._gap_since = None
+        elif self._gap_since is None:
+            self._gap_since = now
 
     # --- jobs -----
     def should_record(self) -> bool:

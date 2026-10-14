@@ -5205,6 +5205,7 @@
           },
           "deadband_pct": {
             "default": 0.15,
+            "description": "For a fresh change only: a gap of more than the deadband in W that holds for the cooldown is written anyway.",
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Deadband as a share of the target",

@@ -3158,6 +3158,7 @@ export interface components {
             cooldown_s: number;
             /**
              * Deadband as a share of the target
+             * @description For a fresh change only: a gap of more than the deadband in W that holds for the cooldown is written anyway.
              * @default 0.15
              */
             deadband_pct: number;

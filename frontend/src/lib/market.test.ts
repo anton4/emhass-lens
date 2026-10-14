@@ -57,6 +57,7 @@ describe('marketGuards and values', () => {
     const guards = marketGuards(undefined)
     expect(guards).toHaveLength(5)
     expect(guards[0]?.text).toContain('1000 W')
+    expect(guards[1]?.text).toContain('a gap of more than 300 W that holds for 180 s is written anyway')
     expect(guards[2]?.text).toContain('180 s')
     expect(guards[3]?.text).toContain('raised to 15500 W at once')
     expect(guards[3]?.text).toContain('at 97 % or more')

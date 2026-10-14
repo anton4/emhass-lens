@@ -7,7 +7,10 @@ the registers, with three guards against needless writes to the Sofar's EEPROM:
 
 1. Direction-aware hysteresis: `enter_w` gates starting a session and flipping direction, `exit_w` only gates
    continuing in the same direction. A command under the gate while a session is open ends the session.
-2. A proportional deadband: max(deadband_w, deadband_pct × |target|).
+2. A proportional deadband: max(deadband_w, deadband_pct × |target|), for a fresh change. A gap of more than
+   `deadband_w` that has held for `cooldown_s` (`gap_for_s`, tracked by the service) is written anyway: the
+   automation holds it for the rest of the session, and on 2026-10-14 Kratt asked 10600 W and got 9400 W for ten
+   minutes. `parity_needs_update` keeps the automation's own call, which shadow mode judges.
 3. A cooldown between commits, bypassed for session edges, wrong battery rails and big changes. Session ends
    are never throttled.
 
@@ -53,6 +56,7 @@ class MarketInputs:
     trigger_entity: str
     force_end: bool = False  # the kill switch: end the session whatever the command
     load_w: float | None = None  # the house load now; None -> 0 (all PV counts as spare)
+    gap_for_s: float | None = None  # seconds the grid target has been more than deadband_w off; None -> new/unknown
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -68,6 +72,8 @@ class Throttle:
     bypass_reasons: list[str]
     cooldown_block: bool
     reasons: list[str]  # the reasoning in words, in order
+    gap_for_s: float | None = None
+    gap_held: bool = False  # the gap outlasted the cooldown: the deadband is deadband_w, not the proportional one
 
 
 @dataclass(frozen=True)
@@ -97,6 +103,7 @@ class MarketDecision:
     notes: list[str] = field(default_factory=list)
     parity_feedin_w: int | None = None  # what the automation would set the feed-in limit to
     parity_feedin_write: bool = False  # and whether it would write it now
+    parity_needs_update: bool = False  # whether the automation would write the passive registers now
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -248,7 +255,11 @@ def decide(
     grid_delta = abs(cur_grid - grid)
     rails_wrong = cur_bmax != bmax or cur_bmin != bmin
     since_commit = 99999.0 if i.since_commit_s is None else i.since_commit_s
-    eff_deadband = max(float(t.deadband_w), t.deadband_pct * abs(grid))
+    proportional = max(float(t.deadband_w), t.deadband_pct * abs(grid))
+    # a gap only the proportional deadband hides is written once it has held for the cooldown
+    in_between = action in ("buy", "sell") and t.deadband_w < grid_delta <= proportional
+    gap_held = in_between and i.gap_for_s is not None and i.gap_for_s >= t.cooldown_s
+    eff_deadband = float(t.deadband_w) if gap_held else proportional
     bypass_reasons: list[str] = []
     if action == "end":
         bypass_reasons.append("session end")
@@ -264,9 +275,17 @@ def decide(
     cooldown_block = since_commit < t.cooldown_s and not bypass
     if action == "end":
         needs_update = grid_delta > 0 or rails_wrong
+        parity_update = needs_update
         reasons.append("registers already safe" if not needs_update else "write the safe state (never throttled)")
     elif action in ("buy", "sell"):
-        reasons.append(f"grid {cur_grid:.0f} → {grid} W: delta {grid_delta:.0f} W, deadband {eff_deadband:.0f} W")
+        reasons.append(f"grid {cur_grid:.0f} → {grid} W: delta {grid_delta:.0f} W, deadband {proportional:.0f} W")
+        if in_between:
+            held = i.gap_for_s or 0.0
+            reasons.append(
+                f"gap held {held:.0f} s ≥ {t.cooldown_s} s: deadband {t.deadband_w} W"
+                if gap_held
+                else f"gap held {held:.0f} s < {t.cooldown_s} s: written at {t.cooldown_s} s if it stays"
+            )
         if rails_wrong:
             reasons.append(f"battery rails {cur_bmin:.0f}…{cur_bmax:.0f} W must be {bmin}…{bmax} W")
         if cooldown_block:
@@ -274,12 +293,22 @@ def decide(
         elif bypass and since_commit < t.cooldown_s:
             reasons.append(f"cooldown bypassed ({', '.join(bypass_reasons)})")
         needs_update = not cooldown_block and (rails_wrong or grid_delta > eff_deadband)
+        parity_update = not cooldown_block and (rails_wrong or grid_delta > proportional)
         if not needs_update and not cooldown_block:
             reasons.append("within the deadband: nothing to write")
     else:
-        needs_update = False
+        needs_update = parity_update = False
     throttle = Throttle(
-        grid_delta, eff_deadband, rails_wrong, i.since_commit_s, bypass, bypass_reasons, cooldown_block, reasons
+        grid_delta,
+        eff_deadband,
+        rails_wrong,
+        i.since_commit_s,
+        bypass,
+        bypass_reasons,
+        cooldown_block,
+        reasons,
+        gap_for_s=i.gap_for_s,
+        gap_held=gap_held,
     )
 
     parity_deadband = max(float(t.deadband_w), t.deadband_pct * abs(parity_feedin))
@@ -342,6 +371,7 @@ def decide(
         why,
         parity_feedin_w=parity_feedin if action != "none" else None,
         parity_feedin_write=parity_feedin_write,
+        parity_needs_update=parity_update,
     )
 
 
@@ -364,9 +394,10 @@ class Expected:
 
 def expected_after(d: MarketDecision, i: MarketInputs) -> Expected:
     """None means "not judged" (e.g. a cooldown-blocked write leaves the register as it was). A sell's feed-in limit
-    isn't judged: EMHASS Lens deliberately writes it less often than the automation."""
+    isn't judged: EMHASS Lens deliberately writes it less often than the automation. A held gap that EMHASS Lens
+    writes the automation leaves, so the registers are judged by the automation's own call."""
     t = d.targets
-    write = d.needs_update and t is not None
+    write = d.parity_needs_update and t is not None
     return Expected(
         session=d.session_after or "none",
         enable_boolean=d.enable_boolean_after,

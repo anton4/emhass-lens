@@ -414,6 +414,38 @@ def test_a_live_sell_leaves_a_feedin_limit_that_lets_the_command_out(tmp_path: P
         client.__exit__(None, None, None)
 
 
+def test_a_live_gap_inside_the_deadband_is_written_once_it_holds_for_the_cooldown(tmp_path: Path, world: World) -> None:
+    """2026-10-14: Kratt raised a sell from 9400 W to 10600 W, inside the 15 % deadband, and the grid stayed at
+    -9400 W for ten minutes. Now the gap is written once it has held for the cooldown, and the write stops its clock."""
+    clock = FakeClock(EARLY)
+    client = client_for(tmp_path, world, clock, "live")
+    try:
+        before = newest_id(client, "market.reconcile")
+        push(client, world, POWER, 9400)
+        push(client, world, MODE, "frrup")
+        started = wait_for_run(client, "market.reconcile", before, summary="Kratt sell 9400W: set")
+        started = wait_for_run(client, "market.reconcile", started["id"] - 1)  # let the queued rerun finish too
+        n = len(world.ha_services)
+        clock.advance(seconds=200)
+        push(client, world, POWER, 10600)
+        fresh = wait_for_run(client, "market.reconcile", started["id"])
+        assert fresh["summary"] == "Kratt sell 10600W: registers unchanged"
+        clock.advance(seconds=181)
+        push(client, world, POWER, 10600)
+        held = wait_for_run(client, "market.reconcile", fresh["id"])
+        assert "grid -10600 W" in held["summary"], held
+        throttle = client.get(f"/api/runs/{held['id']}/artifacts/market_decision").json()["decision"]["throttle"]
+        assert throttle["gap_held"] is True and throttle["gap_for_s"] == pytest.approx(181)
+        assert world.ha_states[GRID]["state"] == "-10600.0" and presses(world, APPLY, n) == 1
+        clock.advance(seconds=200)
+        push(client, world, POWER, 9500)  # a new gap starts its own clock
+        again = wait_for_run(client, "market.reconcile", held["id"])
+        assert again["summary"] == "Kratt sell 9500W: registers unchanged"
+        assert container(client).extras["market"].last["decision"]["throttle"]["gap_for_s"] is None
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_shadow_judges_the_cooldown_at_the_automations_minute_tick(tmp_path: Path, world: World) -> None:
     """Our minute tick runs reconcile_offset_s (15 s) after the automation's: a cooldown that ran out in between
     must not count, or the decision writes where the automation still held (run 4381, 2026-10-13)."""

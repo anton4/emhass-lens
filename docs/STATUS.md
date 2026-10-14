@@ -37,6 +37,35 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: a market gap inside the deadband is written once it holds for the cooldown (0.4.39)
+- **Why:** the owner asked why this morning's Kratt sell didn't get full power (runs 5627–5658, 08:45:54–09:04:04).
+  - Kratt raised the frrup sell from 9400 W to 10600 W at 08:48:53, and the grid register stayed at -9400 W.
+  - The 1200 W change was inside the deadband max(300 W, 15 % × 10600 W) = 1590 W. The cooldown was over a minute
+    later, but every minute tick said "within the deadband: nothing to write".
+  - At 08:59:14 Kratt dropped to 9500 W (100 W off). In all the grid missed about 0.21 kWh.
+  - The rule comes from the HA automation: on a steady command it holds a gap of up to 15 % for the rest of the
+    session.
+- **The owner's choice:** keep the 15 % against quick jitter, but write a gap of more than `deadband_w` once it has
+  held for `cooldown_s`. Two other options were turned down: setting `deadband_pct` to 0, and changing its default.
+- **domain/market.py:**
+  - `MarketInputs.gap_for_s`. `decide()` uses `deadband_w` instead of the proportional deadband when the delta lies
+    between the two and the gap has held ≥ `cooldown_s` (`Throttle.gap_held`, `gap_for_s`).
+  - The reasons say "gap held 22 s < 180 s: written at 180 s if it stays" or "gap held 202 s ≥ 180 s: deadband
+    300 W".
+  - `MarketDecision.parity_needs_update` is the automation's call, and `expected_after` judges by it, so shadow mode
+    still predicts the automation.
+- **services/market.py:** `_track_gap` keeps `_gap_since` in memory.
+  - An open gap (buy or sell, no write, delta > `deadband_w`) starts the gap clock; a write, a closed gap or an end
+    clears it.
+  - A restart starts the clock again, which costs at most one more cooldown.
+- **Replay of this morning:** -10600 W would have gone out at the 08:52:15 tick and -9500 W at 09:02:15. That is two
+  more apply presses, with about 0.07 kWh under and 0.05 kWh over instead of 0.21 kWh under.
+- **Also:** `deadband_pct` has a description, the Market page's deadband guard names the rule, and DOCS.md too.
+- **Checked:** 464 backend tests, ruff, pyright, and on the frontend typecheck, lint, 259 tests and the build.
+  - New tests: `test_a_gap_the_deadband_hides_is_written_once_it_holds_for_the_cooldown` (this morning's numbers),
+    and the live `test_a_live_gap_inside_the_deadband_is_written_once_it_holds_for_the_cooldown`.
+  - **Not checked:** a real Kratt session.
+
 ### 2026-10-14: market sessions on the Power chart, one grid line (0.4.38)
 - **Why:** the owner found the commands hard to read: a grey dotted line rising from zero, a lane with one pale
   block per command, and a popup listing every command in the quarter-hour. They picked direction A ("Commanded vs
