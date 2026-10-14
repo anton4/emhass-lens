@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.37
+
+- Plan: the **Power** chart draws the grid power sensor (Settings → Measurements) finer than the quarter-hour means, as a thin line, so the market's commands can be set beside what went through the grid connection:
+  - zoomed in, every change the sensor reported is a point; wider, means over 10 s to 2 min;
+  - a mean never straddles a command's start, end or power change, so the line steps where the command does;
+  - it covers the measured part of the window, at most the last 48 h, and has its own chip.
+- Plan: each market command says what the grid delivered over it: "· got 9.21 kW" in the commands row, and a **Delivered** row in the popup with its share of the command. The popup also reads the measured grid power at the pointer.
+- The Solcast P10 estimate is no longer sent to EMHASS (`pv_power_forecast_p10`), and the Inputs page's PV chart, its daily totals and the run tables no longer show it. Settings → PV forecast loses *Send the P10 estimate too* (saved settings are migrated), and the EMHASS checks lose the P10 blend check. *Estimate* can still pick P10 as the forecast itself.
+- API: `GET /api/measurements/grid?since&until&max_points` returns the measured grid power finer than the quarter-hour means (at most 48 h); `GET /api/market/commands` adds `measured_w`, `measured_coverage` and `measured_error`.
+
 ## 0.4.36
 
 - Inputs: **After the horizon: Forecast** shows what comes after the plan's end on *What EMHASS gets*, shaded and not sent: the price forecast (up to 7 days of eupowerprices.com) and Solcast's PV, with each later day's PV total marked *not sent*. A **Horizon** row under *Prices sent* shows what was sent.
