@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.36
+
+- Inputs: **After the horizon: Forecast** shows what comes after the plan's end on *What EMHASS gets*, shaded and not sent: the price forecast (up to 7 days of eupowerprices.com) and Solcast's PV, with each later day's PV total marked *not sent*. A **Horizon** row under *Prices sent* shows what was sent.
+- Inputs: **Plan length** picks how many days of price forecast the plan takes after the Nord Pool prices (*Extend by*). Point at a choice to see where that plan would end; click it to save it, after a confirm that says how far it reaches and that EMHASS's load model is refitted for its new lag count.
+- Charts: a day label that would run into the one before it drops its small text, or is left out, so many days fit on a phone.
+- API: `GET /api/inputs/sent` and its preview add `beyond`, `actual_end`, `forecast_source`, `extend_days` and `horizon_options`, and take `beyond=false`.
+
 ## 0.4.35
 
 - Plan: the line over **This slot** names a source only for the power that reaches what it feeds, and only when it adds 300 W or more. PV covers the house first, so 145 W from the grid while PV charges the battery no longer reads "Charging the battery from PV and the grid". The line also changes only once two reads in a row (10 s apart) agree, so the few seconds of import while the inverter catches up with a load that just switched on don't flip it. The boxes still show every reading.
