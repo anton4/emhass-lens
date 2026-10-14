@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import type { MarketCommandSpan, MarketSettings, RunSummary } from '../api/types'
+import type { GridDetail, MarketCommandSpan, MarketSettings, RunSummary } from '../api/types'
 import {
   commandPower,
+  commandSessions,
   decisionRef,
   deliveredW,
+  marketBlock,
   marketLane,
   marketOverlay,
-  marketRows,
   marketFieldValue,
   marketGuards,
   pairMarketCompares,
   parityFeedinText,
   parseReconcileSummary,
+  sessionBands,
+  sessionWindow,
+  shortfallGap,
+  shortfalls,
   watchdogText,
   type MarketDecision,
 } from './market'
@@ -151,54 +156,171 @@ describe('watchdogText', () => {
 })
 
 describe('the commands on the Power chart', () => {
-  const sell: MarketCommandSpan = {
-    start: '2026-10-14T05:45:12.000+00:00',
-    end: '2026-10-14T06:04:30.000+00:00',
+  const tz = 'Europe/Tallinn'
+  const s = (iso: string) => Date.parse(iso) / 1000
+  const span = (start: string, end: string, power_w: number, measured_w?: number): MarketCommandSpan => ({
+    start,
+    end,
     direction: 'sell',
     source: 'kratt',
     mode: 'mfrrup',
-    power_w: 9400,
+    power_w,
     open: false,
+    measured_w,
+    measured_coverage: measured_w === undefined ? undefined : 1,
+  })
+  // a sell session of three commands (08:45:10–08:50:10 in Tallinn), and a buy still on
+  const a = span('2026-10-14T05:45:10Z', '2026-10-14T05:47:00Z', 5200, -5150)
+  const b = span('2026-10-14T05:47:00Z', '2026-10-14T05:49:00Z', 9000, -7000)
+  const c = span('2026-10-14T05:49:00Z', '2026-10-14T05:50:10Z', 6000, -6000)
+  const buy: MarketCommandSpan = { ...span('2026-10-14T06:58:00Z', '2026-10-14T07:30:00Z', 5000), direction: 'buy', mode: 'mfrrdown', open: true }
+  const NOW = s('2026-10-14T07:31:00Z')
+  const sessions = commandSessions([buy, c, a, b], NOW)
+  // the grid every 10 s: a 20 s dip under the first command (too short to count), then 90 s under the second
+  const point = (t: string, w: number | null) => ({ t: `2026-10-14T${t}Z`, w })
+  const detail: GridDetail = {
+    entity: 'sensor.grid',
+    start: '2026-10-14T05:45:10Z',
+    end: '2026-10-14T05:50:10Z',
+    step_s: 10,
+    points: [
+      point('05:45:10', -5150),
+      point('05:46:00', -4000),
+      point('05:46:20', -5200),
+      point('05:47:00', -8950),
+      point('05:47:30', -7000),
+      point('05:48:40', -8000),
+      point('05:49:00', -6000),
+    ],
+    error: null,
   }
-  const buy: MarketCommandSpan = { ...sell, start: '2026-10-14T06:58:00Z', end: '2026-10-14T07:30:00Z', direction: 'buy', mode: 'mfrrdown', power_w: 5000, open: true }
-  const s = (iso: string) => Date.parse(iso) / 1000
 
-  it('draws a sell below zero and a buy above, at their own times', () => {
-    expect(commandPower(sell)).toBe(-9400)
+  it('draws the commanded power as one solid line, a sell below zero and a buy above, at their own times', () => {
+    expect(commandPower(a)).toBe(-5200)
     expect(commandPower(buy)).toBe(5000)
-    expect(marketOverlay([sell, buy]).spans).toEqual([
-      { from: s(sell.start), to: s(sell.end), value: -9400 },
-      { from: s(buy.start), to: s(buy.end), value: 5000 },
-    ])
-    // a command still on runs on to now
-    expect(marketOverlay([buy], s('2026-10-14T07:31:00Z')).spans[0]?.to).toBe(s('2026-10-14T07:31:00Z'))
-    expect(marketOverlay([sell], s('2026-10-14T07:31:00Z')).spans[0]?.to).toBe(s(sell.end))
-    expect(marketLane([sell]).spans).toEqual([
-      { from: s(sell.start), to: s(sell.end), color: '--line-green', text: 'sell 9.40 kW · kratt' },
+    const overlay = marketOverlay([a, buy], NOW)
+    expect(overlay).toMatchObject({ color: '--q-market', base: 'none', halo: true })
+    expect(overlay.spans).toEqual([
+      { from: s(a.start), to: s(a.end), value: -5200 },
+      { from: s(buy.start), to: NOW, value: 5000 }, // still on: runs on to now
     ])
   })
 
-  it('lists the commands in the slot under the cursor', () => {
-    const tz = 'Europe/Tallinn'
-    expect(marketRows([sell, buy], s('2026-10-14T05:30:00Z'), tz)).toEqual([])
-    expect(marketRows([sell, buy], s('2026-10-14T06:00:00Z'), tz)).toEqual([
-      { name: 'Market sell', value: '9.40 kW · kratt · 08:45:12–09:04:30', color: '--line-green' },
-    ])
-    expect(marketRows([sell, buy], s('2026-10-14T07:15:00Z'), tz)[0]?.value).toBe('5.00 kW · kratt · 09:58:00–now')
-  })
-
-  it('says what the grid delivered over each command', () => {
-    const tz = 'Europe/Tallinn'
-    const measured = { ...sell, measured_w: -9210, measured_coverage: 1 }
-    expect(deliveredW(measured)).toBe(9210) // the export a sell asked for, counted positive
+  it('says what the grid delivered over a command, counted in its direction', () => {
+    expect(deliveredW(b)).toBe(7000)
     expect(deliveredW({ ...buy, measured_w: 4800 })).toBe(4800)
-    expect(deliveredW(sell)).toBeNull()
-    expect(marketLane([measured]).spans[0]?.text).toBe('sell 9.40 kW · kratt · got 9.21 kW')
-    expect(marketRows([measured], s('2026-10-14T06:00:00Z'), tz)).toEqual([
-      { name: 'Market sell', value: '9.40 kW · kratt · 08:45:12–09:04:30', color: '--line-green' },
-      { name: 'Delivered', value: '9.21 kW · 98 %', color: '--q-grid' },
+    expect(deliveredW(buy)).toBeNull()
+  })
+
+  it('groups back-to-back commands in one direction into a session', () => {
+    expect(sessions.map((x) => [x.direction, x.spans.length, x.from, x.to, x.open])).toEqual([
+      ['sell', 3, s(a.start), s(c.end), false],
+      ['buy', 1, s(buy.start), NOW, true],
     ])
-    const partly = { ...buy, measured_w: 2500, measured_coverage: 0.5 }
-    expect(marketRows([partly], s('2026-10-14T07:15:00Z'), tz)[1]?.value).toBe('2.50 kW · 50 % · data 50 % so far')
+    const sell = sessions[0]!
+    expect([sell.minW, sell.maxW]).toEqual([5200, 9000])
+    // 1826.5 of 2072 kWs asked: each command's measured mean over its time, never more than it asked
+    expect(sell.delivered).toBeCloseTo(1826500 / 2072000, 6)
+    expect(sessions[1]!.delivered).toBeNull()
+    // a gap or a turn starts another
+    const later = span('2026-10-14T05:50:20Z', '2026-10-14T05:51:00Z', 4000)
+    const turn = { ...span('2026-10-14T05:50:10Z', '2026-10-14T05:50:20Z', 4000), direction: 'buy' }
+    expect(commandSessions([a, b, c, later]).length).toBe(2)
+    expect(commandSessions([a, b, c, turn]).map((x) => x.direction)).toEqual(['sell', 'buy'])
+  })
+
+  it('finds where the grid fell short of a command for a minute or more', () => {
+    const runs = shortfalls([a, b, c], detail)
+    expect(runs).toEqual([
+      {
+        from: s('2026-10-14T05:47:30Z'),
+        to: s('2026-10-14T05:49:00Z'),
+        worstW: 2000,
+        pieces: [
+          { from: s('2026-10-14T05:47:30Z'), to: s('2026-10-14T05:48:40Z'), commanded: -9000, measured: -7000 },
+          { from: s('2026-10-14T05:48:40Z'), to: s('2026-10-14T05:49:00Z'), commanded: -9000, measured: -8000 },
+        ],
+      },
+    ])
+    expect(shortfallGap(runs).spans).toEqual([
+      { from: s('2026-10-14T05:47:30Z'), to: s('2026-10-14T05:48:40Z'), a: -9000, b: -7000 },
+      { from: s('2026-10-14T05:48:40Z'), to: s('2026-10-14T05:49:00Z'), a: -9000, b: -8000 },
+    ])
+    // no value is never short; no detail, nothing to judge
+    expect(shortfalls([b], { ...detail, points: detail.points.map((p) => ({ ...p, w: null })) })).toEqual([])
+    expect(shortfalls([b], undefined)).toEqual([])
+  })
+
+  it('flags each session with its direction and power, and more while the pointer is in it', () => {
+    expect(sessionBands(sessions, tz)).toEqual([
+      {
+        id: a.start,
+        from: s(a.start),
+        to: s(c.end),
+        color: '--q-sell',
+        ink: '--q-sell-ink',
+        label: '↓ SELL 5.2–9.0 kW',
+        detail: '↓ SELL · kratt · mfrrup · 08:45–08:50 · 88 % delivered',
+        short: '↓',
+      },
+      {
+        id: buy.start,
+        from: s(buy.start),
+        to: NOW,
+        color: '--q-buy',
+        ink: '--q-buy-ink',
+        label: '↑ BUY 5.0 kW',
+        detail: '↑ BUY · kratt · mfrrdown · 09:58–now',
+        short: '↑',
+      },
+    ])
+  })
+
+  it('draws a bar per session in the lane, its shortfalls along the foot', () => {
+    const lane = marketLane(sessions, shortfalls([a, b, c], detail))
+    expect(lane.spans[0]).toEqual({
+      from: s(a.start),
+      to: s(c.end),
+      color: '--q-sell',
+      ink: '--q-sell-ink',
+      text: '88 %',
+      long: 'sell · 3 commands · 88 % delivered',
+      marks: [{ from: s('2026-10-14T05:47:30Z'), to: s('2026-10-14T05:49:00Z'), color: '--q-shortfall' }],
+      id: a.start,
+    })
+    expect(lane.spans[1]).toMatchObject({ text: undefined, long: 'buy · 1 command', marks: [] })
+  })
+
+  it('zooms to a session with a little time either side, in whole quarter-hours', () => {
+    expect(sessionWindow(sessions[0]!)).toEqual([s('2026-10-14T05:30:00Z'), s('2026-10-14T06:00:00Z')])
+  })
+
+  it('tells the popup the command at the pointer, the grid there and the session, no list', () => {
+    const runs = shortfalls([a, b, c], detail)
+    const at = (iso: string, d: GridDetail | null = detail) =>
+      marketBlock({ spans: [a, b, c, buy], sessions, runs, detail: d ?? undefined, time: s(iso), nowS: NOW, timeZone: tz })
+    expect(at('2026-10-14T05:48:00Z')).toEqual({
+      title: '↓ SELL',
+      sub: 'kratt · mfrrup',
+      tone: 'sell',
+      rows: [
+        { name: 'Commanded', value: '9.00 kW', note: 'since 08:47:00', color: '--q-market', swatch: 'line' },
+        { name: 'Grid measured', value: '−7.00 kW', note: '78 % of it', color: '--q-grid', swatch: 'thin' },
+        { name: 'Shortfall', value: '2.00 kW', color: '--q-shortfall', swatch: 'hatch', alert: true },
+      ],
+      foot: ['Session 08:45–08:50 · 3 commands', '5.2–9.0 kW · 88 % delivered'],
+    })
+    // past the shortfall: no shortfall row
+    expect(at('2026-10-14T05:46:10Z')?.rows.map((r) => r.name)).toEqual(['Commanded', 'Grid measured'])
+    // without the grid detail: what the grid delivered over the command
+    expect(at('2026-10-14T05:48:00Z', null)?.rows[1]).toEqual({
+      name: 'Delivered',
+      value: '7.00 kW',
+      note: '78 % · mean over the command',
+      color: '--q-grid',
+      swatch: 'thin',
+    })
+    expect(at('2026-10-14T07:00:00Z')).toMatchObject({ title: '↑ BUY', tone: 'buy', foot: ['Session 09:58–now · 1 command', '5.0 kW'] })
+    expect(at('2026-10-14T06:30:00Z')).toBeNull()
   })
 })

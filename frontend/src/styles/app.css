@@ -1979,6 +1979,108 @@ button.diff-locate {
   border-radius: 2px;
 }
 
+/* the slot over the lines' rows, when the header has the pointer's own moment */
+.chart-pop-sub {
+  grid-column: 1 / -1;
+  padding: 0 4px 2px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* the market command at the pointer: a tinted block between the header and the rows */
+.chart-pop-block {
+  margin: 0 0 6px;
+  padding: 6px 8px 7px;
+  border-radius: 7px;
+  background: var(--tint-green);
+}
+
+.chart-pop-block[data-tone='buy'] {
+  background: var(--tint-blue);
+}
+
+.chart-pop-block-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-2);
+}
+
+.chart-pop-block-title b {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--on-green);
+}
+
+.chart-pop-block[data-tone='buy'] .chart-pop-block-title b {
+  color: var(--on-blue);
+}
+
+.chart-pop-block-rows {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  column-gap: 10px;
+  margin-top: 3px;
+}
+
+.chart-pop-block-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 20px;
+}
+
+.chart-pop-block-row b {
+  justify-self: end;
+  font-family: var(--font-code);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-pop-block-row i {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+.chart-pop-block-row[data-alert] .chart-pop-name,
+.chart-pop-block-row[data-alert] b {
+  font-weight: 600;
+  color: var(--on-red);
+}
+
+.chart-pop-block-foot {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line-green);
+  color: var(--ink-2);
+  font-size: 11.5px;
+}
+
+.chart-pop-block[data-tone='buy'] .chart-pop-block-foot {
+  border-top-color: var(--line-blue);
+}
+
+/* the block's swatches: the commanded line, the measured grid's thinner one, the shortfall's hatching */
+.chart-pop-mark {
+  display: inline-block;
+  width: 12px;
+  height: 0;
+  border-top: 2.5px solid currentColor;
+}
+
+.chart-pop-mark[data-swatch='thin'] {
+  border-top-width: 1.5px;
+}
+
+.chart-pop-mark[data-swatch='hatch'] {
+  height: 9px;
+  border: 0;
+  border-radius: 2px;
+  background: repeating-linear-gradient(135deg, currentColor 0 1.5px, transparent 1.5px 4px);
+}
+
 /* rows a chart adds under its lines (what a lane says at the cursor), the first under a rule */
 .chart-pop-row[data-rule] {
   margin-top: 3px;
@@ -2098,20 +2200,28 @@ button.diff-locate {
   box-shadow: inset 0 0 0 1.5px currentColor;
 }
 
-/* A line drawn dotted (the market's commanded power) */
-.legend-swatch[data-dotted] {
-  background: radial-gradient(circle, currentColor 1.2px, transparent 1.6px) 0 0 / 4px 4px !important;
-  box-shadow: inset 0 0 0 1px currentColor;
+/* A bold line (the market's commanded power) */
+.legend-swatch[data-bold] {
+  width: 16px;
+  background: linear-gradient(currentColor, currentColor) center / 100% 3px no-repeat !important;
 }
 
-/* A thin line (the grid power measured in detail) */
-.legend-swatch[data-thin] {
-  background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat !important;
-}
-
-/* The market's commands: sell green, buy blue */
+/* The market's sessions: sell green, buy blue */
 .legend-swatch[data-split] {
-  background: linear-gradient(90deg, var(--line-green) 50%, var(--line-blue) 50%) !important;
+  width: 14px;
+  background: linear-gradient(90deg, var(--q-sell) 50%, var(--q-buy) 50%) !important;
+}
+
+/* A group's name before its chips ("Market"), after a rule */
+.legend-group {
+  margin-left: 4px;
+  padding: 2px 0 2px 16px;
+  border-left: 1px solid var(--frame);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
 }
 
 /* A key item that isn't a switch: the dashed "planned at the time" lines */

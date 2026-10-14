@@ -16,6 +16,29 @@ export interface PopupExtra {
   hatch?: boolean
 }
 
+/** A tinted block above the lines' rows: what was going on at the pointer's moment (a market command), its rows, and
+ *  a few lines under a rule (the session it belongs to). */
+export interface PopupBlock {
+  /** "↓ SELL" */
+  title: string
+  /** "kratt · mfrrup" */
+  sub?: string
+  tone: 'sell' | 'buy'
+  rows: {
+    name: string
+    value: string
+    /** Muted text after the value ("since 09:01:50"). */
+    note?: string
+    /** CSS custom property or colour of its swatch. */
+    color: string
+    /** A bold line, a thin line or a hatched square. */
+    swatch: 'line' | 'thin' | 'hatch'
+    /** Name and value in the swatch's colour (a shortfall). */
+    alert?: boolean
+  }[]
+  foot?: string[]
+}
+
 /** Where the cursor is, in plot pixels; `pointerY` only on the chart under the pointer. */
 export interface CursorAt {
   idx: number

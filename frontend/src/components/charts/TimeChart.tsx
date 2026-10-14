@@ -2,15 +2,24 @@
 // across charts, shaded ranges (forecast), hairlines (midnights) and a "now" marker. The live legend under the
 // plot is the readout: it lists every series' value at the crosshair; with `popup` a popup beside the
 // cursor shows them instead and the legend is a plain key. Optionally the y-axis hugs the visible
-// data (fit) and a drag selects a time range to zoom into (onZoom / xRange).
+// data (fit) and a drag selects a time range to zoom into (onZoom / xRange). Sessions (market sessions) are bands
+// across the plot with a flag above it; while the pointer is in one, the series fade so its overlays stand out.
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
-import { fitRange, overlayExtent, overlayRuns, type ChartOverlay, type FitOptions } from '../../lib/chartRange'
+import { layoutFlags } from '../../lib/chartFlags'
+import {
+  fitRange,
+  overlayExtent,
+  overlayRuns,
+  type ChartGap,
+  type ChartOverlay,
+  type FitOptions,
+} from '../../lib/chartRange'
 import { ChartPopup } from './ChartPopup'
-import { createCursorStore, type CursorAt, type PopupExtra, type PopupTag } from './cursorStore'
+import { createCursorStore, type CursorAt, type PopupBlock, type PopupExtra, type PopupTag } from './cursorStore'
 import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
 
 export interface ChartSeries {
@@ -66,10 +75,39 @@ export interface ChartTick {
  *  the y-axis gutter. */
 export interface ChartLane {
   label: string
-  spans: { from: number; to: number; color: string; hatch?: boolean; text?: string }[]
+  spans: {
+    from: number
+    to: number
+    color: string
+    hatch?: boolean
+    text?: string
+    /** A longer text, drawn instead of `text` where it fits. */
+    long?: string
+    /** The text's colour (default --ink-2). */
+    ink?: string
+    /** Stretches marked by a strip along the span's foot (a shortfall). */
+    marks?: { from: number; to: number; color: string }[]
+    /** Clicking the span calls onSession with this. */
+    id?: string
+  }[]
 }
 
-export type { ChartOverlay }
+/** A stretch shaded across the plot in its own colour, with a flag above the plot that names it (a market session):
+ *  longer while the pointer is in it, just `short` where there is no room. Clicking the flag calls onSession. */
+export interface ChartSession {
+  id: string
+  from: number
+  to: number
+  /** CSS custom property or colour: the band's tint and the flag's fill. */
+  color: string
+  /** The flag's text colour. */
+  ink: string
+  label: string
+  detail: string
+  short: string
+}
+
+export type { ChartGap, ChartOverlay }
 
 /** A label on the plot at (t, value), optionally with a dot there: a day's total over its hump, a marked value. */
 export interface ChartNote {
@@ -88,6 +126,21 @@ export interface ChartNote {
 // a lane's height and the space between the plot and the first lane, CSS px
 const LANE_H = 18
 const LANE_GAP = 6
+// the room above the plot for the sessions' flags, and a flag's height, CSS px
+const FLAG_ROOM = 26
+const FLAG_H = 19
+// how strongly the series are drawn while the pointer is in a session
+const DIMMED = 0.3
+
+/** A clickable rectangle drawn on the canvas outside the plot (a flag, a lane span), in CSS px. */
+interface Hit {
+  id: string
+  left: number
+  top: number
+  right: number
+  bottom: number
+  title: string
+}
 
 /** Diagonal hatching on the sunk surface, for spans that are off. */
 function hatchPattern(ctx: CanvasRenderingContext2D, dpr: number): CanvasPattern | string {
@@ -137,8 +190,14 @@ interface TimeChartProps {
   /** No legend and no y-axis labels (the y-axis keeps its width so the time axis lines up with the charts above). */
   compact?: boolean
   /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"), `extra`
-   *  adds rows under the lines' rows (what a lane says there). */
-  popup?: { tag?: (t: number) => PopupTag | null; extra?: (t: number, time: number) => PopupExtra[] }
+   *  adds rows under the lines' rows (what a lane says there), `head` replaces the slot in its header (the pointer's
+   *  own moment) and `block` adds a tinted block above the rows. */
+  popup?: {
+    tag?: (t: number) => PopupTag | null
+    extra?: (t: number, time: number) => PopupExtra[]
+    head?: (t: number, time: number) => string | null
+    block?: (t: number, time: number) => PopupBlock | null
+  }
   /** Leave out uPlot's legend (the page draws its own key). */
   legend?: boolean
   /** Each x is a slot's start: the cursor reads the slot the pointer is in instead of the nearest start. */
@@ -149,13 +208,19 @@ interface TimeChartProps {
   notes?: ChartNote[]
   /** Lines with times of their own, off the slot grid (market commands); the y-axis fits them too. */
   overlays?: ChartOverlay[]
+  /** Hatched areas between two values (a shortfall), under the overlays. */
+  gaps?: ChartGap[]
+  /** Bands across the plot with a flag above it (market sessions). */
+  sessions?: ChartSession[]
+  /** Called with the id of a clicked flag or lane span. */
+  onSession?: (id: string) => void
 }
 
 const NONE: never[] = []
 
-/** The lanes under the plot: a sunk track each, its spans (hatched when off, with their text where it fits), and its
- *  label right-aligned in the y-axis gutter. */
-function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number) {
+/** The lanes under the plot: a sunk track each, its spans (hatched when off, with their text where it fits, and their
+ *  marks along the foot), and its label right-aligned in the y-axis gutter. Spans with an id go into `hits`. */
+function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
   if (lanes.length === 0) return
   const { ctx, bbox } = u
   const right = bbox.left + bbox.width
@@ -179,18 +244,28 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number) {
       if (span.hatch) hatch ??= hatchPattern(ctx, dpr)
       ctx.fillStyle = span.hatch ? (hatch ?? '') : cssColor(span.color)
       ctx.fillRect(a + gap, top, b - a - gap, h)
-      if (span.text) {
-        ctx.font = `${11 * dpr}px ${mono}`
-        const width = ctx.measureText(span.text).width
-        if (width + 12 * dpr < b - a) {
-          if (span.hatch) {
-            // a quiet patch behind the text, so the hatching doesn't run through it
-            ctx.fillStyle = cssColor('--surface-sunk')
-            ctx.fillRect(a + gap + 2 * dpr, top + dpr, width + 6 * dpr, h - 2 * dpr)
-          }
-          ctx.fillStyle = cssColor('--ink-2')
-          ctx.fillText(span.text, a + gap + 5 * dpr, top + h / 2)
+      for (const mark of span.marks ?? []) {
+        const ma = Math.max(a + gap, Math.round(u.valToPos(mark.from, 'x', true)))
+        const mb = Math.min(b, Math.round(u.valToPos(mark.to, 'x', true)))
+        if (mb <= ma) continue
+        ctx.fillStyle = cssColor(mark.color)
+        const strip = Math.round(4 * dpr)
+        ctx.fillRect(ma, top + h - strip, Math.max(mb - ma, Math.round(2 * dpr)), strip)
+      }
+      if (span.id) {
+        hits.push({ id: span.id, left: a / dpr, top: top / dpr, right: b / dpr, bottom: (top + h) / dpr, title: span.long ?? span.text ?? '' })
+      }
+      ctx.font = `${11 * dpr}px ${mono}`
+      // the longer text where it fits, else the short one where that does
+      const text = [span.long, span.text].find((t) => t && ctx.measureText(t).width + 12 * dpr < b - a)
+      if (text) {
+        if (span.hatch) {
+          // a quiet patch behind the text, so the hatching doesn't run through it
+          ctx.fillStyle = cssColor('--surface-sunk')
+          ctx.fillRect(a + gap + 2 * dpr, top + dpr, ctx.measureText(text).width + 6 * dpr, h - 2 * dpr)
         }
+        ctx.fillStyle = cssColor(span.ink ?? '--ink-2')
+        ctx.fillText(text, a + gap + 5 * dpr, top + h / 2)
       }
     }
     ctx.font = `${12 * dpr}px ${body}`
@@ -225,16 +300,134 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
         ctx.fillRect(a, Math.min(y, zero), u.valToPos(span.to, 'x', true) - a, Math.abs(zero - y))
       }
     }
-    ctx.beginPath()
+    const path = new Path2D()
     for (const run of overlayRuns(overlay.spans, overlay.base)) {
       run.forEach(([t, v], i) => {
         const x = u.valToPos(t, 'x', true)
         const y = u.valToPos(v, 'y', true)
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
+        if (i === 0) path.moveTo(x, y)
+        else path.lineTo(x, y)
       })
     }
-    ctx.stroke()
+    if (overlay.halo) {
+      ctx.save()
+      ctx.strokeStyle = cssColor('--panel')
+      ctx.lineWidth = ((overlay.width ?? 2) + 3) * dpr
+      ctx.lineJoin = 'round'
+      ctx.setLineDash([])
+      ctx.stroke(path)
+      ctx.restore()
+    }
+    ctx.stroke(path)
+  }
+  ctx.restore()
+}
+
+/** Diagonal lines in `color` on nothing, for a gap's hatching. */
+function linePattern(ctx: CanvasRenderingContext2D, color: string, dpr: number): CanvasPattern | string {
+  const size = Math.round(5 * dpr)
+  const tile = document.createElement('canvas')
+  tile.width = size
+  tile.height = size
+  const t = tile.getContext('2d')
+  if (!t) return color
+  t.strokeStyle = color
+  t.lineWidth = Math.max(1, 1.4 * dpr)
+  t.beginPath()
+  t.moveTo(-1, size + 1)
+  t.lineTo(size + 1, -1)
+  t.stroke()
+  return ctx.createPattern(tile, 'repeat') ?? color
+}
+
+/** The gaps: a light tint of their colour, hatched, between their two values. */
+function drawGaps(u: uPlot, gaps: ChartGap[], dpr: number) {
+  if (gaps.length === 0) return
+  const { ctx, bbox } = u
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height)
+  ctx.clip()
+  for (const gap of gaps) {
+    const color = cssColor(gap.color)
+    const area = new Path2D()
+    for (const span of gap.spans) {
+      const a = u.valToPos(span.from, 'x', true)
+      const b = u.valToPos(span.to, 'x', true)
+      const ya = u.valToPos(span.a, 'y', true)
+      const yb = u.valToPos(span.b, 'y', true)
+      area.rect(a, Math.min(ya, yb), b - a, Math.abs(yb - ya))
+    }
+    ctx.fillStyle = withAlpha(color, 0.12)
+    ctx.fill(area)
+    ctx.fillStyle = linePattern(ctx, color, dpr)
+    ctx.fill(area)
+  }
+  ctx.restore()
+}
+
+/** The sessions' bands, under the series: a light tint of their colour with a fainter edge at each end. */
+function drawSessionBands(u: uPlot, sessions: ChartSession[]) {
+  if (sessions.length === 0) return
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  ctx.save()
+  for (const s of sessions) {
+    const a = u.valToPos(s.from, 'x', true)
+    const b = u.valToPos(s.to, 'x', true)
+    if (b < bbox.left || a > right) continue
+    const color = cssColor(s.color)
+    const left = Math.max(a, bbox.left)
+    const width = Math.max(Math.min(b, right) - left, 1)
+    ctx.fillStyle = withAlpha(color, 0.1)
+    ctx.fillRect(left, bbox.top, width, bbox.height)
+    ctx.fillStyle = withAlpha(color, 0.45)
+    if (a >= bbox.left) ctx.fillRect(Math.round(a), bbox.top, 1, bbox.height)
+    if (b <= right) ctx.fillRect(Math.round(b) - 1, bbox.top, 1, bbox.height)
+  }
+  ctx.restore()
+}
+
+/** The sessions' flags in the room above the plot, laid out so they never overlap; the one under the pointer shows
+ *  its longer text. Each goes into `hits`. */
+function drawFlags(u: uPlot, sessions: ChartSession[], hovered: string | null, dpr: number, hits: Hit[]) {
+  if (sessions.length === 0) return
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  const pad = 8 * dpr
+  ctx.save()
+  ctx.font = `600 ${11.5 * dpr}px ${cssValue('--font-body') || 'sans-serif'}`
+  const texts = new Map<string, string[]>()
+  const items = sessions.flatMap((s) => {
+    const a = u.valToPos(s.from, 'x', true)
+    const b = u.valToPos(s.to, 'x', true)
+    if (b < bbox.left || a > right) return []
+    const options = s.id === hovered ? [s.detail, s.label, s.short] : [s.label, s.short]
+    texts.set(s.id, options)
+    return [{ id: s.id, at: a, widths: options.map((t) => ctx.measureText(t).width + 2 * pad), hovered: s.id === hovered }]
+  })
+  const h = FLAG_H * dpr
+  const top = bbox.top - (FLAG_ROOM - 3) * dpr
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  for (const flag of layoutFlags(items, bbox.left, right, 4 * dpr)) {
+    const s = sessions.find((x) => x.id === flag.id)
+    const text = texts.get(flag.id)?.[flag.text]
+    if (!s || text === undefined) continue
+    ctx.fillStyle = cssColor(s.color)
+    ctx.beginPath()
+    ctx.roundRect(flag.left, top, flag.width, h, h / 2)
+    ctx.fill()
+    ctx.fillStyle = cssColor(s.ink)
+    ctx.fillText(text, flag.left + pad, top + h / 2 + 0.5 * dpr)
+    hits.push({
+      id: s.id,
+      left: flag.left / dpr,
+      top: top / dpr,
+      right: (flag.left + flag.width) / dpr,
+      bottom: (top + h) / dpr,
+      title: s.detail,
+    })
   }
   ctx.restore()
 }
@@ -341,18 +534,20 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
-  snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE,
+  snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
-    bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays,
+    bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
+    sessions, onSession,
   })
   useEffect(() => {
     extras.current = {
-      bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays,
+      bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
+      sessions, onSession,
     }
   })
   const [cursor] = useState(createCursorStore)
@@ -366,6 +561,8 @@ export function TimeChart({
       timeZone,
       tag: extras.current.popup?.tag,
       extra: extras.current.popup?.extra,
+      head: extras.current.popup?.head,
+      block: extras.current.popup?.block,
     }),
     [timeZone],
   )
@@ -375,7 +572,7 @@ export function TimeChart({
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
-    lanes.length,
+    lanes.length, sessions.length > 0,
   ])
   const columns = series.some((s) => s.column)
 
@@ -386,6 +583,22 @@ export function TimeChart({
     const grid = cssColor('--chart-grid')
     // lanes sit between the plot and the time axis's labels, which move down to make room
     const lanesPx = lanes.length ? LANE_GAP + lanes.length * LANE_H : 0
+    const flagged = sessions.length > 0
+    // what was drawn outside the plot that a click opens, and the session the pointer is in
+    let hits: Hit[] = []
+    let inSession: string | null = null
+    const enter = (u: uPlot) => {
+      const all = extras.current.sessions
+      const left = u.cursor.left ?? -1
+      const time = left >= 0 ? u.posToVal(left, 'x') : null
+      const id = time === null ? null : (all.find((s) => time >= s.from && time < s.to)?.id ?? null)
+      if (id === inSession) return
+      inSession = id
+      u.series.forEach((s, i) => {
+        if (i > 0) s.alpha = id ? DIMMED : 1
+      })
+      u.redraw(false)
+    }
     const stepped = uPlot.paths.stepped?.({ align: 1 })
     const hasColumns = series.some((s) => s.column)
     // One column per slot for a 'stack' or 'cap' series, read from extras so new data needs no rebuild: a gap between
@@ -518,15 +731,19 @@ export function TimeChart({
           : {}),
       },
       legend: { show: !compact && legend, live: !withPopup },
+      padding: flagged ? [FLAG_ROOM, null, null, null] : undefined,
       scales: {
         x: { time: true },
         y: yRange
           ? { range: () => [yRange[0] ?? 0, yRange[1] ?? 1] }
           : fit
             ? {
-                range: (u, dataMin, dataMax) => {
-                  // the overlays' values in the window shown count too
-                  const extent = overlayExtent(extras.current.overlays, u.scales.x?.min, u.scales.x?.max)
+                range: (_u, dataMin, dataMax) => {
+                  // the overlays' values in the window shown count too: the window asked for, as uPlot's x-scale may
+                  // still be the old one while it applies a new window
+                  const xs = extras.current.x
+                  const win = extras.current.xRange ?? [xs[0], xs[xs.length - 1]]
+                  const extent = overlayExtent(extras.current.overlays, win[0], win[1])
                   if (!extent) return fitRange(dataMin, dataMax, fit)
                   const lo = dataMin === null || dataMin === undefined ? extent[0] : Math.min(dataMin, extent[0])
                   const hi = dataMax === null || dataMax === undefined ? extent[1] : Math.max(dataMax, extent[1])
@@ -624,11 +841,31 @@ export function TimeChart({
               const tick = nearest(event)
               if (tick) extras.current.onTick?.(tick)
             })
+            // flags and lane spans are drawn outside the plot, where uPlot's axis elements take the pointer: listen on
+            // the wrapper and measure from the canvas
+            const canvas = u.ctx.canvas
+            const wrapper = canvas.parentElement ?? u.root
+            const hitAt = (event: MouseEvent) => {
+              const box = canvas.getBoundingClientRect()
+              const px = event.clientX - box.left
+              const py = event.clientY - box.top
+              return hits.find((h) => px >= h.left && px <= h.right && py >= h.top && py <= h.bottom)
+            }
+            wrapper.addEventListener('mousemove', (event) => {
+              const hit = hitAt(event)
+              wrapper.style.cursor = hit && extras.current.onSession ? 'pointer' : ''
+              wrapper.title = hit?.title ?? ''
+            })
+            wrapper.addEventListener('click', (event) => {
+              const hit = hitAt(event)
+              if (hit) extras.current.onSession?.(hit.id)
+            })
           },
         ],
         setCursor: [
           (u) => {
             if (withPopup && frame === null) frame = requestAnimationFrame(() => follow(u))
+            if (flagged) enter(u)
           },
         ],
         setSelect: [
@@ -654,6 +891,7 @@ export function TimeChart({
             fill(extras.current.shade, cssColor('--chart-past'))
             fill(extras.current.bands, cssColor('--chart-wash'))
             ctx.restore()
+            drawSessionBands(u, extras.current.sessions)
           },
         ],
         draw: [
@@ -683,8 +921,11 @@ export function TimeChart({
               ctx.fillRect(Math.round(px - 1.5 * dpr), bbox.top + bbox.height * 0.2, Math.round(3 * dpr), bbox.height * 0.6)
             }
             ctx.restore()
+            hits = []
+            drawGaps(u, extras.current.gaps, dpr)
             drawOverlays(u, extras.current.overlays, dpr)
-            drawLanes(u, extras.current.lanes, dpr)
+            drawFlags(u, extras.current.sessions, inSession, dpr, hits)
+            drawLanes(u, extras.current.lanes, dpr, hits)
             drawNotes(u, extras.current.notes, dpr)
           },
         ],
@@ -722,7 +963,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, shade, markers, now, ticks, lanes, notes])
+  }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions])
 
   // new overlay values may move the y-axis: setting the time window again refits it
   useEffect(() => {

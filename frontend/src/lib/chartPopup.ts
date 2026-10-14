@@ -103,18 +103,33 @@ export function placePopup(o: {
   return { left: flip ? o.left - gap : o.left + gap, top, flip }
 }
 
-const rangeFormats = new Map<string, { start: Intl.DateTimeFormat; end: Intl.DateTimeFormat }>()
+const rangeFormats = new Map<
+  string,
+  { start: Intl.DateTimeFormat; end: Intl.DateTimeFormat; moment: Intl.DateTimeFormat }
+>()
 
-/** A slot as "Mon 10:45–11:00" in `timeZone` (unix seconds). */
-export function slotRange(start: number, end: number, timeZone?: string): string {
+function formats(timeZone?: string) {
   const key = timeZone ?? ''
   let fmt = rangeFormats.get(key)
   if (!fmt) {
+    const clock = { timeZone, hour: '2-digit', minute: '2-digit', hour12: false } as const
     fmt = {
-      start: new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }),
-      end: new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }),
+      start: new Intl.DateTimeFormat('en-GB', { ...clock, weekday: 'short' }),
+      end: new Intl.DateTimeFormat('en-GB', clock),
+      moment: new Intl.DateTimeFormat('en-GB', { ...clock, weekday: 'short', second: '2-digit' }),
     }
     rangeFormats.set(key, fmt)
   }
-  return `${fmt.start.format(new Date(start * 1000))}–${fmt.end.format(new Date(end * 1000))}`
+  return fmt
+}
+
+/** A slot as "Mon 10:45–11:00" in `timeZone` (unix seconds), or "10:45–11:00" without the weekday. */
+export function slotRange(start: number, end: number, timeZone?: string, weekday = true): string {
+  const fmt = formats(timeZone)
+  return `${(weekday ? fmt.start : fmt.end).format(new Date(start * 1000))}–${fmt.end.format(new Date(end * 1000))}`
+}
+
+/** A moment to the second as "Mon 10:52:14" in `timeZone` (unix seconds). */
+export function momentLabel(t: number, timeZone?: string): string {
+  return formats(timeZone).moment.format(new Date(Math.floor(t) * 1000))
 }

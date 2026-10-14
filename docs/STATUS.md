@@ -37,6 +37,55 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: market sessions on the Power chart, one grid line (0.4.38)
+- **Why:** the owner found the commands hard to read: a grey dotted line rising from zero, a lane with one pale
+  block per command, and a popup listing every command in the quarter-hour. They picked direction A ("Commanded vs
+  delivered") from the mockup canvas https://claude.ai/artifact/SdeNh5SupqxXvQjgXaKZ7Y, and asked to:
+  - drop "(+ charge)" and "(+ import)" from the chips;
+  - draw the grid and its 10 s detail as one line;
+  - show the pointer's time in the popup's header instead of after Grid measured.
+- **lib/market.ts:**
+  - `commandSessions` groups back-to-back spans in one direction, with the delivered share of the energy asked
+    (each span's measured mean, capped at its power).
+  - `shortfalls(spans, detail)`: the detail's buckets where the grid missed a command by more than max(500 W, 10 %)
+    for 60 s or more, merged into runs. `shortfallGap` hatches them.
+  - Other helpers:
+    - `sessionBands` (flags: "↓ SELL 5.2–9.4 kW", and the detail on hover);
+    - `marketLane` (a bar per session: "95 %", or `long` where it fits, plus shortfall marks);
+    - `sessionWindow` (zoom with a margin, in whole quarter-hours);
+    - `marketBlock` (the popup block).
+  - `marketOverlay` is a solid ink line (`--q-market`) with a halo, `base: 'none'`. `marketRows` is gone.
+- **TimeChart:**
+  - `sessions` are drawn in `drawClear` as tinted bands, and as flags in a 26 px top padding (`lib/chartFlags.ts`
+    `layoutFlags` shortens the wider of two flags that touch).
+  - Lane spans take `ink`, `long`, `marks` and `id`. Clicks on flags and lane spans go to `onSession`; the listener
+    is on the uPlot wrapper, because its axis divs cover the lane.
+  - `gaps` are drawn hatched; overlays take `halo`.
+  - While the pointer is in a session, `series.alpha` is 0.3.
+  - The y fit takes the overlays in `xRange` rather than `u.scales.x`, which is stale during a rebuild. Before this,
+    a chip toggled while zoomed left the axis fitted to the whole range.
+- **Popup:**
+  - `popup.head(t, time)` replaces the slot in the header; the slot then heads the rows ("Quarter-hour
+    11:30–11:45").
+  - `popup.block` is a tinted `PopupBlock` above the rows.
+  - `chartPopup.momentLabel` and `slotRange(…, weekday=false)`.
+- **PowerChart:**
+  - The grid's measured quarter-hours the detail covers are `null` in `values` and kept in `readout`
+    (`gridDetail.withoutCovered`), so the 1.5 px detail line is the grid there.
+  - The `grid-detail` chip is gone; the Grid chip's title says how fine the line is.
+  - Market chips: *Commanded* ('market-power') and *Sessions* ('market-commands'), after a "Market" group label.
+  - New tokens `--q-sell`, `--q-buy`, `--q-*-ink` and `--q-shortfall`.
+- **Checked:**
+  - typecheck, lint, 259 tests and the build pass.
+  - **UI:** the SSH tunnel to the real App dropped, so this ran against a throwaway Vite config with a generated API
+    (in node_modules/.cache, not committed). It had a Kratt sell of 24 commands with a 5½-minute shortfall and a
+    Fusebox buy. Checked:
+    - the flags (both fit, the hovered one expanded) and the fading;
+    - the popup (pointer time, block, shortfall row, quarter-hour rows);
+    - click to zoom (10:45–12:00 at 10 s, hatched shortfall, lane "sell · 24 commands · 95 % delivered");
+    - chips toggled while zoomed.
+  - **Not checked:** the real HA, dark mode and phone width.
+
 ### 2026-10-14: the measured grid power beside the market commands, and no more P10 (0.4.37)
 - **Why:** the owner couldn't compare the market's commands (at their own times) with the power sent to the grid,
   which the Power chart had only as 15-minute means. They chose a grid-only line whose step follows the window, with

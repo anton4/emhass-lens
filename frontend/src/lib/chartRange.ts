@@ -21,10 +21,19 @@ export interface ChartOverlay {
   dash?: number[]
   /** Fill between the line and zero at this opacity. */
   fill?: number
-  /** 'zero' (default): each run rises from zero and returns to it (a command); 'none': it starts and ends at its own
-   *  values (a measurement). */
+  /** 'zero' (default): each run rises from zero and returns to it; 'none': it starts and ends at its own values. */
   base?: 'zero' | 'none'
+  /** A ring in the surface colour under the line, so it stands clear of the lines it crosses. */
+  halo?: boolean
   spans: { from: number; to: number; value: number }[]
+}
+
+/** The area between two values over stretches of time, hatched in a colour: where the grid delivered less than a
+ *  market command asked. */
+export interface ChartGap {
+  /** CSS custom property or colour. */
+  color: string
+  spans: { from: number; to: number; a: number; b: number }[]
 }
 
 /** The overlay's lines as [time, value] points: each run of back-to-back spans (less than a second apart) steps

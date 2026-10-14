@@ -2,11 +2,12 @@
 // decisions, comparisons, sessions and the write throttle. See backend/emhass_lens/domain/market.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { ChartLane, ChartOverlay } from '../components/charts/TimeChart'
-import type { PopupExtra } from '../components/charts/cursorStore'
-import type { MarketCommandSpan, MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
+import type { ChartGap, ChartLane, ChartOverlay, ChartSession } from '../components/charts/TimeChart'
+import type { PopupBlock } from '../components/charts/cursorStore'
+import type { GridDetail, MarketCommandSpan, MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
 import { formatClock, formatTime } from './format'
-import { formatPower } from './units'
+import { gridAt } from './gridDetail'
+import { formatPower, formatSignedPower } from './units'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
 
@@ -256,8 +257,6 @@ export function watchdogText(
 
 // --- Qilowatt's commands on the Plan page's Power chart -----
 
-const COMMAND_COLOR: Record<string, string> = { sell: '--line-green', buy: '--line-blue' }
-
 const unix = (iso: string) => Date.parse(iso) / 1000
 
 /** A span's end; one still on when it was read runs on to `nowS`. */
@@ -269,14 +268,15 @@ export function commandPower(span: Pick<MarketCommandSpan, 'direction' | 'power_
   return span.direction === 'buy' ? span.power_w : -span.power_w
 }
 
-/** The commanded power as a dotted line over the Power chart, at the commands' own times. */
+/** The commanded power as an ink line over the Power chart, stepping at the commands' own times. The measured grid
+ *  line's buckets break at those times too, so the two lines step together. */
 export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartOverlay {
   return {
-    label: 'Market power',
+    label: 'Commanded',
     color: '--q-market',
-    width: 2,
-    dash: [2, 3],
-    fill: 0.08,
+    width: 2.25,
+    base: 'none',
+    halo: true,
     spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandPower(s) })),
   }
 }
@@ -289,43 +289,230 @@ export function deliveredW(span: Pick<MarketCommandSpan, 'direction' | 'measured
   return span.direction === 'buy' ? w : -w
 }
 
-/** The commands as a lane under the chart: "sell 9.40 kW · kratt · got 9.21 kW". */
-export function marketLane(spans: MarketCommandSpan[], nowS?: number): ChartLane {
+/** Back-to-back commands in one direction: a session as the Power chart shows it. */
+export interface CommandSession {
+  /** Its first command's start. */
+  id: string
+  direction: string
+  from: number
+  /** An open one runs on to now. */
+  to: number
+  open: boolean
+  spans: MarketCommandSpan[]
+  minW: number
+  maxW: number
+  /** The share of the energy asked that the grid delivered, over the commands it was measured for; null if none. */
+  delivered: number | null
+}
+
+/** The commands grouped into sessions: a new one where the direction changes or a gap of a second or more opens. */
+export function commandSessions(spans: MarketCommandSpan[], nowS?: number): CommandSession[] {
+  const sessions: CommandSession[] = []
+  for (const span of [...spans].sort((a, b) => unix(a.start) - unix(b.start))) {
+    const from = unix(span.start)
+    const to = spanEnd(span, nowS)
+    const last = sessions[sessions.length - 1]
+    if (last && last.direction === span.direction && Math.abs(from - last.to) < 1) {
+      last.spans.push(span)
+      last.to = Math.max(last.to, to)
+      last.open ||= span.open
+      continue
+    }
+    sessions.push({ id: span.start, direction: span.direction, from, to, open: span.open, spans: [span], minW: 0, maxW: 0, delivered: null })
+  }
+  for (const s of sessions) {
+    const powers = s.spans.map((x) => x.power_w)
+    s.minW = Math.min(...powers)
+    s.maxW = Math.max(...powers)
+    let asked = 0
+    let got = 0
+    for (const x of s.spans) {
+      const w = deliveredW(x)
+      if (w === null) continue
+      const seconds = spanEnd(x, nowS) - unix(x.start)
+      asked += x.power_w * seconds
+      got += Math.min(Math.max(w, 0), x.power_w) * seconds
+    }
+    s.delivered = asked > 0 ? got / asked : null
+  }
+  return sessions
+}
+
+// A command falls short where the grid delivers less than it by more than max(500 W, 10 % of it) for a minute or
+// more; a ramp of a few seconds after each change doesn't count.
+const SHORT_MIN_W = 500
+const SHORT_SHARE = 0.1
+const SHORT_MIN_S = 60
+
+export interface Shortfall {
+  from: number
+  to: number
+  /** The most that was missing, W. */
+  worstW: number
+  /** The detail's buckets in it, with the commanded and the measured power (EMHASS's sign): the gap to hatch. */
+  pieces: { from: number; to: number; commanded: number; measured: number }[]
+}
+
+/** Where the measured grid power fell short of a command, from the grid detail. Its buckets break where a command
+ *  changes, so each bucket is under one command; a stretch the detail had no value for is never short. */
+export function shortfalls(spans: MarketCommandSpan[], detail: GridDetail | undefined, nowS?: number): Shortfall[] {
+  if (!detail || detail.points.length === 0 || spans.length === 0) return []
+  const end = unix(detail.end)
+  const commands = spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), sign: s.direction === 'buy' ? 1 : -1, w: s.power_w }))
+  const pieces: (Shortfall['pieces'][number] & { missing: number })[] = []
+  detail.points.forEach((p, i) => {
+    if (p.w === null) return
+    const next = detail.points[i + 1]
+    const a = unix(p.t)
+    const b = next ? unix(next.t) : end
+    for (const c of commands) {
+      const from = Math.max(a, c.from)
+      const to = Math.min(b, c.to)
+      if (to <= from) continue
+      const missing = c.w - c.sign * p.w
+      if (missing > Math.max(SHORT_MIN_W, SHORT_SHARE * c.w)) {
+        pieces.push({ from, to, commanded: c.sign * c.w, measured: p.w, missing })
+      }
+    }
+  })
+  pieces.sort((x, y) => x.from - y.from)
+  const runs: Shortfall[] = []
+  for (const { missing, ...piece } of pieces) {
+    const last = runs[runs.length - 1]
+    if (last && Math.abs(piece.from - last.to) < 1) {
+      last.to = Math.max(last.to, piece.to)
+      last.worstW = Math.max(last.worstW, missing)
+      last.pieces.push(piece)
+    } else {
+      runs.push({ from: piece.from, to: piece.to, worstW: missing, pieces: [piece] })
+    }
+  }
+  return runs.filter((r) => r.to - r.from >= SHORT_MIN_S)
+}
+
+/** The hatched gaps between the commanded and the measured line. */
+export function shortfallGap(runs: Shortfall[]): ChartGap {
+  return {
+    color: '--q-shortfall',
+    spans: runs.flatMap((r) => r.pieces.map((p) => ({ from: p.from, to: p.to, a: p.commanded, b: p.measured }))),
+  }
+}
+
+const kw1 = (w: number) => (w / 1000).toFixed(1)
+
+/** "5.2–9.4 kW", or "12.0 kW" for one power. */
+function powerRange(s: CommandSession): string {
+  return s.minW === s.maxW ? `${kw1(s.maxW)} kW` : `${kw1(s.minW)}–${kw1(s.maxW)} kW`
+}
+
+const hhmm = (t: number, timeZone?: string) => formatClock(new Date(t * 1000).toISOString(), timeZone).slice(0, 5)
+
+/** "08:45–09:32", "08:45–now". */
+function sessionTimes(s: CommandSession, timeZone?: string): string {
+  return `${hhmm(s.from, timeZone)}–${s.open ? 'now' : hhmm(s.to, timeZone)}`
+}
+
+function sessionSources(s: CommandSession): string {
+  const unique = (xs: string[]) => [...new Set(xs)].join(', ')
+  return `${unique(s.spans.map((x) => x.source))} · ${unique(s.spans.map((x) => x.mode))}`
+}
+
+const deliveredText = (s: CommandSession) => (s.delivered === null ? null : `${Math.round(s.delivered * 100)} % delivered`)
+
+/** The sessions as bands across the Power chart, each with a flag: "↓ SELL 5.2–9.4 kW", and while the pointer is in it
+ *  "↓ SELL · kratt · mfrrup · 08:45–09:32 · 95 % delivered". */
+export function sessionBands(sessions: CommandSession[], timeZone?: string): ChartSession[] {
+  return sessions.map((s) => {
+    const sell = s.direction === 'sell'
+    const head = sell ? '↓ SELL' : '↑ BUY'
+    const delivered = deliveredText(s)
+    return {
+      id: s.id,
+      from: s.from,
+      to: s.to,
+      color: sell ? '--q-sell' : '--q-buy',
+      ink: sell ? '--q-sell-ink' : '--q-buy-ink',
+      label: `${head} ${powerRange(s)}`,
+      detail: [head, sessionSources(s), sessionTimes(s, timeZone), delivered].filter(Boolean).join(' · '),
+      short: sell ? '↓' : '↑',
+    }
+  })
+}
+
+/** The sessions as a lane under the chart: one bar each with its delivered share ("95 %", or "sell · 24 commands ·
+ *  95 % delivered" where it fits), the shortfalls marked along its foot. */
+export function marketLane(sessions: CommandSession[], runs: Shortfall[] = []): ChartLane {
   return {
     label: 'Market',
-    spans: spans.map((s) => {
-      const got = deliveredW(s)
+    spans: sessions.map((s) => {
+      const sell = s.direction === 'sell'
+      const delivered = deliveredText(s)
+      const commands = `${s.spans.length} ${s.spans.length === 1 ? 'command' : 'commands'}`
       return {
-        from: unix(s.start),
-        to: spanEnd(s, nowS),
-        color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
-        text: `${s.direction} ${formatPower(s.power_w)} · ${s.source}${got !== null ? ` · got ${formatPower(got)}` : ''}`,
+        from: s.from,
+        to: s.to,
+        color: sell ? '--q-sell' : '--q-buy',
+        ink: sell ? '--q-sell-ink' : '--q-buy-ink',
+        text: s.delivered === null ? undefined : `${Math.round(s.delivered * 100)} %`,
+        long: [s.direction, commands, delivered].filter(Boolean).join(' · '),
+        marks: runs.filter((r) => r.to > s.from && r.from < s.to).map((r) => ({ from: r.from, to: r.to, color: '--q-shortfall' })),
+        id: s.id,
       }
     }),
   }
 }
 
-/** The popup's rows for the commands in the slot from `t`: "Market sell" "9.40 kW · kratt · 08:45:12–09:04:30", then
- *  what the grid delivered over the command: "Delivered" "9.21 kW · 98 %". */
-export function marketRows(spans: MarketCommandSpan[], t: number, timeZone?: string, slotS = 900): PopupExtra[] {
-  return spans
-    .filter((s) => unix(s.start) < t + slotS && unix(s.end) > t)
-    .flatMap((s) => {
-      const rows: PopupExtra[] = [
-        {
-          name: `Market ${s.direction}`,
-          value: `${formatPower(s.power_w)} · ${s.source} · ${formatClock(s.start, timeZone)}–${s.open ? 'now' : formatClock(s.end, timeZone)}`,
-          color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
-        },
+/** The zoom window for a session: its time with a few minutes either side, in whole quarter-hours. */
+export function sessionWindow(s: Pick<CommandSession, 'from' | 'to'>, slotS = 900): [number, number] {
+  const margin = Math.max(120, (s.to - s.from) * 0.1)
+  return [Math.floor((s.from - margin) / slotS) * slotS, Math.ceil((s.to + margin) / slotS) * slotS]
+}
+
+/** The popup's block for the command at `time`: the command and since when, the measured grid there and its share of
+ *  the command (or, without the detail, what the grid delivered over the command), a shortfall, and the session. */
+export function marketBlock(o: {
+  spans: MarketCommandSpan[]
+  sessions: CommandSession[]
+  runs: Shortfall[]
+  detail: GridDetail | undefined
+  time: number
+  nowS?: number
+  timeZone?: string
+}): PopupBlock | null {
+  const span = o.spans.find((s) => unix(s.start) <= o.time && o.time < spanEnd(s, o.nowS))
+  if (!span) return null
+  const sell = span.direction === 'sell'
+  const rows: PopupBlock['rows'] = [
+    {
+      name: 'Commanded',
+      value: formatPower(span.power_w),
+      note: `since ${formatClock(span.start, o.timeZone)}`,
+      color: '--q-market',
+      swatch: 'line',
+    },
+  ]
+  const share = (got: number) => (span.power_w > 0 ? `${Math.round((got / span.power_w) * 100)} % of it` : undefined)
+  const w = gridAt(o.detail, o.time)
+  if (w !== null) {
+    const got = sell ? -w : w
+    rows.push({ name: 'Grid measured', value: formatSignedPower(w), note: share(got), color: '--q-grid', swatch: 'thin' })
+    if (o.runs.some((r) => r.from <= o.time && o.time < r.to)) {
+      rows.push({ name: 'Shortfall', value: formatPower(span.power_w - got), color: '--q-shortfall', swatch: 'hatch', alert: true })
+    }
+  } else {
+    const got = deliveredW(span)
+    if (got !== null) {
+      const pct = span.power_w > 0 ? `${Math.round((got / span.power_w) * 100)} %` : null
+      const note = [pct, span.open ? 'so far' : 'mean over the command'].filter(Boolean).join(' · ')
+      rows.push({ name: 'Delivered', value: formatPower(got), note, color: '--q-grid', swatch: 'thin' })
+    }
+  }
+  const session = o.sessions.find((s) => s.from <= o.time && o.time < s.to)
+  const foot = session
+    ? [
+        `Session ${sessionTimes(session, o.timeZone)} · ${session.spans.length} ${session.spans.length === 1 ? 'command' : 'commands'}`,
+        [powerRange(session), deliveredText(session)].filter(Boolean).join(' · '),
       ]
-      const got = deliveredW(s)
-      if (got !== null) {
-        const parts = [formatPower(got)]
-        if (s.power_w > 0) parts.push(`${Math.round((got / s.power_w) * 100)} %`)
-        const coverage = s.measured_coverage
-        if (coverage !== null && coverage !== undefined && coverage < 0.9) parts.push(`data ${Math.round(coverage * 100)} %`)
-        rows.push({ name: 'Delivered', value: `${parts.join(' · ')}${s.open ? ' so far' : ''}`, color: '--q-grid' })
-      }
-      return rows
-    })
+    : undefined
+  return { title: sell ? '↓ SELL' : '↑ BUY', sub: `${span.source} · ${span.mode}`, tone: sell ? 'sell' : 'buy', rows, foot }
 }

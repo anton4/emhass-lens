@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from './chartPopup'
+import { momentLabel, nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from './chartPopup'
 import { formatPower, formatSignedPower } from './units'
 
 const charging = (w: number) => (w > 0 ? 'charging' : w < 0 ? 'discharging' : 'idle')
@@ -65,6 +65,13 @@ describe('the popup placement', () => {
     expect(slotRange(Date.parse('2026-10-12T07:45:00Z') / 1000, Date.parse('2026-10-12T08:00:00Z') / 1000, 'Europe/Tallinn')).toBe(
       'Mon 10:45–11:00',
     )
+    expect(slotRange(Date.parse('2026-10-12T07:45:00Z') / 1000, Date.parse('2026-10-12T08:00:00Z') / 1000, 'Europe/Tallinn', false)).toBe(
+      '10:45–11:00',
+    )
+  })
+
+  it('names the pointer\'s own moment to the second', () => {
+    expect(momentLabel(Date.parse('2026-10-14T06:02:14Z') / 1000 + 0.7, 'Europe/Tallinn')).toBe('Wed 09:02:14')
   })
 })
 

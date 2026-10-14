@@ -2,15 +2,33 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
-import { TimeChart, type ChartLane, type ChartOverlay, type ChartSeries, type ChartTick } from '../../components/charts/TimeChart'
+import {
+  TimeChart,
+  type ChartGap,
+  type ChartLane,
+  type ChartOverlay,
+  type ChartSeries,
+  type ChartSession,
+  type ChartTick,
+} from '../../components/charts/TimeChart'
 import { Lamp } from '../../components/Lamp'
 import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
-import { detailRequest, gridDetailLabel, gridOverlay, gridRows } from '../../lib/gridDetail'
-import { marketLane, marketOverlay, marketRows } from '../../lib/market'
+import { momentLabel } from '../../lib/chartPopup'
+import { detailCover, detailRequest, gridDetailNote, gridOverlay, gridRows, withoutCovered } from '../../lib/gridDetail'
+import {
+  commandSessions,
+  marketBlock,
+  marketLane,
+  marketOverlay,
+  sessionBands,
+  sessionWindow,
+  shortfallGap,
+  shortfalls,
+} from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { snapWindow } from '../../lib/chartRange'
-import { alignTo, deferrableColumns, hasColumn, SLOT_S, socColumns } from '../../lib/plan'
+import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
 import { IDLE_W } from '../../lib/planSummary'
 import { isForecast, originLabel } from '../../lib/prices'
 import {
@@ -77,7 +95,7 @@ const POWER = [
     column: 'P_batt',
     measured: 'batt',
     planned: 'P_batt',
-    label: 'Battery (+ charge)',
+    label: 'Battery',
     popupLabel: 'Battery',
     color: '--q-batt',
     fill: undefined,
@@ -89,7 +107,7 @@ const POWER = [
     column: 'P_grid',
     measured: 'grid',
     planned: 'P_grid',
-    label: 'Grid (+ import)',
+    label: 'Grid',
     popupLabel: 'Grid',
     color: '--q-grid',
     fill: undefined,
@@ -125,9 +143,11 @@ const POWER = [
 
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
 
-/** What the Power chart's chips switch: a quantity (its measured, planned and planned-then lines), the deferrable
- *  loads, the grid power measured finer than the slots, and Qilowatt's commands as a line and as a lane. */
-type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'grid-detail' | 'market-power' | 'market-commands'
+/** What the Power chart's chips switch: a quantity (its measured, planned and planned-then lines; the grid's measured
+ *  line is the grid power finer than the slots where there is one), the deferrable loads, and Qilowatt's commands: the
+ *  commanded power with its shortfalls ('market-power'), and the sessions as bands, flags and a lane
+ *  ('market-commands'). */
+type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'market-power' | 'market-commands'
 
 // The parts hidden are remembered in this browser only; blocked storage just means all shown.
 const HIDDEN_KEY = 'emhass-lens.plan.power.hidden'
@@ -341,6 +361,7 @@ export function PlanCharts({
         onZoom={zoomTo}
         shade={shade}
         nowS={nowS}
+        pastEndS={pastEndS}
         timeZone={data.timezone}
         slotTag={slotTag}
       />
@@ -451,9 +472,10 @@ function MpcRunStrip({
   )
 }
 
-/** The Power chart: battery, grid, PV, house load and the deferrable loads, the grid power measured finer than the
- *  slots (a thin line), and Qilowatt's commands (a dotted line for the power, a lane for what was asked and what the
- *  grid delivered) read from the Home Assistant recorder; chips under it switch each part. */
+/** The Power chart: battery, grid, PV, house load and the deferrable loads, with the grid measured finer than the slots
+ *  left of now where there is a grid sensor, and Qilowatt's commands from the Home Assistant recorder: each session a
+ *  band with a flag and a bar in the lane under the chart (a click zooms to it), the commanded power as an ink line on
+ *  the same steps as the measured grid, and where the grid fell short of it, hatched. Chips under it switch each part. */
 function PowerChart({
   x,
   parts,
@@ -463,6 +485,7 @@ function PowerChart({
   onZoom,
   shade,
   nowS,
+  pastEndS,
   timeZone,
   slotTag,
 }: {
@@ -474,6 +497,7 @@ function PowerChart({
   onZoom: (range: [number, number] | null) => void
   shade: [number, number][]
   nowS: number
+  pastEndS: number
   timeZone: string
   slotTag: { tag: (t: number) => { text: string; tone: 'neutral' | 'blue' } }
 }) {
@@ -491,59 +515,104 @@ function PowerChart({
   const commands = useMarketCommands(since)
   const spans = useMemo(() => commands.data?.spans ?? [], [commands.data])
   const showPower = spans.length > 0 && !hidden.has('market-power')
-  const showCommands = spans.length > 0 && !hidden.has('market-commands')
-  // the measured part of the window shown, finer than the slots
+  const showSessions = spans.length > 0 && !hidden.has('market-commands')
+  // the measured part of the window shown, finer than the slots: the grid's line there
   const last = x[x.length - 1]
   const shown: [number, number] | null = zoom ?? (first !== undefined && last !== undefined ? [first, last] : null)
-  const showDetail = measuredGrid && !hidden.has('grid-detail')
+  const showDetail = measuredGrid && !hidden.has('grid')
   const detail = useGridDetail(shown ? detailRequest(shown, nowS, zoom !== null) : null, showDetail)
   const gridData = showDetail ? detail.data : undefined
+  const cover = useMemo(() => detailCover(gridData), [gridData])
   const series = useMemo(
-    () => parts.filter((p) => !hidden.has(p.chip.part)).flatMap((p) => p.series),
-    [parts, hidden],
+    () =>
+      parts
+        .filter((p) => !hidden.has(p.chip.part))
+        .flatMap((p) =>
+          p.chip.part === 'grid' && cover
+            ? p.series.map((line, i) =>
+                // the measured quarter-hours the detail covers are drawn by its line; the popup keeps their means
+                i === 0 ? { ...line, values: withoutCovered(x, line.values, cover, pastEndS), readout: line.values } : line,
+              )
+            : p.series,
+        ),
+    [parts, hidden, cover, x, pastEndS],
   )
-  // the commanded power on top of the measured line; a command still on runs on to the now line
+  const sessions = useMemo(() => commandSessions(spans, nowS), [spans, nowS])
+  const runs = useMemo(() => (showPower ? shortfalls(spans, gridData, nowS) : []), [showPower, spans, gridData, nowS])
+  // the measured grid's thin line on top of the bold commanded one, so both show where they agree
   const overlays = useMemo<ChartOverlay[]>(
     () => [
-      ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
       ...(showPower ? [marketOverlay(spans, nowS)] : []),
+      ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
     ],
     [gridData, showPower, spans, nowS],
   )
-  const lanes = useMemo<ChartLane[]>(() => (showCommands ? [marketLane(spans, nowS)] : []), [showCommands, spans, nowS])
-  const popup = useMemo(
-    () => ({
-      ...slotTag,
-      extra:
-        gridData || showPower || showCommands
-          ? (_t: number, time: number) => [
-              ...gridRows(gridData, time, timeZone),
-              // the commands in the quarter-hour under the pointer (the popup's slot is the nearest one on the grid)
-              ...(showPower || showCommands ? marketRows(spans, Math.floor(time / SLOT_S) * SLOT_S, timeZone) : []),
-            ]
-          : undefined,
-    }),
-    [slotTag, gridData, showPower, showCommands, spans, timeZone],
+  const gaps = useMemo<ChartGap[]>(() => (runs.length > 0 ? [shortfallGap(runs)] : []), [runs])
+  const bands = useMemo<ChartSession[]>(
+    () => (showSessions ? sessionBands(sessions, timeZone) : []),
+    [showSessions, sessions, timeZone],
   )
-  const chips: PowerChip[] = [
-    ...parts.map((p) => p.chip),
-    ...(measuredGrid
-      ? [{ part: 'grid-detail' as const, label: gridDetailLabel(gridData?.step_s), color: '--q-grid' }]
-      : []),
-    ...(spans.length > 0
+  const lanes = useMemo<ChartLane[]>(
+    () => (showSessions ? [marketLane(sessions, runs)] : []),
+    [showSessions, sessions, runs],
+  )
+  const popup = useMemo(() => {
+    const market = showPower || showSessions
+    const block = (time: number) =>
+      market ? marketBlock({ spans, sessions, runs, detail: gridData, time, nowS, timeZone }) : null
+    return {
+      ...slotTag,
+      // left of now the popup is about the pointer's own moment (the measured grid, a command); the slot heads the rows
+      head: gridData || market ? (_t: number, time: number) => (time < nowS ? momentLabel(time, timeZone) : null) : undefined,
+      block: market ? (_t: number, time: number) => block(time) : undefined,
+      // the measured grid at the pointer, unless the command's block has it
+      extra: gridData ? (_t: number, time: number) => (block(time) ? [] : gridRows(gridData, time)) : undefined,
+    }
+  }, [slotTag, gridData, showPower, showSessions, spans, sessions, runs, nowS, timeZone])
+  const zoomToSession = (id: string) => {
+    const session = sessions.find((s) => s.id === id)
+    if (session) onZoom(sessionWindow(session))
+  }
+  const detailNote = gridDetailNote(gridData?.step_s)
+  const gridTitle = gridData?.error
+    ? gridData.error
+    : detailNote
+      ? `Left of now ${detailNote}, the plan right of it`
+      : undefined
+  const chips = parts.map((p) => p.chip)
+  const marketChips: PowerChip[] =
+    spans.length > 0
       ? [
-          { part: 'market-power' as const, label: 'Market power (+ buy)', color: '--q-market' },
-          { part: 'market-commands' as const, label: 'Market commands', color: '--line-green' },
+          { part: 'market-power', label: 'Commanded', color: '--q-market' },
+          { part: 'market-commands', label: 'Sessions', color: '--q-sell' },
         ]
-      : []),
-  ]
+      : []
+  const chip = (c: PowerChip, title?: string) => (
+    <li key={c.part}>
+      <button
+        type="button"
+        className="legend-toggle"
+        aria-pressed={!hidden.has(c.part)}
+        title={title ?? (hidden.has(c.part) ? 'Show in the chart' : 'Hide from the chart')}
+        onClick={() => toggle(c.part)}
+      >
+        <span
+          className="legend-swatch"
+          data-bold={c.part === 'market-power' || undefined}
+          data-split={c.part === 'market-commands' || undefined}
+          style={{ background: `var(${c.color})`, color: `var(${c.color})` }}
+        />
+        {c.label}
+      </button>
+    </li>
+  )
   return (
     <section className="chart-block">
       <h3>Power</h3>
       <TimeChart
         x={x}
         series={series}
-        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, the grid power measured in detail, and the market's commands"
+        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, the grid power measured in detail, and the market's sessions and commanded power"
         syncKey={SYNC}
         yFormat={kwTick}
         fit={POWER_FIT}
@@ -552,39 +621,23 @@ function PowerChart({
         shade={shade}
         now={nowS}
         timeZone={timeZone}
-        height={300}
+        height={bands.length > 0 ? 326 : 300}
         popup={popup}
         legend={false}
         overlays={overlays}
+        gaps={gaps}
         lanes={lanes}
+        sessions={bands}
+        onSession={zoomToSession}
       />
       <ul className="legend" role="group" aria-label="Lines shown in the Power chart">
-        {chips.map((c) => (
-          <li key={c.part}>
-            <button
-              type="button"
-              className="legend-toggle"
-              aria-pressed={!hidden.has(c.part)}
-              title={
-                c.part === 'grid-detail' && gridData?.error
-                  ? gridData.error
-                  : hidden.has(c.part)
-                    ? 'Show in the chart'
-                    : 'Hide from the chart'
-              }
-              onClick={() => toggle(c.part)}
-            >
-              <span
-                className="legend-swatch"
-                data-dotted={c.part === 'market-power' || undefined}
-                data-thin={c.part === 'grid-detail' || undefined}
-                data-split={c.part === 'market-commands' || undefined}
-                style={{ background: `var(${c.color})`, color: `var(${c.color})` }}
-              />
-              {c.label}
-            </button>
+        {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}
+        {marketChips.length > 0 && (
+          <li className="legend-group" aria-hidden="true">
+            Market
           </li>
-        ))}
+        )}
+        {marketChips.map((c) => chip(c))}
         {hasPast && (
           <li className="legend-key" title="Left of the now line, solid lines are measured; right of it, the current plan">
             <span className="legend-dash" aria-hidden="true" />

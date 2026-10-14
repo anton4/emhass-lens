@@ -69,7 +69,15 @@
   --q-import: #33197d;
   --q-export: #a874de;
   --q-spot: #8a8984;
-  --q-market: #45474f; /* Qilowatt's commanded power, dotted over the Power chart */
+  /* Qilowatt's commands on the Power chart: the commanded power as an ink line; each session a band, a flag and a
+     lane bar, sell green and buy blue like the market's action chips, with text in --q-*-ink on the flag and the bar;
+     a shortfall (the grid delivering less than asked) hatched in red */
+  --q-market: #1b1c1f;
+  --q-sell: #2e7d32;
+  --q-sell-ink: #ffffff;
+  --q-buy: #0277bd;
+  --q-buy-ink: #ffffff;
+  --q-shortfall: #c62828;
 
   /* Categorical slots in fixed order, for charts whose series are not quantities (cost functions, fee parts). */
   --series-1: #2a78d6;
@@ -185,7 +193,12 @@
     --q-import: #d4c8ff;
     --q-export: #8f55c9;
     --q-spot: #8f8e88;
-    --q-market: #c4c6cc;
+    --q-market: #f2f3f5;
+    --q-sell: #66bb6a;
+    --q-sell-ink: #0f2411;
+    --q-buy: #4fc3f7;
+    --q-buy-ink: #06263a;
+    --q-shortfall: #ef5350;
 
     --series-1: #3987e5;
     --series-2: #d95926;
