@@ -253,9 +253,11 @@ class PriceService:
         self._cache[key] = entries
         return entries
 
-    def stitched(self, start: datetime, forecast: ForecastSeries | None) -> Stitched:
+    def stitched(self, start: datetime, forecast: ForecastSeries | None, extend_days: int | None = None) -> Stitched:
+        """The Nord Pool prices from `start` and, after them, `extend_days` of the forecast (default: the setting)."""
         settings = self.settings
-        extend = settings.forecast.extend_days if settings.forecast.source != "none" else 0
+        extend = settings.forecast.extend_days if extend_days is None else extend_days
+        extend = extend if settings.forecast.source != "none" else 0
         end = start + timedelta(days=4 + extend)
         return stitch(self.entries(start, end), forecast, extend)
 
@@ -266,6 +268,7 @@ class PriceService:
         *,
         legacy_compat: bool = False,
         settings: Settings | None = None,
+        extend_days: int | None = None,
     ) -> list[SlotPrice]:
         settings = settings or self.settings
         tariff = settings.prices.tariff
@@ -273,7 +276,7 @@ class PriceService:
         tz = area_tz(settings)
         return [
             price_slot(s.eur_mwh, s.start, s.end, tariff, tz, s.origin, rates, legacy_compat)
-            for s in self.stitched(start, forecast).slots
+            for s in self.stitched(start, forecast, extend_days).slots
         ]
 
     def status(self) -> dict[str, Any]:

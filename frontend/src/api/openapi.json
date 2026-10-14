@@ -230,6 +230,62 @@
         "title": "BackupStatus",
         "type": "object"
       },
+      "BeyondSlot": {
+        "description": "One slot after the horizon, which wasn't sent: the price and PV forecast as they are now.",
+        "properties": {
+          "load_cost": {
+            "title": "Load Cost",
+            "type": "number"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "prod_price": {
+            "title": "Prod Price",
+            "type": "number"
+          },
+          "pv_p10_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv P10 W"
+          },
+          "pv_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pv W"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "origin",
+          "period",
+          "load_cost",
+          "prod_price"
+        ],
+        "title": "BeyondSlot",
+        "type": "object"
+      },
       "ButtonPress": {
         "description": "One press of a Sofar button, whoever pressed it.",
         "properties": {
@@ -3337,6 +3393,40 @@
           "last_resume"
         ],
         "title": "HoldStatus",
+        "type": "object"
+      },
+      "HorizonOption": {
+        "description": "Where the plan would end with `days` of price forecast after the Nord Pool prices (Settings → Price forecast →\nExtend by), with the data there is now.",
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "num_lags": {
+            "title": "Num Lags",
+            "type": "integer"
+          },
+          "short": {
+            "title": "Short",
+            "type": "boolean"
+          },
+          "slots": {
+            "title": "Slots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "end",
+          "slots",
+          "num_lags",
+          "short"
+        ],
+        "title": "HorizonOption",
         "type": "object"
       },
       "ImportPreview": {
@@ -8494,8 +8584,19 @@
         "type": "object"
       },
       "SentInputs": {
-        "description": "What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS\nforecast for those slots, and what was measured before the anchor.",
+        "description": "What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS\nforecast for those slots, what was measured before the anchor, and the forecasts after the horizon.",
         "properties": {
+          "actual_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual End"
+          },
           "anchor": {
             "anyOf": [
               {
@@ -8511,11 +8612,37 @@
             "title": "Available",
             "type": "boolean"
           },
+          "beyond": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BeyondSlot"
+            },
+            "title": "Beyond",
+            "type": "array"
+          },
           "deferrables": {
             "items": {
               "$ref": "#/components/schemas/SentDeferrable"
             },
             "title": "Deferrables",
+            "type": "array"
+          },
+          "extend_days": {
+            "default": 0,
+            "title": "Extend Days",
+            "type": "integer"
+          },
+          "forecast_source": {
+            "default": "none",
+            "title": "Forecast Source",
+            "type": "string"
+          },
+          "horizon_options": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HorizonOption"
+            },
+            "title": "Horizon Options",
             "type": "array"
           },
           "load_plan_generated_at": {
@@ -10544,7 +10671,7 @@
     },
     "/api/inputs/sent": {
       "get": {
-        "description": "What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the\nlast `hours_back` hours measured before its anchor.",
+        "description": "What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots, the last\n`hours_back` hours measured before its anchor, and (`beyond`) the price and PV forecast after its horizon. Where\neach plan length (days of price forecast) would end comes either way.",
         "operationId": "inputs_sent_api_inputs_sent_get",
         "parameters": [
           {
@@ -10557,6 +10684,16 @@
               "minimum": 0,
               "title": "Hours Back",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beyond",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Beyond",
+              "type": "boolean"
             }
           }
         ],
@@ -10603,6 +10740,16 @@
               "minimum": 0,
               "title": "Hours Back",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beyond",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Beyond",
+              "type": "boolean"
             }
           }
         ],

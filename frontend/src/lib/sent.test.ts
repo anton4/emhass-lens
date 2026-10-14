@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { SentDeferrable, SentInputs } from '../api/types'
+import type { BeyondSlot, HorizonOption, SentDeferrable, SentInputs } from '../api/types'
 import {
   deferrableLanes,
   exportLane,
   forecastRangesOn,
+  horizonLane,
   kwhOf,
   loadExtras,
   loadWindow,
@@ -178,5 +179,68 @@ describe('PV day totals', () => {
 
   it('adds up energy per 15-minute slot', () => {
     expect(kwhOf([4000, 4000, null, 4000, 4000])).toBe(4)
+  })
+})
+
+describe('after the horizon', () => {
+  const after = (i: number, extra: Partial<BeyondSlot> = {}): BeyondSlot => ({
+    start: iso(ANCHOR + i * 900),
+    origin: 'forecast:ee_eupowerprices',
+    period: 'night',
+    load_cost: 0.2,
+    prod_price: 0.1,
+    pv_w: 0,
+    pv_p10_w: null,
+    ...extra,
+  })
+  const data = { ...sent([slot(0), slot(1)], 1), beyond: [after(2), after(3, { period: 'day' })] }
+  const axis = sentAxis(data)
+
+  it('follows the payload on the axis; the plan still ends with the payload', () => {
+    expect(axis.x).toEqual([ANCHOR - 900, ANCHOR, ANCHOR + 900, ANCHOR + 1800, ANCHOR + 2700, ANCHOR + 3600])
+    expect([axis.anchorIdx, axis.beyondIdx]).toEqual([1, 3])
+    expect([axis.endS, axis.axisEndS]).toEqual([ANCHOR + 1800, ANCHOR + 3600])
+    expect(onAxis(axis, [1], [2, 3], [4, null])).toEqual([1, 2, 3, 4, null, null])
+    expect(onAxis(axis, [1], [2, 3])).toEqual([1, 2, 3, null, null, null])
+  })
+
+  it('carries the tariff and the forecast shading over it, and the popup gives its tariff only', () => {
+    expect(tariffLane(axis, data).spans.map((s) => [s.from, s.to, s.text])).toEqual([
+      [ANCHOR, ANCHOR + 2700, 'night'],
+      [ANCHOR + 2700, ANCHOR + 3600, 'day'],
+    ])
+    expect(forecastRangesOn(axis, data)).toEqual([[ANCHOR + 1800, ANCHOR + 3600]])
+    expect(priceExtras(axis, data, ANCHOR + 2700)).toEqual([{ name: 'Tariff', value: 'day', color: '--chart-grid' }])
+  })
+
+  it('draws the horizon: sent, then not sent; a previewed length moves the end', () => {
+    expect(horizonLane(axis, data).spans).toEqual([
+      { from: ANCHOR, to: ANCHOR + 1800, color: '--tint-green', text: 'sent · 2 slots' },
+      { from: ANCHOR + 1800, to: ANCHOR + 3600, color: '--chart-grid', hatch: true, text: 'not sent' },
+    ])
+    const longer: HorizonOption = { days: 2, end: iso(ANCHOR + 2700), slots: 3, num_lags: 384, short: false }
+    expect(horizonLane(axis, data, longer).spans).toEqual([
+      { from: ANCHOR, to: ANCHOR + 2700, color: '--tint-blue', text: 'Nord Pool + 2 d · 3 slots' },
+      { from: ANCHOR + 2700, to: ANCHOR + 3600, color: '--chart-grid', hatch: true, text: 'not sent' },
+    ])
+    expect(horizonLane(sentAxis(sent([slot(0)])), sent([slot(0)])).spans).toHaveLength(1)
+  })
+
+  it('says which PV day totals were not sent', () => {
+    // Sunday measured; Monday sent until 12:00 and after the horizon from then; Tuesday cut off at 01:00
+    const sentSlots = Array.from({ length: 60 }, (_, i) => slot(i))
+    const afterSlots = Array.from({ length: 52 }, (_, i) => after(60 + i))
+    const long = sentAxis({ ...sent(sentSlots, 96), beyond: afterSlots })
+    const sunHigh = (t: number) => {
+      const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(new Date(t * 1000)))
+      return h >= 9 && h < 17 ? 2000 : 0
+    }
+    const pv = [...long.x.slice(0, -1).map(sunHigh), null] as (number | null)[]
+    const days = pvDays(long, pv, long.x.map(() => null), TZ)
+    expect(days.map((d) => [d.measured, d.notSent])).toEqual([
+      ['all', 'none'],
+      ['none', 'some'],
+    ])
+    expect(pvNotes(days).map((n) => n.sub)).toEqual([undefined, 'partly sent'])
   })
 })

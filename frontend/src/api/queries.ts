@@ -48,7 +48,7 @@ export const keys = {
   storage: ['storage'] as const,
   prices: (daysBack: number) => ['prices', daysBack] as const,
   inputs: ['inputs'] as const,
-  sentInputs: (hoursBack: number) => ['inputs', 'sent', hoursBack] as const,
+  sentInputs: (hoursBack: number, beyond: boolean) => ['inputs', 'sent', hoursBack, beyond] as const,
   emhass: ['emhass'] as const,
   problems: ['problems'] as const,
   entities: (params: Record<string, unknown>) => ['ha-entities', params] as const,
@@ -188,10 +188,10 @@ export function useInputs() {
 }
 
 /** What the newest MPC run gave EMHASS, slot by slot, after `hoursBack` hours measured before its anchor. */
-export function useSentInputs(hoursBack: number) {
+export function useSentInputs(hoursBack: number, beyond: boolean) {
   return useQuery({
-    queryKey: keys.sentInputs(hoursBack),
-    queryFn: () => api.get<SentInputs>(`/api/inputs/sent${query({ hours_back: hoursBack })}`),
+    queryKey: keys.sentInputs(hoursBack, beyond),
+    queryFn: () => api.get<SentInputs>(`/api/inputs/sent${query({ hours_back: hoursBack, beyond })}`),
     refetchInterval: 60_000,
     placeholderData: keepPreviousData,
   })

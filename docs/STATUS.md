@@ -37,6 +37,35 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: the forecasts after the horizon, and the plan length on the Inputs page (0.4.36)
+- **Why:** the owner wanted to see how far the eupowerprices and Solcast forecasts reach beyond what is sent, and to
+  pick the plan length from there. They chose days after Nord Pool (`forecast.extend_days`), and a switch on the
+  charts that saves after a confirm.
+- **Backend:**
+  - `PriceService.stitched/priced(…, extend_days=)` and `derive(settings, extend_days=)` take overrides.
+  - `SentInputsService._ahead` stitches from the anchor with 7 forecast days. Starting the stitch after Nord Pool's
+    end would drop the forecast, because it hangs off `actual_end`.
+  - It returns `beyond` (the priced slots after the payload's end, with Solcast PV and P10, missing as None) and
+    `horizon_options`. For N = 1..7, `end = min(actual_end + N d, the end of the contiguous priced slots,
+    anchor + max_horizon)`, `num_lags` comes from `derive`, and `short` is true when it ends early. There are no
+    options without a forecast.
+  - `GET /api/inputs/sent` and its preview take `beyond`.
+- **Frontend:**
+  - `SentAxis` gains `beyondIdx` and `axisEndS`; `endS` stays the plan's end. `onAxis` takes a beyond array.
+    `tariffLane`, `forecastRangesOn` and `priceExtras` cover the slots after the horizon, and `pvDays` gives
+    `notSent`.
+  - `horizonLane(axis, data, preview)`.
+  - SentPanel has the *After the horizon* switch (pref `emhass-lens.inputs.after-horizon`) and *Plan length*
+    (`useSetExtendDays`, ConfirmDialog).
+  - `TimeChart.drawNotes` drops a note's sub-text, and then the note, where it would overlap the one before.
+- **Checked:**
+  - The e2e stack passed 24/24, then got 5 days of eupowerprices points seeded into app.db, with Lens on port
+    18101. Port 8099 was taken by an ssh tunnel to the real HA host.
+  - The beyond prices, PV and Horizon lane show. Hovering 3 d previews "Nord Pool + 3 d · 340 slots", and 6–7 d are
+    disabled once the forecast ends.
+  - Confirming saved revision 20 (extend_days 3), and a preview then built 339 slots.
+  - At 390 px there is no side scroll, and the PV labels no longer overlap.
+
 ### 2026-10-14: a steadier slot headline, market commands on the Power chart, less text (0.4.35)
 - **Why:** the owner's screenshot read "Charging the battery from PV and the grid" while PV 3.80 kW − house 389 W
   already covered the 3.44 kW charge (the grid's 145 W ran the house). They also asked for the market's commands

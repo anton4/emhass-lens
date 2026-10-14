@@ -1,41 +1,62 @@
 // The Inputs page's "What EMHASS gets" (GET /api/inputs/sent): one MPC payload on a time axis, after what was
-// measured (and the prices that applied) before its anchor. Lanes under the charts show the tariff period, the export
-// limit and each deferrable load's window; the PV chart labels each day's total.
+// measured (and the prices that applied) before its anchor and before the price and PV forecast after its horizon.
+// Lanes under the charts show the tariff period, the export limit, the horizon and each deferrable load's window; the
+// PV chart labels each day's total.
 
 import type { ChartLane, ChartNote } from '../components/charts/TimeChart'
 import type { PopupExtra } from '../components/charts/cursorStore'
-import type { SentDeferrable, SentInputs } from '../api/types'
+import type { HorizonOption, SentDeferrable, SentInputs } from '../api/types'
 import { isForecast, periodLabel } from './prices'
 import { formatPower, isNumber } from './units'
 
 export const SLOT_S = 900
 
+/** What the axis is built from: the slots after the horizon are optional. */
+export type SentData = Pick<SentInputs, 'measured' | 'slots'> & Partial<Pick<SentInputs, 'beyond'>>
+
 export interface SentAxis {
-  /** Slot starts (unix s): the measured slots, then the payload's, then the end of the last one. */
+  /** Slot starts (unix s): the measured slots, the payload's, those after the horizon, then the end of the last. */
   x: number[]
   /** Index in x of the first payload slot. */
   anchorIdx: number
+  /** Index in x of the first slot after the horizon (the closing point when there are none). */
+  beyondIdx: number
   anchorS: number
+  /** The end of the payload's last slot: where the plan ends. */
   endS: number
+  /** The end of the axis: the last slot after the horizon, else endS. */
+  axisEndS: number
 }
 
-export function sentAxis(data: Pick<SentInputs, 'measured' | 'slots'>): SentAxis {
+export function sentAxis(data: SentData): SentAxis {
   const measured = data.measured.map((m) => Date.parse(m.start) / 1000)
   const sent = data.slots.map((s) => Date.parse(s.start) / 1000)
+  const beyond = (data.beyond ?? []).map((b) => Date.parse(b.start) / 1000)
   const anchorS = sent[0] ?? measured[measured.length - 1] ?? 0
   const endS = (sent[sent.length - 1] ?? anchorS - SLOT_S) + SLOT_S
-  return { x: [...measured, ...sent, endS], anchorIdx: measured.length, anchorS, endS }
+  const axisEndS = beyond.length > 0 ? beyond[beyond.length - 1]! + SLOT_S : endS
+  return {
+    x: [...measured, ...sent, ...beyond, axisEndS],
+    anchorIdx: measured.length,
+    beyondIdx: measured.length + sent.length,
+    anchorS,
+    endS,
+    axisEndS,
+  }
 }
 
-/** One value per x: `past` on the measured slots, `future` on the payload's, nothing at the closing point. */
+/** One value per x: `past` on the measured slots, `future` on the payload's, `beyond` after the horizon, nothing at
+ *  the closing point. */
 export function onAxis(
   axis: SentAxis,
   past: readonly (number | null | undefined)[] | null,
   future: readonly (number | null | undefined)[] | null,
+  beyond: readonly (number | null | undefined)[] | null = null,
 ): (number | null)[] {
   const out: (number | null)[] = []
   for (let i = 0; i < axis.anchorIdx; i++) out.push(num(past?.[i]))
-  for (let i = axis.anchorIdx; i < axis.x.length - 1; i++) out.push(num(future?.[i - axis.anchorIdx]))
+  for (let i = axis.anchorIdx; i < axis.beyondIdx; i++) out.push(num(future?.[i - axis.anchorIdx]))
+  for (let i = axis.beyondIdx; i < axis.x.length - 1; i++) out.push(num(beyond?.[i - axis.beyondIdx]))
   out.push(null)
   return out
 }
@@ -60,13 +81,18 @@ const PERIOD_COLORS: Record<string, string> = {
   holiday_peak: '--tint-amber',
 }
 
-/** The tariff period over the whole axis: the measured slots' (the prices that applied), then the payload's. */
-export function tariffLane(axis: SentAxis, data: Pick<SentInputs, 'measured' | 'slots'>): ChartLane {
+/** The tariff period over the whole axis: the measured slots' (the prices that applied), the payload's, then those
+ *  after the horizon. */
+export function tariffLane(axis: SentAxis, data: SentData): ChartLane {
   return {
     label: 'Tariff',
     spans: runsOf(
       axis,
-      [...data.measured.map((m) => m.period ?? null), ...data.slots.map((s) => s.period)],
+      [
+        ...data.measured.map((m) => m.period ?? null),
+        ...data.slots.map((s) => s.period),
+        ...(data.beyond ?? []).map((b) => b.period),
+      ],
       0,
     ).flatMap((r) =>
       r.value === null
@@ -113,14 +139,14 @@ export function loadAsk(load: SentDeferrable): string {
   return `${formatPower(load.nominal_power_w)} for ${hours(load.operating_hours)}`
 }
 
-/** What the payload says about each lane at t: the tariff period and the export limit; before the anchor the period
- *  that applied. */
-export function priceExtras(axis: SentAxis, data: Pick<SentInputs, 'measured' | 'slots'>, t: number): PopupExtra[] {
+/** What the payload says about each lane at t: the tariff period and the export limit; before the anchor and after
+ *  the horizon only the period. */
+export function priceExtras(axis: SentAxis, data: SentData, t: number): PopupExtra[] {
   const i = slotAt(axis, t)
-  if (i < 0) {
-    const period = data.measured[axis.anchorIdx + i]?.period
-    return period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: PERIOD_COLORS[period] ?? '--chart-grid' }] : []
-  }
+  const tariffOnly = (period: string | null | undefined): PopupExtra[] =>
+    period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: PERIOD_COLORS[period] ?? '--chart-grid' }] : []
+  if (i < 0) return tariffOnly(data.measured[axis.anchorIdx + i]?.period)
+  if (i >= data.slots.length) return tariffOnly(data.beyond?.[i - data.slots.length]?.period)
   const slot = data.slots[i]
   if (!slot) return []
   const out: PopupExtra[] = [
@@ -146,12 +172,24 @@ export function slotAt(axis: SentAxis, t: number): number {
   return Math.floor((t - axis.anchorS) / SLOT_S)
 }
 
-/** Where the payload's prices are a forecast, as [from, to) in unix s. */
-export function forecastRangesOn(axis: SentAxis, data: Pick<SentInputs, 'slots'>): [number, number][] {
-  return runsOf(
-    axis,
-    data.slots.map((s) => isForecast(s.origin)),
-  ).flatMap((r) => (r.value ? [[r.from, r.to] as [number, number]] : []))
+/** Where the prices are a forecast (sent or after the horizon), as [from, to) in unix s. */
+export function forecastRangesOn(axis: SentAxis, data: Omit<SentData, 'measured'>): [number, number][] {
+  return runsOf(axis, [...data.slots, ...(data.beyond ?? [])].map((s) => isForecast(s.origin))).flatMap((r) =>
+    r.value ? [[r.from, r.to] as [number, number]] : [],
+  )
+}
+
+/** The plan's horizon under the price chart: what was sent, then (hatched) what wasn't. While a plan length is
+ *  previewed, where that one would end instead. */
+export function horizonLane(axis: SentAxis, data: Pick<SentInputs, 'slots'>, preview: HorizonOption | null = null): ChartLane {
+  const end = preview ? Date.parse(preview.end) / 1000 : axis.endS
+  const spans: ChartLane['spans'] = [
+    preview
+      ? { from: axis.anchorS, to: end, color: '--tint-blue', text: `Nord Pool + ${preview.days} d · ${preview.slots} slots` }
+      : { from: axis.anchorS, to: end, color: '--tint-green', text: `sent · ${data.slots.length} slots` },
+  ]
+  if (axis.axisEndS > end) spans.push({ from: end, to: axis.axisEndS, color: '--chart-grid', hatch: true, text: 'not sent' })
+  return { label: 'Horizon', spans }
 }
 
 /** Local midnights inside the axis (unix s). */
@@ -187,6 +225,8 @@ export interface PvDay {
   /** The P10 total, for days that are all forecast. */
   p10Kwh: number | null
   measured: 'all' | 'some' | 'none'
+  /** How much of the day's production is after the horizon, so not sent. */
+  notSent: 'all' | 'some' | 'none'
 }
 
 /** Each local day's PV energy on the axis: measured before the anchor, the estimate after it. Days the axis cuts
@@ -197,14 +237,17 @@ export function pvDays(
   p10: readonly (number | null)[],
   timeZone: string,
 ): PvDay[] {
-  const days = new Map<string, { first: number; last: number; from: number; to: number; wh: number; p10: number; peak: number; measured: number; sent: number }>()
+  const days = new Map<
+    string,
+    { first: number; last: number; from: number; to: number; wh: number; p10: number; peak: number; measured: number; sent: number; beyond: number }
+  >()
   for (let i = 0; i + 1 < axis.x.length; i++) {
     const t = axis.x[i]!
     const key = dayKey(t, timeZone)
     const v = pv[i] ?? 0
     let d = days.get(key)
     if (!d) {
-      d = { first: i, last: i, from: -1, to: -1, wh: 0, p10: 0, peak: 0, measured: 0, sent: 0 }
+      d = { first: i, last: i, from: -1, to: -1, wh: 0, p10: 0, peak: 0, measured: 0, sent: 0, beyond: 0 }
       days.set(key, d)
     }
     d.last = i
@@ -212,7 +255,8 @@ export function pvDays(
       if (d.from < 0) d.from = t
       d.to = t + SLOT_S
       if (i < axis.anchorIdx) d.measured++
-      else d.sent++
+      else if (i < axis.beyondIdx) d.sent++
+      else d.beyond++
     }
     d.wh += (v * SLOT_S) / 3600
     if (i >= axis.anchorIdx) d.p10 += ((p10[i] ?? 0) * SLOT_S) / 3600
@@ -222,13 +266,15 @@ export function pvDays(
   for (const d of days.values()) {
     const cut = (pv[d.first] ?? 0) > 0 || (pv[d.last] ?? 0) > 0
     if (cut || d.wh < 50) continue
-    const measured = d.sent === 0 ? 'all' : d.measured > 0 ? 'some' : 'none'
+    const ahead = d.sent + d.beyond
+    const measured = ahead === 0 ? 'all' : d.measured > 0 ? 'some' : 'none'
     out.push({
       t: (d.from + d.to) / 2,
       peak: d.peak,
       kwh: d.wh / 1000,
       p10Kwh: measured === 'none' && p10.some((v) => isNumber(v)) ? d.p10 / 1000 : null,
       measured,
+      notSent: d.beyond === 0 ? 'none' : d.measured + d.sent === 0 ? 'all' : 'some',
     })
   }
   return out
@@ -240,7 +286,13 @@ export function pvNotes(days: readonly PvDay[]): ChartNote[] {
     t: d.t,
     value: d.peak,
     text: `${d.kwh.toFixed(1)} kWh`,
-    sub: d.p10Kwh !== null ? `P10 ${d.p10Kwh.toFixed(1)}` : d.measured === 'some' ? 'measured + forecast' : undefined,
+    sub:
+      [
+        d.p10Kwh !== null ? `P10 ${d.p10Kwh.toFixed(1)}` : d.measured === 'some' ? 'measured + forecast' : null,
+        d.notSent === 'all' ? 'not sent' : d.notSent === 'some' ? 'partly sent' : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined,
     color: '--q-pv-ink',
   }))
 }

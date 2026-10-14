@@ -240,11 +240,16 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
   ctx.restore()
 }
 
-/** Labels on the plot: the text (and its muted sub) above the point or beside its dot, kept inside the plot. */
+/** Labels on the plot: the text (and its muted sub) above the point or beside its dot, kept inside the plot. Where a
+ *  label would run into one drawn before it (many days on a narrow chart), its sub goes, and then the label. */
 function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
   if (notes.length === 0) return
   const { ctx, bbox } = u
   const mono = cssValue('--font-code') || 'monospace'
+  const drawn: { left: number; right: number; base: number }[] = []
+  const gap = 8 * dpr
+  const free = (left: number, right: number, base: number) =>
+    !drawn.some((d) => left < d.right + gap && right > d.left - gap && Math.abs(base - d.base) < 14 * dpr)
   ctx.save()
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
@@ -268,15 +273,24 @@ function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
     const main = ctx.measureText(note.text).width
     ctx.font = light
     const sub = note.sub ? 6 * dpr + ctx.measureText(note.sub).width : 0
-    const width = main + sub
     const align = note.align ?? 'center'
-    let left = align === 'center' ? px - width / 2 : align === 'right' ? px + 10 * dpr : px - 10 * dpr - width
-    left = Math.min(Math.max(left, bbox.left + 2 * dpr), bbox.left + bbox.width - width - 2 * dpr)
+    const leftFor = (width: number) => {
+      const left = align === 'center' ? px - width / 2 : align === 'right' ? px + 10 * dpr : px - 10 * dpr - width
+      return Math.min(Math.max(left, bbox.left + 2 * dpr), bbox.left + bbox.width - width - 2 * dpr)
+    }
     const base = Math.max(bbox.top + 13 * dpr, note.dot ? py - 9 * dpr : py - 8 * dpr)
+    let withSub = sub > 0
+    let left = leftFor(main + sub)
+    if (!free(left, left + main + sub, base)) {
+      withSub = false
+      left = leftFor(main)
+      if (!free(left, left + main, base)) continue
+    }
+    drawn.push({ left, right: left + main + (withSub ? sub : 0), base })
     ctx.font = bold
     ctx.fillStyle = color
     ctx.fillText(note.text, left, base)
-    if (note.sub) {
+    if (withSub && note.sub) {
       ctx.font = light
       ctx.fillStyle = cssColor('--ink-muted')
       ctx.fillText(note.sub, left + main + 6 * dpr, base)

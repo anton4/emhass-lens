@@ -248,8 +248,9 @@ export interface paths {
         };
         /**
          * Inputs Sent
-         * @description What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the
-         *     last `hours_back` hours measured before its anchor.
+         * @description What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots, the last
+         *     `hours_back` hours measured before its anchor, and (`beyond`) the price and PV forecast after its horizon. Where
+         *     each plan length (days of price forecast) would end comes either way.
          */
         get: operations["inputs_sent_api_inputs_sent_get"];
         put?: never;
@@ -1211,6 +1212,26 @@ export interface components {
              * @default false
              */
             stale: boolean;
+        };
+        /**
+         * BeyondSlot
+         * @description One slot after the horizon, which wasn't sent: the price and PV forecast as they are now.
+         */
+        BeyondSlot: {
+            /** Load Cost */
+            load_cost: number;
+            /** Origin */
+            origin: string;
+            /** Period */
+            period: string;
+            /** Prod Price */
+            prod_price: number;
+            /** Pv P10 W */
+            pv_p10_w?: number | null;
+            /** Pv W */
+            pv_w?: number | null;
+            /** Start */
+            start: string;
         };
         /**
          * ButtonPress
@@ -2411,6 +2432,23 @@ export interface components {
             since: string | null;
             /** Value */
             value: string | null;
+        };
+        /**
+         * HorizonOption
+         * @description Where the plan would end with `days` of price forecast after the Nord Pool prices (Settings → Price forecast →
+         *     Extend by), with the data there is now.
+         */
+        HorizonOption: {
+            /** Days */
+            days: number;
+            /** End */
+            end: string;
+            /** Num Lags */
+            num_lags: number;
+            /** Short */
+            short: boolean;
+            /** Slots */
+            slots: number;
         };
         /** ImportPreview */
         ImportPreview: {
@@ -4338,15 +4376,37 @@ export interface components {
         /**
          * SentInputs
          * @description What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS
-         *     forecast for those slots, and what was measured before the anchor.
+         *     forecast for those slots, what was measured before the anchor, and the forecasts after the horizon.
          */
         SentInputs: {
+            /** Actual End */
+            actual_end?: string | null;
             /** Anchor */
             anchor: string | null;
             /** Available */
             available: boolean;
+            /**
+             * Beyond
+             * @default []
+             */
+            beyond: components["schemas"]["BeyondSlot"][];
             /** Deferrables */
             deferrables: components["schemas"]["SentDeferrable"][];
+            /**
+             * Extend Days
+             * @default 0
+             */
+            extend_days: number;
+            /**
+             * Forecast Source
+             * @default none
+             */
+            forecast_source: string;
+            /**
+             * Horizon Options
+             * @default []
+             */
+            horizon_options: components["schemas"]["HorizonOption"][];
             /** Load Plan Generated At */
             load_plan_generated_at: string | null;
             /** Load Plan Run Id */
@@ -5449,6 +5509,7 @@ export interface operations {
         parameters: {
             query?: {
                 hours_back?: number;
+                beyond?: boolean;
             };
             header?: never;
             path?: never;
@@ -5480,6 +5541,7 @@ export interface operations {
         parameters: {
             query?: {
                 hours_back?: number;
+                beyond?: boolean;
             };
             header?: never;
             path?: never;

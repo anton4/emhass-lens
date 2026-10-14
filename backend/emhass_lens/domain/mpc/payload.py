@@ -42,9 +42,11 @@ class BuildResult:
     issues: list[Issue] = field(default_factory=list)
 
 
-def derive(settings: Settings) -> Derived:
-    """Same formulas as the HACS integration, so a model fitted by it keeps working."""
-    extend = settings.forecast.extend_days if settings.forecast.source != "none" else 0
+def derive(settings: Settings, extend_days: int | None = None) -> Derived:
+    """Same formulas as the HACS integration, so a model fitted by it keeps working. `extend_days` stands in for the
+    setting (what another plan length would give)."""
+    extend = settings.forecast.extend_days if extend_days is None else extend_days
+    extend = extend if settings.forecast.source != "none" else 0
     if settings.emhass.ml.num_lags:
         lags, formula = settings.emhass.ml.num_lags, "set in Settings"
     else:

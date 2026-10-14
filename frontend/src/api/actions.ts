@@ -77,6 +77,24 @@ export function useSetControllerMode(section: ControllerSection) {
   })
 }
 
+/** Change how many days of price forecast the plan takes after the Nord Pool prices (Settings → Price forecast →
+ *  Extend by), from the Inputs page. */
+export function useSetExtendDays() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (days: number) =>
+      api.post<SaveResponse>('/api/settings/change', {
+        base_revision: await baseRevision(queryClient),
+        changes: { forecast: { extend_days: days } },
+        comment: `Price forecast extended by ${days} day${days === 1 ? '' : 's'} from the Inputs page`,
+      }),
+    onSettled: () => {
+      refreshAfterChange(queryClient)
+      void queryClient.invalidateQueries({ queryKey: ['inputs'] })
+    },
+  })
+}
+
 export type MlAction = 'fit' | 'tune' | 'predict'
 
 /** Start an EMHASS ML job; answers with its run id. */

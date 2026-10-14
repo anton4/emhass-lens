@@ -845,9 +845,32 @@ class MeasuredSlot(BaseModel):
     period: str | None = None
 
 
+class BeyondSlot(BaseModel):
+    """One slot after the horizon, which wasn't sent: the price and PV forecast as they are now."""
+
+    start: str
+    origin: str  # actual | forecast:<provider>
+    period: str
+    load_cost: float
+    prod_price: float
+    pv_w: float | None = None  # None: Solcast has no value for it
+    pv_p10_w: float | None = None
+
+
+class HorizonOption(BaseModel):
+    """Where the plan would end with `days` of price forecast after the Nord Pool prices (Settings → Price forecast →
+    Extend by), with the data there is now."""
+
+    days: int
+    end: str
+    slots: int  # from the anchor
+    num_lags: int  # EMHASS's load model then
+    short: bool  # the forecast (or the maximum horizon) ends it before Nord Pool + `days`
+
+
 class SentInputs(BaseModel):
     """What one MPC payload gave EMHASS slot by slot (the last run's, or one built now), the house load EMHASS
-    forecast for those slots, and what was measured before the anchor."""
+    forecast for those slots, what was measured before the anchor, and the forecasts after the horizon."""
 
     available: bool
     source: str  # last_run | preview
@@ -873,6 +896,11 @@ class SentInputs(BaseModel):
     no_export_at_or_below: float | None
     measured: list[MeasuredSlot]
     measured_entities: dict[str, str]
+    beyond: list[BeyondSlot] = []
+    actual_end: str | None = None  # where the Nord Pool prices end
+    forecast_source: str = "none"
+    extend_days: int = 0  # the setting (0 without a price forecast)
+    horizon_options: list[HorizonOption] = []
 
 
 class DriverResult(BaseModel):

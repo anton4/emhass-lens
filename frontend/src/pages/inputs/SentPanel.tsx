@@ -1,11 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { useSetExtendDays } from '../../api/actions'
 import { api, query } from '../../api/client'
-import { useSentInputs } from '../../api/queries'
-import type { SentInputs } from '../../api/types'
+import { useSentInputs, useSettings, useStatus } from '../../api/queries'
+import type { HorizonOption, SentInputs } from '../../api/types'
 import { TimeChart, type ChartNote, type ChartSeries } from '../../components/charts/TimeChart'
 import type { PopupTag } from '../../components/charts/cursorStore'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Empty, ErrorNotice } from '../../components/PageHead'
 import { snapWindow } from '../../lib/chartRange'
 import { outcomeLabel } from '../../lib/outcomes'
@@ -15,6 +17,7 @@ import {
   deferrableLanes,
   exportLane,
   forecastRangesOn,
+  horizonLane,
   kwhOf,
   loadAsk,
   loadExtras,
@@ -33,6 +36,8 @@ import { eurTick, formatAge, formatPower, isNumber, priceFactor, type PriceUnit 
 const SYNC = 'sent'
 const HOURS_BACK_KEY = 'emhass-lens.inputs.hours-back'
 const HOURS_BACK = [0, 24] as const
+const AFTER_KEY = 'emhass-lens.inputs.after-horizon'
+const AFTER = [0, 1] as const
 
 const POWER_FIT = { minSpan: 500 }
 // room above the highest hump for its day's total
@@ -40,6 +45,7 @@ const PV_FIT = { minSpan: 500, pad: 0.2, zero: true, clamp: [0, null] as [number
 const PRICE_FIT = { minSpan: 0.01 }
 
 const MEASURED: PopupTag = { text: 'measured', tone: 'neutral' }
+const NOT_SENT: PopupTag = { text: 'not sent', tone: 'neutral' }
 
 const dayTimes = new Map<string, Intl.DateTimeFormat>()
 /** "Sun 21:00" in the tariff time zone. */
@@ -75,10 +81,13 @@ const provider = (origin: string) => originLabel(origin).replace(/^Forecast \((.
  *  after what was measured before its anchor, every chart with the Plan page's value popup. */
 export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
   const [hoursBack, setHoursBackState] = useState<number>(() => loadPref(HOURS_BACK_KEY, HOURS_BACK, 24))
+  const [after, setAfterState] = useState<number>(() => loadPref(AFTER_KEY, AFTER, 1))
+  const beyond = after === 1
   const [source, setSource] = useState<'last_run' | 'preview'>('last_run')
-  const last = useSentInputs(hoursBack)
+  const last = useSentInputs(hoursBack, beyond)
   const preview = useMutation({
-    mutationFn: (hours: number) => api.post<SentInputs>(`/api/inputs/sent/preview${query({ hours_back: hours })}`),
+    mutationFn: ({ hours, ahead }: { hours: number; ahead: boolean }) =>
+      api.post<SentInputs>(`/api/inputs/sent/preview${query({ hours_back: hours, beyond: ahead })}`),
   })
   const data = source === 'preview' ? preview.data : last.data
   const [zoom, setZoom] = useState<[number, number] | null>(null)
@@ -88,12 +97,18 @@ export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
     setHoursBackState(hours)
     savePref(HOURS_BACK_KEY, hours)
     setZoom(null)
-    if (source === 'preview') preview.mutate(hours)
+    if (source === 'preview') preview.mutate({ hours, ahead: beyond })
+  }
+  const setAfter = (value: number) => {
+    setAfterState(value)
+    savePref(AFTER_KEY, value)
+    setZoom(null)
+    if (source === 'preview') preview.mutate({ hours: hoursBack, ahead: value === 1 })
   }
   const showPreview = () => {
     setSource('preview')
     setZoom(null)
-    preview.mutate(hoursBack)
+    preview.mutate({ hours: hoursBack, ahead: beyond })
   }
 
   return (
@@ -128,7 +143,9 @@ export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
             zoomTo={zoomTo}
             hoursBack={hoursBack}
             setHoursBack={setHoursBack}
-            rebuild={source === 'preview' ? () => preview.mutate(hoursBack) : undefined}
+            after={after}
+            setAfter={setAfter}
+            rebuild={source === 'preview' ? () => preview.mutate({ hours: hoursBack, ahead: beyond }) : undefined}
           />
         )}
       </div>
@@ -144,6 +161,8 @@ function SentView({
   zoomTo,
   hoursBack,
   setHoursBack,
+  after,
+  setAfter,
   rebuild,
 }: {
   data: SentInputs
@@ -153,13 +172,24 @@ function SentView({
   zoomTo: (range: [number, number] | null) => void
   hoursBack: number
   setHoursBack: (hours: number) => void
+  after: number
+  setAfter: (value: number) => void
   rebuild?: () => void
 }) {
   const tz = data.timezone
   const charts = useMemo(() => buildCharts(data, unit), [data, unit])
   const { axis } = charts
-  const shade: [number, number][] = axis.anchorIdx > 0 ? [[axis.x[0] ?? axis.anchorS, axis.anchorS]] : []
-  const now = nowS >= (axis.x[0] ?? 0) && nowS <= axis.endS ? nowS : undefined
+  // a plan length pointed at: the horizon lane shows where it would end
+  const [lengthPreview, setLengthPreview] = useState<HorizonOption | null>(null)
+  const priceLanes = useMemo(
+    () => [...charts.priceLanes, horizonLane(axis, data, lengthPreview)],
+    [charts, axis, data, lengthPreview],
+  )
+  const shade: [number, number][] = [
+    ...(axis.anchorIdx > 0 ? [[axis.x[0] ?? axis.anchorS, axis.anchorS] as [number, number]] : []),
+    ...(axis.axisEndS > axis.endS ? [[axis.endS, axis.axisEndS] as [number, number]] : []),
+  ]
+  const now = nowS >= (axis.x[0] ?? 0) && nowS <= axis.axisEndS ? nowS : undefined
   const common = {
     x: axis.x,
     syncKey: SYNC,
@@ -199,6 +229,7 @@ function SentView({
           )}
         </p>
         <div className="sent-back">
+          <PlanLength data={data} onPreview={setLengthPreview} />
           <span className="muted">Before the anchor</span>
           <div className="segmented" role="group" aria-label="Measured before the anchor">
             <button type="button" aria-pressed={hoursBack === 0} onClick={() => setHoursBack(0)}>
@@ -206,6 +237,20 @@ function SentView({
             </button>
             <button type="button" aria-pressed={hoursBack === 24} onClick={() => setHoursBack(24)}>
               24 h measured
+            </button>
+          </div>
+          <span className="muted">After the horizon</span>
+          <div className="segmented" role="group" aria-label="Forecast after the horizon">
+            <button type="button" aria-pressed={after === 0} onClick={() => setAfter(0)}>
+              Off
+            </button>
+            <button
+              type="button"
+              aria-pressed={after === 1}
+              onClick={() => setAfter(1)}
+              title="The price and PV forecast after the plan's end, as they are now; not sent"
+            >
+              Forecast
             </button>
           </div>
         </div>
@@ -217,12 +262,12 @@ function SentView({
           <TimeChart
             {...common}
             series={charts.prices}
-            ariaLabel="Import and export price per quarter-hour: those that applied before the anchor and those sent to EMHASS after it, with the tariff period and the export limit under the chart"
+            ariaLabel="Import and export price per quarter-hour: those that applied before the anchor, those sent to EMHASS, and the forecast after the plan's horizon, with the tariff period, the export limit and the horizon under the chart"
             yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
             fit={PRICE_FIT}
             bands={charts.forecast}
             height={230}
-            lanes={charts.priceLanes}
+            lanes={priceLanes}
             popup={charts.pricePopup}
           />
           <details className="chart-note more">
@@ -234,6 +279,8 @@ function SentView({
               ' Before the anchor: the Nord Pool prices that applied, with today’s tariff (nothing is sent for past slots).'}
             {isNumber(data.no_export_at_or_below) &&
               ` Export is capped at 0 W where the export price is at or below ${data.no_export_at_or_below} €/kWh (maximum_power_to_grid).`}
+            {axis.axisEndS > axis.endS &&
+              ' After the horizon (washed, hatched in the Horizon lane): the forecast as it is now, not sent. Plan length picks how many days of it the plan takes after the Nord Pool prices (Settings → Price forecast → Extend by).'}
           </details>
         </section>
 
@@ -264,6 +311,7 @@ function SentView({
             from Solcast. Above each day: its total{charts.hasP10 && ', and the P10 total for forecast days'}.
             {charts.hasReserve && ' The EV area is PV held back for the car: EMHASS doesn’t get it.'}
             {measuredBy('pv') && hoursBack > 0 && <> Before the anchor: <code>{measuredBy('pv')}</code>.</>}
+            {axis.axisEndS > axis.endS && ' After the horizon: Solcast’s forecast as it is now, not sent.'}
           </details>
         </section>
 
@@ -320,6 +368,101 @@ function SentView({
           </details>
         </section>
       </div>
+    </>
+  )
+}
+
+const daysText = (days: number) => `${days} day${days === 1 ? '' : 's'}`
+
+/** "Plan length": how many days of price forecast the plan takes after the Nord Pool prices (Settings → Price
+ *  forecast → Extend by). Pointing at a choice shows in the Horizon lane where that plan would end with today's data;
+ *  picking one asks first, then saves it for the next MPC run. */
+function PlanLength({ data, onPreview }: { data: SentInputs; onPreview: (option: HorizonOption | null) => void }) {
+  const writable = useStatus().data?.writable ?? false
+  const fitOnFault = useSettings().data?.settings.emhass.ml.fit_on_fault ?? false
+  const setDays = useSetExtendDays()
+  const [chosen, setChosen] = useState<HorizonOption | null>(null)
+  const options = data.horizon_options ?? []
+  const tz = data.timezone
+  if (options.length === 0) {
+    return (
+      <Link className="muted" to="/settings?section=forecast" title="Without a price forecast the plan ends with the Nord Pool prices">
+        No price forecast
+      </Link>
+    )
+  }
+  const current = options.find((o) => o.days === data.extend_days)
+  const until = (o: HorizonOption) => `until ${dayTime(Date.parse(o.end) / 1000, tz)}, ${o.slots} slots (${o.slots / 4} h)`
+  const close = () => {
+    setChosen(null)
+    setDays.reset()
+  }
+  return (
+    <>
+      <span className="muted">Plan length</span>
+      <div className="segmented" role="group" aria-label="Days of price forecast after the Nord Pool prices">
+        {options.map((o, i) => {
+          // the forecast ran out: more days plan no further
+          const same = i > 0 && o.short && options[i - 1]?.end === o.end
+          return (
+            <button
+              key={o.days}
+              type="button"
+              aria-pressed={o.days === data.extend_days}
+              disabled={!writable || same || setDays.isPending}
+              title={
+                same
+                  ? `The price forecast ends ${dayTime(Date.parse(o.end) / 1000, tz)}: ${daysText(o.days)} plan no further`
+                  : `Nord Pool + ${daysText(o.days)} of forecast: ${until(o)}`
+              }
+              onMouseEnter={() => onPreview(o)}
+              onMouseLeave={() => onPreview(null)}
+              onFocus={() => onPreview(o)}
+              onBlur={() => onPreview(null)}
+              onClick={() => o.days !== data.extend_days && setChosen(o)}
+            >
+              {o.days} d
+            </button>
+          )
+        })}
+      </div>
+      <ConfirmDialog
+        open={chosen !== null}
+        title={`Plan with ${daysText(chosen?.days ?? 0)} of price forecast?`}
+        onClose={close}
+        actions={[
+          {
+            label: setDays.isPending ? 'Saving…' : `Use ${daysText(chosen?.days ?? 0)}`,
+            kind: 'primary',
+            onClick: () => chosen && setDays.mutate(chosen.days, { onSuccess: close }),
+            disabled: setDays.isPending,
+          },
+        ]}
+      >
+        {chosen && (
+          <p>
+            From the next MPC run the plan takes the Nord Pool prices and {daysText(chosen.days)} of the price forecast
+            after them: with today&rsquo;s data {until(chosen)}
+            {chosen.short ? ', where the forecast ends' : ''}. Preview now shows it right away.
+          </p>
+        )}
+        {chosen && current && chosen.num_lags !== current.num_lags && (
+          <p>
+            EMHASS&rsquo;s load model then uses {chosen.num_lags} lags instead of {current.num_lags}.{' '}
+            {fitOnFault
+              ? 'EMHASS Lens fits it again after the next MPC run.'
+              : 'Fit it again under Health → ML load forecast.'}
+          </p>
+        )}
+        <p className="cell-sub">
+          The change is stored as a settings revision and can be reverted from Settings → History.
+        </p>
+        {setDays.error && (
+          <div className="notice" data-color="red">
+            {(setDays.error as Error).message}
+          </div>
+        )}
+      </ConfirmDialog>
     </>
   )
 }
@@ -485,12 +628,25 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
   const slots = data.slots
   const f = priceFactor(unit)
   const priceFormat = unit === 'cents' ? (v: number) => `${v.toFixed(1)} c/kWh` : (v: number) => `${v.toFixed(3)} €/kWh`
-  const sentTag = (text: string) => (t: number): PopupTag => (t < axis.anchorS ? MEASURED : { text, tone: 'blue' })
+  const beyond = data.beyond ?? []
+  const sentTag = (text: string) => (t: number): PopupTag =>
+    t < axis.anchorS ? MEASURED : t >= axis.endS ? NOT_SENT : { text, tone: 'blue' }
 
   // before the anchor: the prices that applied (nothing is sent for past slots)
   const scaled = (v: number | null | undefined) => (isNumber(v) ? v * f : null)
-  const importValues = onAxis(axis, data.measured.map((m) => scaled(m.load_cost)), slots.map((s) => s.load_cost * f))
-  const exportValues = onAxis(axis, data.measured.map((m) => scaled(m.prod_price)), slots.map((s) => s.prod_price * f))
+  // after the horizon: the forecast as it is now, not sent
+  const importValues = onAxis(
+    axis,
+    data.measured.map((m) => scaled(m.load_cost)),
+    slots.map((s) => s.load_cost * f),
+    beyond.map((b) => b.load_cost * f),
+  )
+  const exportValues = onAxis(
+    axis,
+    data.measured.map((m) => scaled(m.prod_price)),
+    slots.map((s) => s.prod_price * f),
+    beyond.map((b) => b.prod_price * f),
+  )
   const prices: ChartSeries[] = [
     { label: 'Import', color: '--q-import', values: closeSteps(importValues), readout: importValues, format: priceFormat },
     { label: 'Export', color: '--q-export', values: closeSteps(exportValues), readout: exportValues, format: priceFormat },
@@ -500,6 +656,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     tag: (t: number): PopupTag | null => {
       const i = slotAt(axis, t)
       if (i < 0) return isNumber(data.measured[axis.anchorIdx + i]?.load_cost) ? { text: originLabel('actual'), tone: 'neutral' } : null
+      const after = beyond[i - slots.length]
+      if (after) return { text: `Not sent · ${originLabel(after.origin)}`, tone: 'neutral' }
       const slot = slots[i]
       return slot ? { text: originLabel(slot.origin), tone: isForecast(slot.origin) ? 'blue' : 'neutral' } : null
     },
@@ -510,8 +668,14 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     axis,
     data.measured.map((m) => m.pv),
     slots.map((s) => s.pv_w),
+    beyond.map((b) => b.pv_w),
   )
-  const p10Values = onAxis(axis, null, slots.map((s) => s.pv_p10_w))
+  const p10Values = onAxis(
+    axis,
+    null,
+    slots.map((s) => s.pv_p10_w),
+    beyond.map((b) => b.pv_p10_w),
+  )
   const hasP10 = p10Values.some((v) => v !== null)
   const hasReserve = slots.some((s) => (s.ev_reserved_w ?? 0) > 0)
   const pv: ChartSeries[] = [{ label: 'PV', color: '--q-pv', fill: 0.16, values: closeSteps(pvValues), readout: pvValues, format: formatPower }]

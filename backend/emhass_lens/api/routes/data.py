@@ -107,16 +107,21 @@ async def mpc_preview(c: ContainerDep) -> MpcPreview:
 
 
 @router.get("/inputs/sent")
-async def inputs_sent(c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24) -> SentInputs:
-    """What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots and the
-    last `hours_back` hours measured before its anchor."""
-    return await c.extras["sent_inputs"].last_run(hours_back)
+async def inputs_sent(
+    c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24, beyond: bool = True
+) -> SentInputs:
+    """What the newest MPC run gave EMHASS, slot by slot, with EMHASS's house load forecast for those slots, the last
+    `hours_back` hours measured before its anchor, and (`beyond`) the price and PV forecast after its horizon. Where
+    each plan length (days of price forecast) would end comes either way."""
+    return await c.extras["sent_inputs"].last_run(hours_back, beyond)
 
 
 @router.post("/inputs/sent/preview")
-async def inputs_sent_preview(c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24) -> SentInputs:
+async def inputs_sent_preview(
+    c: ContainerDep, hours_back: Annotated[int, Query(ge=0, le=48)] = 24, beyond: bool = True
+) -> SentInputs:
     """The same for a payload built as if a run started now. Nothing is sent."""
-    return await c.extras["sent_inputs"].preview(hours_back)
+    return await c.extras["sent_inputs"].preview(hours_back, beyond)
 
 
 def _snapshot_out(row: dict[str, Any] | None) -> PlanSnapshotOut | None:

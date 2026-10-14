@@ -150,3 +150,51 @@ def test_without_an_mpc_run_there_is_nothing_sent_but_a_preview_builds_one(tmp_p
         assert built["anchor"] == "2026-10-09T11:00:00.000+00:00"
         assert len(built["slots"]) > 0 and built["measured"] == []
         assert built["load_source"] == "none" and all(v is None for v in built["load_w"])
+
+
+def test_the_forecasts_after_the_horizon_and_where_each_plan_length_would_end(tmp_path: Path, world: World) -> None:
+    # Nord Pool's delivery day ends at midnight CET (22:00 UTC); the forecast goes 72 hours further
+    actual_end = datetime(2026, 10, 10, 22, 0, tzinfo=UTC)
+    world.ee_forecast = {
+        "series": [
+            {"ts_utc": (actual_end + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ"), "price_eur_mwh": 60.0 + h}
+            for h in range(72)
+        ]
+    }
+    clock = FakeClock(datetime(2026, 10, 9, 11, 5, tzinfo=UTC))
+    with make_client(tmp_path, world, clock) as client:
+        rev = client.get("/api/settings").json()["revision"]
+        forecast = {"source": "ee_eupowerprices", "extend_days": 1, "ee": {"api_key": "secret-key-123"}}
+        saved = client.patch("/api/settings", json={"base_revision": rev, "changes": {"forecast": forecast}})
+        assert saved.status_code == 200, saved.text
+        run_job(client, "nordpool.poll")
+        assert run_job(client, "forecast.ee.poll")["outcome"] == "ok"
+        prime(client, world)
+
+        built = client.post("/api/inputs/sent/preview", params={"hours_back": 0}).json()
+        assert built["anchor"] == "2026-10-09T11:00:00.000+00:00"
+        assert (built["forecast_source"], built["extend_days"]) == ("ee_eupowerprices", 1)
+        assert built["actual_end"] == "2026-10-10T22:00:00.000+00:00"
+        # one day of forecast is sent; the other two follow, not sent
+        sent_end = datetime(2026, 10, 11, 22, 0, tzinfo=UTC)
+        assert len(built["slots"]) == (sent_end - datetime(2026, 10, 9, 11, 0, tzinfo=UTC)) / timedelta(minutes=15)
+        beyond = built["beyond"]
+        assert beyond[0]["start"] == "2026-10-11T22:00:00.000+00:00" and len(beyond) == 2 * 96
+        assert {b["origin"] for b in beyond} == {"forecast:ee_eupowerprices"}
+        assert all(b["load_cost"] > 0 and b["period"] for b in beyond)
+        # each plan length: Nord Pool + N days until the forecast runs out after 3
+        options = {o["days"]: o for o in built["horizon_options"]}
+        assert [o["slots"] for o in built["horizon_options"][:3]] == [236, 332, 428]
+        assert options[1]["end"] == "2026-10-11T22:00:00.000+00:00" and not options[1]["short"]
+        assert options[3]["end"] == "2026-10-13T22:00:00.000+00:00" and not options[3]["short"]
+        assert options[4]["end"] == options[3]["end"] and options[4]["short"]
+        assert [options[n]["num_lags"] for n in (1, 2, 7)] == [288, 384, 864]
+
+        quiet = client.post("/api/inputs/sent/preview", params={"hours_back": 0, "beyond": False}).json()
+        assert quiet["beyond"] == [] and len(quiet["horizon_options"]) == 7
+
+        rev = client.get("/api/settings").json()["revision"]
+        off = {"forecast": {"source": "none"}}
+        assert client.patch("/api/settings", json={"base_revision": rev, "changes": off}).status_code == 200
+        none = client.post("/api/inputs/sent/preview", params={"hours_back": 0}).json()
+        assert none["horizon_options"] == [] and none["extend_days"] == 0 and none["forecast_source"] == "none"
