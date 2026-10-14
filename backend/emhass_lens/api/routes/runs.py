@@ -46,10 +46,12 @@ async def list_runs(
     since: str | None = None,
     until: str | None = None,
     order: Literal["desc", "asc"] = "desc",
+    wrote: Literal["inverter"] | None = None,
 ) -> list[RunSummary]:
     """Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to
-    keep any of several, and `not_job` or `not_outcome` to leave them out. Page with `before` (the oldest id seen,
-    newest first) or `after` (the newest id seen, oldest first)."""
+    keep any of several, and `not_job` or `not_outcome` to leave them out. `wrote=inverter` keeps the runs that wrote
+    to the inverter: the plan's and the market sessions'. Page with `before` (the oldest id seen, newest first) or
+    `after` (the newest id seen, oldest first)."""
     rows = await c.recorder.list(
         job,
         outcome,
@@ -61,6 +63,7 @@ async def list_runs(
         since=utc_bound(since, "since"),
         until=utc_bound(until, "until"),
         ascending=order == "asc",
+        ids=await c.extras["sofar"].commit_run_ids() if wrote == "inverter" else None,
     )
     return [RunSummary(**row) for row in rows]
 

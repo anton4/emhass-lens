@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RunSummary } from '../api/types'
+import type { InverterWrite, MarketSession, RunSummary } from '../api/types'
 import {
   compareDiffs,
   decideChip,
@@ -10,6 +10,7 @@ import {
   formatAgreement,
   inverterLegend,
   inverterStrip,
+  marketFill,
   mergeBySlot,
   modeTone,
   NOT_IN_CONTROL_FILL,
@@ -366,6 +367,94 @@ describe('inverterStrip', () => {
       ),
     )
     expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.wrote, null])
+  })
+
+  it('shows the slots a market session held, with every write in them, the plan\'s and the market\'s', () => {
+    // 2026-10-14 in UTC: the plan sets self-use at 05:45:02, the market's sell holds from 05:45:05 to 06:04:04,
+    // then the plan takes the inverter back
+    const t = (hms: string) => `2026-10-14T${hms}.000+00:00`
+    const decides = [
+      run(5623, 'inverter.decide', t('05:45:02'), 'ok', `Set ${SELF}`),
+      run(5649, 'inverter.decide', t('06:00:05'), 'noop', `Not in control (a market session holds it); would: ${SELF}`),
+      run(5659, 'inverter.decide', t('06:04:04'), 'ok', `Set ${SELF}`),
+      run(5667, 'inverter.decide', t('06:15:02'), 'ok', `Already set: ${SELF}`),
+    ]
+    const session: MarketSession = {
+      id: 7,
+      direction: 'sell',
+      source: 'kratt',
+      mode: 'mfrrup',
+      power_w: 9500,
+      started_at: t('05:45:05'),
+      updated_at: t('05:45:05'),
+      ended_at: t('06:04:03'),
+      end_reason: 'mode_cleared',
+      start_run_id: 5630,
+      end_run_id: 5658,
+    }
+    const write = (
+      at: string,
+      owner: string,
+      group: string,
+      runId: number,
+      grid: number | null,
+      feedin: number | null = null,
+    ): InverterWrite => ({
+      at: t(at),
+      owner,
+      group,
+      grid_w: grid,
+      battery_max_w: grid === null ? null : 20000,
+      battery_min_w: grid === null ? null : -20000,
+      feedin_w: feedin,
+      run_id: runId,
+      ok: true,
+    })
+    const writes = [
+      write('06:04:04', 'plan', 'passive', 5659, 0),
+      write('05:45:09', 'market', 'passive', 5630, -9400),
+      write('05:45:05', 'market', 'feedin', 5630, null, 15500),
+      write('05:45:02', 'plan', 'passive', 5623, 0),
+    ]
+    const strip = inverterStrip(mergeBySlot(decides, []), [session], writes, Date.parse(t('06:30:00')))
+    expect(strip.map((s) => s.label)).toEqual(['Market sell', 'Market sell', 'Self-use'])
+    const selfUse = modeTone('Self-use battery or PV').fill
+    expect(strip.map((s) => s.fill)).toEqual([marketFill('sell'), marketFill('sell'), selfUse])
+    // the market wrote in the first slot only; the second opens the session's own run
+    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.wrote, null, null])
+    expect(strip.map((s) => s.runId)).toEqual([5630, 5630, 5667])
+    const [first, second] = strip.map((s) => s.detail!)
+    expect(first?.writes?.map((w) => [w.owner, w.runId, w.grid_w, w.feedin_w])).toEqual([
+      ['plan', 5623, 0, null],
+      ['market', 5630, -9400, 15500],
+    ])
+    expect(second?.writes?.map((w) => [w.owner, w.runId])).toEqual([['plan', 5659]])
+    expect(second?.market).toMatchObject({ direction: 'sell', power_w: 9500, runId: 5630 })
+    expect(second?.action?.kind).toBe('set') // the plan's hand-back is the newest decide run of the slot
+    expect(inverterLegend(strip).map((k) => [k.text, k.count])).toEqual([
+      ['Self-use', 1],
+      ['Market sell', 2],
+    ])
+  })
+
+  it('gives a slot a session held a mark even without a decide run, and runs an open session up to now', () => {
+    const session: MarketSession = {
+      id: 1,
+      direction: 'buy',
+      source: 'fusebox',
+      mode: null,
+      power_w: 3000,
+      started_at: '2026-10-14T10:20:00.000+00:00',
+      updated_at: '2026-10-14T10:20:00.000+00:00',
+      ended_at: null,
+      start_run_id: 9,
+    }
+    const strip = inverterStrip([], [session], [], Date.parse('2026-10-14T10:40:00Z'))
+    expect(strip.map((s) => [s.t, s.label, s.runId])).toEqual([
+      [Date.parse('2026-10-14T10:15:00Z') / 1000, 'Market buy', 9],
+      [Date.parse('2026-10-14T10:30:00Z') / 1000, 'Market buy', 9],
+    ])
+    expect(strip[0]?.detail?.market?.until).toBeNull()
   })
 })
 

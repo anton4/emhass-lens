@@ -181,6 +181,7 @@ def test_live_runs_a_session_throttles_writes_and_hands_the_inverter_back_to_the
         started = wait_for_run(client, "market.reconcile", before, summary="Kratt sell 5000W: set")
         assert started["outcome"] == "ok", started
         assert started["summary"].startswith("Kratt sell 5000W: set 'Force discharge', grid -5000 W")
+        opened = started["id"]
         started = wait_for_run(client, "market.reconcile", started["id"] - 1)  # let the queued rerun finish too
         assert calls(world, n) == [
             ("input_select/select_option", SESSION),
@@ -232,6 +233,31 @@ def test_live_runs_a_session_throttles_writes_and_hands_the_inverter_back_to_the
         assert status["session"] is None and status["wear_24h"]["our_commits"] >= 4
         [session] = client.get("/api/market/sessions").json()
         assert session["direction"] == "sell" and session["end_reason"] == "mode_cleared" and session["ended_at"]
+        assert (session["start_run_id"], session["end_run_id"]) == (opened, ended["id"])
+
+        # the Inverter page sees the market's writes next to the plan's
+        inverter = client.get("/api/inverter").json()
+        by_run = {(w["run_id"], w["group"]): w for w in inverter["writes"]}
+        assert by_run[(opened, "passive")]["owner"] == "market"
+        assert by_run[(opened, "passive")]["grid_w"] == -5000
+        assert by_run[(opened, "feedin")]["owner"] == "market"
+        assert by_run[(handoff["id"], "passive")] | {"at": None} == {
+            "at": None,
+            "owner": "plan",
+            "group": "passive",
+            "grid_w": 18800,
+            "battery_max_w": by_run[(handoff["id"], "passive")]["battery_max_w"],
+            "battery_min_w": by_run[(handoff["id"], "passive")]["battery_min_w"],
+            "feedin_w": None,
+            "run_id": handoff["id"],
+            "ok": True,
+        }
+        # the Runs filter keeps the runs that wrote: the market's and the hand-back, not the reconciles that didn't
+        wrote = {r["id"] for r in client.get("/api/runs", params={"wrote": "inverter", "limit": 1000}).json()}
+        assert {opened, written["id"], handoff["id"]} <= wrote
+        assert inside["id"] not in wrote and cooled["id"] not in wrote and held["id"] not in wrote
+        both = client.get("/api/runs", params={"wrote": "inverter", "job": "market.reconcile"}).json()
+        assert {r["job"] for r in both} == {"market.reconcile"}
     finally:
         client.__exit__(None, None, None)
 

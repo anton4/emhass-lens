@@ -252,6 +252,17 @@
             "title": "Entity Id",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
           "run_id": {
             "anyOf": [
               {
@@ -4031,6 +4042,14 @@
           },
           "wear_7d": {
             "$ref": "#/components/schemas/WearStats"
+          },
+          "writes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InverterWrite"
+            },
+            "title": "Writes",
+            "type": "array"
           }
         },
         "required": [
@@ -4045,6 +4064,90 @@
           "presses"
         ],
         "title": "InverterStatus",
+        "type": "object"
+      },
+      "InverterWrite": {
+        "description": "One write EMHASS Lens made to the inverter: the passive settings or the feed-in limit, for the plan or for a\nmarket session.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "battery_max_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Max W"
+          },
+          "battery_min_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Min W"
+          },
+          "feedin_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedin W"
+          },
+          "grid_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid W"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "at",
+          "owner",
+          "group",
+          "ok"
+        ],
+        "title": "InverterWrite",
         "type": "object"
       },
       "IssueOut": {
@@ -4600,6 +4703,17 @@
             ],
             "title": "End Reason"
           },
+          "end_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Run Id"
+          },
           "ended_at": {
             "anyOf": [
               {
@@ -4647,6 +4761,17 @@
               }
             ],
             "title": "Source"
+          },
+          "start_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Run Id"
           },
           "started_at": {
             "title": "Started At",
@@ -11200,7 +11325,7 @@
     },
     "/api/runs": {
       "get": {
-        "description": "Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to\nkeep any of several, and `not_job` or `not_outcome` to leave them out. Page with `before` (the oldest id seen,\nnewest first) or `after` (the newest id seen, oldest first).",
+        "description": "Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to\nkeep any of several, and `not_job` or `not_outcome` to leave them out. `wrote=inverter` keeps the runs that wrote\nto the inverter: the plan's and the market sessions'. Page with `before` (the oldest id seen, newest first) or\n`after` (the newest id seen, oldest first).",
         "operationId": "list_runs_api_runs_get",
         "parameters": [
           {
@@ -11367,6 +11492,23 @@
               ],
               "title": "Order",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wrote",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "inverter",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Wrote"
             }
           }
         ],

@@ -316,6 +316,7 @@ class InverterService:
             "wear_24h": await writer.wear(24),
             "wear_7d": await writer.wear(24 * 7),
             "presses": await writer.presses(24 * 7),
+            "writes": await writer.writes(24),
         }
 
 

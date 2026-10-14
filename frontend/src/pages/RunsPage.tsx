@@ -26,6 +26,7 @@ export function RunsPage() {
   const [params, setParams] = useSearchParams()
   const job = readMulti(params, 'job')
   const outcome = readMulti(params, 'outcome')
+  const wrote = params.get('wrote') === 'inverter'
   const from = params.get('from') ?? ''
   const to = params.get('to') ?? ''
   const sortKey = params.get('sort') ?? 'started'
@@ -49,6 +50,7 @@ export function RunsPage() {
     since,
     until,
     order: order === 'asc' ? ('asc' as const) : undefined,
+    wrote: wrote ? ('inverter' as const) : undefined,
   }
   const runs = useRuns({ ...filters, limit: PAGE })
   const jobs = useJobs()
@@ -60,7 +62,7 @@ export function RunsPage() {
   // Ticked runs by id, so they stay ticked through refetches, filter changes and loading more
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set())
   const anchor = useRef<number | null>(null)
-  const filterKey = JSON.stringify([job, outcome, since, until, order])
+  const filterKey = JSON.stringify([job, outcome, since, until, order, wrote])
   if (moreKey !== filterKey) {
     setMoreKey(filterKey)
     setMore([])
@@ -161,7 +163,7 @@ export function RunsPage() {
   }
 
   const ranged = Boolean(from || to)
-  const filtered = ranged || job.values.length > 0 || outcome.values.length > 0
+  const filtered = ranged || wrote || job.values.length > 0 || outcome.values.length > 0
   const pick = (id: number) => (wide ? setFilters({ run: String(id) }) : navigate(`/runs/${id}`))
   return (
     <>
@@ -190,6 +192,14 @@ export function RunsPage() {
           value={outcome}
           onChange={(v) => setMulti('outcome', v)}
         />
+        <label className="check" title="The runs that wrote to the inverter: the plan's and the market sessions'">
+          <input
+            type="checkbox"
+            checked={wrote}
+            onChange={(e) => setFilters({ wrote: e.target.checked ? 'inverter' : '' })}
+          />
+          Wrote to the inverter
+        </label>
         <label className="range-input">
           <span className="muted">From</span>
           <input

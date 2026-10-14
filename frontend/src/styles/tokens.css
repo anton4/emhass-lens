@@ -95,6 +95,8 @@
     var(--mode-self-use);
   --mode-charge-export: repeating-linear-gradient(135deg, var(--mode-pv-export) 0 3px, var(--mode-force-charge) 3px 6px);
   --mode-blocked: repeating-linear-gradient(135deg, var(--ink-faint) 0 1px, transparent 1px 5px), var(--surface-sunk);
+  /* the stripe over a state a market session set (marketFill in lib/inverter.ts) */
+  --market-stripe: rgba(255, 255, 255, 0.5);
   --chart-grid: #eceef2;
   --chart-axis: #c4c7cf;
   --chart-wash: rgba(27, 28, 31, 0.045);
@@ -198,6 +200,7 @@
     --mode-self-use-dot: #a99ff0;
     --mode-pv-export: #199e70;
     --mode-force-discharge: #d95926;
+    --market-stripe: rgba(16, 17, 20, 0.45);
     --chart-grid: #26282d;
     --chart-axis: #44474e;
     --chart-wash: rgba(227, 228, 232, 0.06);

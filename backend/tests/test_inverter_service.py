@@ -465,7 +465,11 @@ def test_a_press_by_emhass_lens_names_its_run(tmp_path: Path, world: World) -> N
         push_button(client, world, APPLY_BUTTON, pressed, {"id": "c", "parent_id": None, "user_id": "supervisor"})
         push_button(client, world, APPLY_BUTTON, "2026-10-09T11:14:00+00:00", BY_USER)
         presses = client.get("/api/inverter").json()["presses"]
-        assert [(p["source"], p["run_id"]) for p in presses] == [("user", None), ("lens", run["id"])]
+        # and who the run wrote for: the plan (a market session's run says market)
+        assert [(p["source"], p["run_id"], p["owner"]) for p in presses] == [
+            ("user", None, None),
+            ("lens", run["id"], "plan"),
+        ]
         wear = client.get("/api/inverter").json()["wear_24h"]
         assert (wear["apply_presses"], wear["our_commits"], wear["presses_not_ours"]) == (2, 1, 1)
     finally:

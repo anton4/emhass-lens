@@ -655,8 +655,9 @@ export interface paths {
         /**
          * List Runs
          * @description Runs newest first (`order=asc`: oldest first), started within [since, until). Repeat `job` or `outcome` to
-         *     keep any of several, and `not_job` or `not_outcome` to leave them out. Page with `before` (the oldest id seen,
-         *     newest first) or `after` (the newest id seen, oldest first).
+         *     keep any of several, and `not_job` or `not_outcome` to leave them out. `wrote=inverter` keeps the runs that wrote
+         *     to the inverter: the plan's and the market sessions'. Page with `before` (the oldest id seen, newest first) or
+         *     `after` (the newest id seen, oldest first).
          */
         get: operations["list_runs_api_runs_get"];
         put?: never;
@@ -1202,6 +1203,8 @@ export interface components {
             button: string | null;
             /** Entity Id */
             entity_id: string;
+            /** Owner */
+            owner?: string | null;
             /** Run Id */
             run_id: number | null;
             /** Source */
@@ -2688,6 +2691,36 @@ export interface components {
             presses: components["schemas"]["ButtonPress"][];
             wear_24h: components["schemas"]["WearStats"];
             wear_7d: components["schemas"]["WearStats"];
+            /**
+             * Writes
+             * @default []
+             */
+            writes: components["schemas"]["InverterWrite"][];
+        };
+        /**
+         * InverterWrite
+         * @description One write EMHASS Lens made to the inverter: the passive settings or the feed-in limit, for the plan or for a
+         *     market session.
+         */
+        InverterWrite: {
+            /** At */
+            at: string;
+            /** Battery Max W */
+            battery_max_w?: number | null;
+            /** Battery Min W */
+            battery_min_w?: number | null;
+            /** Feedin W */
+            feedin_w?: number | null;
+            /** Grid W */
+            grid_w?: number | null;
+            /** Group */
+            group: string;
+            /** Ok */
+            ok: boolean;
+            /** Owner */
+            owner: string;
+            /** Run Id */
+            run_id?: number | null;
         };
         /** IssueOut */
         IssueOut: {
@@ -2926,6 +2959,8 @@ export interface components {
             direction: string;
             /** End Reason */
             end_reason?: string | null;
+            /** End Run Id */
+            end_run_id?: number | null;
             /** Ended At */
             ended_at?: string | null;
             /** Id */
@@ -2936,6 +2971,8 @@ export interface components {
             power_w: number | null;
             /** Source */
             source: string | null;
+            /** Start Run Id */
+            start_run_id?: number | null;
             /** Started At */
             started_at: string;
             /** Updated At */
@@ -5932,6 +5969,7 @@ export interface operations {
                 since?: string | null;
                 until?: string | null;
                 order?: "desc" | "asc";
+                wrote?: "inverter" | null;
             };
             header?: never;
             path?: never;

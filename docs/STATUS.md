@@ -37,6 +37,29 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: the market's inverter writes beside the plan's (0.4.34)
+- **Why:** the owner downloaded `inverter.decide` runs 5603–5667 and asked whether the feed-in button was pressed
+  around 08:30, and why the market's writes weren't among them.
+  - The 08:30 run (5613) pressed only the apply button; the feed-in limit was already 15500 W.
+  - The market writes through the same `SofarWriter`, but as `market.reconcile` runs, so the strip showed the 08:45
+    slot as the plan's Self-use. In fact EMHASS Lens's own sell session held Force discharge −9400 W from about 08:45
+    to 09:04.
+- **Backend:**
+  - `GET /api/inverter` adds `writes`: `sofar_commit` for the last 24 h, with owner plan | market. Presses add
+    `owner` from the commit with the same run.
+  - `GET /api/market/sessions` adds `start_run_id` and `end_run_id`.
+  - `GET /api/runs?wrote=inverter` keeps the runs with a `sofar_commit` row, through `recorder.list(ids=…)`.
+- **Frontend:**
+  - `inverterStrip(rows, sessions, writes, now)` turns a slot a session overlaps into *Market sell/buy*: the state's
+    tone with a `--market-stripe`, and `runId` the market's write or the session's start. It also adds slots without
+    a decide run.
+  - `SlotDetail` carries `market` and `writes`, which `InverterSlotPopup` lists. `pressWho` says *for the plan* or
+    *for a market session*.
+  - The Inverter page has an **Inverter writes** button, and the Runs page has a **Wrote to the inverter** checkbox.
+- **Checked:** the e2e stack passed 24/24. The UI was checked with a session and writes added to its app.db: the
+  strip, popup, legend and Runs filter, and no side scroll at 390 px. The live session path is covered by
+  `test_live_runs_a_session_throttles_writes_and_hands_the_inverter_back_to_the_plan`.
+
 ### 2026-10-14: past prices on *Prices sent*, and the Plan page says what drives the inverter (0.4.33)
 - **Why:** the owner asked why *Prices sent* (Inputs → What EMHASS gets) was empty before the anchor with
   *24 h measured* on, and asked the Plan page to say whether EMHASS or a market session is in charge.

@@ -969,6 +969,22 @@ class ButtonPress(BaseModel):
     button: str | None  # apply | feedin; None for a button that is no longer configured
     source: str  # lens | automation | user | unknown
     run_id: int | None  # the EMHASS Lens run that pressed it
+    owner: str | None = None  # ours: plan | market (who the run wrote for)
+
+
+class InverterWrite(BaseModel):
+    """One write EMHASS Lens made to the inverter: the passive settings or the feed-in limit, for the plan or for a
+    market session."""
+
+    at: str
+    owner: str  # plan | market
+    group: str  # passive | feedin
+    grid_w: float | None = None
+    battery_max_w: float | None = None
+    battery_min_w: float | None = None
+    feedin_w: float | None = None
+    run_id: int | None = None
+    ok: bool
 
 
 class InverterStatus(BaseModel):
@@ -982,6 +998,7 @@ class InverterStatus(BaseModel):
     wear_24h: WearStats
     wear_7d: WearStats
     presses: list[ButtonPress]  # the last 7 days, newest first
+    writes: list[InverterWrite] = []  # the last 24 h, newest first
 
 
 class MarketSession(BaseModel):
@@ -994,6 +1011,8 @@ class MarketSession(BaseModel):
     updated_at: str
     ended_at: str | None = None
     end_reason: str | None = None
+    start_run_id: int | None = None  # the market run that opened it
+    end_run_id: int | None = None
 
 
 class WatchdogFinding(BaseModel):

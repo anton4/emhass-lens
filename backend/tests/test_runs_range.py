@@ -74,6 +74,16 @@ def test_runs_filter_by_several_jobs_and_outcomes(tmp_path: Path) -> None:
         assert get(job=["test.a", "test.c"], not_outcome=["ok"]) == [("test.a", "noop"), ("test.c", "noop")]
         assert get(not_job=["test.a", "test.b"], not_outcome=["noop"]) == []
 
+        # only the runs that wrote to the inverter: none yet, then the one whose write is kept
+        assert get(wrote="inverter") == []
+        [b] = [r["id"] for r in client.get("/api/runs", params={"job": "test.b"}).json()]
+        c.app_db.execute(
+            "INSERT INTO sofar_commit (at, owner, register_group, run_id) VALUES (?, 'market', 'passive', ?)",
+            ("2026-10-09T10:00:00.000+00:00", b),
+        )
+        assert get(wrote="inverter") == [("test.b", "error")]
+        assert get(wrote="inverter", job="test.a") == []
+
 
 def test_market_sessions_in_a_time_range(tmp_path: Path) -> None:
     with make_client(tmp_path, World(), FakeClock(T0)) as client:

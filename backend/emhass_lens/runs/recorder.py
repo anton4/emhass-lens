@@ -180,10 +180,11 @@ class RunRecorder:
         since: str | None = None,
         until: str | None = None,
         ascending: bool = False,
+        ids: Sequence[int] | None = None,
     ) -> list[dict[str, Any]]:
         """Runs newest first (or oldest first), of any of the jobs and outcomes given and none of `not_jobs` and
         `not_outcomes`, started within [since, until), paged by id: `before` going back, `after` going forward.
-        `since`/`until` are UTC ISO like started_at."""
+        `since`/`until` are UTC ISO like started_at. `ids` keeps only those runs (an empty list: none)."""
         where: list[str] = []
         args: list[Any] = []
 
@@ -197,6 +198,9 @@ class RunRecorder:
         among("job", not_jobs, negate=True)
         among("outcome", outcome)
         among("outcome", not_outcomes, negate=True)
+        if ids is not None:
+            where.append(f"id IN ({','.join('?' * len(ids))})" if ids else "0")
+            args.extend(ids)
         for clause, value in (
             ("id < ?", before),
             ("id > ?", after),

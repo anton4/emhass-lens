@@ -2,7 +2,7 @@
 // show decisions, comparisons and agreement. See backend/emhass_lens/domain/inverter.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { Agreement, ButtonPress, InverterSettings, RunSummary } from '../api/types'
+import type { Agreement, ButtonPress, InverterSettings, InverterWrite, MarketSession, RunSummary } from '../api/types'
 import type { StripInput } from './dayStrip'
 
 export interface InverterTargets {
@@ -225,6 +225,88 @@ export function modeTone(state: string): ModeTone {
   return MODE_TONES.find((m) => m.state === state) ?? { state, short: state, fill: NO_SETTINGS_FILL }
 }
 
+/** The passive state a market session sets (domain/market.py STATES). */
+export const MARKET_STATES: Record<string, string> = { buy: 'Force charge', sell: 'Force discharge' }
+
+/** A slot a market session held: the tone of the state it set, striped, so it reads as set for the market. */
+export function marketFill(direction: string): string {
+  const tone = modeTone(MARKET_STATES[direction] ?? direction)
+  return `repeating-linear-gradient(45deg, var(--market-stripe) 0 2px, transparent 2px 6px), ${tone.fill}`
+}
+
+/** The market session that held the inverter during a slot (EMHASS Lens's own, with market control on Live). */
+export interface SlotMarket {
+  direction: string
+  power_w: number | null
+  source: string | null
+  from: number // ms
+  until: number | null // ms; null while it is still open
+  runId: number | null // the run that opened it
+}
+
+/** One run's writes to the inverter (the passive settings and/or the feed-in limit). */
+export interface SlotWrite {
+  at: number // ms, the first of the run's writes
+  owner: string // plan | market
+  runId: number | null
+  grid_w: number | null
+  battery_min_w: number | null
+  battery_max_w: number | null
+  feedin_w: number | null
+  ok: boolean
+}
+
+/** The writes of each slot (ms), oldest first, one entry per run. */
+export function writesBySlot(writes: readonly InverterWrite[]): Map<number, SlotWrite[]> {
+  const byRun = new Map<string, SlotWrite>()
+  for (const w of [...writes].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
+    const key = w.run_id === null || w.run_id === undefined ? `at:${w.at}` : `run:${w.run_id}`
+    const entry = byRun.get(key) ?? {
+      at: Date.parse(w.at),
+      owner: w.owner,
+      runId: w.run_id ?? null,
+      grid_w: null,
+      battery_min_w: null,
+      battery_max_w: null,
+      feedin_w: null,
+      ok: true,
+    }
+    if (w.group === 'feedin') entry.feedin_w = w.feedin_w ?? null
+    else {
+      entry.grid_w = w.grid_w ?? null
+      entry.battery_min_w = w.battery_min_w ?? null
+      entry.battery_max_w = w.battery_max_w ?? null
+    }
+    entry.ok &&= w.ok
+    byRun.set(key, entry)
+  }
+  const out = new Map<number, SlotWrite[]>()
+  for (const entry of byRun.values()) {
+    const slot = Math.floor(entry.at / SLOT_MS) * SLOT_MS
+    out.set(slot, [...(out.get(slot) ?? []), entry])
+  }
+  return out
+}
+
+/** The market session over each slot (ms) it touched; a newer session wins a slot two share. */
+export function sessionsBySlot(sessions: readonly MarketSession[], now: number): Map<number, SlotMarket> {
+  const out = new Map<number, SlotMarket>()
+  for (const s of [...sessions].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at))) {
+    const from = Date.parse(s.started_at)
+    const until = s.ended_at ? Date.parse(s.ended_at) : null
+    const market: SlotMarket = {
+      direction: s.direction,
+      power_w: s.power_w ?? null,
+      source: s.source ?? null,
+      from,
+      until,
+      runId: s.start_run_id ?? null,
+    }
+    for (let slot = Math.floor(from / SLOT_MS) * SLOT_MS; slot < (until ?? now); slot += SLOT_MS) out.set(slot, market)
+  }
+  return out
+}
+
 /** One slot of the inverter's day strip, for its popup. */
 export interface SlotDetail {
   slot: number // ms, the start of the quarter-hour
@@ -240,6 +322,10 @@ export interface SlotDetail {
   compare: string | null // the compare run's outcome: ok, mismatch, noop
   /** The Sofar button presses within the slot, oldest first: ours and anyone else's. */
   presses?: ButtonPress[]
+  /** The market session that held the inverter during the slot. */
+  market?: SlotMarket | null
+  /** What EMHASS Lens wrote to the inverter in the slot, oldest first, for the plan or for the market. */
+  writes?: SlotWrite[]
 }
 
 const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
@@ -248,12 +334,24 @@ const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as 
 export const STRIP_BAND = { same: 'var(--line-green)', differs: 'var(--lamp-amber)', wrote: 'var(--ink-2)' }
 
 /** The inverter's day strip from mergeBySlot rows: each slot coloured by its passive state (hatched where EMHASS Lens
- * wasn't in control), and the line under it showing the comparison (dry run) or a write (live). */
-export function inverterStrip(rows: HistoryRow[]): StripInput<SlotDetail>[] {
+ * wasn't in control, striped where a market session held it), and the line under it showing the comparison (dry run)
+ * or a write (live). `sessions` and `writes` add the market's sessions and every write, the plan's and the market's;
+ * `now` (ms) ends a session that is still open. */
+export function inverterStrip(
+  rows: HistoryRow[],
+  sessions: readonly MarketSession[] = [],
+  writes: readonly InverterWrite[] = [],
+  now: number = Date.now(),
+): StripInput<SlotDetail>[] {
   const out: StripInput<SlotDetail>[] = []
+  const markets = sessionsBySlot(sessions, now)
+  const written = writesBySlot(writes)
+  // a slot a session held gets a mark even when no decide run looked at it
+  const all = new Map(rows.map((r) => [r.slot, r]))
+  for (const slot of markets.keys()) if (!all.has(slot)) all.set(slot, { slot })
   // the last settings EMHASS Lens was in control of, and the last feed-in limit set
   const last: { targets: DecisionTargets | null; feedin: SlotDetail['feedinBefore'] } = { targets: null, feedin: null }
-  for (const row of [...rows].sort((a, b) => a.slot - b.slot)) {
+  for (const row of [...all.values()].sort((a, b) => a.slot - b.slot)) {
     const summary = row.decide?.summary ?? null
     const targets = parseDecisionTargets(summary)
     const action = decisionAction(summary)
@@ -273,6 +371,8 @@ export function inverterStrip(rows: HistoryRow[]): StripInput<SlotDetail>[] {
       feedinBefore: last.feedin,
       differs: compareDiffs(row.compare?.summary),
       compare: row.compare?.outcome ?? null,
+      market: markets.get(row.slot) ?? null,
+      writes: written.get(row.slot) ?? [],
     }
     if (targets && !blocked) {
       last.targets = targets
@@ -282,6 +382,20 @@ export function inverterStrip(rows: HistoryRow[]): StripInput<SlotDetail>[] {
     }
     const tone = targets ? modeTone(targets.state) : null
     const compare = detail.compare
+    const market = detail.market
+    if (market) {
+      const ours = detail.writes?.filter((w) => w.owner === 'market') ?? []
+      out.push({
+        t: row.slot / 1000,
+        compare,
+        label: `Market ${market.direction}`,
+        runId: ours.at(-1)?.runId ?? market.runId ?? row.decide?.id,
+        fill: marketFill(market.direction),
+        band: ours.length > 0 ? STRIP_BAND.wrote : null,
+        detail,
+      })
+      continue
+    }
     out.push({
       t: row.slot / 1000,
       compare,
@@ -307,10 +421,12 @@ export function inverterStrip(rows: HistoryRow[]): StripInput<SlotDetail>[] {
  * and those without settings, with how many slots each. */
 export function inverterLegend(inputs: StripInput<SlotDetail>[]): { text: string; fill: string; count: number }[] {
   const states = new Map<string, number>()
+  const markets = new Map<string, number>()
   let blocked = 0
   let none = 0
   for (const { detail } of inputs) {
-    if (detail?.action?.kind === 'blocked') blocked++
+    if (detail?.market) markets.set(detail.market.direction, (markets.get(detail.market.direction) ?? 0) + 1)
+    else if (detail?.action?.kind === 'blocked') blocked++
     else if (detail?.targets) states.set(detail.targets.state, (states.get(detail.targets.state) ?? 0) + 1)
     else none++
   }
@@ -320,6 +436,9 @@ export function inverterLegend(inputs: StripInput<SlotDetail>[]): { text: string
     const count = states.get(state)
     return count ? [{ text: modeTone(state).short, fill: modeTone(state).fill, count }] : []
   })
+  for (const [direction, count] of [...markets].sort()) {
+    out.push({ text: `Market ${direction}`, fill: marketFill(direction), count })
+  }
   if (blocked) out.push({ text: 'Not in control', fill: NOT_IN_CONTROL_FILL, count: blocked })
   if (none) out.push({ text: 'No settings', fill: NO_SETTINGS_FILL, count: none })
   return out

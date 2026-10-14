@@ -13,9 +13,13 @@ const WHO: Record<string, string> = {
   unknown: 'not known',
 }
 
-/** Who pressed: "EMHASS Lens", "an automation", "a user" (in the UI, or through a script they ran) or "not known". */
-export function pressWho(p: Pick<ButtonPress, 'source'>, capital = false): string {
-  const text = WHO[p.source] ?? WHO.unknown!
+/** Who pressed: "EMHASS Lens" (with "for the plan" or "for a market session" when the run is known), "an automation",
+ *  "a user" (in the UI, or through a script they ran) or "not known". */
+export function pressWho(p: Pick<ButtonPress, 'source' | 'owner'>, capital = false): string {
+  const who = WHO[p.source] ?? WHO.unknown!
+  // ours: whether the run wrote for the plan or for a market session
+  const text =
+    p.source === 'lens' && p.owner ? `${who} ${p.owner === 'market' ? 'for a market session' : 'for the plan'}` : who
   return capital ? text.charAt(0).toUpperCase() + text.slice(1) : text
 }
 

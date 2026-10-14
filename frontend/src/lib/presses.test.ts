@@ -13,6 +13,13 @@ describe('pressWho', () => {
     expect(pressWho(press('2026-10-13T08:00:00.000+00:00', 'user'), true)).toBe('A user')
     expect(pressWho(press('2026-10-13T08:00:00.000+00:00', 'something new'), true)).toBe('Not known')
   })
+
+  it('says whether EMHASS Lens pressed for the plan or for a market session', () => {
+    const ours = press('2026-10-13T08:00:00.000+00:00', 'lens', 'apply', 5630)
+    expect(pressWho({ ...ours, owner: 'market' }, true)).toBe('EMHASS Lens for a market session')
+    expect(pressWho({ ...ours, owner: 'plan' })).toBe('EMHASS Lens for the plan')
+    expect(pressWho({ ...press('2026-10-13T08:00:00.000+00:00', 'user'), owner: 'plan' })).toBe('a user')
+  })
 })
 
 describe('pressButton', () => {

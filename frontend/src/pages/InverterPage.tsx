@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useInverterDecide } from '../api/actions'
-import { useInverter, useRuns, useSettings, useStatus } from '../api/queries'
+import { useInverter, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
 import { AgreeHeadline, CompareTable, DecisionView, RulesExplainer } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
@@ -72,17 +72,26 @@ export function InverterPage() {
   const today = todayKey(tz, now)
   const todayDecides = useRuns(runFilters('inverter.decide', today, tz, 0))
   const todayCompares = useRuns(runFilters('inverter.compare', today, tz, 0))
+  const bounds = dayBounds(today, tz)
+  // the market's own sessions: one started yesterday can still hold the inverter today
+  const sessionsSince = new Date(Date.parse(bounds.since) - 86_400_000).toISOString()
+  const sessions = useMarketSessions({ since: sessionsSince, until: bounds.until })
+  const writes = data?.writes
   const strip = useMemo(
     () =>
-      inverterStrip(mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? [])).map((input) =>
+      inverterStrip(
+        mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? []),
+        sessions.data ?? [],
+        writes ?? [],
+        now.getTime(),
+      ).map((input) =>
         input.detail
           ? { ...input, detail: { ...input.detail, presses: pressesInSlot(presses ?? [], input.detail.slot) } }
           : input,
       ),
-    [todayDecides.data, todayCompares.data, presses],
+    [todayDecides.data, todayCompares.data, sessions.data, writes, presses, now],
   )
   const ticks = useMemo(() => pressTicks(presses ?? []), [presses])
-  const bounds = dayBounds(today, tz)
   const pressesToday = pressCounts(presses ?? [], bounds.since, bounds.until)
 
   return (
@@ -120,6 +129,13 @@ export function InverterPage() {
             >
               {decide.isPending ? 'Deciding…' : 'Decide now'}
             </button>
+            <Link
+              className="button"
+              to="/runs?wrote=inverter"
+              title="Every run that wrote to the inverter: the plan's and the market sessions'"
+            >
+              Inverter writes
+            </Link>
             <Link className="button" to="/settings?section=inverter">
               Settings
             </Link>

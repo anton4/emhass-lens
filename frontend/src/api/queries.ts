@@ -90,6 +90,8 @@ export type RunFilters = {
   since?: string
   until?: string
   order?: 'asc' | 'desc'
+  /** inverter: only the runs that wrote to the inverter (the plan's and the market's) */
+  wrote?: 'inverter'
 }
 
 /** Runs matching `filters`. A range that ended a while ago no longer changes, so it sits under its own key that run

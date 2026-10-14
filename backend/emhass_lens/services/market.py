@@ -636,6 +636,8 @@ class MarketService:
                 "updated_at": r["updated_at"],
                 "ended_at": r["ended_at"],
                 "end_reason": r["end_reason"],
+                "start_run_id": r["start_run_id"],
+                "end_run_id": r["end_run_id"],
             }
             for r in rows
         ]
