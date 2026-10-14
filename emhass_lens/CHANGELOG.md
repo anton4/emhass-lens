@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.34
+
+- Inverter: the market's writes to the inverter now show alongside the plan's.
+  - On **Today, slot by slot**, a slot during which EMHASS Lens's own market session held the inverter is *Market sell* or *Market buy*, in the colour of the state it set, striped. Before, it showed what the plan had decided.
+  - Each slot's popup lists every write in it, for the plan or the market, with the run.
+  - **Button presses** say whether EMHASS Lens pressed for the plan or for a market session.
+  - **Inverter writes** opens the matching Runs list.
+- Runs: **Wrote to the inverter** keeps only the runs that wrote to the inverter, the plan's and the market's, so one download covers both.
+- API: `GET /api/inverter` adds `writes`, and its `presses` add `owner`. `GET /api/market/sessions` adds `start_run_id` and `end_run_id`. `GET /api/runs` takes `wrote=inverter`.
+
 ## 0.4.33
 
 - Inputs: with **24 h measured** on, *Prices sent* also shows the prices before the anchor. These are the Nord Pool prices that applied, with today's tariff; nothing is sent to EMHASS for past slots. The **Tariff** lane and the popup cover them too.
