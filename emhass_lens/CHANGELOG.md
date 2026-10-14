@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.39
+
+- Market: a change in a market command that the 15 % deadband hid is now written once it has held for the cooldown (180 s), as long as it is more than 300 W. On 2026-10-14 Kratt raised a sell from 9400 W to 10600 W, and the inverter kept exporting 9400 W for the ten minutes left of the command. A quick change that comes back within the cooldown is still left alone.
+- Market: each decision says how long the gap has held ("gap held 22 s < 180 s: written at 180 s if it stays"). Shadow mode still judges by the automation's own rule.
+
 ## 0.4.38
 
 - Plan: the **Power** chart shows Qilowatt's market sessions instead of every command:
