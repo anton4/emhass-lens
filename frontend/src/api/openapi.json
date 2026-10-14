@@ -5006,7 +5006,7 @@
         "type": "object"
       },
       "MeasuredSlot": {
-        "description": "What was measured in one slot before the anchor: W means, SOC 0–1.",
+        "description": "One slot before the anchor: what was measured (W means, SOC 0–1) and the prices that applied (Nord Pool with\nthe current tariff, rounded as a payload has them).",
         "properties": {
           "load": {
             "anyOf": [
@@ -5188,6 +5188,39 @@
             },
             "description": "The household consumption in watts without the deferrable loads (the EV charger), usually the same sensor EMHASS learns from.",
             "title": "House load without deferrable loads, W (what EMHASS forecasts as P_Load)"
+          },
+          "load_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Cost"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "prod_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prod Price"
           },
           "pv": {
             "$ref": "#/components/schemas/MeasuredPower",

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from emhass_lens.core.clock import FakeClock
+from emhass_lens.domain.mpc.payload import PRICE_DECIMALS
 from emhass_lens.domain.mpc.sent import deferrables, load_series
 from tests.test_phase1 import make_client, prime, run_job
 from tests.test_phase2 import START, live_client
@@ -114,8 +115,23 @@ def test_the_last_run_slot_by_slot_with_the_plans_load(tmp_path: Path, world: Wo
         assert body["model"]["var_model"] == payload["var_model"]
         assert len(body["measured"]) == 8
         assert body["measured"][0]["start"] == "2026-10-09T09:15:00.000+00:00"
-        slot = {"start": "2026-10-09T10:15:00.000+00:00", "load": 1234.0, "pv": None, "soc": None}
+        # nothing was sent before the anchor: the prices that applied, rounded as the payload rounds them
+        priced = {p.start: p for p in container.extras["prices"].priced(datetime(2026, 10, 9, 9, 15, tzinfo=UTC), None)}
+        past = priced[datetime(2026, 10, 9, 10, 15, tzinfo=UTC)]
+        slot = {
+            "start": "2026-10-09T10:15:00.000+00:00",
+            "load": 1234.0,
+            "pv": None,
+            "soc": None,
+            "load_cost": round(past.import_price, PRICE_DECIMALS),
+            "prod_price": round(past.export_price, PRICE_DECIMALS),
+            "period": past.period,
+        }
         assert body["measured"][4] == slot
+        assert all(m["load_cost"] is not None and m["period"] for m in body["measured"])
+        # the anchor slot's price is the payload's first
+        anchor = priced[datetime(2026, 10, 9, 11, 15, tzinfo=UTC)]
+        assert round(anchor.import_price, PRICE_DECIMALS) == payload["load_cost_forecast"][0]
         assert body["measured_entities"]["load"] == "sensor.house_power_without_deferrable"
     finally:
         client.__exit__(None, None, None)

@@ -819,12 +819,16 @@ class SentModel(BaseModel):
 
 
 class MeasuredSlot(BaseModel):
-    """What was measured in one slot before the anchor: W means, SOC 0–1."""
+    """One slot before the anchor: what was measured (W means, SOC 0–1) and the prices that applied (Nord Pool with
+    the current tariff, rounded as a payload has them)."""
 
     start: str
     load: float | None = None
     pv: float | None = None
     soc: float | None = None
+    load_cost: float | None = None
+    prod_price: float | None = None
+    period: str | None = None
 
 
 class SentInputs(BaseModel):

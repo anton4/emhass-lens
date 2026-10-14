@@ -1,6 +1,6 @@
 // The Inputs page's "What EMHASS gets" (GET /api/inputs/sent): one MPC payload on a time axis, after what was
-// measured before its anchor. Lanes under the charts show the tariff period, the export limit and each deferrable
-// load's window; the PV chart labels each day's total.
+// measured (and the prices that applied) before its anchor. Lanes under the charts show the tariff period, the export
+// limit and each deferrable load's window; the PV chart labels each day's total.
 
 import type { ChartLane, ChartNote } from '../components/charts/TimeChart'
 import type { PopupExtra } from '../components/charts/cursorStore'
@@ -40,11 +40,11 @@ export function onAxis(
   return out
 }
 
-/** Runs of equal values over the payload's slots, as [from, to) in unix s. */
-export function runsOf<T>(axis: SentAxis, values: readonly T[]): { from: number; to: number; value: T }[] {
+/** Runs of equal values over the payload's slots (or from slot `start` of the axis on), as [from, to) in unix s. */
+export function runsOf<T>(axis: SentAxis, values: readonly T[], start = axis.anchorIdx): { from: number; to: number; value: T }[] {
   const out: { from: number; to: number; value: T }[] = []
   values.forEach((value, i) => {
-    const from = axis.x[axis.anchorIdx + i]
+    const from = axis.x[start + i]
     if (from === undefined) return
     const last = out[out.length - 1]
     if (last && last.value === value && last.to === from) last.to = from + SLOT_S
@@ -60,18 +60,19 @@ const PERIOD_COLORS: Record<string, string> = {
   holiday_peak: '--tint-amber',
 }
 
-export function tariffLane(axis: SentAxis, data: Pick<SentInputs, 'slots'>): ChartLane {
+/** The tariff period over the whole axis: the measured slots' (the prices that applied), then the payload's. */
+export function tariffLane(axis: SentAxis, data: Pick<SentInputs, 'measured' | 'slots'>): ChartLane {
   return {
     label: 'Tariff',
     spans: runsOf(
       axis,
-      data.slots.map((s) => s.period),
-    ).map((r) => ({
-      from: r.from,
-      to: r.to,
-      color: PERIOD_COLORS[r.value] ?? '--chart-grid',
-      text: periodLabel(r.value).toLowerCase(),
-    })),
+      [...data.measured.map((m) => m.period ?? null), ...data.slots.map((s) => s.period)],
+      0,
+    ).flatMap((r) =>
+      r.value === null
+        ? []
+        : [{ from: r.from, to: r.to, color: PERIOD_COLORS[r.value] ?? '--chart-grid', text: periodLabel(r.value).toLowerCase() }],
+    ),
   }
 }
 
@@ -112,9 +113,15 @@ export function loadAsk(load: SentDeferrable): string {
   return `${formatPower(load.nominal_power_w)} for ${hours(load.operating_hours)}`
 }
 
-/** What the payload says about each lane at t: the tariff period and the export limit. */
-export function priceExtras(axis: SentAxis, data: Pick<SentInputs, 'slots'>, t: number): PopupExtra[] {
-  const slot = data.slots[slotAt(axis, t)]
+/** What the payload says about each lane at t: the tariff period and the export limit; before the anchor the period
+ *  that applied. */
+export function priceExtras(axis: SentAxis, data: Pick<SentInputs, 'measured' | 'slots'>, t: number): PopupExtra[] {
+  const i = slotAt(axis, t)
+  if (i < 0) {
+    const period = data.measured[axis.anchorIdx + i]?.period
+    return period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: PERIOD_COLORS[period] ?? '--chart-grid' }] : []
+  }
+  const slot = data.slots[i]
   if (!slot) return []
   const out: PopupExtra[] = [
     { name: 'Tariff', value: periodLabel(slot.period).toLowerCase(), color: PERIOD_COLORS[slot.period] ?? '--chart-grid' },

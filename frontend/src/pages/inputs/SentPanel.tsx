@@ -220,7 +220,7 @@ function SentView({
           <TimeChart
             {...common}
             series={charts.prices}
-            ariaLabel="Import and export price sent to EMHASS per quarter-hour, with the tariff period and the export limit under the chart"
+            ariaLabel="Import and export price per quarter-hour: those that applied before the anchor and those sent to EMHASS after it, with the tariff period and the export limit under the chart"
             yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
             fit={PRICE_FIT}
             bands={charts.forecast}
@@ -231,6 +231,9 @@ function SentView({
           <p className="chart-note">
             <code>load_cost_forecast</code> and <code>prod_price_forecast</code>, fees included and the import price with
             VAT.{charts.forecast.length > 0 && ' Shaded: forecast prices.'}
+            {charts.hasPastPrices &&
+              hoursBack > 0 &&
+              ' Before the anchor: the Nord Pool prices that applied, with today’s tariff (nothing is sent for past slots).'}
             {isNumber(data.no_export_at_or_below) &&
               ` Export is capped at 0 W where the export price is at or below ${data.no_export_at_or_below} €/kWh (maximum_power_to_grid).`}
           </p>
@@ -477,14 +480,20 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
   const priceFormat = unit === 'cents' ? (v: number) => `${v.toFixed(1)} c/kWh` : (v: number) => `${v.toFixed(3)} €/kWh`
   const sentTag = (text: string) => (t: number): PopupTag => (t < axis.anchorS ? MEASURED : { text, tone: 'blue' })
 
+  // before the anchor: the prices that applied (nothing is sent for past slots)
+  const scaled = (v: number | null | undefined) => (isNumber(v) ? v * f : null)
+  const importValues = onAxis(axis, data.measured.map((m) => scaled(m.load_cost)), slots.map((s) => s.load_cost * f))
+  const exportValues = onAxis(axis, data.measured.map((m) => scaled(m.prod_price)), slots.map((s) => s.prod_price * f))
   const prices: ChartSeries[] = [
-    { label: 'Import', color: '--q-import', values: closeSteps(onAxis(axis, null, slots.map((s) => s.load_cost * f))), format: priceFormat },
-    { label: 'Export', color: '--q-export', values: closeSteps(onAxis(axis, null, slots.map((s) => s.prod_price * f))), format: priceFormat },
+    { label: 'Import', color: '--q-import', values: closeSteps(importValues), readout: importValues, format: priceFormat },
+    { label: 'Export', color: '--q-export', values: closeSteps(exportValues), readout: exportValues, format: priceFormat },
   ]
   const exportRow = exportLane(axis, data)
   const pricePopup = {
     tag: (t: number): PopupTag | null => {
-      const slot = slots[slotAt(axis, t)]
+      const i = slotAt(axis, t)
+      if (i < 0) return isNumber(data.measured[axis.anchorIdx + i]?.load_cost) ? { text: originLabel('actual'), tone: 'neutral' } : null
+      const slot = slots[i]
       return slot ? { text: originLabel(slot.origin), tone: isForecast(slot.origin) ? 'blue' : 'neutral' } : null
     },
     extra: (t: number) => priceExtras(axis, data, t),
@@ -548,6 +557,7 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     midnights: midnightsOn(axis, tz),
     forecast: forecastRangesOn(axis, data),
     prices,
+    hasPastPrices: data.measured.some((m) => isNumber(m.load_cost)),
     priceLanes: exportRow ? [tariffLane(axis, data), exportRow] : [tariffLane(axis, data)],
     pricePopup,
     pv,

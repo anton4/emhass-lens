@@ -18,7 +18,7 @@ from emhass_lens.api.schemas import (
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import SLOT, slot_floor
 from emhass_lens.domain.mpc.anchor import anchor_slot
-from emhass_lens.domain.mpc.payload import BuildResult, build
+from emhass_lens.domain.mpc.payload import PRICE_DECIMALS, BuildResult, build
 from emhass_lens.domain.mpc.sent import deferrables, load_series
 from emhass_lens.services.inputs import describe
 from emhass_lens.services.prices import area_tz
@@ -152,10 +152,21 @@ class SentInputsService:
         if anchor is not None and hours_back > 0:
             start = anchor - timedelta(hours=hours_back)
             rows = await c.app_db.run(c.extras["measurements"].read, start, anchor)
+            # nothing was sent for these slots: the prices that applied, as a payload would have them
+            prices = {iso(p.start): p for p in await c.app_db.run(c.extras["prices"].priced, start, None)}
             for k in range(hours_back * 4):
                 key = iso(start + k * SLOT) or ""
                 values = {q: rows.get(q, {}).get(key) for q in ("load", "pv", "soc")}
-                measured.append(MeasuredSlot(start=key, **{q: v[0] if v else None for q, v in values.items()}))
+                price = prices.get(key)
+                measured.append(
+                    MeasuredSlot(
+                        start=key,
+                        **{q: v[0] if v else None for q, v in values.items()},
+                        load_cost=round(price.import_price, PRICE_DECIMALS) if price else None,
+                        prod_price=round(price.export_price, PRICE_DECIMALS) if price else None,
+                        period=price.period if price else None,
+                    )
+                )
 
         pv = inputs.get("pv") or {}
         m = settings.measurements

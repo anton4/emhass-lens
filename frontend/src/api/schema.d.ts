@@ -3095,11 +3095,18 @@ export interface components {
         };
         /**
          * MeasuredSlot
-         * @description What was measured in one slot before the anchor: W means, SOC 0–1.
+         * @description One slot before the anchor: what was measured (W means, SOC 0–1) and the prices that applied (Nord Pool with
+         *     the current tariff, rounded as a payload has them).
          */
         MeasuredSlot: {
             /** Load */
             load?: number | null;
+            /** Load Cost */
+            load_cost?: number | null;
+            /** Period */
+            period?: string | null;
+            /** Prod Price */
+            prod_price?: number | null;
             /** Pv */
             pv?: number | null;
             /** Soc */

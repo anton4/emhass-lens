@@ -39,12 +39,15 @@ function slot(i: number, extra: Partial<Slot> = {}): Slot {
   }
 }
 
-function sent(slots: Slot[], measuredSlots = 0): Pick<SentInputs, 'measured' | 'slots'> {
+type Measured = SentInputs['measured'][number]
+
+function sent(slots: Slot[], measuredSlots = 0, past: (k: number) => Partial<Measured> = () => ({})): Pick<SentInputs, 'measured' | 'slots'> {
   const measured = Array.from({ length: measuredSlots }, (_, k) => ({
     start: iso(ANCHOR - (measuredSlots - k) * 900),
     load: 1000 + k,
     pv: null,
     soc: 0.5,
+    ...past(k),
   }))
   return { measured, slots }
 }
@@ -88,14 +91,29 @@ describe('the sent payload on a time axis', () => {
     expect(exportLane(axis, sent([slot(0, { export_max_w: null })]))).toBeNull()
   })
 
-  it('reads the lanes at the cursor for the popup, and nothing before the anchor', () => {
-    const data = sent([slot(0), slot(1, { period: 'day', export_max_w: 0 })], 4)
+  it('carries the tariff lane back over the prices that applied before the anchor', () => {
+    // two slots without a stored price, then day, then night from two slots before the anchor on
+    const data = sent([slot(0), slot(1, { period: 'day' })], 5, (k) =>
+      k < 2 ? {} : { load_cost: 0.2, prod_price: 0.1, period: k < 3 ? 'day' : 'night' },
+    )
+    const axis = sentAxis(data)
+    expect(tariffLane(axis, data).spans).toEqual([
+      { from: ANCHOR - 3 * 900, to: ANCHOR - 2 * 900, color: '--chart-grid', text: 'day' },
+      { from: ANCHOR - 2 * 900, to: ANCHOR + 900, color: '--frame-strong', text: 'night' },
+      { from: ANCHOR + 900, to: ANCHOR + 1800, color: '--chart-grid', text: 'day' },
+    ])
+    expect(onAxis(axis, data.measured.map((m) => m.load_cost), [0.25, 0.26])).toEqual([null, null, 0.2, 0.2, 0.2, 0.25, 0.26, null])
+  })
+
+  it('reads the lanes at the cursor for the popup; before the anchor only the tariff that applied', () => {
+    const data = sent([slot(0), slot(1, { period: 'day', export_max_w: 0 })], 4, (k) => (k === 3 ? { period: 'day' } : {}))
     const axis = sentAxis(data)
     expect(priceExtras(axis, data, ANCHOR + 900)).toEqual([
       { name: 'Tariff', value: 'day', color: '--chart-grid' },
       { name: 'Export limit', value: '0 W', color: '--line-green', hatch: true },
     ])
-    expect(priceExtras(axis, data, ANCHOR - 900)).toEqual([])
+    expect(priceExtras(axis, data, ANCHOR - 900)).toEqual([{ name: 'Tariff', value: 'day', color: '--chart-grid' }])
+    expect(priceExtras(axis, data, ANCHOR - 1800)).toEqual([])
   })
 
   it('shades the forecast prices and marks local midnights', () => {
