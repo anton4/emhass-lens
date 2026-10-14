@@ -25,6 +25,7 @@ from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.inverter import Targets
 from emhass_lens.domain.market import (
     STATES,
+    CommandSpan,
     MarketDecision,
     MarketInputs,
     command_spans,
@@ -643,23 +644,33 @@ class MarketService:
             for r in rows
         ]
 
-    async def commands(self, since: datetime, until: datetime) -> dict[str, Any]:
+    async def spans(self, since: datetime, until: datetime) -> list[CommandSpan]:
         """Qilowatt's commands in [since, until), read from the recorder history of the source, mode and power-limit
-        sensors: what was asked, whoever ran the sessions (EMHASS Lens, the automation, or nobody in shadow mode)."""
+        sensors: what was asked, whoever ran the sessions (EMHASS Lens, the automation, or nobody in shadow mode).
+        Raises when the recorder can't be read."""
         e = self._e()
         ids = [e.source_sensor, e.mode_sensor, e.powerlimit_sensor]
-        try:
-            lists = await self.c.extras["ha"].history(since, until, [i for i in ids if i])
-        except Exception as exc:  # the chart leaves the commands out and says why
-            log.debug("Reading the market command history failed: %s", exc)
-            return {"spans": [], "error": str(exc)}
+        lists = await self.c.extras["ha"].history(since, until, [i for i in ids if i])
         by_entity = {
             str(lst[0]["entity_id"]): lst
             for lst in lists
             if lst and isinstance(lst[0], dict) and lst[0].get("entity_id")
         }
         source, mode, power = (by_entity.get(i, []) for i in ids)
-        spans = command_spans(source, mode, power, self._t(), since, until)
+        return command_spans(source, mode, power, self._t(), since, until)
+
+    async def commands(self, since: datetime, until: datetime) -> dict[str, Any]:
+        """The commands in [since, until) (see `spans`), each with the grid power measured over it when it ended
+        within the last 48 h."""
+        try:
+            spans = await self.spans(since, until)
+        except Exception as exc:  # the chart leaves the commands out and says why
+            log.debug("Reading the market command history failed: %s", exc)
+            return {"spans": [], "error": str(exc), "measured_error": None}
+        grid = self.c.extras.get("grid_detail")
+        measured, measured_error = (
+            await grid.delivered(spans) if grid is not None else ([(None, None)] * len(spans), None)
+        )
         return {
             "spans": [
                 {
@@ -670,10 +681,13 @@ class MarketService:
                     "mode": s.mode,
                     "power_w": s.power_w,
                     "open": s.open,
+                    "measured_w": w,
+                    "measured_coverage": coverage,
                 }
-                for s in spans
+                for s, (w, coverage) in zip(spans, measured, strict=True)
             ],
             "error": None,
+            "measured_error": measured_error,
         }
 
     async def status(self) -> dict[str, Any]:

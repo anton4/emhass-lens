@@ -209,8 +209,7 @@ class MeasurementService:
             for m in slot_means(by_entity.get(cfg.entity, []), start, end):
                 if m.value is None:
                     continue
-                value = m.value * cfg.scale * (-1.0 if cfg.invert else 1.0)
-                rows.append((iso(m.start), quantity, value, m.coverage, cfg.entity))
+                rows.append((iso(m.start), quantity, cfg.to_emhass(m.value), m.coverage, cfg.entity))
                 counts[quantity] += 1
         if rows:
             await self.c.app_db.run(

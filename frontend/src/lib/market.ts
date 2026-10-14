@@ -281,26 +281,51 @@ export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartO
   }
 }
 
-/** The commands as a lane under the chart: "sell 9.40 kW · kratt". */
+/** What the grid delivered in the command's direction: the measured mean, with a sell's export counted positive like
+ *  its power; null when it wasn't measured. */
+export function deliveredW(span: Pick<MarketCommandSpan, 'direction' | 'measured_w'>): number | null {
+  const w = span.measured_w
+  if (w === null || w === undefined) return null
+  return span.direction === 'buy' ? w : -w
+}
+
+/** The commands as a lane under the chart: "sell 9.40 kW · kratt · got 9.21 kW". */
 export function marketLane(spans: MarketCommandSpan[], nowS?: number): ChartLane {
   return {
     label: 'Market',
-    spans: spans.map((s) => ({
-      from: unix(s.start),
-      to: spanEnd(s, nowS),
-      color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
-      text: `${s.direction} ${formatPower(s.power_w)} · ${s.source}`,
-    })),
+    spans: spans.map((s) => {
+      const got = deliveredW(s)
+      return {
+        from: unix(s.start),
+        to: spanEnd(s, nowS),
+        color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
+        text: `${s.direction} ${formatPower(s.power_w)} · ${s.source}${got !== null ? ` · got ${formatPower(got)}` : ''}`,
+      }
+    }),
   }
 }
 
-/** The popup's rows for the commands in the slot from `t`: "Market sell" "9.40 kW · kratt · 08:45:12–09:04:30". */
+/** The popup's rows for the commands in the slot from `t`: "Market sell" "9.40 kW · kratt · 08:45:12–09:04:30", then
+ *  what the grid delivered over the command: "Delivered" "9.21 kW · 98 %". */
 export function marketRows(spans: MarketCommandSpan[], t: number, timeZone?: string, slotS = 900): PopupExtra[] {
   return spans
     .filter((s) => unix(s.start) < t + slotS && unix(s.end) > t)
-    .map((s) => ({
-      name: `Market ${s.direction}`,
-      value: `${formatPower(s.power_w)} · ${s.source} · ${formatClock(s.start, timeZone)}–${s.open ? 'now' : formatClock(s.end, timeZone)}`,
-      color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
-    }))
+    .flatMap((s) => {
+      const rows: PopupExtra[] = [
+        {
+          name: `Market ${s.direction}`,
+          value: `${formatPower(s.power_w)} · ${s.source} · ${formatClock(s.start, timeZone)}–${s.open ? 'now' : formatClock(s.end, timeZone)}`,
+          color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
+        },
+      ]
+      const got = deliveredW(s)
+      if (got !== null) {
+        const parts = [formatPower(got)]
+        if (s.power_w > 0) parts.push(`${Math.round((got / s.power_w) * 100)} %`)
+        const coverage = s.measured_coverage
+        if (coverage !== null && coverage !== undefined && coverage < 0.9) parts.push(`data ${Math.round(coverage * 100)} %`)
+        rows.push({ name: 'Delivered', value: `${parts.join(' · ')}${s.open ? ' so far' : ''}`, color: '--q-grid' })
+      }
+      return rows
+    })
 }

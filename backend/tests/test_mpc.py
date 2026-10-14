@@ -207,32 +207,24 @@ def test_published_row_mirrors_emhass() -> None:
     assert published_row(rows, utc(2026, 10, 9, 11, 22, 30), "nearest") == 0
 
 
-def test_p10_companion_is_sent_only_to_emhass_0_18_4_and_later() -> None:
+def test_only_the_chosen_pv_estimate_is_sent() -> None:
     now = utc(2026, 10, 9, 11, 13, 0)
     inputs = inputs_at(now)
     anchor = anchor_slot(now, "nearest")
-    new = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
-    p50, p10 = new.payload["pv_power_forecast"], new.payload["pv_power_forecast_p10"]
-    assert len(p10) == len(p50) == new.horizon
-    assert all(b == round(a / 2) for a, b in zip(p50, p10, strict=True))  # the fixture's P10 is half of P50
-    assert new.explain[0]["pv_p10_w"] == p10[0]
-    assert not [i for i in validate(new, inputs, Settings()) if i.level == "error"]
-
-    old = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 3))
-    unknown = build(inputs, anchor, slot_floor(now), Settings())
-    compat = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5), compat=True)
-    quiet = Settings.model_validate({"pv": {"send_p10": False}})
-    off = build(inputs, anchor, slot_floor(now), quiet, emhass_version=(0, 18, 5))
-    for result in (old, unknown, compat, off):
-        assert "pv_power_forecast_p10" not in result.payload
-        assert result.explain[0]["pv_p10_w"] is None
+    p50 = build(inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert "pv_power_forecast_p10" not in p50.payload
+    assert "pv_p10_w" not in p50.explain[0]
+    assert not [i for i in validate(p50, inputs, Settings()) if i.level == "error"]
 
     states: dict[str, dict[str, Any] | None] = {
         f"s{i}": {"attributes": a} for i, a in enumerate(pv_for(now.astimezone(TZ)))
     }
     p10_inputs = replace(inputs, pv=parse_pv(states, "estimate10"))
-    p10_only = build(p10_inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
-    assert "pv_power_forecast_p10" not in p10_only.payload  # nothing to blend when P10 is the estimate
+    p10 = build(p10_inputs, anchor, slot_floor(now), Settings(), emhass_version=(0, 18, 5))
+    assert "pv_power_forecast_p10" not in p10.payload
+    # the fixture's P10 is half of P50: choosing P10 as the estimate sends it as the forecast
+    pairs = zip(p50.payload["pv_power_forecast"], p10.payload["pv_power_forecast"], strict=True)
+    assert all(b == round(a / 2) for a, b in pairs)
 
 
 def test_def_current_state_is_sent_only_when_a_running_entity_is_configured() -> None:
@@ -278,8 +270,6 @@ def test_the_ev_reserve_comes_out_of_the_pv_forecast_but_not_of_the_compat_build
     assert sent[first] == pv[first] - 300
     assert sent[first + 1] == 0  # never below zero
     assert sent[:first] == pv[:first] and sent[first + 2 :] == pv[first + 2 :]
-    p10, p10_plain = out.payload["pv_power_forecast_p10"], plain.payload["pv_power_forecast_p10"]
-    assert p10[first] == max(0, p10_plain[first] - 300) and p10[first + 1] == 0
     assert out.explain[first]["ev_reserved_w"] == 300
     assert out.explain[first + 1]["ev_reserved_w"] == 1_000_000
     assert all(r["ev_reserved_w"] == 0 for r in out.explain if r["i"] not in (first, first + 1))

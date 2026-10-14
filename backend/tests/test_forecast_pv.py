@@ -124,22 +124,18 @@ def test_pv_dst_day_with_50_periods_stays_aligned() -> None:
     assert day == last_local_hour.astimezone(TZ).date()
 
 
-def test_pv_keeps_the_p10_companion_next_to_the_chosen_estimate() -> None:
+def test_pv_reads_the_chosen_estimate() -> None:
     start = datetime(2026, 10, 9, 9, 0, tzinfo=UTC)
     periods = [
         {"period_start": start.isoformat(), "pv_estimate": 2.0, "pv_estimate10": 1.2, "pv_estimate90": 2.6},
-        {"period_start": (start + timedelta(minutes=30)).isoformat(), "pv_estimate": 3.0},  # no P10 here
+        {"period_start": (start + timedelta(minutes=30)).isoformat(), "pv_estimate": 3.0},  # no P10 or P90 here
     ]
     states: dict[str, dict[str, Any] | None] = {"s": {"attributes": {"detailedForecast": periods}}}
-    p50 = parse_pv(states, "estimate")
-    assert p50.has_p10
-    assert p50.p10_watts[start] == 1200
     quarters = [start, start + timedelta(minutes=15), start + timedelta(minutes=30), start + timedelta(minutes=45)]
-    assert p50.series(quarters)[0] == [2000, 2000, 3000, 3000]
-    assert p50.p10_series(quarters) == [1200, 1200, 0.0, 0.0]
+    p50 = parse_pv(states, "estimate")
+    assert p50.series(quarters) == ([2000, 2000, 3000, 3000], [])
     p90 = parse_pv(states, "estimate90", scale=0.5)
     assert p90.watts[start] == 1300
-    assert p90.p10_watts[start] == 600  # scaled like the chosen estimate
+    assert p90.series(quarters)[1] == quarters[2:]  # missing, not filled from another estimate
     p10 = parse_pv(states, "estimate10")
-    assert not p10.has_p10  # nothing to blend when P10 is the estimate itself
-    assert p10.p10_series(quarters) == [0.0, 0.0, 0.0, 0.0]
+    assert p10.watts[start] == 1200

@@ -19,6 +19,8 @@ export interface PopupExtra {
 /** Where the cursor is, in plot pixels; `pointerY` only on the chart under the pointer. */
 export interface CursorAt {
   idx: number
+  /** The time under the pointer (unix s); a chart that snaps to slots gives the slot's start. */
+  time: number
   left: number
   pointerY: number | null
   /** The height of each (non-"then") series' value at idx. */

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
-import { fitRange, overlayExtent, type ChartOverlay, type FitOptions } from '../../lib/chartRange'
+import { fitRange, overlayExtent, overlayRuns, type ChartOverlay, type FitOptions } from '../../lib/chartRange'
 import { ChartPopup } from './ChartPopup'
 import { createCursorStore, type CursorAt, type PopupExtra, type PopupTag } from './cursorStore'
 import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
@@ -138,7 +138,7 @@ interface TimeChartProps {
   compact?: boolean
   /** A value popup beside the cursor instead of a live legend; `tag` labels the slot under it ("measured"), `extra`
    *  adds rows under the lines' rows (what a lane says there). */
-  popup?: { tag?: (t: number) => PopupTag | null; extra?: (t: number) => PopupExtra[] }
+  popup?: { tag?: (t: number) => PopupTag | null; extra?: (t: number, time: number) => PopupExtra[] }
   /** Leave out uPlot's legend (the page draws its own key). */
   legend?: boolean
   /** Each x is a slot's start: the cursor reads the slot the pointer is in instead of the nearest start. */
@@ -202,8 +202,8 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number) {
   ctx.restore()
 }
 
-/** Overlays: each run of back-to-back spans rises from zero to its values, follows them and returns to zero, with a
- *  light fill between the line and zero. */
+/** Overlays in the order given (the last on top): each run of back-to-back spans follows their values, from and back
+ *  to zero unless its base is 'none', with an optional light fill between the line and zero. */
 function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
   if (overlays.length === 0) return
   const { ctx, bbox } = u
@@ -214,27 +214,26 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
   ctx.clip()
   for (const overlay of overlays) {
     const color = cssColor(overlay.color)
-    const spans = [...overlay.spans].sort((a, b) => a.from - b.from)
     ctx.strokeStyle = color
     ctx.lineWidth = (overlay.width ?? 2) * dpr
     ctx.setLineDash((overlay.dash ?? []).map((d) => d * dpr))
-    ctx.fillStyle = withAlpha(color, overlay.fill ?? 0)
-    ctx.beginPath()
-    spans.forEach((span, i) => {
-      const a = u.valToPos(span.from, 'x', true)
-      const b = u.valToPos(span.to, 'x', true)
-      const y = u.valToPos(span.value, 'y', true)
-      if (overlay.fill) ctx.fillRect(a, Math.min(y, zero), b - a, Math.abs(zero - y))
-      const joined = i > 0 && Math.abs(spans[i - 1]!.to - span.from) < 1
-      if (joined) ctx.lineTo(a, y)
-      else {
-        ctx.moveTo(a, zero)
-        ctx.lineTo(a, y)
+    if (overlay.fill) {
+      ctx.fillStyle = withAlpha(color, overlay.fill)
+      for (const span of overlay.spans) {
+        const a = u.valToPos(span.from, 'x', true)
+        const y = u.valToPos(span.value, 'y', true)
+        ctx.fillRect(a, Math.min(y, zero), u.valToPos(span.to, 'x', true) - a, Math.abs(zero - y))
       }
-      ctx.lineTo(b, y)
-      const next = spans[i + 1]
-      if (!next || Math.abs(next.from - span.to) >= 1) ctx.lineTo(b, zero)
-    })
+    }
+    ctx.beginPath()
+    for (const run of overlayRuns(overlay.spans, overlay.base)) {
+      run.forEach(([t, v], i) => {
+        const x = u.valToPos(t, 'x', true)
+        const y = u.valToPos(v, 'y', true)
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+    }
     ctx.stroke()
   }
   ctx.restore()
@@ -376,7 +375,7 @@ export function TimeChart({
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
-    lanes.length, overlays.map((o) => [o.label, o.color, o.width, o.dash, o.fill]),
+    lanes.length,
   ])
   const columns = series.some((s) => s.column)
 
@@ -486,6 +485,7 @@ export function TimeChart({
       const column = hasColumns ? columnAt(u, idx) : undefined
       cursor.setAt({
         idx,
+        time: u.posToVal(left, 'x'),
         left: column ? column.left + column.width / 2 : left,
         pointerY: hovered ? (u.cursor.top ?? null) : null,
         points,

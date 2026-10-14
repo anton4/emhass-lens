@@ -3,6 +3,7 @@ import type { MarketCommandSpan, MarketSettings, RunSummary } from '../api/types
 import {
   commandPower,
   decisionRef,
+  deliveredW,
   marketLane,
   marketOverlay,
   marketRows,
@@ -184,5 +185,20 @@ describe('the commands on the Power chart', () => {
       { name: 'Market sell', value: '9.40 kW · kratt · 08:45:12–09:04:30', color: '--line-green' },
     ])
     expect(marketRows([sell, buy], s('2026-10-14T07:15:00Z'), tz)[0]?.value).toBe('5.00 kW · kratt · 09:58:00–now')
+  })
+
+  it('says what the grid delivered over each command', () => {
+    const tz = 'Europe/Tallinn'
+    const measured = { ...sell, measured_w: -9210, measured_coverage: 1 }
+    expect(deliveredW(measured)).toBe(9210) // the export a sell asked for, counted positive
+    expect(deliveredW({ ...buy, measured_w: 4800 })).toBe(4800)
+    expect(deliveredW(sell)).toBeNull()
+    expect(marketLane([measured]).spans[0]?.text).toBe('sell 9.40 kW · kratt · got 9.21 kW')
+    expect(marketRows([measured], s('2026-10-14T06:00:00Z'), tz)).toEqual([
+      { name: 'Market sell', value: '9.40 kW · kratt · 08:45:12–09:04:30', color: '--line-green' },
+      { name: 'Delivered', value: '9.21 kW · 98 %', color: '--q-grid' },
+    ])
+    const partly = { ...buy, measured_w: 2500, measured_coverage: 0.5 }
+    expect(marketRows([partly], s('2026-10-14T07:15:00Z'), tz)[1]?.value).toBe('2.50 kW · 50 % · data 50 % so far')
   })
 })

@@ -237,7 +237,11 @@ async def market_commands(c: ContainerDep, since: str, until: str | None = None)
     if start is None or end <= start or end - start > COMMANDS_MAX:
         raise HTTPException(400, "since must be before until, and the window at most 8 days")
     result = await c.extras["market"].commands(start, end)
-    return MarketCommands(spans=[MarketCommandSpan(**s) for s in result["spans"]], error=result["error"])
+    return MarketCommands(
+        spans=[MarketCommandSpan(**s) for s in result["spans"]],
+        error=result["error"],
+        measured_error=result["measured_error"],
+    )
 
 
 @router.get("/setup")

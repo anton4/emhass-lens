@@ -493,6 +493,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Grid Detail
+         * @description The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer
+         *     than the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits
+         *     the window, broken where a market command starts, ends or changes.
+         */
+        get: operations["grid_detail_api_measurements_grid_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/{action}": {
         parameters: {
             query?: never;
@@ -1226,8 +1248,6 @@ export interface components {
             period: string;
             /** Prod Price */
             prod_price: number;
-            /** Pv P10 W */
-            pv_p10_w?: number | null;
             /** Pv W */
             pv_w?: number | null;
             /** Start */
@@ -2220,8 +2240,6 @@ export interface components {
             period: string;
             /** Prod Price */
             prod_price: number;
-            /** Pv P10 W */
-            pv_p10_w?: number | null;
             /** Pv W */
             pv_w: number;
             /** Spot */
@@ -2352,6 +2370,32 @@ export interface components {
             };
             /** Source */
             source: string;
+        };
+        /**
+         * GridDetail
+         * @description The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else
+         *     means per step_s, broken where a market command starts, ends or changes.
+         */
+        GridDetail: {
+            /** End */
+            end: string;
+            /** Entity */
+            entity: string | null;
+            /** Error */
+            error?: string | null;
+            /** Points */
+            points: components["schemas"]["GridPoint"][];
+            /** Start */
+            start: string;
+            /** Step S */
+            step_s: number | null;
+        };
+        /** GridPoint */
+        GridPoint: {
+            /** T */
+            t: string;
+            /** W */
+            w: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2955,6 +2999,10 @@ export interface components {
             direction: string;
             /** End */
             end: string;
+            /** Measured Coverage */
+            measured_coverage?: number | null;
+            /** Measured W */
+            measured_w?: number | null;
             /** Mode */
             mode: string;
             /** Open */
@@ -2970,6 +3018,8 @@ export interface components {
         MarketCommands: {
             /** Error */
             error?: string | null;
+            /** Measured Error */
+            measured_error?: string | null;
             /** Spans */
             spans: components["schemas"]["MarketCommandSpan"][];
         };
@@ -4045,12 +4095,6 @@ export interface components {
              */
             scale: number;
             /**
-             * Send the P10 estimate too
-             * @description EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate above is P10 itself.
-             * @default true
-             */
-            send_p10: boolean;
-            /**
              * PV forecast
              * @default solcast
              * @enum {string}
@@ -4829,7 +4873,6 @@ export interface components {
              *       "field": "from_select",
              *       "field_select_entity": "select.solcast_pv_forecast_use_forecast_field",
              *       "scale": 1,
-             *       "send_p10": true,
              *       "source": "solcast"
              *     }
              */
@@ -5863,6 +5906,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketSession"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grid_detail_api_measurements_grid_get: {
+        parameters: {
+            query: {
+                since: string;
+                until?: string | null;
+                max_points?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridDetail"];
                 };
             };
             /** @description Validation Error */

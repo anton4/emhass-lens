@@ -2104,6 +2104,11 @@ button.diff-locate {
   box-shadow: inset 0 0 0 1px currentColor;
 }
 
+/* A thin line (the grid power measured in detail) */
+.legend-swatch[data-thin] {
+  background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat !important;
+}
+
 /* The market's commands: sell green, buy blue */
 .legend-swatch[data-split] {
   background: linear-gradient(90deg, var(--line-green) 50%, var(--line-blue) 50%) !important;

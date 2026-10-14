@@ -5,6 +5,7 @@ import type {
   CostfunCompareResponse,
   EmhassStatus,
   EntityOption,
+  GridDetail,
   InputsResponse,
   InverterStatus,
   JobInfo,
@@ -30,6 +31,7 @@ import type {
 } from './types'
 import type { SchemaNode } from '../lib/schema'
 import { isClosedRange } from '../lib/days'
+import type { DetailRequest } from '../lib/gridDetail'
 
 export const keys = {
   status: ['status'] as const,
@@ -60,6 +62,7 @@ export const keys = {
   market: ['market'] as const,
   marketSessions: ['market-sessions'] as const,
   marketCommands: ['market-commands'] as const,
+  gridDetail: ['grid-detail'] as const,
   setup: ['setup'] as const,
 }
 
@@ -269,6 +272,22 @@ export function useMarketSessions(range: { since?: string; until?: string } = {}
     queryKey: [...keys.marketSessions, filters],
     queryFn: () => api.get<MarketSession[]>(`/api/market/sessions${query(filters)}`),
     refetchInterval: (q) => (closed && !q.state.data?.some((s) => !s.ended_at) ? false : 30_000),
+  })
+}
+
+/** The grid power measured finer than the quarter-hour means (see lib/gridDetail `detailRequest` for the window). */
+export function useGridDetail(req: DetailRequest | null, enabled: boolean) {
+  const live = req?.until === null
+  return useQuery({
+    queryKey: [...keys.gridDetail, req?.since, req?.until ?? 'live', req?.maxPoints],
+    queryFn: () =>
+      api.get<GridDetail>(
+        `/api/measurements/grid${query({ since: req?.since, until: req?.until, max_points: req?.maxPoints })}`,
+      ),
+    enabled: enabled && req !== null,
+    placeholderData: keepPreviousData,
+    refetchInterval: live ? 60_000 : false,
+    staleTime: live ? 0 : Infinity,
   })
 }
 

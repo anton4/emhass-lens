@@ -249,17 +249,6 @@
             "title": "Prod Price",
             "type": "number"
           },
-          "pv_p10_w": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pv P10 W"
-          },
           "pv_w": {
             "anyOf": [
               {
@@ -2818,17 +2807,6 @@
             "title": "Prod Price",
             "type": "number"
           },
-          "pv_p10_w": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pv P10 W"
-          },
           "pv_w": {
             "title": "Pv W",
             "type": "number"
@@ -3146,6 +3124,93 @@
           "providers"
         ],
         "title": "ForecastStatus",
+        "type": "object"
+      },
+      "GridDetail": {
+        "description": "The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else\nmeans per step_s, broken where a market command starts, ends or changes.",
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/GridPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "step_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step S"
+          }
+        },
+        "required": [
+          "entity",
+          "start",
+          "end",
+          "step_s",
+          "points"
+        ],
+        "title": "GridDetail",
+        "type": "object"
+      },
+      "GridPoint": {
+        "properties": {
+          "t": {
+            "title": "T",
+            "type": "string"
+          },
+          "w": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "W"
+          }
+        },
+        "required": [
+          "t",
+          "w"
+        ],
+        "title": "GridPoint",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -4660,6 +4725,28 @@
             "title": "End",
             "type": "string"
           },
+          "measured_coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Coverage"
+          },
+          "measured_w": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured W"
+          },
           "mode": {
             "title": "Mode",
             "type": "string"
@@ -4705,6 +4792,17 @@
               }
             ],
             "title": "Error"
+          },
+          "measured_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Error"
           },
           "spans": {
             "items": {
@@ -7613,12 +7711,6 @@
               "advanced": true
             }
           },
-          "send_p10": {
-            "default": true,
-            "description": "EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate above is P10 itself.",
-            "title": "Send the P10 estimate too",
-            "type": "boolean"
-          },
           "source": {
             "default": "solcast",
             "enum": [
@@ -9277,7 +9369,6 @@
               "field": "from_select",
               "field_select_entity": "select.solcast_pv_forecast_use_forecast_field",
               "scale": 1.0,
-              "send_p10": true,
               "source": "solcast"
             },
             "title": "PV forecast"
@@ -11310,6 +11401,77 @@
         "summary": "Market Sessions",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/measurements/grid": {
+      "get": {
+        "description": "The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer\nthan the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits\nthe window, broken where a market command starts, ends or changes.",
+        "operationId": "grid_detail_api_measurements_grid_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 1500,
+              "maximum": 2000,
+              "minimum": 50,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GridDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grid Detail",
+        "tags": [
+          "data"
         ]
       }
     },

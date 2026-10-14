@@ -222,8 +222,6 @@ export interface PvDay {
   t: number
   peak: number
   kwh: number
-  /** The P10 total, for days that are all forecast. */
-  p10Kwh: number | null
   measured: 'all' | 'some' | 'none'
   /** How much of the day's production is after the horizon, so not sent. */
   notSent: 'all' | 'some' | 'none'
@@ -234,12 +232,11 @@ export interface PvDay {
 export function pvDays(
   axis: SentAxis,
   pv: readonly (number | null)[],
-  p10: readonly (number | null)[],
   timeZone: string,
 ): PvDay[] {
   const days = new Map<
     string,
-    { first: number; last: number; from: number; to: number; wh: number; p10: number; peak: number; measured: number; sent: number; beyond: number }
+    { first: number; last: number; from: number; to: number; wh: number; peak: number; measured: number; sent: number; beyond: number }
   >()
   for (let i = 0; i + 1 < axis.x.length; i++) {
     const t = axis.x[i]!
@@ -247,7 +244,7 @@ export function pvDays(
     const v = pv[i] ?? 0
     let d = days.get(key)
     if (!d) {
-      d = { first: i, last: i, from: -1, to: -1, wh: 0, p10: 0, peak: 0, measured: 0, sent: 0, beyond: 0 }
+      d = { first: i, last: i, from: -1, to: -1, wh: 0, peak: 0, measured: 0, sent: 0, beyond: 0 }
       days.set(key, d)
     }
     d.last = i
@@ -259,7 +256,6 @@ export function pvDays(
       else d.beyond++
     }
     d.wh += (v * SLOT_S) / 3600
-    if (i >= axis.anchorIdx) d.p10 += ((p10[i] ?? 0) * SLOT_S) / 3600
     d.peak = Math.max(d.peak, v)
   }
   const out: PvDay[] = []
@@ -272,7 +268,6 @@ export function pvDays(
       t: (d.from + d.to) / 2,
       peak: d.peak,
       kwh: d.wh / 1000,
-      p10Kwh: measured === 'none' && p10.some((v) => isNumber(v)) ? d.p10 / 1000 : null,
       measured,
       notSent: d.beyond === 0 ? 'none' : d.measured + d.sent === 0 ? 'all' : 'some',
     })
@@ -280,7 +275,7 @@ export function pvDays(
   return out
 }
 
-/** The PV chart's labels: each day's total above its hump, with the P10 total for forecast days. */
+/** The PV chart's labels: each day's total above its hump. */
 export function pvNotes(days: readonly PvDay[]): ChartNote[] {
   return days.map((d) => ({
     t: d.t,
@@ -288,7 +283,7 @@ export function pvNotes(days: readonly PvDay[]): ChartNote[] {
     text: `${d.kwh.toFixed(1)} kWh`,
     sub:
       [
-        d.p10Kwh !== null ? `P10 ${d.p10Kwh.toFixed(1)}` : d.measured === 'some' ? 'measured + forecast' : null,
+        d.measured === 'some' ? 'measured + forecast' : null,
         d.notSent === 'all' ? 'not sent' : d.notSent === 'some' ? 'partly sent' : null,
       ]
         .filter(Boolean)

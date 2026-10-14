@@ -179,3 +179,19 @@ def test_schema_5_settings_drop_the_per_mode_battery_mins(app_db, bus, clock) ->
     assert limits["battery_min_w"] == -18000
     newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
     assert newest == {"schema_version": SCHEMA_VERSION, "source": "migration"}
+
+
+def test_schema_6_settings_drop_the_p10_switch(app_db, bus, clock) -> None:
+    doc = Settings().model_dump(mode="json")
+    doc["pv"]["send_p10"] = True
+    app_db.execute(
+        "INSERT INTO settings_revision (created_at, source, schema_version, doc_json, diff_json) "
+        "VALUES ('x', 'ui', 6, ?, '[]')",
+        (json.dumps(doc),),
+    )
+    store = SettingsStore(db=app_db, bus=bus, clock=clock)
+    store.load()
+    assert store.load_errors == []
+    assert "send_p10" not in store.current.pv.model_dump()
+    newest = app_db.query_one("SELECT schema_version, source FROM settings_revision ORDER BY id DESC LIMIT 1")
+    assert newest == {"schema_version": SCHEMA_VERSION, "source": "migration"}

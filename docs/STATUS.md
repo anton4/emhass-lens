@@ -37,6 +37,61 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: the measured grid power beside the market commands, and no more P10 (0.4.37)
+- **Why:** the owner couldn't compare the market's commands (at their own times) with the power sent to the grid,
+  which the Power chart had only as 15-minute means. They chose a grid-only line whose step follows the window, with
+  every command start, end and power change as a point and every sensor change once zoomed in, plus the delivered
+  power in the lane and popup. They also asked to drop Solcast's P10 from the *PV sent* chart and from what EMHASS
+  gets, keeping *Estimate*.
+- **Grid detail (backend):**
+  - `domain/measure.py`:
+    - `bucket_means` (`slot_means` now sits on it), `clip_points` and `step_points`;
+    - `pick_step` (10 s … 15 min for at most `max_points`) and `detail_edges` (epoch-aligned steps plus the breaks, a
+      step edge within a quarter step of a break giving way);
+    - `detail`: raw changes when they fit, else bucket means.
+  - `services/grid_detail.py` `GridDetailService`:
+    - reads the `measurements.grid` sensor's history in hour chunks kept in memory (72 h at most, as `array('d')`);
+    - an hour is complete 2 min after it ends, and the current one is read again after 30 s;
+    - missing hours are read at most 6 h per request;
+    - `detail()` breaks the line at `MarketService.spans()` (split out of `commands()`).
+  - `delivered(spans)` gives the mean and coverage for spans of at least 5 s that ended within 48 h, within a 10 s
+    timeout. `MeasuredPower.to_emhass` applies scale and sign (`plan_now` and `measurements` use it too).
+  - `GET /api/measurements/grid?since&until&max_points`: until is clipped to now and the window to 48 h, with 400
+    when empty. `MarketCommandSpan` adds `measured_w`/`measured_coverage`, `MarketCommands` adds `measured_error`.
+- **Grid detail (frontend):**
+  - `ChartOverlay.base: 'none'` and the pure `overlayRuns`.
+  - Overlays are out of TimeChart's `specKey`: they change by redraw, not rebuild.
+  - `CursorAt.time` (the pointer's time) goes to `popup.extra(t, time)`; extra rows are keyed by index.
+  - `lib/gridDetail.ts`:
+    - `detailRequest` covers the measured part of the zoom or axis, hour-floored when unzoomed, and at most the
+      last 48 h;
+    - `gridOverlay` and `gridRows`;
+    - `gridDetailLabel` for the chip ("Grid every 10 s", "Grid, each change").
+  - `lib/market.ts`: `deliveredW`; the lane gets "· got"; `marketRows` gets a *Delivered* row (% of the command,
+    *data %* below 90 % coverage, *so far* while open). The Power chart now lists the commands of the pointer's own
+    quarter-hour, not of the popup's slot.
+    - **Why:** PowerChart has no `snapToSlot`, so the popup's slot is the nearest one on the grid.
+    - **Known gap:** from the MPC run at :11 to the end of the quarter-hour, the current slot is in neither the
+      history nor the new plan, so the popup names the next slot. This predates 0.4.37.
+  - `PowerChart`: a `grid-detail` chip (thin swatch) when the history has measured grid. `useGridDetail` keeps the
+    previous data while loading and refetches every 60 s while live.
+- **P10 removed:**
+  - The payload, `pv_solcast` (`p10_watts`, `p10_series`), the validate length check, the EMHASS "PV P10 blend"
+    check, `ExplainSlot`/`BeyondSlot.pv_p10_w`, SentPanel's P10 series/totals/Details, `pvDays`/`pvNotes` and
+    ExplainTable's column.
+  - `pv.send_p10` is gone with settings schema 7 (`_v6_to_v7`).
+- **Checked:**
+  - **e2e:** 25/25 on a fresh stack. The new check posts a meter and a sell command, and expects the delivered mean
+    and the raw points; the P10 check now expects no P10.
+  - **UI:** against the e2e HA with a meter fed every 3 s and sell commands (6 kW, then 4 kW).
+    - Zoomed to 13:45–14:30, the thin line steps with the dotted command line: the 6 s ramp and the 6 → 4 kW change
+      are visible.
+    - The chip reads "Grid, each change".
+    - The popup shows *Grid measured +350 W at 14:03:43* and a *Delivered* row per command: 4.90 kW · 98 %,
+      5.77 kW · 96 %, 3.99 kW · 100 %.
+    - Inputs and Settings show no P10.
+    - 390 px wasn't checked: the window wouldn't resize.
+
 ### 2026-10-14: the forecasts after the horizon, and the plan length on the Inputs page (0.4.36)
 - **Why:** the owner wanted to see how far the eupowerprices and Solcast forecasts reach beyond what is sent, and to
   pick the plan length from there. They chose days after Nord Pool (`forecast.extend_days`), and a switch on the

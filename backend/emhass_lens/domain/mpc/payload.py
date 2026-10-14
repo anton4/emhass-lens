@@ -18,7 +18,6 @@ from emhass_lens.domain.mpc.inputs import MpcInputs
 from emhass_lens.settings.model import Settings
 
 PRICE_DECIMALS = 4
-P10_VERSION = (0, 18, 4)  # EMHASS accepts pv_power_forecast_p10 next to pv_power_forecast
 
 
 @dataclass(frozen=True)
@@ -85,7 +84,7 @@ def build(
 ) -> BuildResult:
     """`emhass_version` gates keys older EMHASS versions don't know, and `emhass_config` (GET /get-config) says
     whether EMHASS can take a per-slot export limit. `compat` builds what the HACS integration sends (for the parity
-    check): no P10 companion, no def_current_state and no export limit. `model_steps` is how far EMHASS's (tuned) load
+    check): no def_current_state and no export limit. `model_steps` is how far EMHASS's (tuned) load
     model forecasts, when it is known to be shorter than the horizon."""
     issues: list[Issue] = []
     derived = derive(settings)
@@ -131,18 +130,8 @@ def build(
         )
     starts = [s.start for s in slots]
 
-    p10_values: list[float] | None = None
     if inputs.pv is not None:
         pv_values, pv_missing = inputs.pv.series(starts)
-        if (
-            not compat
-            and settings.pv.send_p10
-            and inputs.pv.has_p10
-            and inputs.pv.field_name != "estimate10"
-            and emhass_version is not None
-            and emhass_version >= P10_VERSION
-        ):
-            p10_values = inputs.pv.p10_series(starts)
         if pv_missing:
             share = len(pv_missing) / max(1, len(starts))
             level = "warning" if share < 0.5 else "error"
@@ -163,8 +152,6 @@ def build(
     if reserve is not None:
         # the car takes this from the PV outside the plan: EMHASS must not plan the battery or exports with it
         pv_values = [max(0.0, v - r) for v, r in zip(pv_values, reserved, strict=True)]
-        if p10_values is not None:
-            p10_values = [max(0.0, v - r) for v, r in zip(p10_values, reserved, strict=True)]
 
     offset = slot_offset(anchor, current_slot)
     nominal, hours, ends, single, running = [], [], [], [], []
@@ -214,8 +201,6 @@ def build(
         "end_timesteps_of_each_deferrable_load": ends,
         "set_deferrable_load_single_constant": single,
     }
-    if p10_values is not None:
-        payload["pv_power_forecast_p10"] = [round(v) for v in p10_values]
     if running_known and not compat:
         # a load that is on right now is planned as on, instead of getting a fresh start (EMHASS 0.18.2+)
         payload["def_current_state"] = running
@@ -267,7 +252,6 @@ def build(
             "load_cost": payload["load_cost_forecast"][i],
             "prod_price": payload["prod_price_forecast"][i],
             "pv_w": payload["pv_power_forecast"][i],
-            "pv_p10_w": payload["pv_power_forecast_p10"][i] if p10_values is not None else None,
             "ev_reserved_w": round(reserved[i]),
             "export_max_w": round(export_max[i]) if export_max is not None else None,
         }

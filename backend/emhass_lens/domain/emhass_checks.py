@@ -5,7 +5,7 @@ from typing import Any
 
 from emhass_lens.domain.mpc import export_limit
 from emhass_lens.domain.mpc.anchor import parse_version
-from emhass_lens.domain.mpc.payload import P10_VERSION, derive
+from emhass_lens.domain.mpc.payload import derive
 from emhass_lens.settings.model import Settings
 
 MIN_VERSION = (0, 17, 9)  # GET /api/v1/plan
@@ -73,9 +73,8 @@ def run_checks(
                 "info",
                 "≥ 0.18.5 recommended",
                 version or "?",
-                "Works. 0.18.4 takes the P10 PV estimate EMHASS Lens sends (Settings → PV forecast); 0.18.5 keeps "
-                "the MPC horizon and the forecasts right across DST changes and reports Optimal_Inaccurate solutions "
-                "as ok instead of error.",
+                "Works. 0.18.5 keeps the MPC horizon and the forecasts right across DST changes and reports "
+                "Optimal_Inaccurate solutions as ok instead of error.",
             )
         )
     else:
@@ -243,39 +242,6 @@ def run_checks(
                 "EMHASS attaches the whole horizon to every sensor it publishes (forecasts, deferrables_schedule, "
                 "battery_scheduled_power, …). EMHASS Lens reads the plan from /api/v1/plan and doesn't need them; "
                 "turn them off in EMHASS to keep Home Assistant's recorder small, unless a dashboard uses them.",
-                "info",
-            )
-        )
-
-    bias = get("weather_forecast_pv_quantile_bias")
-    if bias is not None and settings.pv.source == "solcast":
-        try:
-            bias_value = float(bias)
-        except TypeError, ValueError:
-            bias_value = 0.0
-        sending = settings.pv.send_p10 and settings.pv.field != "estimate10" and ver is not None and ver >= P10_VERSION
-        why = ""
-        if not sending:
-            why = (
-                "the estimate sent is P10 itself"
-                if settings.pv.field == "estimate10"
-                else "Settings → PV forecast → Send the P10 estimate too is off"
-                if not settings.pv.send_p10
-                else "EMHASS is older than 0.18.4"
-            )
-        checks.append(
-            _check(
-                "pv_quantile_bias",
-                "PV P10 blend",
-                (bias_value > 0) == sending,
-                "> 0 with the P10 estimate sent" if sending else "0",
-                bias,
-                (
-                    "EMHASS gets the P10 estimate with every run but ignores it while this is 0. Set it in EMHASS "
-                    "(e.g. 0.3 = 30 % of the way toward P10) to plan more conservatively on uncertain days."
-                    if sending
-                    else f"EMHASS would blend toward P10 but doesn't get it: {why}."
-                ),
                 "info",
             )
         )

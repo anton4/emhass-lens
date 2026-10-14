@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 Level = Literal["debug", "info", "warning", "error"]
@@ -557,13 +557,6 @@ class Pv(Section):
         title="Solcast select entity",
         json_schema_extra=ui(widget="entity", domain="select", advanced=True),
     )
-    send_p10: bool = Field(
-        default=True,
-        title="Send the P10 estimate too",
-        description="EMHASS 0.18.4 and later take the pessimistic P10 estimate next to the forecast and blend the "
-        "two by their own weather_forecast_pv_quantile_bias setting (0 = ignore P10). Not sent while the estimate "
-        "above is P10 itself.",
-    )
     scale: float = Field(default=1.0, ge=0, le=10, title="Multiply by", json_schema_extra=ui(advanced=True))
 
 
@@ -591,6 +584,10 @@ class MeasuredPower(Section):
         title="Opposite sign",
         description="Tick when the sensor's sign is the reverse of EMHASS's (see the quantity's title).",
     )
+
+    def to_emhass(self, value: float) -> float:
+        """A sensor value in EMHASS's units and sign."""
+        return value * self.scale * (-1.0 if self.invert else 1.0)
 
 
 class Measurements(Section):

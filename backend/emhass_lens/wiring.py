@@ -20,6 +20,7 @@ from emhass_lens.services.costfun import CostfunCompareService
 from emhass_lens.services.emhass import EmhassService
 from emhass_lens.services.external import ExternalControlService
 from emhass_lens.services.forecasts import ForecastService
+from emhass_lens.services.grid_detail import GridDetailService
 from emhass_lens.services.history import PlanHistoryService
 from emhass_lens.services.inputs import InputsService
 from emhass_lens.services.inverter import InverterService
@@ -71,6 +72,7 @@ def build(c: Container) -> None:
     x["http_updates"] = make_client("github", timeout=15, transport=transport)
     x["updates"] = UpdateService(c, x["http_updates"])
     x["measurements"] = MeasurementService(c)
+    x["grid_detail"] = GridDetailService(c)
     x["costfun"] = CostfunCompareService(c)
     x["history"] = PlanHistoryService(c)
     x["sent_inputs"] = SentInputsService(c)

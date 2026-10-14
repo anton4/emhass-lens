@@ -21,8 +21,6 @@ def validate(result: BuildResult, inputs: MpcInputs, settings: Settings) -> list
             )
         )
     lists = ["load_cost_forecast", "prod_price_forecast", "pv_power_forecast"]
-    if "pv_power_forecast_p10" in p:  # EMHASS rejects the run when the pair doesn't line up
-        lists.append("pv_power_forecast_p10")
     if isinstance(p.get("maximum_power_to_grid"), list):  # a wrong length makes EMHASS use the first value everywhere
         lists.append("maximum_power_to_grid")
     for key in lists:

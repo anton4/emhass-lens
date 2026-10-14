@@ -66,8 +66,20 @@ def _v5_to_v6(doc: Doc) -> Doc:
     return _drop(doc, "inverter", "limits", "force_charge_battery_min_w")
 
 
+def _v6_to_v7(doc: Doc) -> Doc:
+    """0.4.37: the Solcast P10 estimate is no longer sent next to the forecast, so its switch is gone."""
+    return _drop(doc, "pv", "send_p10")
+
+
 # MIGRATIONS[n] upgrades a version-n document to version n+1.
-MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
+MIGRATIONS: dict[int, Callable[[Doc], Doc]] = {
+    1: _v1_to_v2,
+    2: _v2_to_v3,
+    3: _v3_to_v4,
+    4: _v4_to_v5,
+    5: _v5_to_v6,
+    6: _v6_to_v7,
+}
 
 
 def migrate(doc: Doc, from_version: int) -> tuple[Doc, int]:

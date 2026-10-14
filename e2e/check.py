@@ -12,6 +12,7 @@ import sys
 import tarfile
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -180,14 +181,13 @@ def main() -> int:
                 f"{live['summary']}; first row {first}, anchor {explain['anchor']}",
             )
             request = http.get(f"/api/runs/{live['id']}/artifacts/request").json()
-            p10 = request.get("pv_power_forecast_p10")
-            version = tuple(int(x) for x in str(emhass["version"] or "0").lstrip("v").split(".")[:3])
-            takes_p10 = version >= (0, 18, 4)
-            p10_ok = (isinstance(p10, list) and len(p10) == request["prediction_horizon"]) if takes_p10 else p10 is None
+            pv_sent = request.get("pv_power_forecast")
             check(
-                "sends Solcast's P10 estimate next to the PV forecast only to EMHASS 0.18.4 and later",
-                p10_ok and live["outcome"] == "ok",
-                f"EMHASS {emhass['version']}: {len(p10) if isinstance(p10, list) else 'no'} P10 values "
+                "sends the chosen PV forecast and no P10 estimate",
+                isinstance(pv_sent, list)
+                and len(pv_sent) == request["prediction_horizon"]
+                and "pv_power_forecast_p10" not in request,
+                f"{len(pv_sent) if isinstance(pv_sent, list) else 'no'} PV values "
                 f"for {request['prediction_horizon']} slots",
             )
 
@@ -265,7 +265,8 @@ def main() -> int:
             compared = run_job(http, "emhass.costfun_compare", timeout=300)
             costfun = http.get("/api/plan/costfun").json()
             columns = sorted(
-                (r["totals"] or {}).get("emhass_objective_column") or f"none ({r['problem']})" for r in costfun["results"]
+                (r["totals"] or {}).get("emhass_objective_column") or f"none ({r['problem']})"
+                for r in costfun["results"]
             )
             after = http.get("/api/plan").json()
             live_plan_ok = after.get("current") is not None and after["current"]["run_id"] == compared["id"]
@@ -363,13 +364,18 @@ def main() -> int:
                 "input_select.qilowatt_session_state": "none",
             }.items():
                 ha.post(f"/api/states/{entity}", json={"state": value})
-            patch(http, {"market": {"mode": "shadow"}}, "e2e: market shadow")
+            grid_meter = "sensor.e2e_grid_power"  # + import, − export, like EMHASS's P_grid
+            ha.post(f"/api/states/{grid_meter}", json={"state": "300"})
+            shadow = {"market": {"mode": "shadow"}, "measurements": {"grid": {"entity": grid_meter}}}
+            patch(http, shadow, "e2e: market shadow")
             time.sleep(1)
             market_runs = http.get("/api/runs", params={"job": "market.reconcile"}).json()
             market_before = max((r["id"] for r in market_runs), default=0)
+            sell_since = time.time()
             # REST state posts emit state_changed, so the WebSocket listener and the settle time run for real
             ha.post("/api/states/sensor.qw_powerlimit", json={"state": "5000"})
             ha.post("/api/states/sensor.qw_mode", json={"state": "mfrrup"})
+            ha.post(f"/api/states/{grid_meter}", json={"state": "-4900"})
 
             def sell_decision() -> dict[str, Any] | None:
                 runs = http.get("/api/runs", params={"job": "market.reconcile"}).json()
@@ -392,8 +398,32 @@ def main() -> int:
                 "shadow mode never writes to the inverter",
                 ha.get("/api/states/number.sofar_passive_mode_grid_power").json()["state"] == "0",
             )
+            time.sleep(max(0.0, sell_since + 8 - time.time()))  # a command shorter than 5 s isn't measured
             ha.post("/api/states/sensor.qw_mode", json={"state": "none"})
-            patch(http, {"market": {"mode": "off"}}, "e2e: market off")
+            ha.post(f"/api/states/{grid_meter}", json={"state": "200"})
+            since = datetime.fromtimestamp(sell_since - 600, UTC).isoformat()
+
+            def delivered() -> tuple[dict[str, Any], list[Any], dict[str, Any]] | None:
+                spans = http.get("/api/market/commands", params={"since": since}).json()["spans"]
+                done = [s for s in spans if not s["open"] and s["measured_w"] is not None]
+                detail = http.get("/api/measurements/grid", params={"since": since}).json()
+                values = [p["w"] for p in detail["points"]]
+                # the hour still going is read again after 30 s, so the meter's last value can take that long
+                return (done[-1], values, detail) if done and values[-1:] == [200] else None
+
+            measured = wait_for(delivered, 45)
+            span, values, detail = measured if isinstance(measured, tuple) else ({}, [], {})
+            got = span.get("measured_w")
+            check(
+                "measures the grid power over a market command, finer than the quarter-hours",
+                got is not None
+                and -4900 <= got < -2000
+                and detail.get("error") is None
+                and detail.get("step_s") is None
+                and values[-3:] == [300, -4900, 200],
+                f"sell 5000 W delivered {got} W; the meter's last points {values[-5:]}",
+            )
+            patch(http, {"market": {"mode": "off"}, "measurements": {"grid": {"entity": ""}}}, "e2e: market off")
 
             cleaned = run_job(http, "maintenance.retention")
             storage = http.get("/api/storage").json()

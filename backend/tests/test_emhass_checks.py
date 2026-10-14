@@ -50,29 +50,9 @@ def test_horizon_attributes_are_only_a_hint() -> None:
     assert worst(run_checks({**BASE, "publish_horizon_attributes": True}, "0.18.5", settings, None)) == "ok"
 
 
-def test_p10_blend_check_matches_what_is_sent() -> None:
-    settings = Settings()  # Solcast, P10 sent, estimate follows the select
-    cfg = {**BASE, "weather_forecast_pv_quantile_bias": 0.0}
-    unused = by_key(run_checks(cfg, "0.18.5", settings, None))["pv_quantile_bias"]
-    assert unused.status == "info"
-    assert "ignores it" in unused.explanation
-    used = by_key(run_checks({**cfg, "weather_forecast_pv_quantile_bias": 0.3}, "0.18.5", settings, None))
-    assert used["pv_quantile_bias"].status == "ok"
-
-    old = by_key(run_checks({**cfg, "weather_forecast_pv_quantile_bias": 0.3}, "0.18.3", settings, None))
-    assert old["pv_quantile_bias"].status == "info"
-    assert "older than 0.18.4" in old["pv_quantile_bias"].explanation
-
-    p10_only = Settings.model_validate({"pv": {"field": "estimate10"}})
-    quiet = by_key(run_checks(cfg, "0.18.5", p10_only, None))["pv_quantile_bias"]
-    assert quiet.status == "ok"  # bias 0 and nothing to blend: consistent
-    off = Settings.model_validate({"pv": {"send_p10": False}})
-    wanted = by_key(run_checks({**cfg, "weather_forecast_pv_quantile_bias": 0.3}, "0.18.5", off, None))
-    assert wanted["pv_quantile_bias"].status == "info"
-    assert "Send the P10" in wanted["pv_quantile_bias"].explanation
-
-    no_pv = Settings.model_validate({"pv": {"source": "none"}})
-    assert "pv_quantile_bias" not in by_key(run_checks(cfg, "0.18.5", no_pv, None))
+def test_no_p10_blend_check_since_p10_is_not_sent() -> None:
+    cfg = {**BASE, "weather_forecast_pv_quantile_bias": 0.3}
+    assert "pv_quantile_bias" not in by_key(run_checks(cfg, "0.18.5", Settings(), None))
 
 
 def test_no_export_needs_emhass_0_16_with_curtailment() -> None:

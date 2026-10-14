@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { useJobs, useMarketCommands, useRuns } from '../../api/queries'
+import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
 import { TimeChart, type ChartLane, type ChartOverlay, type ChartSeries, type ChartTick } from '../../components/charts/TimeChart'
 import { Lamp } from '../../components/Lamp'
 import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
+import { detailRequest, gridDetailLabel, gridOverlay, gridRows } from '../../lib/gridDetail'
 import { marketLane, marketOverlay, marketRows } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { snapWindow } from '../../lib/chartRange'
-import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
+import { alignTo, deferrableColumns, hasColumn, SLOT_S, socColumns } from '../../lib/plan'
 import { IDLE_W } from '../../lib/planSummary'
 import { isForecast, originLabel } from '../../lib/prices'
 import {
@@ -125,8 +126,8 @@ const POWER = [
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
 
 /** What the Power chart's chips switch: a quantity (its measured, planned and planned-then lines), the deferrable
- *  loads, and Qilowatt's commands as a line and as a lane. */
-type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'market-power' | 'market-commands'
+ *  loads, the grid power measured finer than the slots, and Qilowatt's commands as a line and as a lane. */
+type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'grid-detail' | 'market-power' | 'market-commands'
 
 // The parts hidden are remembered in this browser only; blocked storage just means all shown.
 const HIDDEN_KEY = 'emhass-lens.plan.power.hidden'
@@ -335,6 +336,7 @@ export function PlanCharts({
         x={x}
         parts={power}
         hasPast={hasPast}
+        measuredGrid={hasMeasured(past, 'grid')}
         zoom={zoom}
         onZoom={zoomTo}
         shade={shade}
@@ -449,12 +451,14 @@ function MpcRunStrip({
   )
 }
 
-/** The Power chart: battery, grid, PV, house load and the deferrable loads, and Qilowatt's commands (a dotted line
- *  for the power, a lane for what was asked) read from the Home Assistant recorder; chips under it switch each part. */
+/** The Power chart: battery, grid, PV, house load and the deferrable loads, the grid power measured finer than the
+ *  slots (a thin line), and Qilowatt's commands (a dotted line for the power, a lane for what was asked and what the
+ *  grid delivered) read from the Home Assistant recorder; chips under it switch each part. */
 function PowerChart({
   x,
   parts,
   hasPast,
+  measuredGrid,
   zoom,
   onZoom,
   shade,
@@ -465,6 +469,7 @@ function PowerChart({
   x: number[]
   parts: { chip: PowerChip; series: ChartSeries[] }[]
   hasPast: boolean
+  measuredGrid: boolean
   zoom: [number, number] | null
   onZoom: (range: [number, number] | null) => void
   shade: [number, number][]
@@ -487,25 +492,44 @@ function PowerChart({
   const spans = useMemo(() => commands.data?.spans ?? [], [commands.data])
   const showPower = spans.length > 0 && !hidden.has('market-power')
   const showCommands = spans.length > 0 && !hidden.has('market-commands')
+  // the measured part of the window shown, finer than the slots
+  const last = x[x.length - 1]
+  const shown: [number, number] | null = zoom ?? (first !== undefined && last !== undefined ? [first, last] : null)
+  const showDetail = measuredGrid && !hidden.has('grid-detail')
+  const detail = useGridDetail(shown ? detailRequest(shown, nowS, zoom !== null) : null, showDetail)
+  const gridData = showDetail ? detail.data : undefined
   const series = useMemo(
     () => parts.filter((p) => !hidden.has(p.chip.part)).flatMap((p) => p.series),
     [parts, hidden],
   )
-  // a command still on runs on to the now line
+  // the commanded power on top of the measured line; a command still on runs on to the now line
   const overlays = useMemo<ChartOverlay[]>(
-    () => (showPower ? [marketOverlay(spans, nowS)] : []),
-    [showPower, spans, nowS],
+    () => [
+      ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
+      ...(showPower ? [marketOverlay(spans, nowS)] : []),
+    ],
+    [gridData, showPower, spans, nowS],
   )
   const lanes = useMemo<ChartLane[]>(() => (showCommands ? [marketLane(spans, nowS)] : []), [showCommands, spans, nowS])
   const popup = useMemo(
     () => ({
       ...slotTag,
-      extra: showPower || showCommands ? (t: number) => marketRows(spans, t, timeZone) : undefined,
+      extra:
+        gridData || showPower || showCommands
+          ? (_t: number, time: number) => [
+              ...gridRows(gridData, time, timeZone),
+              // the commands in the quarter-hour under the pointer (the popup's slot is the nearest one on the grid)
+              ...(showPower || showCommands ? marketRows(spans, Math.floor(time / SLOT_S) * SLOT_S, timeZone) : []),
+            ]
+          : undefined,
     }),
-    [slotTag, showPower, showCommands, spans, timeZone],
+    [slotTag, gridData, showPower, showCommands, spans, timeZone],
   )
   const chips: PowerChip[] = [
     ...parts.map((p) => p.chip),
+    ...(measuredGrid
+      ? [{ part: 'grid-detail' as const, label: gridDetailLabel(gridData?.step_s), color: '--q-grid' }]
+      : []),
     ...(spans.length > 0
       ? [
           { part: 'market-power' as const, label: 'Market power (+ buy)', color: '--q-market' },
@@ -519,7 +543,7 @@ function PowerChart({
       <TimeChart
         x={x}
         series={series}
-        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, and the market's commands"
+        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, the grid power measured in detail, and the market's commands"
         syncKey={SYNC}
         yFormat={kwTick}
         fit={POWER_FIT}
@@ -541,12 +565,19 @@ function PowerChart({
               type="button"
               className="legend-toggle"
               aria-pressed={!hidden.has(c.part)}
-              title={hidden.has(c.part) ? 'Show in the chart' : 'Hide from the chart'}
+              title={
+                c.part === 'grid-detail' && gridData?.error
+                  ? gridData.error
+                  : hidden.has(c.part)
+                    ? 'Show in the chart'
+                    : 'Hide from the chart'
+              }
               onClick={() => toggle(c.part)}
             >
               <span
                 className="legend-swatch"
                 data-dotted={c.part === 'market-power' || undefined}
+                data-thin={c.part === 'grid-detail' || undefined}
                 data-split={c.part === 'market-commands' || undefined}
                 style={{ background: `var(${c.color})`, color: `var(${c.color})` }}
               />

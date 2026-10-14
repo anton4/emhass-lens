@@ -22,7 +22,7 @@ export function ChartPopup({
     x: number[]
     timeZone?: string
     tag?: (t: number) => PopupTag | null
-    extra?: (t: number) => PopupExtra[]
+    extra?: (t: number, time: number) => PopupExtra[]
   }
 }) {
   const { over, at } = useSyncExternalStore(store.subscribe, store.get)
@@ -43,7 +43,7 @@ export function ChartPopup({
   const { series, x, timeZone, tag: tagFor, extra: extraFor } = read()
   const { rows, hasThen } = popupRows(series, at.idx)
   const t = x[at.idx]
-  const extra = t !== undefined ? (extraFor?.(t) ?? []) : []
+  const extra = t !== undefined ? (extraFor?.(t, at.time) ?? []) : []
   if ((rows.length === 0 && extra.length === 0) || t === undefined) return null
   const near = at.pointerY !== null ? nearestRow(at.points, at.pointerY) : null
   const anchorY = at.column?.top ?? at.points.find((p) => p.series === near)?.y ?? at.points[0]?.y ?? at.height / 2
@@ -122,7 +122,7 @@ export function ChartPopup({
             </div>
           ))}
           {extra.map((r, i) => (
-            <div key={`extra-${r.name}`} className="chart-pop-row" data-rule={(i === 0 && rows.length > 0) || undefined}>
+            <div key={`extra-${i}`} className="chart-pop-row" data-rule={(i === 0 && rows.length > 0) || undefined}>
               <span className="chart-pop-name">
                 <span
                   className="chart-pop-square"

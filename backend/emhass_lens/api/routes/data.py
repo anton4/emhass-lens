@@ -4,9 +4,10 @@ from dataclasses import asdict
 from datetime import timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from emhass_lens.api.deps import ContainerDep
+from emhass_lens.api.routes.runs import utc_bound
 from emhass_lens.api.schemas import (
     CostfunCompareResponse,
     CostfunHistoryPoint,
@@ -15,6 +16,8 @@ from emhass_lens.api.schemas import (
     EvReserveOut,
     ExplainSlot,
     ForecastStatus,
+    GridDetail,
+    GridPoint,
     HaStatus,
     InputsResponse,
     InputsSnapshot,
@@ -146,6 +149,29 @@ async def plan_history(
     """The last `hours` of slots: what the plan said `horizon` slots ahead of each, what was measured,
     and error statistics over 24 h and 7 d."""
     return await c.extras["history"].history(hours, horizon)
+
+
+GRID_DETAIL_MAX = timedelta(hours=48)
+
+
+@router.get("/measurements/grid")
+async def grid_detail(
+    c: ContainerDep,
+    since: str,
+    until: str | None = None,
+    max_points: Annotated[int, Query(ge=50, le=2000)] = 1500,
+) -> GridDetail:
+    """The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer
+    than the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits
+    the window, broken where a market command starts, ends or changes."""
+    now = c.clock.now()
+    start = parse_iso(utc_bound(since, "since"))
+    end = min(parse_iso(utc_bound(until, "until")) or now, now)
+    if start is None or end <= start:
+        raise HTTPException(400, "since must be before until and before now")
+    start = max(start, end - GRID_DETAIL_MAX)
+    result = await c.extras["grid_detail"].detail(start, end, max_points)
+    return GridDetail(**{**result, "points": [GridPoint(**p) for p in result["points"]]})
 
 
 @router.get("/plan/costfun")

@@ -301,14 +301,7 @@ function SentView({
           )}
           <details className="chart-note more">
             <summary>Details</summary>
-            <code>pv_power_forecast</code>
-            {charts.hasP10 && (
-              <>
-                {' '}
-                and <code>pv_power_forecast_p10</code>
-              </>
-            )}{' '}
-            from Solcast. Above each day: its total{charts.hasP10 && ', and the P10 total for forecast days'}.
+            <code>pv_power_forecast</code> from Solcast. Above each day: its total.
             {charts.hasReserve && ' The EV area is PV held back for the car: EMHASS doesn’t get it.'}
             {measuredBy('pv') && hoursBack > 0 && <> Before the anchor: <code>{measuredBy('pv')}</code>.</>}
             {axis.axisEndS > axis.endS && ' After the horizon: Solcast’s forecast as it is now, not sent.'}
@@ -541,8 +534,6 @@ function SentCards({ data }: { data: SentInputs }) {
   const forecastSlot = slots.find((s) => isForecast(s.origin))
   const forecastFrom = forecastSlot ? Date.parse(forecastSlot.start) / 1000 : null
   const pvKwh = kwhOf(slots.map((s) => s.pv_w))
-  const hasP10 = slots.some((s) => isNumber(s.pv_p10_w))
-  const p10Kwh = kwhOf(slots.map((s) => s.pv_p10_w))
   const loads = data.deferrables
   const one = loads.length === 1 ? loads[0] : undefined
   const m = data.model
@@ -569,11 +560,11 @@ function SentCards({ data }: { data: SentInputs }) {
         value={`${pvKwh.toFixed(1)} kWh`}
         sub={
           <>
-            Solcast, {data.pv_sensors} day sensors{hasP10 && ` · P10 ${p10Kwh.toFixed(1)} kWh`}
+            Solcast, {data.pv_sensors} day sensors
             {data.pv_slots_missing > 0 && ` · ${data.pv_slots_missing} slots missing`}
           </>
         }
-        keys={hasP10 ? ['pv_power_forecast', 'pv_power_forecast_p10'] : ['pv_power_forecast']}
+        keys={['pv_power_forecast']}
       />
       <Card
         title="Battery"
@@ -670,18 +661,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     slots.map((s) => s.pv_w),
     beyond.map((b) => b.pv_w),
   )
-  const p10Values = onAxis(
-    axis,
-    null,
-    slots.map((s) => s.pv_p10_w),
-    beyond.map((b) => b.pv_p10_w),
-  )
-  const hasP10 = p10Values.some((v) => v !== null)
   const hasReserve = slots.some((s) => (s.ev_reserved_w ?? 0) > 0)
   const pv: ChartSeries[] = [{ label: 'PV', color: '--q-pv', fill: 0.16, values: closeSteps(pvValues), readout: pvValues, format: formatPower }]
-  if (hasP10) {
-    pv.push({ label: 'P10', color: '--q-pv', dash: [4, 3], width: 1.5, values: closeSteps(p10Values), readout: p10Values, format: formatPower })
-  }
   if (hasReserve) {
     const reserved = onAxis(axis, null, slots.map((s) => ((s.ev_reserved_w ?? 0) > 0 ? (s.ev_reserved_w ?? 0) : null)))
     pv.push({
@@ -732,9 +713,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     priceLanes: exportRow ? [tariffLane(axis, data), exportRow] : [tariffLane(axis, data)],
     pricePopup,
     pv,
-    hasP10,
     hasReserve,
-    pvNotes: pvNotes(pvDays(axis, pvValues, p10Values, tz)),
+    pvNotes: pvNotes(pvDays(axis, pvValues, tz)),
     sentPopup: { tag: sentTag('sent') },
     load,
     loadLanes: deferrableLanes(axis, data.deferrables),

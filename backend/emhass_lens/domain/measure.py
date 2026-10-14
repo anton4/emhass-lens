@@ -1,11 +1,18 @@
-"""Quarter-hour means of Home Assistant history. Pure functions, no I/O.
+"""Means of Home Assistant history. Pure functions, no I/O.
 
 The recorder gives state changes; each state holds until the next one. A slot's value is the
 time-weighted mean of the numeric states covering it, and `coverage` says how much of the slot
 had a numeric state at all (unavailable/unknown and gaps count as nothing).
+
+`detail` serves a finer line than the quarter-hour means: every change when they fit the point
+budget, else means over a step that suits the window, broken at given moments (the market's
+commands) so each of them gets a mean of its own.
 """
 
+import bisect
+import itertools
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -52,29 +59,117 @@ def slot_means(
 ) -> list[SlotMean]:
     """Time-weighted means per `step_s` slot of [start, end) from recorder history items
     ({"state": ..., "last_changed": ...}); the first item may be older than `start` (the state in force then)."""
-    segments = _segments(states)
-    out: list[SlotMean] = []
+    slots: list[datetime] = []
     slot = start
-    i = 0
     while slot < end:
-        slot_a = slot.timestamp()
-        slot_b = slot_a + step_s
-        # move to the last segment that starts at or before the slot start
-        while i + 1 < len(segments) and segments[i + 1][0] <= slot_a:
+        slots.append(slot)
+        slot += timedelta(seconds=step_s)
+    edges = [s.timestamp() for s in slots] + [slot.timestamp()]
+    means = bucket_means(_segments(states), edges, min_coverage)
+    return [SlotMean(s, mean, coverage) for s, (mean, coverage) in zip(slots, means, strict=True)]
+
+
+# --- a finer line: every change, or means over a step that suits the window --------------------------------------
+
+Point = tuple[float, float | None]  # (unix seconds, value or None); holds until the next point
+
+STEPS = (10, 30, 60, 120, 300, 600, 900)
+BREAK_MERGE_S = 1.0  # moments closer than this are one
+
+
+def bucket_means(
+    points: list[Point], edges: list[float], min_coverage: float = 0.5
+) -> list[tuple[float | None, float]]:
+    """(mean, coverage 0–1) for each bucket [edges[i], edges[i+1]) of a step function given as sorted points; the
+    last point holds to the end. The mean is None when less than `min_coverage` of the bucket had a value."""
+    out: list[tuple[float | None, float]] = []
+    i = 0
+    n = len(points)
+    for a, b in itertools.pairwise(edges):
+        # move to the last point at or before the bucket start
+        while i + 1 < n and points[i + 1][0] <= a:
             i += 1
         weighted = 0.0
         covered = 0.0
         j = i
-        while j < len(segments) and segments[j][0] < slot_b:
-            seg_a = max(segments[j][0], slot_a)
-            seg_b = min(segments[j + 1][0] if j + 1 < len(segments) else slot_b, slot_b)
-            value = segments[j][1]
+        while j < n and points[j][0] < b:
+            seg_a = max(points[j][0], a)
+            seg_b = min(points[j + 1][0] if j + 1 < n else b, b)
+            value = points[j][1]
             if seg_b > seg_a and value is not None:
                 weighted += value * (seg_b - seg_a)
                 covered += seg_b - seg_a
             j += 1
-        coverage = covered / step_s
+        coverage = covered / (b - a) if b > a else 0.0
         mean = weighted / covered if covered > 0 and coverage >= min_coverage else None
-        out.append(SlotMean(slot, mean, round(coverage, 4)))
-        slot += timedelta(seconds=step_s)
+        out.append((mean, round(coverage, 4)))
     return out
+
+
+def clip_points(points: list[Point], start: float, end: float) -> list[Point]:
+    """The step function on [start, end): a first point at `start` with the value in force then (None when there was
+    none), then the changes inside the window. `points` are sorted by time."""
+    first = bisect.bisect_right(points, start, key=lambda p: p[0])
+    last = bisect.bisect_left(points, end, key=lambda p: p[0])
+    before = points[first - 1][1] if first > 0 else None
+    return [(start, before), *points[first:last]]
+
+
+def step_points(states: list[dict[str, Any]], start: float, end: float) -> list[Point]:
+    """Recorder history items as a step function on [start, end) (see `clip_points`)."""
+    return clip_points(_segments(states), start, end)
+
+
+def pick_step(window_s: float, max_points: int) -> int:
+    """The finest step from STEPS that keeps the window within `max_points` buckets (the coarsest when none does)."""
+    for step in STEPS:
+        if window_s / step <= max_points:
+            return step
+    return STEPS[-1]
+
+
+def detail_edges(start: float, end: float, step_s: int, breaks: Iterable[float]) -> list[float]:
+    """Bucket edges for [start, end): multiples of `step_s` (from the epoch) and every break inside the window. A
+    multiple closer than a quarter step to a break gives way to it, so no sliver buckets; breaks within a second of
+    each other (or of the window's ends) count once."""
+    kept: list[float] = [start]
+    for t in sorted(t for t in breaks if start < t < end):
+        if t - kept[-1] >= BREAK_MERGE_S and end - t >= BREAK_MERGE_S:
+            kept.append(t)
+    marks = kept[1:]
+    edges = [start, *marks, end]
+    t = (math.floor(start / step_s) + 1) * step_s
+    while t < end:
+        k = bisect.bisect_left(marks, t)
+        near = min(
+            (abs(t - marks[i]) for i in (k - 1, k) if 0 <= i < len(marks)),
+            default=math.inf,
+        )
+        if near >= step_s / 4 and t - start >= step_s / 4 and end - t >= step_s / 4:
+            edges.append(t)
+        t += step_s
+    return sorted(edges)
+
+
+def _merge_repeats(points: list[Point]) -> list[Point]:
+    """Drops points that repeat the value before them: the step function stays the same."""
+    out: list[Point] = []
+    for p in points:
+        if not out or out[-1][1] != p[1]:
+            out.append(p)
+    return out
+
+
+def detail(
+    points: list[Point], start: float, end: float, max_points: int, breaks: Iterable[float] = ()
+) -> tuple[int | None, list[Point]]:
+    """The step function on [start, end) in at most about `max_points` points: (None, every change) when they fit,
+    else (step, the means of the buckets from `detail_edges`); each point holds until the next one, the last until
+    `end`."""
+    clipped = _merge_repeats(clip_points(points, start, end))
+    if len(clipped) <= max_points:
+        return None, clipped
+    step = pick_step(end - start, max_points)
+    edges = detail_edges(start, end, step, breaks)
+    means = bucket_means(clipped, edges)
+    return step, _merge_repeats([(a, mean) for a, (mean, _) in zip(edges[:-1], means, strict=True)])

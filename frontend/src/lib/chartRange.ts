@@ -12,7 +12,7 @@ export interface FitOptions {
 }
 
 /** A line drawn at times of its own rather than on the chart's slot grid: a market command from its start to its
- *  end. */
+ *  end, or the grid power measured finer than the slots. */
 export interface ChartOverlay {
   label: string
   /** CSS custom property or colour. */
@@ -21,7 +21,34 @@ export interface ChartOverlay {
   dash?: number[]
   /** Fill between the line and zero at this opacity. */
   fill?: number
+  /** 'zero' (default): each run rises from zero and returns to it (a command); 'none': it starts and ends at its own
+   *  values (a measurement). */
+  base?: 'zero' | 'none'
   spans: { from: number; to: number; value: number }[]
+}
+
+/** The overlay's lines as [time, value] points: each run of back-to-back spans (less than a second apart) steps
+ *  through their values; a gap between spans breaks the line. */
+export function overlayRuns(spans: ChartOverlay['spans'], base: 'zero' | 'none' = 'zero'): [number, number][][] {
+  const sorted = [...spans].sort((a, b) => a.from - b.from)
+  const runs: [number, number][][] = []
+  let run: [number, number][] = []
+  let end = 0
+  for (const span of sorted) {
+    if (run.length > 0 && Math.abs(end - span.from) >= 1) {
+      if (base === 'zero') run.push([end, 0])
+      runs.push(run)
+      run = []
+    }
+    if (run.length === 0 && base === 'zero') run.push([span.from, 0])
+    run.push([span.from, span.value], [span.to, span.value])
+    end = span.to
+  }
+  if (run.length > 0) {
+    if (base === 'zero') run.push([end, 0])
+    runs.push(run)
+  }
+  return runs
 }
 
 /** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null. */

@@ -782,7 +782,6 @@ class ExplainSlot(BaseModel):
     load_cost: float
     prod_price: float
     pv_w: float
-    pv_p10_w: float | None = None
     ev_reserved_w: float = 0
     export_max_w: float | None = None
 
@@ -854,7 +853,6 @@ class BeyondSlot(BaseModel):
     load_cost: float
     prod_price: float
     pv_w: float | None = None  # None: Solcast has no value for it
-    pv_p10_w: float | None = None
 
 
 class HorizonOption(BaseModel):
@@ -1051,11 +1049,31 @@ class MarketCommandSpan(BaseModel):
     mode: str
     power_w: int
     open: bool  # still on at the end of the window
+    measured_w: int | None = None  # the grid power measured over it (EMHASS's sign: + import); None past 48 h
+    measured_coverage: float | None = None  # 0–1: how much of it the grid sensor had a value for
 
 
 class MarketCommands(BaseModel):
     spans: list[MarketCommandSpan]
     error: str | None = None  # why the recorder history couldn't be read
+    measured_error: str | None = None  # why the grid power over the commands couldn't be read
+
+
+class GridPoint(BaseModel):
+    t: str
+    w: int | None  # W, EMHASS's sign (+ import, − export); None: the sensor had no value. Holds until the next point
+
+
+class GridDetail(BaseModel):
+    """The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else
+    means per step_s, broken where a market command starts, ends or changes."""
+
+    entity: str | None
+    start: str
+    end: str
+    step_s: int | None
+    points: list[GridPoint]
+    error: str | None = None
 
 
 class WatchdogFinding(BaseModel):

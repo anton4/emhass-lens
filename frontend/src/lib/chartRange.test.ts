@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitRange, snapWindow } from './chartRange'
+import { fitRange, overlayExtent, overlayRuns, snapWindow } from './chartRange'
 
 describe('fitRange', () => {
   it('hugs the data with a small margin instead of starting at zero', () => {
@@ -50,5 +50,34 @@ describe('snapWindow', () => {
     expect(snapWindow([1_000_000_000 - 60, 1_000_000_000 + 21_540], 900)).toEqual([999_999_900, 1_000_021_500])
     expect(snapWindow([1800, 1810], 900)).toEqual([1800, 2700])
     expect(snapWindow([2700, 900], 900)).toEqual([900, 2700])
+  })
+})
+
+describe('overlayRuns', () => {
+  const spans = [
+    { from: 30, to: 40, value: -5 },
+    { from: 0, to: 10, value: 2 },
+    { from: 10.5, to: 20, value: 3 }, // under a second after the first: joined
+  ]
+
+  it('takes a command from zero through its values and back', () => {
+    expect(overlayRuns(spans)).toEqual([
+      [[0, 0], [0, 2], [10, 2], [10.5, 3], [20, 3], [20, 0]],
+      [[30, 0], [30, -5], [40, -5], [40, 0]],
+    ])
+  })
+
+  it('starts and ends a measurement at its own values, a gap breaking the line', () => {
+    expect(overlayRuns(spans, 'none')).toEqual([
+      [[0, 2], [10, 2], [10.5, 3], [20, 3]],
+      [[30, -5], [40, -5]],
+    ])
+    expect(overlayRuns([], 'none')).toEqual([])
+  })
+
+  it('counts every overlay in the window towards the y-axis', () => {
+    const overlay = { label: 'x', color: 'red', spans }
+    expect(overlayExtent([overlay], 25, 50)).toEqual([-5, -5])
+    expect(overlayExtent([overlay], null, null)).toEqual([-5, 3])
   })
 })

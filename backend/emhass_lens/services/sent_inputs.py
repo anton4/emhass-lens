@@ -248,7 +248,6 @@ class SentInputsService:
                     load_cost=round(p.import_price, PRICE_DECIMALS),
                     prod_price=round(p.export_price, PRICE_DECIMALS),
                     pv_w=pv.watts.get(p.start) if pv is not None else None,
-                    pv_p10_w=pv.p10_watts.get(p.start) if pv is not None and pv.has_p10 else None,
                 )
                 for p in reach
                 if p.start >= sent_end

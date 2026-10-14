@@ -33,7 +33,7 @@ def measured_now(c: Container) -> dict[str, Reading]:
         value = num(state)
         stamp = last_updated(state)
         out[quantity] = Reading(
-            value * cfg.scale * (-1.0 if cfg.invert else 1.0) if value is not None else None,
+            cfg.to_emhass(value) if value is not None else None,
             cfg.entity,
             (now - stamp).total_seconds() if stamp is not None else None,
         )

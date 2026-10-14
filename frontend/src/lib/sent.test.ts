@@ -33,7 +33,6 @@ function slot(i: number, extra: Partial<Slot> = {}): Slot {
     load_cost: 0.25,
     prod_price: 0.14,
     pv_w: 0,
-    pv_p10_w: 0,
     ev_reserved_w: 0,
     export_max_w: 15500,
     ...extra,
@@ -151,17 +150,16 @@ describe('PV day totals', () => {
   }
   const pv = axis.x.slice(0, -1).map(sunHigh) as (number | null)[]
   pv.push(null)
-  const p10 = axis.x.map((t, i) => (i >= axis.anchorIdx && i < axis.x.length - 1 ? sunHigh(t) / 4 : null))
 
-  it('totals each whole day: measured before the anchor, the estimate and its P10 after it', () => {
-    const days = pvDays(axis, pv, p10, TZ)
-    expect(days.map((d) => [d.kwh, d.p10Kwh, d.measured])).toEqual([
-      [16, null, 'all'],
-      [16, 4, 'none'],
+  it('totals each whole day: measured before the anchor, the estimate after it', () => {
+    const days = pvDays(axis, pv, TZ)
+    expect(days.map((d) => [d.kwh, d.measured])).toEqual([
+      [16, 'all'],
+      [16, 'none'],
     ])
     expect(pvNotes(days).map((n) => [n.text, n.sub])).toEqual([
       ['16.0 kWh', undefined],
-      ['16.0 kWh', 'P10 4.0'],
+      ['16.0 kWh', undefined],
     ])
     // over the middle of the day's production, at its peak
     expect(days[1]?.peak).toBe(2000)
@@ -173,8 +171,7 @@ describe('PV day totals', () => {
     const short = sentAxis(sent(slots, 40))
     const cut = short.x.slice(0, -1).map(sunHigh) as (number | null)[]
     cut.push(null)
-    const cutP10 = short.x.map((t, i) => (i >= short.anchorIdx && i < short.x.length - 1 ? sunHigh(t) / 4 : null))
-    expect(pvDays(short, cut, cutP10, TZ).map((d) => d.measured)).toEqual(['none'])
+    expect(pvDays(short, cut, TZ).map((d) => d.measured)).toEqual(['none'])
   })
 
   it('adds up energy per 15-minute slot', () => {
@@ -190,7 +187,6 @@ describe('after the horizon', () => {
     load_cost: 0.2,
     prod_price: 0.1,
     pv_w: 0,
-    pv_p10_w: null,
     ...extra,
   })
   const data = { ...sent([slot(0), slot(1)], 1), beyond: [after(2), after(3, { period: 'day' })] }
@@ -236,7 +232,7 @@ describe('after the horizon', () => {
       return h >= 9 && h < 17 ? 2000 : 0
     }
     const pv = [...long.x.slice(0, -1).map(sunHigh), null] as (number | null)[]
-    const days = pvDays(long, pv, long.x.map(() => null), TZ)
+    const days = pvDays(long, pv, TZ)
     expect(days.map((d) => [d.measured, d.notSent])).toEqual([
       ['all', 'none'],
       ['none', 'some'],

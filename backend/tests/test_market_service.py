@@ -460,9 +460,12 @@ def test_the_commands_come_from_the_recorder_whatever_runs_the_sessions(tmp_path
                     "mode": "mfrrup",
                     "power_w": 9400,
                     "open": False,
+                    "measured_w": None,  # no grid sensor set
+                    "measured_coverage": None,
                 }
             ],
             "error": None,
+            "measured_error": None,
         }
         # until defaults to now
         assert client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()["spans"][0][
