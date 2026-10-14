@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.38
+
+- Plan: the **Power** chart shows Qilowatt's market sessions instead of every command:
+  - each session (back-to-back commands in one direction) is a band across the chart, green for a sell and blue for a buy, with a flag above it ("↓ SELL 5.2–9.4 kW"; point into it for the source, times and how much was delivered);
+  - the row under the chart has one bar per session with the share of the energy asked that the grid delivered; click a bar or a flag to zoom to the session;
+  - **Commanded** is the commanded power as a solid dark line that steps where the measured grid line steps; where the grid delivered less than the command by more than 500 W or 10 % for a minute or more, the gap is hatched red;
+  - while the pointer is in a session, the quarter-hour lines fade.
+- Plan: left of now, the popup's header is the moment under the pointer ("Wed 11:33:09") and the quarter-hour heads its rows. Inside a command it shows one block: the command and since when, the grid measured there and its share of the command, a shortfall, and the session.
+- Plan: the grid power measured finer than the quarter-hours is now the **Grid** line itself left of now (the popup keeps the quarter-hour's mean), so there is one grid line and no separate chip. The chips read *Battery* and *Grid*.
+- Charts: switching a chip on or off while zoomed no longer stretches the power axis to the whole range.
+
 ## 0.4.37
 
 - Plan: the **Power** chart draws the grid power sensor (Settings → Measurements) finer than the quarter-hour means, as a thin line, so the market's commands can be set beside what went through the grid connection:
