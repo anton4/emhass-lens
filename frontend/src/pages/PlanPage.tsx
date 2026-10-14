@@ -122,18 +122,11 @@ export function PlanPage() {
           {runNote} <Link to="/runs?job=emhass.mpc">MPC runs</Link> show what EMHASS Lens sent and EMHASS's full answer.
         </div>
       )}
-      {current.driver === 'legacy' ? (
-        <div className="notice" role="note">
-          <strong>Requested by the HACS integration:</strong> its Auto MPC switch was on when EMHASS Lens picked this
-          plan up.
+      {current.driver !== 'app' && current.driver !== 'legacy' && (
+        <div className="notice" data-color="amber" role="note">
+          <strong>Requested by {DRIVERS[current.driver] ?? current.driver}.</strong> {EXTERNAL_PLAN_NOTE}{' '}
+          <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it was picked up.
         </div>
-      ) : (
-        current.driver !== 'app' && (
-          <div className="notice" data-color="amber" role="note">
-            <strong>Requested by {DRIVERS[current.driver] ?? current.driver}.</strong> {EXTERNAL_PLAN_NOTE}{' '}
-            <Link to="/runs?job=emhass.plan_watch">Plan watch runs</Link> show when it was picked up.
-          </div>
-        )
       )}
 
       <NowSlot
@@ -168,6 +161,15 @@ export function PlanPage() {
                     {' · '}
                     <Link to={`/runs/${current.run_id}`}>run {current.run_id}</Link>
                   </>
+                )}
+                {current.driver === 'legacy' && (
+                  <span
+                    className="muted"
+                    title="Requested by the HACS integration: its Auto MPC switch was on when EMHASS Lens picked this plan up"
+                  >
+                    {' '}
+                    · by HACS
+                  </span>
                 )}
               </dd>
             </div>
@@ -275,7 +277,6 @@ export function PlanPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>Cost functions</h2>
-          <span className="muted">profit, cost and self-consumption with the same inputs</span>
         </div>
         <div className="panel-body">
           <CostfunPanel nowS={nowS} now={now} />

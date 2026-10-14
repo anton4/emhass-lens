@@ -8,6 +8,7 @@ import type {
   InputsResponse,
   InverterStatus,
   JobInfo,
+  MarketCommands,
   MarketSession,
   MarketStatus,
   OutputsStatus,
@@ -58,6 +59,7 @@ export const keys = {
   charger: ['charger'] as const,
   market: ['market'] as const,
   marketSessions: ['market-sessions'] as const,
+  marketCommands: ['market-commands'] as const,
   setup: ['setup'] as const,
 }
 
@@ -267,6 +269,16 @@ export function useMarketSessions(range: { since?: string; until?: string } = {}
     queryKey: [...keys.marketSessions, filters],
     queryFn: () => api.get<MarketSession[]>(`/api/market/sessions${query(filters)}`),
     refetchInterval: (q) => (closed && !q.state.data?.some((s) => !s.ended_at) ? false : 30_000),
+  })
+}
+
+/** Qilowatt's commands since `since` (round it, so the key stays put), read from the Home Assistant recorder. */
+export function useMarketCommands(since: string | null) {
+  return useQuery({
+    queryKey: [...keys.marketCommands, since],
+    queryFn: () => api.get<MarketCommands>(`/api/market/commands${query({ since: since ?? undefined })}`),
+    enabled: since !== null,
+    refetchInterval: 60_000,
   })
 }
 

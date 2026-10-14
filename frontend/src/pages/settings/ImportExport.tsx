@@ -64,8 +64,7 @@ export function ImportExport({ revision, writable, secretPaths }: { revision: nu
         </div>
         <div className="panel-body">
           <p style={{ marginTop: 0 }} className="muted">
-            Download the current settings as YAML. Secrets such as API keys are masked; importing the file again keeps the
-            stored ones.
+            Secrets such as API keys are masked; importing the file again keeps the stored ones.
           </p>
           <button type="button" onClick={exportYaml}>
             Download settings.yaml
@@ -78,8 +77,7 @@ export function ImportExport({ revision, writable, secretPaths }: { revision: nu
         </div>
         <div className="panel-body">
           <p style={{ marginTop: 0 }} className="muted">
-            Paste or open a settings file. Anything missing from the file goes back to its default. You see every change
-            before it is applied.
+            Anything missing from the file goes back to its default; you see every change before it is applied.
           </p>
           <div className="toolbar" style={{ marginBottom: 10 }}>
             <label className="button">

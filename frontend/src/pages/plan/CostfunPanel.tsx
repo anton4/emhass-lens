@@ -203,12 +203,13 @@ export function CostfunPanel({ nowS, now }: { nowS: number; now: Date }) {
               </tbody>
             </table>
           </div>
-          <p className="chart-note">
+          <details className="chart-note more">
+            <summary>How plans are compared</summary>
             Net cost, import, export and self-consumption are computed the same way for every plan over its{' '}
             {results[0]?.totals?.hours ?? '?'} h horizon, from each plan's grid power and the prices sent. EMHASS objective
             is the sum of the plan's own cost_fun column (EMHASS's sign: positive is money in), only comparable within one
             method.
-          </p>
+          </details>
 
           <div className="costfun-toggles">
             <div className="segmented" role="group" aria-label="Quantity to compare">

@@ -167,10 +167,7 @@ export function RunsPage() {
   const pick = (id: number) => (wide ? setFilters({ run: String(id) }) : navigate(`/runs/${id}`))
   return (
     <>
-      <PageHead
-        title="Runs"
-        intro="Every job execution, including the ones that were skipped, refused or missed. Open a run to see its inputs, what it sent, what came back and its logs."
-      />
+      <PageHead title="Runs" />
       <RunTimeline
         window={timelineWindow}
         onWindow={(w) => setFilters({ window: w === '6h' ? '' : w })}
@@ -263,7 +260,13 @@ export function RunsPage() {
                   </th>
                   <SortableTh label="Run" sortKey="id" sort={sort} onSort={onSort} />
                   <SortableTh label="Job" sortKey="job" sort={sort} onSort={onSort} />
-                  <SortableTh label="Started" sortKey="started" sort={sort} onSort={onSort} />
+                  <SortableTh
+                    label="Started"
+                    sortKey="started"
+                    sort={sort}
+                    onSort={onSort}
+                    title={`Times in ${tz ?? "your browser's timezone"}${ranged ? '; the range includes From but not To' : ''}`}
+                  />
                   <SortableTh label="Took" sortKey="took" sort={sort} onSort={onSort} />
                   <SortableTh label="Outcome" sortKey="outcome" sort={sort} onSort={onSort} />
                   <th>Summary</th>
@@ -348,13 +351,9 @@ export function RunsPage() {
               )}
             </Empty>
           )}
-          <div className="panel-body cell-sub">
-            {!SERVER_SORTED.has(sortKey) && loaded.length > 0 && (
-              <>Sorted within the {loaded.length} runs loaded so far. </>
-            )}
-            Times in {tz ?? "your browser's timezone"}
-            {ranged ? ', and the range includes From but not To.' : '.'}
-          </div>
+          {!SERVER_SORTED.has(sortKey) && loaded.length > 0 && (
+            <div className="panel-body cell-sub">Sorted within the {loaded.length} runs loaded so far.</div>
+          )}
           {loaded.length >= PAGE && (
             <div className="panel-body">
               <button type="button" onClick={loadMore} disabled={loadingMore || noMore}>

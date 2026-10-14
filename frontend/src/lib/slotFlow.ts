@@ -56,30 +56,61 @@ function chargerDirection(charger: ChargerNow | null | undefined): string | null
   return 'plugged in'
 }
 
-/** The slot in one line, from what flows where: "Charging the battery from the grid". */
+/** A second source (or the export) joins the headline only when it adds this much: the 145 W a 3.4 kW charge
+ *  draws while the inverter catches up with a load, or because the sensors are read seconds apart, is noise. */
+const big = (w: number) => w >= POWER_W
+
+/** The slot in one line, from what flows where: "Charging the battery from the grid". A source is named for the
+ *  power that reaches what it feeds: PV goes to the house first, so the grid charges the battery only with what
+ *  PV's surplus doesn't cover. */
 export function flowHeadline(v: FlowValues, deferrable = 'the EV'): string {
   const pv = pos(v.pv)
   const ev = pos(v.ev)
   const users = ev ? `the house and ${deferrable}` : 'the house'
+  const imported = Math.max(0, v.grid ?? 0)
+  const exported = Math.max(0, -(v.grid ?? 0))
   if (neg(v.batt)) {
     const what = ev ? `the battery and ${deferrable}` : 'the battery'
-    if (pv && neg(v.grid)) return `Charging ${what} from PV, exporting the rest`
-    if (pv && pos(v.grid)) return `Charging ${what} from PV and the grid`
-    if (pv) return `Charging ${what} from PV`
+    const charge = -(v.batt ?? 0) + (ev ? (v.ev ?? 0) : 0)
+    const fromPv = Math.min(charge, Math.max(0, (v.pv ?? 0) - (v.load ?? 0)))
+    const fromGrid = Math.min(imported, charge - fromPv)
+    // neither adds much: the larger one names it
+    const viaPv = big(fromPv) || (pv && !big(fromGrid) && fromPv >= fromGrid)
+    if (viaPv && big(fromGrid)) return `Charging ${what} from PV and the grid`
+    if (viaPv) return big(exported) ? `Charging ${what} from PV, exporting the rest` : `Charging ${what} from PV`
     return `Charging ${what} from the grid`
   }
   if (pos(v.batt)) {
-    if (neg(v.grid)) return 'Discharging the battery to the grid'
-    if (pos(v.grid)) return `The battery and the grid cover ${users}`
-    if (pv) return `The battery and PV cover ${users}`
+    if (big(exported)) return 'Discharging the battery to the grid'
+    if (big(imported)) return `The battery and the grid cover ${users}`
+    if (big(v.pv ?? 0)) return `The battery and PV cover ${users}`
     return `The battery covers ${users}`
   }
-  if (pv && neg(v.grid)) return `PV covers ${users}, exporting the rest`
-  if (pv && pos(v.grid)) return `PV and the grid cover ${users}`
+  if (pv && big(exported)) return `PV covers ${users}, exporting the rest`
+  if (pv && pos(v.grid)) {
+    const pvW = v.pv ?? 0
+    if (big(pvW) && big(imported)) return `PV and the grid cover ${users}`
+    return pvW >= imported ? `PV covers ${users}` : `The grid covers ${users}`
+  }
   if (pv) return `PV covers ${users}`
   if (pos(v.grid)) return `The grid covers ${users}`
   if (neg(v.grid)) return 'Exporting to the grid'
   return 'Nothing flows'
+}
+
+/** The headline on show, and the one waiting to replace it. */
+export interface SteadyHeadline {
+  shown: string
+  candidate: string | null
+  count: number
+}
+
+/** The headline after one more read: a new one shows only once `reads` reads in a row said it, so the few seconds
+ *  a load that switched on draws from the grid don't flip it. The first read shows straight away. */
+export function steadyHeadline(state: SteadyHeadline | null, next: string, reads = 2): SteadyHeadline {
+  if (!state || next === state.shown) return { shown: next, candidate: null, count: 0 }
+  const count = next === state.candidate ? state.count + 1 : 1
+  return count >= reads ? { shown: next, candidate: null, count: 0 } : { shown: state.shown, candidate: next, count }
 }
 
 const JUDGED = [

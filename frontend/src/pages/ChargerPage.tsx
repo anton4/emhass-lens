@@ -173,13 +173,14 @@ export function ChargerPage() {
         </div>
         <div>
           <dt>PV reserved for the car</dt>
-          <dd>
-            {data?.pv_reserve ? evReserveText(data.pv_reserve, tz) : <span className="faint">off</span>}
-            <div className="cell-sub">
-              {data?.pv_reserve
+          <dd
+            title={
+              data?.pv_reserve
                 ? 'While the car charges from excess solar, its share is taken out of the PV forecast EMHASS plans with.'
-                : 'Settings → EV charger control → PV reserved for Excess Solar keeps the car’s share out of the PV forecast EMHASS plans with.'}
-            </div>
+                : 'Settings → EV charger control → PV reserved for Excess Solar keeps the car’s share out of the PV forecast EMHASS plans with.'
+            }
+          >
+            {data?.pv_reserve ? evReserveText(data.pv_reserve, tz) : <span className="faint">off</span>}
           </dd>
         </div>
       </ControllerHead>
@@ -192,7 +193,7 @@ export function ChargerPage() {
         what="decision"
         empty={
           data?.mode === 'off'
-            ? 'EV charger control is off, so nothing is decided. Switch to Dry run to compare with the automation.'
+            ? 'Nothing decided: EV charger control is off.'
             : 'No decisions yet today.'
         }
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
@@ -213,7 +214,7 @@ export function ChargerPage() {
             {!last ? (
               <Empty title="No decision yet">
                 {data?.mode === 'off'
-                  ? 'EV charger control is off. Use Decide now to see what it would do.'
+                  ? 'Decide now shows what it would do.'
                   : 'The next decision comes with the next publish, minute check or SoC stop.'}
               </Empty>
             ) : (
@@ -357,7 +358,7 @@ function ChargerHistory({ timeZone }: { timeZone?: string }) {
           <table>
             <thead>
               <tr>
-                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} />
+                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} title={`Times in ${timeZone ?? "your browser's timezone"}`} />
                 <th>Decision</th>
                 <SortableTh label="Branch" sortKey="branch" sort={list.sort} onSort={onSort} />
                 <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
@@ -407,7 +408,6 @@ function ChargerHistory({ timeZone }: { timeZone?: string }) {
           </table>
         </div>
       )}
-      <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
   )
 }

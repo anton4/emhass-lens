@@ -1,8 +1,19 @@
 """The market rules must match the HA automation 'Qilowatt: Master Market Controller' guard for guard, except for the
 feed-in limit during a sell, which EMHASS Lens writes far less often (the automation's value is kept as parity_*)."""
 
-from emhass_lens.domain.market import Expected, MarketInputs, compare_expected, decide, expected_after
+from datetime import UTC, datetime
+
+from emhass_lens.domain.market import (
+    CommandSpan,
+    Expected,
+    MarketInputs,
+    command_spans,
+    compare_expected,
+    decide,
+    expected_after,
+)
 from emhass_lens.settings.model import InverterLimits, MarketThresholds
+from tests.fixtures.loader import load_json
 
 T = MarketThresholds()
 L = InverterLimits()
@@ -275,3 +286,35 @@ def test_expected_after_and_compare() -> None:
     assert compare_expected(Expected("sell", None, None, None, None, None, None), {"session": "none"})["fields"] == [
         {"field": "session", "decided": "sell", "observed": "none", "same": False}
     ]
+
+
+def at(hh: int, mm: int, ss: float = 0) -> datetime:
+    return datetime(2026, 10, 14, hh, mm, int(ss), round((ss % 1) * 1_000_000), tzinfo=UTC)
+
+
+def test_command_spans_from_the_recorder_history() -> None:
+    source, mode, power = load_json("ha", "qw_history.json")
+    spans = command_spans(source, mode, power, T, at(5, 0), at(7, 30))
+    assert spans == [
+        # Kratt's sell at 08:45 local: 9420 W is commanded as 9400 W, then 7000 W until the mode clears
+        CommandSpan(at(5, 45, 12.345), at(5, 55), "sell", "kratt", "mfrrup", 9400, open=False),
+        CommandSpan(at(5, 55), at(6, 4, 30), "sell", "kratt", "mfrrup", 7000, open=False),
+        # a buy, cut while the source is unavailable, and still on at the end of the window
+        CommandSpan(at(6, 58), at(7, 0), "buy", "kratt", "mfrrdown", 5000, open=False),
+        CommandSpan(at(7, 1, 30), at(7, 30), "buy", "kratt", "mfrrdown", 5000, open=True),
+    ]
+
+
+def test_command_spans_start_with_the_state_in_force() -> None:
+    source, mode, power = load_json("ha", "qw_history.json")
+    # the window opens mid-sell: the span starts with the window
+    spans = command_spans(source, mode, power, T, at(5, 50), at(6, 0))
+    assert [(s.start, s.end, s.power_w, s.open) for s in spans] == [
+        (at(5, 50), at(5, 55), 9400, False),
+        (at(5, 55), at(6, 0), 7000, True),
+    ]
+    assert command_spans(source, mode, power, T, at(4, 0), at(5, 0)) == []
+    assert command_spans([], [], [], T, at(4, 0), at(5, 0)) == []
+    # a source the thresholds don't know isn't a command
+    unknown = MarketThresholds(sources=["fusebox"])
+    assert command_spans(source, mode, power, unknown, at(5, 0), at(7, 30)) == []

@@ -45,17 +45,16 @@ export function OutputsCard() {
             <dd>{formatTime(o?.last_published_at)}</dd>
           </div>
         </dl>
-        <p className="cell-sub">
+        <details className="more chart-note">
+          <summary>What Home Assistant gets</summary>
           {o?.enabled
             ? 'The EMHASS Lens device in Home Assistant has the import and export price now, a problem sensor, the last successful MPC, an Auto MPC switch and a Run MPC button.'
-            : 'With MQTT entities on, an "EMHASS Lens" device appears in Home Assistant (needs the Mosquitto broker App).'}
-        </p>
-        <h3>The plan-published event</h3>
-        <p className="cell-sub">
+            : 'With MQTT entities on, an "EMHASS Lens" device appears in Home Assistant (needs the Mosquitto broker App).'}{' '}
           In live mode, right after each slot starts, EMHASS Lens calls EMHASS publish-data and then fires{' '}
           <code>emhass_lens_plan_published</code> with that slot's plan values. An automation can trigger on it instead of
           on a fixed second after the quarter-hour, and read the values from <code>trigger.event.data.current</code>.
-        </p>
+        </details>
+        <h3>The plan-published event</h3>
         {event ? (
           <>
             <PublishEventView event={event} />

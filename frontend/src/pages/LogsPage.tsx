@@ -157,10 +157,7 @@ export function LogsPage() {
 
   return (
     <>
-      <PageHead
-        title="Logs"
-        intro="Everything EMHASS Lens does, as it happens. The same lines appear in the App's Log tab in Home Assistant."
-      >
+      <PageHead title="Logs">
         <div className="toolbar">
           <button type="button" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
             {paused ? 'Resume' : 'Pause'}

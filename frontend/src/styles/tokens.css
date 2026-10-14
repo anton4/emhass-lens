@@ -69,6 +69,7 @@
   --q-import: #33197d;
   --q-export: #a874de;
   --q-spot: #8a8984;
+  --q-market: #45474f; /* Qilowatt's commanded power, dotted over the Power chart */
 
   /* Categorical slots in fixed order, for charts whose series are not quantities (cost functions, fee parts). */
   --series-1: #2a78d6;
@@ -184,6 +185,7 @@
     --q-import: #d4c8ff;
     --q-export: #8f55c9;
     --q-spot: #8f8e88;
+    --q-market: #c4c6cc;
 
     --series-1: #3987e5;
     --series-2: #d95926;

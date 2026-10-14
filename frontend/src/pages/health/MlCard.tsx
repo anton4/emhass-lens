@@ -64,11 +64,12 @@ export function MlCard({ writable }: { writable: boolean }) {
         {current && <span className="muted">model {current.ml.sklearn_model}, load sensor {current.ml.var_model}</span>}
       </div>
       <div className="panel-body">
-        <p style={{ marginTop: 0 }}>
+        <details className="more chart-note" style={{ marginTop: 0 }}>
+          <summary>How it runs</summary>
           EMHASS forecasts the household load with a model trained on your load sensor. EMHASS Lens runs it with the same
           number of lags as the MPC runs. Fit and tune can take long (time limits {current ? `${formatDuration(current.timeouts.fit * 1000)} and ${formatDuration(current.timeouts.tune * 1000)}` : 'from Settings → EMHASS → Timeouts'}); MPC runs wait while EMHASS is busy with them.
-        </p>
-        {current && <p className="muted">{autoFitText(current.ml)}</p>}
+          {current && ` ${autoFitText(current.ml)}`}
+        </details>
         {lagsChanged && (
           <div className="notice" data-color="amber" role="note">
             <strong>{lagsChanged.title}.</strong> {lagsChanged.detail} Run Fit so the model matches.
@@ -146,8 +147,9 @@ function MlJob({
   const run = last.data
   return (
     <div className="ml-job">
-      <div className="cell-title">{title}</div>
-      <div className="cell-sub">{what}</div>
+      <div className="cell-title" title={what}>
+        {title}
+      </div>
       <div className="action-row" style={{ marginTop: 10 }}>
         <button type="button" disabled={!writable || busy} onClick={onRun}>
           {title} now

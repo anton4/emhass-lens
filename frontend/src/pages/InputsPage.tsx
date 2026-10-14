@@ -65,7 +65,7 @@ export function InputsPage() {
 
   return (
     <>
-      <PageHead title="Inputs" intro="Everything EMHASS is fed, each value with where it came from and how old it is.">
+      <PageHead title="Inputs">
         <div className="segmented" role="group" aria-label="Price unit">
           <button type="button" aria-pressed={unit === 'eur'} onClick={() => setUnit('eur')}>
             €/kWh
@@ -105,10 +105,6 @@ export function InputsPage() {
         <div className="panel-body">
           {data && data.slots.length > 0 ? (
             <div className="chart-stack">
-              <p className="chart-note chart-zoom">
-                Point at a chart to read both at that quarter-hour. Drag across one to zoom in; double-click to see every
-                day again.
-              </p>
               <section className="chart-block">
                 <h3>Import, export and spot</h3>
                 <PriceChart data={data} unit={unit} nowS={nowS} syncKey={SYNC} xRange={zoom} onZoom={zoomTo} />

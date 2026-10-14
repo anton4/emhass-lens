@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { MarketSettings, RunSummary } from '../api/types'
+import type { MarketCommandSpan, MarketSettings, RunSummary } from '../api/types'
 import {
+  commandPower,
   decisionRef,
+  marketLane,
+  marketOverlay,
+  marketRows,
   marketFieldValue,
   marketGuards,
   pairMarketCompares,
@@ -142,5 +146,43 @@ describe('watchdogText', () => {
       detail: 'Sell session: qw_source has been "none" for 11 min',
     })
     expect(watchdogText({ ...base, findings: findings.slice(0, 1) }, now).color).toBe('amber')
+  })
+})
+
+describe('the commands on the Power chart', () => {
+  const sell: MarketCommandSpan = {
+    start: '2026-10-14T05:45:12.000+00:00',
+    end: '2026-10-14T06:04:30.000+00:00',
+    direction: 'sell',
+    source: 'kratt',
+    mode: 'mfrrup',
+    power_w: 9400,
+    open: false,
+  }
+  const buy: MarketCommandSpan = { ...sell, start: '2026-10-14T06:58:00Z', end: '2026-10-14T07:30:00Z', direction: 'buy', mode: 'mfrrdown', power_w: 5000, open: true }
+  const s = (iso: string) => Date.parse(iso) / 1000
+
+  it('draws a sell below zero and a buy above, at their own times', () => {
+    expect(commandPower(sell)).toBe(-9400)
+    expect(commandPower(buy)).toBe(5000)
+    expect(marketOverlay([sell, buy]).spans).toEqual([
+      { from: s(sell.start), to: s(sell.end), value: -9400 },
+      { from: s(buy.start), to: s(buy.end), value: 5000 },
+    ])
+    // a command still on runs on to now
+    expect(marketOverlay([buy], s('2026-10-14T07:31:00Z')).spans[0]?.to).toBe(s('2026-10-14T07:31:00Z'))
+    expect(marketOverlay([sell], s('2026-10-14T07:31:00Z')).spans[0]?.to).toBe(s(sell.end))
+    expect(marketLane([sell]).spans).toEqual([
+      { from: s(sell.start), to: s(sell.end), color: '--line-green', text: 'sell 9.40 kW · kratt' },
+    ])
+  })
+
+  it('lists the commands in the slot under the cursor', () => {
+    const tz = 'Europe/Tallinn'
+    expect(marketRows([sell, buy], s('2026-10-14T05:30:00Z'), tz)).toEqual([])
+    expect(marketRows([sell, buy], s('2026-10-14T06:00:00Z'), tz)).toEqual([
+      { name: 'Market sell', value: '9.40 kW · kratt · 08:45:12–09:04:30', color: '--line-green' },
+    ])
+    expect(marketRows([sell, buy], s('2026-10-14T07:15:00Z'), tz)[0]?.value).toBe('5.00 kW · kratt · 09:58:00–now')
   })
 })

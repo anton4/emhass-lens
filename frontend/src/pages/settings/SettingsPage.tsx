@@ -16,10 +16,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHead
-        title="Settings"
-        intro="Changes apply as soon as they are saved; no restart needed. Every save is kept in the history and can be reverted."
-      >
+      <PageHead title="Settings" intro="Changes apply on save and can be reverted.">
         <div className="subtabs" role="group" aria-label="Settings views">
           <button type="button" aria-pressed={tab === 'edit'} onClick={() => setTab('edit')}>
             Edit

@@ -156,17 +156,19 @@ export function MarketExplainer({ thresholds }: { thresholds: MarketSettings['th
     <section className="panel">
       <div className="panel-head">
         <h2>How sessions are run</h2>
-        <span className="muted">Four guards keep inverter writes rare</span>
       </div>
       <div className="panel-body">
-        <ol className="rule-steps">
-          {marketGuards(thresholds).map((g) => (
-            <li key={g.title}>
-              <div className="cell-title">{g.title}</div>
-              <div>{g.text}</div>
-            </li>
-          ))}
-        </ol>
+        <details className="more rules-list">
+          <summary>The guards that keep inverter writes rare</summary>
+          <ol className="rule-steps">
+            {marketGuards(thresholds).map((g) => (
+              <li key={g.title}>
+                <div className="cell-title">{g.title}</div>
+                <div>{g.text}</div>
+              </li>
+            ))}
+          </ol>
+        </details>
         <details className="more rules-more">
           <summary>More about decisions</summary>
           <p>

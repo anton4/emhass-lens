@@ -4560,6 +4560,76 @@
         "title": "Market",
         "type": "object"
       },
+      "MarketCommandSpan": {
+        "properties": {
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "power_w": {
+            "title": "Power W",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "direction",
+          "source",
+          "mode",
+          "power_w",
+          "open"
+        ],
+        "title": "MarketCommandSpan",
+        "type": "object"
+      },
+      "MarketCommands": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/MarketCommandSpan"
+            },
+            "title": "Spans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "title": "MarketCommands",
+        "type": "object"
+      },
       "MarketEntities": {
         "additionalProperties": false,
         "properties": {
@@ -10901,6 +10971,65 @@
           }
         },
         "summary": "Market Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/market/commands": {
+      "get": {
+        "description": "Qilowatt's market commands in [since, until) (until: now), from the Home Assistant recorder; at most 8 days.",
+        "operationId": "market_commands_api_market_commands_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketCommands"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Market Commands",
         "tags": [
           "system"
         ]

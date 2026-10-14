@@ -434,3 +434,43 @@ def test_shadow_judges_the_cooldown_at_the_automations_minute_tick(tmp_path: Pat
         assert decision.throttle.cooldown_block is True and decision.needs_update is False
     finally:
         client.__exit__(None, None, None)
+
+
+def test_the_commands_come_from_the_recorder_whatever_runs_the_sessions(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, "off")
+    at = lambda h, m: datetime(2026, 10, 9, h, m, tzinfo=UTC)  # noqa: E731
+    world.ha_history = {
+        SOURCE: [(at(6, 0), "kratt")],
+        MODE: [(at(6, 0), "none"), (at(8, 45), "mfrrup"), (at(9, 4), "none")],
+        POWER: [(at(6, 0), "0"), (at(8, 45), "9420"), (at(9, 5), "0")],
+    }
+    try:
+        got = client.get(
+            "/api/market/commands", params={"since": "2026-10-09T08:00:00Z", "until": "2026-10-09T10:00:00Z"}
+        )
+        assert got.status_code == 200, got.text
+        assert got.json() == {
+            "spans": [
+                {
+                    "start": "2026-10-09T08:45:00.000+00:00",
+                    "end": "2026-10-09T09:04:00.000+00:00",
+                    "direction": "sell",
+                    "source": "kratt",
+                    "mode": "mfrrup",
+                    "power_w": 9400,
+                    "open": False,
+                }
+            ],
+            "error": None,
+        }
+        # until defaults to now
+        assert client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()["spans"][0][
+            "end"
+        ] == ("2026-10-09T09:04:00.000+00:00")
+        assert client.get("/api/market/commands", params={"since": "2026-09-01T00:00:00Z"}).status_code == 400
+        world.ha_history_status = 404
+        broken = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
+        assert broken["spans"] == [] and "history integration" in broken["error"]
+    finally:
+        client.__exit__(None, None, None)

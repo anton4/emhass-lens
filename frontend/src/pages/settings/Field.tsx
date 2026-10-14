@@ -1,8 +1,17 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { api } from '../../api/client'
 import { deepEqual } from '../../lib/diff'
 import { formatQuarterOffset, formatValue } from '../../lib/format'
-import { defaultFor, fieldInfo, getPath, hasErrorsUnder, idFor, type FieldInfo, type SchemaNode } from '../../lib/schema'
+import {
+  defaultFor,
+  fieldInfo,
+  getPath,
+  hasErrorsUnder,
+  idFor,
+  splitHelp,
+  type FieldInfo,
+  type SchemaNode,
+} from '../../lib/schema'
 import { EmhassUrlStatus, EntityPicker } from './EntityPicker'
 
 export const MASK = '********'
@@ -23,6 +32,27 @@ interface FieldProps {
   path: (string | number)[]
   ctx: FormContext
   depth: number
+}
+
+/** A field's help: whole when short, else its first sentence with the rest behind "more" (still found by the
+ *  browser's find, which opens it). */
+function FieldHelp({ text, style }: { text: string; style?: CSSProperties }) {
+  const { first, rest } = splitHelp(text)
+  if (!rest) {
+    return (
+      <p className="field-help" style={style}>
+        {text}
+      </p>
+    )
+  }
+  return (
+    <details className="field-help field-help-more" style={style}>
+      <summary>
+        {first} <span className="field-help-toggle">more</span>
+      </summary>
+      {rest}
+    </details>
+  )
 }
 
 function pathKey(path: (string | number)[]): string {
@@ -71,7 +101,7 @@ export function Field({ name, node, path, ctx, depth }: FieldProps) {
         {modified && <SavedValue info={info} original={original} />}
         {modified && <RevertButton disabled={ctx.disabled} onClick={() => ctx.onChange(path, original)} />}
       </div>
-      {info.description && <p className="field-help">{info.description}</p>}
+      {info.description && <FieldHelp text={info.description} />}
       {ownErrors.map((msg) => (
         <p key={msg} className="field-error" role="alert">
           {msg}
@@ -129,7 +159,7 @@ function ObjectGroup({
   return (
     <div className="group">
       <h3>{info.title}</h3>
-      {info.description && <p className="field-help" style={{ gridColumn: 'auto', marginBottom: 8 }}>{info.description}</p>}
+      {info.description && <FieldHelp text={info.description} style={{ gridColumn: 'auto', marginBottom: 8 }} />}
       {ownErrors.map((msg) => (
         <p key={msg} className="field-error" role="alert">
           {msg}
@@ -172,7 +202,7 @@ function ListField({
         {info.title}
         {modified && <RevertButton disabled={ctx.disabled} onClick={() => ctx.onChange(path, original)} />}
       </h3>
-      {info.description && <p className="field-help" style={{ gridColumn: 'auto' }}>{info.description}</p>}
+      {info.description && <FieldHelp text={info.description} style={{ gridColumn: 'auto' }} />}
       {ownErrors.map((msg) => (
         <p key={msg} className="field-error" role="alert">
           {msg}

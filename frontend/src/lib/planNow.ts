@@ -78,11 +78,16 @@ export function expectedText(q: NowQuantity | undefined, past = false): string |
   return `expected ${formatPower(Math.abs(q.expected))} ${way} with ${given}`
 }
 
-/** The pieces of the "Inverter set to" line. */
-export function inverterParts(inv: InverterNow): string[] {
+/** The inverter's mode and passive state: "Passive Mode · Self-use battery or PV". */
+export function inverterMode(inv: InverterNow): string {
+  return [inv.charger_mode, inv.state].filter(Boolean).join(' · ')
+}
+
+/** The pieces of the "Inverter set to" line; `withMode` false leaves out the mode when a chip already shows it. */
+export function inverterParts(inv: InverterNow, withMode = true): string[] {
   const parts: string[] = []
-  const mode = [inv.charger_mode, inv.state].filter(Boolean).join(' · ')
-  if (mode) parts.push(mode)
+  const mode = inverterMode(inv)
+  if (mode && withMode) parts.push(mode)
   if (isNumber(inv.grid_power_w)) parts.push(`grid target ${formatPower(inv.grid_power_w)}`)
   if (isNumber(inv.battery_min_w) && isNumber(inv.battery_max_w)) {
     const kw = (w: number) => String(Number((w / 1000).toFixed(1)))

@@ -432,6 +432,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/market/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market Commands
+         * @description Qilowatt's market commands in [since, until) (until: now), from the Home Assistant recorder; at most 8 days.
+         */
+        get: operations["market_commands_api_market_commands_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/market/reconcile": {
         parameters: {
             query?: never;
@@ -2890,6 +2910,30 @@ export interface components {
              *     }
              */
             watchdog: components["schemas"]["MarketWatchdog"];
+        };
+        /** MarketCommandSpan */
+        MarketCommandSpan: {
+            /** Direction */
+            direction: string;
+            /** End */
+            end: string;
+            /** Mode */
+            mode: string;
+            /** Open */
+            open: boolean;
+            /** Power W */
+            power_w: number;
+            /** Source */
+            source: string;
+            /** Start */
+            start: string;
+        };
+        /** MarketCommands */
+        MarketCommands: {
+            /** Error */
+            error?: string | null;
+            /** Spans */
+            spans: components["schemas"]["MarketCommandSpan"][];
         };
         /** MarketEntities */
         MarketEntities: {
@@ -5668,6 +5712,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketStatus"];
+                };
+            };
+        };
+    };
+    market_commands_api_market_commands_get: {
+        parameters: {
+            query: {
+                since: string;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketCommands"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

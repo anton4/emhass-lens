@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { defaultFor, errorsByPath, fieldInfo, getPath, hasErrorsUnder, locatePath, setPath, type SchemaNode } from './schema'
+import {
+  defaultFor,
+  errorsByPath,
+  fieldInfo,
+  getPath,
+  hasErrorsUnder,
+  locatePath,
+  setPath,
+  splitHelp,
+  type SchemaNode,
+} from './schema'
 
 describe('fieldInfo', () => {
   it('unwraps anyOf with null into a nullable field', () => {
@@ -106,5 +116,32 @@ describe('locatePath', () => {
       fieldPath: ['emhass', 'extra'],
     })
     expect(locatePath(schema, 'gone.thing')).toEqual({ titles: ['gone', 'thing'], fieldPath: [] })
+  })
+})
+
+describe('splitHelp', () => {
+  const long =
+    'Every Force charge slot sets the grid target to Grid import max, e.g. 18.2 kW, and the battery limits its ' +
+    'charge. When the plan imports and discharges in the same slot, it saves the battery for a dearer slot; with ' +
+    'grid 0 W and the full window the battery would cover the whole house instead, which is what the automation does.'
+
+  it('keeps short help whole', () => {
+    expect(splitHelp('Who sends the command: kratt or fusebox.')).toEqual({
+      first: 'Who sends the command: kratt or fusebox.',
+      rest: null,
+    })
+  })
+
+  it('folds long help after its first sentence, not after an abbreviation or a decimal', () => {
+    const { first, rest } = splitHelp(long)
+    expect(first).toBe(
+      'Every Force charge slot sets the grid target to Grid import max, e.g. 18.2 kW, and the battery limits its charge.',
+    )
+    expect(rest).toMatch(/^When the plan imports/)
+  })
+
+  it('keeps one long sentence whole', () => {
+    const one = Array.from({ length: 50 }, (_, i) => `word${i}`).join(' ') + '.'
+    expect(splitHelp(one)).toEqual({ first: one, rest: null })
   })
 })

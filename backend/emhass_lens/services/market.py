@@ -27,6 +27,7 @@ from emhass_lens.domain.market import (
     STATES,
     MarketDecision,
     MarketInputs,
+    command_spans,
     compare_expected,
     decide,
     expected_after,
@@ -641,6 +642,39 @@ class MarketService:
             }
             for r in rows
         ]
+
+    async def commands(self, since: datetime, until: datetime) -> dict[str, Any]:
+        """Qilowatt's commands in [since, until), read from the recorder history of the source, mode and power-limit
+        sensors: what was asked, whoever ran the sessions (EMHASS Lens, the automation, or nobody in shadow mode)."""
+        e = self._e()
+        ids = [e.source_sensor, e.mode_sensor, e.powerlimit_sensor]
+        try:
+            lists = await self.c.extras["ha"].history(since, until, [i for i in ids if i])
+        except Exception as exc:  # the chart leaves the commands out and says why
+            log.debug("Reading the market command history failed: %s", exc)
+            return {"spans": [], "error": str(exc)}
+        by_entity = {
+            str(lst[0]["entity_id"]): lst
+            for lst in lists
+            if lst and isinstance(lst[0], dict) and lst[0].get("entity_id")
+        }
+        source, mode, power = (by_entity.get(i, []) for i in ids)
+        spans = command_spans(source, mode, power, self._t(), since, until)
+        return {
+            "spans": [
+                {
+                    "start": iso(s.start),
+                    "end": iso(s.end),
+                    "direction": s.direction,
+                    "source": s.source,
+                    "mode": s.mode,
+                    "power_w": s.power_w,
+                    "open": s.open,
+                }
+                for s in spans
+            ],
+            "error": None,
+        }
 
     async def status(self) -> dict[str, Any]:
         e, inv = self._e(), self.c.settings.current.inverter.entities

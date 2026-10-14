@@ -13,6 +13,7 @@ import {
   priceInDay,
   segmentBox,
   shortAge,
+  steadyHeadline,
   WIDE_FLOW,
   type FlowValues,
 } from './slotFlow'
@@ -39,6 +40,46 @@ describe('the slot in one line', () => {
     )
     expect(flowHeadline(v(3000, -2000, 0, 1000))).toBe('PV covers the house, exporting the rest')
     expect(flowHeadline(v(40, 60, -30, 70))).toBe('Nothing flows') // EMHASS's few watts of noise
+  })
+
+  it('names a source only for the power that reaches what it feeds', () => {
+    // 11:18: PV's 3.80 kW minus the house's 389 W covers the 3.44 kW charge; the grid's 145 W ran the house
+    expect(flowHeadline(v(3800, 145, -3440, 389))).toBe('Charging the battery from PV')
+    // a kettle before the inverter catches up: the grid does charge the battery for those seconds
+    expect(flowHeadline(v(3800, 2000, -3440, 2389))).toBe('Charging the battery from PV and the grid')
+    // a little PV that the house uses up
+    expect(flowHeadline(v(150, 3000, -2800, 350))).toBe('Charging the battery from the grid')
+    expect(flowHeadline(v(150, 250, -200, 200))).toBe('Charging the battery from the grid')
+    expect(flowHeadline(v(400, 0, -200, 200))).toBe('Charging the battery from PV')
+    expect(flowHeadline(v(4000, -150, -3500, 350))).toBe('Charging the battery from PV')
+    expect(flowHeadline(v(0, 200, 2200, 2400))).toBe('The battery covers the house')
+    expect(flowHeadline(v(200, 0, 2200, 2400))).toBe('The battery covers the house')
+    expect(flowHeadline(v(1500, 0, 900, 2400))).toBe('The battery and PV cover the house')
+    expect(flowHeadline(v(2000, 150, 0, 2150))).toBe('PV covers the house')
+    expect(flowHeadline(v(150, 2000, 0, 2150))).toBe('The grid covers the house')
+    expect(flowHeadline(v(1500, 900, 0, 2400))).toBe('PV and the grid cover the house')
+  })
+})
+
+describe('a steady headline', () => {
+  it('changes only after two reads in a row say so', () => {
+    let s = steadyHeadline(null, 'Charging the battery from PV')
+    expect(s.shown).toBe('Charging the battery from PV')
+    s = steadyHeadline(s, 'Charging the battery from PV and the grid')
+    expect(s.shown).toBe('Charging the battery from PV')
+    s = steadyHeadline(s, 'Charging the battery from PV')
+    expect(s).toEqual({ shown: 'Charging the battery from PV', candidate: null, count: 0 })
+    s = steadyHeadline(s, 'PV covers the house')
+    s = steadyHeadline(s, 'PV covers the house')
+    expect(s.shown).toBe('PV covers the house')
+  })
+
+  it('starts over when a different headline comes in between', () => {
+    let s = steadyHeadline(null, 'a')
+    s = steadyHeadline(s, 'b')
+    s = steadyHeadline(s, 'c')
+    expect(s).toEqual({ shown: 'a', candidate: 'c', count: 1 })
+    expect(steadyHeadline(s, 'c').shown).toBe('c')
   })
 })
 

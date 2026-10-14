@@ -101,7 +101,6 @@ export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
       <div className="panel-head">
         <div className="panel-title-row">
           <h2>What EMHASS gets</h2>
-          {data?.available && <span className="muted">times in {data.timezone}</span>}
         </div>
         <div className="segmented" role="group" aria-label="Payload">
           <button type="button" aria-pressed={source === 'last_run'} onClick={() => setSource('last_run')}>
@@ -190,15 +189,13 @@ function SentView({
 
       <div className="sent-toolbar">
         <p className="chart-note chart-zoom" role="status">
-          {zoom ? (
+          {zoom && (
             <>
               Zoomed in
               <button type="button" className="quiet" onClick={() => zoomTo(null)}>
                 Reset zoom
               </button>
             </>
-          ) : (
-            'Point at a chart to read every chart at that quarter-hour. Drag across one to zoom in; double-click to see it all.'
           )}
         </p>
         <div className="sent-back">
@@ -228,7 +225,8 @@ function SentView({
             lanes={charts.priceLanes}
             popup={charts.pricePopup}
           />
-          <p className="chart-note">
+          <details className="chart-note more">
+            <summary>Details</summary>
             <code>load_cost_forecast</code> and <code>prod_price_forecast</code>, fees included and the import price with
             VAT.{charts.forecast.length > 0 && ' Shaded: forecast prices.'}
             {charts.hasPastPrices &&
@@ -236,7 +234,7 @@ function SentView({
               ' Before the anchor: the Nord Pool prices that applied, with today’s tariff (nothing is sent for past slots).'}
             {isNumber(data.no_export_at_or_below) &&
               ` Export is capped at 0 W where the export price is at or below ${data.no_export_at_or_below} €/kWh (maximum_power_to_grid).`}
-          </p>
+          </details>
         </section>
 
         <section className="chart-block">
@@ -251,7 +249,11 @@ function SentView({
             notes={charts.pvNotes}
             popup={charts.sentPopup}
           />
-          <p className="chart-note">
+          {data.pv_slots_missing > 0 && (
+            <p className="chart-note">{data.pv_slots_missing} slots had no Solcast value and were sent as 0 W.</p>
+          )}
+          <details className="chart-note more">
+            <summary>Details</summary>
             <code>pv_power_forecast</code>
             {charts.hasP10 && (
               <>
@@ -261,9 +263,8 @@ function SentView({
             )}{' '}
             from Solcast. Above each day: its total{charts.hasP10 && ', and the P10 total for forecast days'}.
             {charts.hasReserve && ' The EV area is PV held back for the car: EMHASS doesn’t get it.'}
-            {data.pv_slots_missing > 0 && ` ${data.pv_slots_missing} slots had no Solcast value and were sent as 0 W.`}
             {measuredBy('pv') && hoursBack > 0 && <> Before the anchor: <code>{measuredBy('pv')}</code>.</>}
-          </p>
+          </details>
         </section>
 
         <section className="chart-block">
@@ -278,18 +279,23 @@ function SentView({
             lanes={charts.loadLanes}
             popup={charts.loadPopup}
           />
-          <p className="chart-note">
+          {data.deferrables.some((d) => !d.on) && (
+            <p className="chart-note">
+              {data.deferrables
+                .filter((d) => !d.on)
+                .map((d, i) => (
+                  <span key={d.name}>
+                    {i > 0 && ' '}
+                    {d.name} is off{d.enabled_source && <> (<code>{d.enabled_source}</code>)</>}: sent as 0 W for 0 h.
+                  </span>
+                ))}
+            </p>
+          )}
+          <details className="chart-note more">
+            <summary>Details</summary>
             <LoadNote data={data} />
             {measuredBy('load') && hoursBack > 0 && <> Before the anchor: <code>{measuredBy('load')}</code>.</>}
-            {data.deferrables
-              .filter((d) => !d.on)
-              .map((d) => (
-                <span key={d.name}>
-                  {' '}
-                  {d.name} is off{d.enabled_source && <> (<code>{d.enabled_source}</code>)</>}: sent as 0 W for 0 h.
-                </span>
-              ))}
-          </p>
+          </details>
         </section>
 
         <section className="chart-block">
@@ -304,13 +310,14 @@ function SentView({
             notes={charts.socNotes}
             popup={charts.socPopup}
           />
-          <p className="chart-note">
+          <details className="chart-note more">
+            <summary>Details</summary>
             <code>soc_init</code>
             {data.soc_init_reading && <> from <code>{data.soc_init_reading.source}</code>{ageOf(data.soc_init_reading.age_s)}</>}, and{' '}
             <code>soc_final</code>, the target at the end of the horizon
             {data.soc_final_reading && <>, from <code>{data.soc_final_reading.source}</code></>}. EMHASS plans the path between them.
             {measuredBy('soc') && hoursBack > 0 && <> Before the anchor: <code>{measuredBy('soc')}</code>.</>}
-          </p>
+          </details>
         </section>
       </div>
     </>

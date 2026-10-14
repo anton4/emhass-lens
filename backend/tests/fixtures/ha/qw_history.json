@@ -1,0 +1,20 @@
+[
+  [
+    {"entity_id": "sensor.qw_source", "state": "kratt", "last_changed": "2026-10-13T20:00:00+00:00", "last_updated": "2026-10-13T20:00:00+00:00"},
+    {"state": "unavailable", "last_changed": "2026-10-14T07:00:00+00:00"},
+    {"state": "kratt", "last_changed": "2026-10-14T07:01:30+00:00"}
+  ],
+  [
+    {"entity_id": "sensor.qw_mode", "state": "none", "last_changed": "2026-10-14T03:00:00+00:00", "last_updated": "2026-10-14T03:00:00+00:00"},
+    {"state": "mfrrup", "last_changed": "2026-10-14T05:45:12.345000+00:00"},
+    {"state": "none", "last_changed": "2026-10-14T06:04:30+00:00"},
+    {"state": "mfrrdown", "last_changed": "2026-10-14T06:58:00+00:00"}
+  ],
+  [
+    {"entity_id": "sensor.qw_powerlimit", "state": "0", "last_changed": "2026-10-14T03:00:00+00:00", "last_updated": "2026-10-14T03:00:00+00:00"},
+    {"state": "9420", "last_changed": "2026-10-14T05:45:11+00:00"},
+    {"state": "7000", "last_changed": "2026-10-14T05:55:00+00:00"},
+    {"state": "0", "last_changed": "2026-10-14T06:05:00+00:00"},
+    {"state": "5000", "last_changed": "2026-10-14T06:58:00+00:00"}
+  ]
+]

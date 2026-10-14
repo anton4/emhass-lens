@@ -7,16 +7,19 @@ export function SortableTh({
   sort,
   onSort,
   className,
+  title,
 }: {
   label: string
   sortKey: string
   sort: SortState
   onSort: (key: string) => void
   className?: string
+  /** Hover text ("Times in Europe/Tallinn"). */
+  title?: string
 }) {
   const active = sort.key === sortKey
   return (
-    <th className={className} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th className={className} title={title} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button type="button" className="sort-button" onClick={() => onSort(sortKey)}>
         {label}
         <span className="sort-mark" aria-hidden="true">

@@ -106,14 +106,15 @@ export function AccuracyCard({ history }: { history: PlanHistoryResponse | undef
           </tbody>
         </table>
       </div>
-      <p className="accuracy-hint">
+      <details className="accuracy-hint more">
+        <summary>How it’s measured</summary>
         Error (first line) is the mean absolute difference between the plan and the measurement per quarter-hour; bias
         (under it) is the mean signed difference (plus: the plan expected more). Planned values are taken from the plan <em>{horizon}</em>
         {history.horizon === 0 ? ' when the slot came' : ' of each slot'}
         {d.get('load')?.mape !== null && d.get('load')?.mape !== undefined
           ? `; the load error is ${pct(d.get('load')?.mape)} of the measured load over 24 h.`
           : '.'}
-      </p>
+      </details>
       {remaining > 0 && (
         <p className="accuracy-hint">
           Still reading history from Home Assistant: {remaining} quarter-hours to go. The numbers fill in as it lands.

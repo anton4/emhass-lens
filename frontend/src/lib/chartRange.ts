@@ -11,6 +11,39 @@ export interface FitOptions {
   zero?: boolean
 }
 
+/** A line drawn at times of its own rather than on the chart's slot grid: a market command from its start to its
+ *  end. */
+export interface ChartOverlay {
+  label: string
+  /** CSS custom property or colour. */
+  color: string
+  width?: number
+  dash?: number[]
+  /** Fill between the line and zero at this opacity. */
+  fill?: number
+  spans: { from: number; to: number; value: number }[]
+}
+
+/** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null. */
+export function overlayExtent(
+  overlays: ChartOverlay[],
+  from: number | null | undefined,
+  to: number | null | undefined,
+): [number, number] | null {
+  let lo = Infinity
+  let hi = -Infinity
+  for (const overlay of overlays) {
+    for (const span of overlay.spans) {
+      if ((to !== null && to !== undefined && span.from > to) || (from !== null && from !== undefined && span.to < from)) {
+        continue
+      }
+      lo = Math.min(lo, span.value)
+      hi = Math.max(hi, span.value)
+    }
+  }
+  return lo <= hi ? [lo, hi] : null
+}
+
 export function fitRange(
   min: number | null | undefined,
   max: number | null | undefined,

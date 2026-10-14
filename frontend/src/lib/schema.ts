@@ -226,3 +226,20 @@ export function secretPathsOf(schema: SchemaNode, prefix = ''): string[] {
   }
   return out
 }
+
+// abbreviations whose full stop doesn't end a sentence
+const ABBREVIATION = /\b(?:e\.g|i\.e|etc|approx|vs|cf|incl)\.$/i
+
+/** A field's help split after its first sentence when it runs past `maxWords`, so a long one shows its gist and
+ *  folds the rest; `rest` is null when it's short or is one sentence. */
+export function splitHelp(text: string, maxWords = 40): { first: string; rest: string | null } {
+  if (text.trim().split(/\s+/).length <= maxWords) return { first: text, rest: null }
+  const end = /[.!?]\s+(?=[A-Z"“(])/g
+  for (let m = end.exec(text); m; m = end.exec(text)) {
+    const first = text.slice(0, m.index + 1)
+    if (ABBREVIATION.test(first)) continue
+    const rest = text.slice(end.lastIndex).trim()
+    return rest ? { first, rest } : { first: text, rest: null }
+  }
+  return { first: text, rest: null }
+}

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
-import { fitRange, type FitOptions } from '../../lib/chartRange'
+import { fitRange, overlayExtent, type ChartOverlay, type FitOptions } from '../../lib/chartRange'
 import { ChartPopup } from './ChartPopup'
 import { createCursorStore, type CursorAt, type PopupExtra, type PopupTag } from './cursorStore'
 import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
@@ -68,6 +68,8 @@ export interface ChartLane {
   label: string
   spans: { from: number; to: number; color: string; hatch?: boolean; text?: string }[]
 }
+
+export type { ChartOverlay }
 
 /** A label on the plot at (t, value), optionally with a dot there: a day's total over its hump, a marked value. */
 export interface ChartNote {
@@ -145,6 +147,8 @@ interface TimeChartProps {
   lanes?: ChartLane[]
   /** Labels (and dots) on the plot. */
   notes?: ChartNote[]
+  /** Lines with times of their own, off the slot grid (market commands); the y-axis fits them too. */
+  overlays?: ChartOverlay[]
 }
 
 const NONE: never[] = []
@@ -195,6 +199,44 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number) {
     ctx.fillText(lane.label, bbox.left - 8 * dpr, top + h / 2)
     ctx.textAlign = 'left'
   })
+  ctx.restore()
+}
+
+/** Overlays: each run of back-to-back spans rises from zero to its values, follows them and returns to zero, with a
+ *  light fill between the line and zero. */
+function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
+  if (overlays.length === 0) return
+  const { ctx, bbox } = u
+  const zero = u.valToPos(0, 'y', true)
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height)
+  ctx.clip()
+  for (const overlay of overlays) {
+    const color = cssColor(overlay.color)
+    const spans = [...overlay.spans].sort((a, b) => a.from - b.from)
+    ctx.strokeStyle = color
+    ctx.lineWidth = (overlay.width ?? 2) * dpr
+    ctx.setLineDash((overlay.dash ?? []).map((d) => d * dpr))
+    ctx.fillStyle = withAlpha(color, overlay.fill ?? 0)
+    ctx.beginPath()
+    spans.forEach((span, i) => {
+      const a = u.valToPos(span.from, 'x', true)
+      const b = u.valToPos(span.to, 'x', true)
+      const y = u.valToPos(span.value, 'y', true)
+      if (overlay.fill) ctx.fillRect(a, Math.min(y, zero), b - a, Math.abs(zero - y))
+      const joined = i > 0 && Math.abs(spans[i - 1]!.to - span.from) < 1
+      if (joined) ctx.lineTo(a, y)
+      else {
+        ctx.moveTo(a, zero)
+        ctx.lineTo(a, y)
+      }
+      ctx.lineTo(b, y)
+      const next = spans[i + 1]
+      if (!next || Math.abs(next.from - span.to) >= 1) ctx.lineTo(b, zero)
+    })
+    ctx.stroke()
+  }
   ctx.restore()
 }
 
@@ -286,15 +328,19 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
-  snapToSlot = false, lanes = NONE, notes = NONE,
+  snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const theme = useThemeVersion()
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
-  const extras = useRef({ bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes })
+  const extras = useRef({
+    bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays,
+  })
   useEffect(() => {
-    extras.current = { bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes }
+    extras.current = {
+      bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays,
+    }
   })
   const [cursor] = useState(createCursorStore)
   const readPopup = useCallback(
@@ -316,7 +362,7 @@ export function TimeChart({
   const specKey = JSON.stringify([
     series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
-    lanes.length,
+    lanes.length, overlays.map((o) => [o.label, o.color, o.width, o.dash, o.fill]),
   ])
   const columns = series.some((s) => s.column)
 
@@ -463,7 +509,16 @@ export function TimeChart({
         y: yRange
           ? { range: () => [yRange[0] ?? 0, yRange[1] ?? 1] }
           : fit
-            ? { range: (_u, dataMin, dataMax) => fitRange(dataMin, dataMax, fit) }
+            ? {
+                range: (u, dataMin, dataMax) => {
+                  // the overlays' values in the window shown count too
+                  const extent = overlayExtent(extras.current.overlays, u.scales.x?.min, u.scales.x?.max)
+                  if (!extent) return fitRange(dataMin, dataMax, fit)
+                  const lo = dataMin === null || dataMin === undefined ? extent[0] : Math.min(dataMin, extent[0])
+                  const hi = dataMax === null || dataMax === undefined ? extent[1] : Math.max(dataMax, extent[1])
+                  return fitRange(lo, hi, fit)
+                },
+              }
             : {},
       },
       axes: [
@@ -614,6 +669,7 @@ export function TimeChart({
               ctx.fillRect(Math.round(px - 1.5 * dpr), bbox.top + bbox.height * 0.2, Math.round(3 * dpr), bbox.height * 0.6)
             }
             ctx.restore()
+            drawOverlays(u, extras.current.overlays, dpr)
             drawLanes(u, extras.current.lanes, dpr)
             drawNotes(u, extras.current.notes, dpr)
           },
@@ -653,6 +709,11 @@ export function TimeChart({
   useEffect(() => {
     plot.current?.redraw(false)
   }, [bands, shade, markers, now, ticks, lanes, notes])
+
+  // new overlay values may move the y-axis: setting the time window again refits it
+  useEffect(() => {
+    if (plot.current) applyXRange(plot.current, extras.current.x, extras.current.xRange)
+  }, [overlays])
 
   return (
     <>

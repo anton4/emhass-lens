@@ -174,7 +174,7 @@ export function MarketPage() {
         what="decision"
         empty={
           data?.mode === 'off'
-            ? 'Market control is off, so nothing is decided. Switch to Shadow to compare with the automation.'
+            ? 'Nothing decided: market control is off.'
             : 'No decisions yet today.'
         }
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
@@ -209,7 +209,7 @@ export function MarketPage() {
             {!last ? (
               <Empty title="No decision yet">
                 {data?.mode === 'off'
-                  ? 'Market control is off. Use Reconcile now to see what it would do.'
+                  ? 'Reconcile now shows what it would do.'
                   : 'The next decision comes with the next command change or minute tick.'}
               </Empty>
             ) : (
@@ -343,7 +343,7 @@ function SessionsTable({ tz }: { tz?: string }) {
           <table>
             <thead>
               <tr>
-                <SortableTh label="Started" sortKey="started" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Started" sortKey="started" sort={list.sort} onSort={onSort} title={`Times in ${tz ?? "your browser's timezone"}`} />
                 <SortableTh label="Direction" sortKey="direction" sort={list.sort} onSort={onSort} />
                 <th>Source</th>
                 <SortableTh label="Power" sortKey="power" sort={list.sort} onSort={onSort} />
@@ -427,7 +427,7 @@ function MarketHistory({ timeZone }: { timeZone?: string }) {
           <table>
             <thead>
               <tr>
-                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} />
+                <SortableTh label="When" sortKey="at" sort={list.sort} onSort={onSort} title={`Times in ${timeZone ?? "your browser's timezone"}`} />
                 <th>Run</th>
                 <SortableTh label="Decision" sortKey="decision" sort={list.sort} onSort={onSort} />
                 <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
@@ -466,7 +466,6 @@ function MarketHistory({ timeZone }: { timeZone?: string }) {
           </table>
         </div>
       )}
-      <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
   )
 }

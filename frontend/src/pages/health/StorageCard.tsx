@@ -86,7 +86,7 @@ export function StorageCard({ writable }: { writable: boolean }) {
             type="button"
             disabled={!writable || busy}
             onClick={() => action.mutate('cleanup')}
-            title="Retention, size budgets, then compaction when at least 20 % and 16 MiB are free"
+            title="Retention, size budgets, then compaction when at least 20 % and 16 MiB are free. Cleanup cuts the oldest days first, never pinned runs, open problems or sessions, the current settings version, or the last few days the planner needs"
           >
             {running('maintenance.retention') ? 'Cleaning up…' : 'Clean up now'}
           </button>
@@ -182,11 +182,6 @@ export function StorageCard({ writable }: { writable: boolean }) {
             {!data.dbstat && (
               <p className="chart-note">Sizes per table need SQLite's dbstat table, which this build lacks; row counts are shown.</p>
             )}
-            <p className="chart-note">
-              Cleanup keeps each database within its budget by cutting the oldest days first, never pinned runs, open problems
-              or sessions, the current settings version, or the last few days the planner needs. Compaction returns free pages
-              to the disk.
-            </p>
           </>
         )}
       </div>

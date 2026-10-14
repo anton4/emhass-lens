@@ -1,6 +1,7 @@
 """EMHASS status and discovery, problems, Home Assistant entities, take over / hand back."""
 
 import time
+from datetime import timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -16,6 +17,8 @@ from emhass_lens.api.schemas import (
     EntityOption,
     InverterStatus,
     JobInfo,
+    MarketCommands,
+    MarketCommandSpan,
     MarketReconcileRequest,
     MarketSession,
     MarketStatus,
@@ -29,7 +32,7 @@ from emhass_lens.api.schemas import (
     SetupStep,
     StorageOverview,
 )
-from emhass_lens.core.clock import iso
+from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.domain.entity_search import search_entities
 from emhass_lens.services import driver, setup
 from emhass_lens.settings.store import StaleRevision
@@ -221,6 +224,20 @@ async def market_sessions(
     """Market sessions newest first, optionally those started within [since, until)."""
     rows = await c.extras["market"].sessions(limit, utc_bound(since, "since"), utc_bound(until, "until"))
     return [MarketSession(**row) for row in rows]
+
+
+COMMANDS_MAX = timedelta(days=8)
+
+
+@router.get("/market/commands")
+async def market_commands(c: ContainerDep, since: str, until: str | None = None) -> MarketCommands:
+    """Qilowatt's market commands in [since, until) (until: now), from the Home Assistant recorder; at most 8 days."""
+    start = parse_iso(utc_bound(since, "since"))
+    end = parse_iso(utc_bound(until, "until")) or c.clock.now()
+    if start is None or end <= start or end - start > COMMANDS_MAX:
+        raise HTTPException(400, "since must be before until, and the window at most 8 days")
+    result = await c.extras["market"].commands(start, end)
+    return MarketCommands(spans=[MarketCommandSpan(**s) for s in result["spans"]], error=result["error"])
 
 
 @router.get("/setup")

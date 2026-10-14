@@ -1499,6 +1499,30 @@ td.wrap {
   max-width: 68ch;
 }
 
+/* Long help: the first sentence, then "more" */
+.field-help-more > summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+}
+
+.field-help-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-help-toggle {
+  color: var(--link);
+  white-space: nowrap;
+}
+
+.field-help-more[open] .field-help-toggle {
+  display: none;
+}
+
+.field-help-more[open] > summary {
+  margin-bottom: 4px;
+}
+
 .field-error {
   grid-column: 2;
   margin: 0;
@@ -1717,6 +1741,11 @@ button.diff-locate {
   align-items: center;
   gap: 4px 8px;
   margin: 0;
+}
+
+/* says only "Showing … · Reset zoom", and only while zoomed */
+.chart-zoom:empty {
+  display: none;
 }
 
 .time-chart {
@@ -2067,6 +2096,27 @@ button.diff-locate {
 .legend-toggle[aria-pressed='false'] .legend-swatch {
   background: transparent !important;
   box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* A line drawn dotted (the market's commanded power) */
+.legend-swatch[data-dotted] {
+  background: radial-gradient(circle, currentColor 1.2px, transparent 1.6px) 0 0 / 4px 4px !important;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* The market's commands: sell green, buy blue */
+.legend-swatch[data-split] {
+  background: linear-gradient(90deg, var(--line-green) 50%, var(--line-blue) 50%) !important;
+}
+
+/* A key item that isn't a switch: the dashed "planned at the time" lines */
+.legend-key {
+  padding: 2px 4px;
+}
+
+.legend-dash {
+  width: 16px;
+  border-top: 2px dashed var(--ink-muted);
 }
 
 /* ---------- Inputs: what EMHASS gets ---------- */

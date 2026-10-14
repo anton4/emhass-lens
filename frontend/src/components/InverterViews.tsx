@@ -246,42 +246,53 @@ export function RulesExplainer({
   current?: string | null
 }) {
   const list = rules(limits, noExportAtOrBelow)
+  const chosen = list.find((r) => r.key === current)
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>How a rule is chosen</h2>
-        <span className="muted">The first match wins, top to bottom</span>
       </div>
       <div className="panel-body">
-        <div className="rule-groups">
-          {RULE_GROUPS.map((g) => (
-            <div key={g.group}>
-              <h3 className="sub-head">{g.title}</h3>
-              <ol className="rule-steps" start={list.findIndex((r) => r.group === g.group) + 1}>
-                {list
-                  .filter((r) => r.group === g.group)
-                  .map((r) => (
-                    <li key={r.key}>
-                      <div className="cell-title">
-                        <span className="rule-badge small word">{r.id}</span> {r.title}
-                        {r.key === current && (
-                          <span className="chip" data-color="blue">
-                            chosen now
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <span className="muted">When</span> {r.when}
-                      </div>
-                      <div>
-                        <span className="muted">Sets</span> <q>{r.state}</q>, {r.sets}
-                      </div>
-                    </li>
-                  ))}
-              </ol>
-            </div>
-          ))}
-        </div>
+        <details className="more rules-list">
+          <summary>
+            The {list.length} rules, first match wins
+            {chosen && (
+              <>
+                {' · now '}
+                <span className="rule-badge small word">{chosen.id}</span> {chosen.title}
+              </>
+            )}
+          </summary>
+          <div className="rule-groups">
+            {RULE_GROUPS.map((g) => (
+              <div key={g.group}>
+                <h3 className="sub-head">{g.title}</h3>
+                <ol className="rule-steps" start={list.findIndex((r) => r.group === g.group) + 1}>
+                  {list
+                    .filter((r) => r.group === g.group)
+                    .map((r) => (
+                      <li key={r.key}>
+                        <div className="cell-title">
+                          <span className="rule-badge small word">{r.id}</span> {r.title}
+                          {r.key === current && (
+                            <span className="chip" data-color="blue">
+                              chosen now
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="muted">When</span> {r.when}
+                        </div>
+                        <div>
+                          <span className="muted">Sets</span> <q>{r.state}</q>, {r.sets}
+                        </div>
+                      </li>
+                    ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </details>
         <details className="more rules-more">
           <summary>More about decisions</summary>
           <p>

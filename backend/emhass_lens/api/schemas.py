@@ -1015,6 +1015,21 @@ class MarketSession(BaseModel):
     end_run_id: int | None = None
 
 
+class MarketCommandSpan(BaseModel):
+    start: str
+    end: str
+    direction: str  # buy | sell
+    source: str
+    mode: str
+    power_w: int
+    open: bool  # still on at the end of the window
+
+
+class MarketCommands(BaseModel):
+    spans: list[MarketCommandSpan]
+    error: str | None = None  # why the recorder history couldn't be read
+
+
 class WatchdogFinding(BaseModel):
     kind: str  # stale | long_session | emhass_off
     severity: str  # error | warning

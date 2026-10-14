@@ -2,8 +2,11 @@
 // decisions, comparisons, sessions and the write throttle. See backend/emhass_lens/domain/market.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
-import { formatTime } from './format'
+import type { ChartLane, ChartOverlay } from '../components/charts/TimeChart'
+import type { PopupExtra } from '../components/charts/cursorStore'
+import type { MarketCommandSpan, MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
+import { formatClock, formatTime } from './format'
+import { formatPower } from './units'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
 
@@ -249,4 +252,55 @@ export function watchdogText(
     ? ` · last: ${String(w.last_action.summary ?? '')} (${formatTime(String(w.last_action.at ?? ''), now, tz)})`
     : ''
   return { color: 'green', text: 'Every minute', detail: `${last}${clears}, warns after ${duration(w.long_session_s)}${acted}` }
+}
+
+// --- Qilowatt's commands on the Plan page's Power chart -----
+
+const COMMAND_COLOR: Record<string, string> = { sell: '--line-green', buy: '--line-blue' }
+
+const unix = (iso: string) => Date.parse(iso) / 1000
+
+/** A span's end; one still on when it was read runs on to `nowS`. */
+const spanEnd = (s: MarketCommandSpan, nowS?: number) =>
+  s.open && nowS !== undefined ? Math.max(unix(s.end), nowS) : unix(s.end)
+
+/** A command's power the way the chart's grid counts it: a buy imports (+), a sell exports (−). */
+export function commandPower(span: Pick<MarketCommandSpan, 'direction' | 'power_w'>): number {
+  return span.direction === 'buy' ? span.power_w : -span.power_w
+}
+
+/** The commanded power as a dotted line over the Power chart, at the commands' own times. */
+export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartOverlay {
+  return {
+    label: 'Market power',
+    color: '--q-market',
+    width: 2,
+    dash: [2, 3],
+    fill: 0.08,
+    spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandPower(s) })),
+  }
+}
+
+/** The commands as a lane under the chart: "sell 9.40 kW · kratt". */
+export function marketLane(spans: MarketCommandSpan[], nowS?: number): ChartLane {
+  return {
+    label: 'Market',
+    spans: spans.map((s) => ({
+      from: unix(s.start),
+      to: spanEnd(s, nowS),
+      color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
+      text: `${s.direction} ${formatPower(s.power_w)} · ${s.source}`,
+    })),
+  }
+}
+
+/** The popup's rows for the commands in the slot from `t`: "Market sell" "9.40 kW · kratt · 08:45:12–09:04:30". */
+export function marketRows(spans: MarketCommandSpan[], t: number, timeZone?: string, slotS = 900): PopupExtra[] {
+  return spans
+    .filter((s) => unix(s.start) < t + slotS && unix(s.end) > t)
+    .map((s) => ({
+      name: `Market ${s.direction}`,
+      value: `${formatPower(s.power_w)} · ${s.source} · ${formatClock(s.start, timeZone)}–${s.open ? 'now' : formatClock(s.end, timeZone)}`,
+      color: COMMAND_COLOR[s.direction] ?? '--line-neutral',
+    }))
 }

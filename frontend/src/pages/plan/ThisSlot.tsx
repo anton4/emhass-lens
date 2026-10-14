@@ -6,7 +6,7 @@ import { useNow } from '../../components/useNow'
 import { modeTone } from '../../lib/inverter'
 import { formatClock } from '../../lib/format'
 import { deferrableColumns, num, socOf } from '../../lib/plan'
-import { evSensor, expectedText, inverterParts, type NowByKey } from '../../lib/planNow'
+import { evSensor, expectedText, inverterMode, inverterParts, type NowByKey } from '../../lib/planNow'
 import {
   agreement,
   flowHeadline,
@@ -18,9 +18,11 @@ import {
   priceInDay,
   segmentBox,
   shortAge,
+  steadyHeadline,
   WIDE_FLOW,
   type FlowLayout,
   type FlowNode,
+  type SteadyHeadline,
 } from '../../lib/slotFlow'
 import { formatFraction, formatPrice, isNumber } from '../../lib/units'
 
@@ -242,6 +244,9 @@ function Price({ row, prices, slotStart, tz }: { row: PlanRow; prices: PlanPrice
   )
 }
 
+// a read this long after the one before starts the steady headline over (back from the Previous slot tab)
+const STALE_READ_MS = 30_000
+
 /** A slot as a flow: what is measured (or, for the next slot, planned) as the big numbers, the plan under them,
  *  a line that says what happens, the state of charge and the price; for this slot also what the inverter is set to. */
 export function ThisSlot({
@@ -252,7 +257,6 @@ export function ThisSlot({
   past = false,
   charger,
   inverter,
-  plan,
   socMin,
   socMax,
   prices,
@@ -270,8 +274,6 @@ export function ThisSlot({
   past?: boolean
   charger?: ChargerNow | null
   inverter?: InverterNow | null
-  /** When the plan in force was made, and by which run. */
-  plan?: { generatedAt: string | null; runId: number | null }
   socMin?: number | null
   socMax?: number | null
   prices: PlanPrice[]
@@ -305,7 +307,15 @@ export function ThisSlot({
   for (const key of Object.keys(measured) as (keyof typeof measured)[]) shown[key] = measured[key] ?? planned[key]
   const anyMeasured = Object.values(measured).some((v) => v !== null)
   const users = charger ? 'the EV' : 'the deferrable load'
-  const headline = flowHeadline(shown, users)
+  // what is measured now changes its wording only once two reads in a row agree
+  const live = !past && anyMeasured
+  const said = flowHeadline(shown, users)
+  const [steady, setSteady] = useState<{ slot: string; read: number; state: SteadyHeadline } | null>(null)
+  if (live && (steady?.slot !== slotStart || steady.read !== fetchedAt)) {
+    const fresh = steady?.slot === slotStart && fetchedAt - steady.read < STALE_READ_MS
+    setSteady({ slot: slotStart, read: fetchedAt, state: steadyHeadline(fresh ? steady.state : null, said) })
+  }
+  const headline = live && steady?.slot === slotStart && steady.read === fetchedAt ? steady.state.shown : said
   const planHeadline = flowHeadline(planned, users)
   const agree = agreement(quantities, planned, measured)
   const nodes = flowNodes(planned, measured, {
@@ -331,24 +341,13 @@ export function ThisSlot({
         <strong>Plan:</strong> {lowerFirst(planHeadline)}
       </>
     ),
-    plan?.generatedAt && (
-      <>
-        planned {formatClock(plan.generatedAt, tz)}
-        {plan.runId && (
-          <>
-            {' · '}
-            <Link to={`/runs/${plan.runId}`}>run #{plan.runId}</Link>
-          </>
-        )}
-      </>
-    ),
   ].filter(Boolean)
 
   return (
     <div className="slot">
       <div className="slot-top">
         {tone && (
-          <span className="slot-mode" title={`The inverter's passive mode: ${tone.state}`}>
+          <span className="slot-mode" title={`The inverter is set to ${inverter ? inverterMode(inverter) : tone.state}`}>
             <span className="slot-mode-swatch" style={{ background: tone.fill }} aria-hidden="true" />
             {tone.short}
           </span>
@@ -377,7 +376,7 @@ export function ThisSlot({
             color={inverter.in_control ? 'green' : 'amber'}
             text={inverter.in_control ? 'Inverter set to' : 'Inverter not in control:'}
           />{' '}
-          {inverter.in_control ? inverterParts(inverter).join(' · ') : inverter.reason}
+          {inverter.in_control ? inverterParts(inverter, !tone).join(' · ') : inverter.reason}
           {inverter.written_at && (
             <>
               {' · '}written {formatClock(inverter.written_at, tz)}

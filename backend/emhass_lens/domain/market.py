@@ -22,9 +22,12 @@ in shadow mode.
 """
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from typing import Any
 
+from emhass_lens.core.clock import parse_iso
 from emhass_lens.domain.inverter import Targets, round100
+from emhass_lens.domain.measure import numeric
 from emhass_lens.settings.model import InverterLimits, MarketThresholds
 
 LOST = ("unavailable", "unknown", "none")
@@ -387,3 +390,79 @@ def compare_expected(e: Expected, observed: dict[str, Any]) -> dict[str, Any]:
             same = got is not None and abs(float(got) - want) < 0.5
         rows.append({"field": name, "decided": want, "observed": got, "same": same})
     return {"agree": all(r["same"] for r in rows), "fields": rows}
+
+
+# --- the commands over time, for the Plan page's Power chart -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CommandSpan:
+    start: datetime
+    end: datetime
+    direction: str  # buy | sell
+    source: str
+    mode: str
+    power_w: int
+    open: bool  # still on at the end of the window
+
+
+def _changes(states: list[dict[str, Any]]) -> list[tuple[datetime, Any]]:
+    """(when, state) from recorder history items, oldest first; a state holds until the next one."""
+    out: list[tuple[datetime, Any]] = []
+    for s in states:
+        stamp = parse_iso(s.get("last_changed") or s.get("last_updated"))
+        if stamp is not None:
+            out.append((stamp, s.get("state")))
+    out.sort(key=lambda c: c[0])
+    return out
+
+
+class _Cursor:
+    """The state in force at moments asked for in order."""
+
+    def __init__(self, changes: list[tuple[datetime, Any]]) -> None:
+        self.changes = changes
+        self.i = 0
+        self.value: Any = None
+
+    def at(self, t: datetime) -> Any:
+        while self.i < len(self.changes) and self.changes[self.i][0] <= t:
+            self.value = self.changes[self.i][1]
+            self.i += 1
+        return self.value
+
+
+def command_spans(
+    source: list[dict[str, Any]],
+    mode: list[dict[str, Any]],
+    powerlimit: list[dict[str, Any]],
+    t: MarketThresholds,
+    start: datetime,
+    end: datetime,
+) -> list[CommandSpan]:
+    """The market commands in [start, end) from the recorder history of the source, mode and power-limit sensors
+    (each list's first item may be older than `start`: the state in force then). A command is what `decide` reads
+    as one: a known source with a buy or sell mode and a power above zero (rounded to 100 W). A span ends when the
+    direction, source, mode or power changes; whether a session followed (the gates, the SoC floor) isn't judged."""
+    streams = [_changes(source), _changes(mode), _changes(powerlimit)]
+    moments = sorted({start, *(stamp for c in streams for stamp, _ in c if start < stamp < end)})
+    src_at, mode_at, power_at = (_Cursor(c) for c in streams)
+    spans: list[CommandSpan] = []
+    current: tuple[str, str, str, int] | None = None
+    since = start
+    for moment in [*moments, end]:
+        command: tuple[str, str, str, int] | None = None
+        if moment < end:
+            src, md = src_at.at(moment), mode_at.at(moment)
+            power = round100(numeric(power_at.at(moment)) or 0.0)
+            if src in t.sources and power > 0:
+                direction = "buy" if md in t.buy_modes else "sell" if md in t.sell_modes else None
+                if direction:
+                    command = (direction, str(src), str(md), power)
+        if command == current and moment < end:
+            continue
+        if current is not None:
+            direction, src, md, power = current
+            spans.append(CommandSpan(since, moment, direction, src, md, power, open=moment >= end))
+        current, since = command, moment
+    return spans

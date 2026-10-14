@@ -45,17 +45,18 @@ export function NowSlot({
   const fetchedAt = planNow.dataUpdatedAt
   // the state of charge starts where the slot before ended
   const fromRow = (which === 'now' ? d?.prev_row : which === 'next' ? d?.row : undefined) as PlanRow | null | undefined
-  const when = start && end && (
+  // when the slot was published and last read go into the times' hover text
+  const times = start && end && `${formatClock(start, tz)}–${formatClock(end, tz)}`
+  const stamps = isNow
+    ? [
+        d?.published_at && `published ${formatClock(d.published_at, tz)}`,
+        fetchedAt > 0 && `read ${formatClock(new Date(fetchedAt).toISOString(), tz)} (every 10 s)`,
+      ].filter(Boolean)
+    : []
+  const when = times && (
     <>
-      {formatClock(start, tz)}–{formatClock(end, tz)}
-      {isNow && d?.published_at && <> · published {formatClock(d.published_at, tz)}</>}
+      <span title={stamps.length ? stamps.join(' · ') : undefined}>{times}</span>
       {which === 'prev' && anyMeasured && <> · quarter-hour means</>}
-      {isNow && fetchedAt > 0 && (
-        <span title="When this page last read the sensors, the plan and the inverter; it reads them every 10 s">
-          {' '}
-          · read {formatClock(new Date(fetchedAt).toISOString(), tz)}
-        </span>
-      )}
     </>
   )
   return (
@@ -90,7 +91,6 @@ export function NowSlot({
             past={which === 'prev'}
             charger={isNow ? d?.charger : null}
             inverter={isNow ? d?.inverter : null}
-            plan={isNow ? { generatedAt: d?.plan_generated_at ?? null, runId: d?.plan_run_id ?? null } : undefined}
             socMin={d?.soc_min}
             socMax={d?.soc_max}
             prices={prices}

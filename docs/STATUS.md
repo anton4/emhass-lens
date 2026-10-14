@@ -37,6 +37,31 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: a steadier slot headline, market commands on the Power chart, less text (0.4.35)
+- **Why:** the owner's screenshot read "Charging the battery from PV and the grid" while PV 3.80 kW − house 389 W
+  already covered the 3.44 kW charge (the grid's 145 W ran the house). They also asked for the market's commands
+  and powers on the Plan page's Power chart with on/off switches, and for less text across the pages.
+- **Headline** (`flowHeadline`, lib/slotFlow.ts): a source is named by power balance (PV covers the house first; the
+  grid charges the battery only with what PV's surplus doesn't cover) and only when it adds ≥ `POWER_W` (300 W).
+  `steadyHeadline` changes the shown line only after two reads in a row (ThisSlot, keyed on `fetchedAt`, reset per
+  slot and after a 30 s gap). The owner chose this over "the plan's intent as the headline".
+- **Market on the Power chart:**
+  - `command_spans` (domain/market.py) folds the recorder history of `sensor.qw_source` / `qw_mode` /
+    `qw_powerlimit` into spans with the same test `decide` uses (known source, buy/sell mode, power > 0 after
+    `round100`); `GET /api/market/commands?since&until` (≤ 8 days) serves them via `MarketService.commands`. It
+    covers Live, Shadow, the automation and off alike. Recorder errors come back as `error`, and the chart just
+    leaves the layer out.
+  - TimeChart takes `overlays` (step lines at their own times, off the slot grid, counted in the y fit); lib/market.ts
+    has `marketOverlay`, `marketLane` and `marketRows` (popup). Open spans run on to the now line.
+  - PlanCharts: `PowerChart` with `legend={false}` and `legend-toggle` chips for every quantity plus Market power and
+    Market commands, hidden set in localStorage `emhass-lens.plan.power.hidden`.
+- **Less text:** repeats removed and explanations folded (`details.more` or `title`) on Plan, Inputs, the three
+  controller pages, Health, Runs and Settings; Settings help over 40 words shows its first sentence (`splitHelp`,
+  `FieldHelp`). The mode explain line hides in live (the amber notice says it), and `ConfirmDialog` still shows it.
+- **Checked:** e2e stack 24/24. In the UI against the e2e Home Assistant: commands set through its REST API show as
+  the dotted line and the lane at their exact times (zoomed), the chips hide/show and survive a reload, the folded
+  rules and the Settings *more* links render.
+
 ### 2026-10-14: the market's inverter writes beside the plan's (0.4.34)
 - **Why:** the owner downloaded `inverter.decide` runs 5603–5667 and asked whether the feed-in button was pressed
   around 08:30, and why the market's writes weren't among them.

@@ -174,7 +174,7 @@ export function InverterPage() {
         timeZone={tz}
         empty={
           data?.mode === 'off'
-            ? 'Inverter control is off, so nothing is decided. Switch to Dry run to compare with the automation slot by slot.'
+            ? 'Nothing decided: inverter control is off.'
             : 'No decisions yet today.'
         }
         legend={<StripKey strip={strip} presses={pressesToday} />}
@@ -197,7 +197,7 @@ export function InverterPage() {
             {!last ? (
               <Empty title="No decision yet">
                 {data?.mode === 'off'
-                  ? 'Inverter control is off. Use Decide now to see what it would do for the current slot.'
+                  ? 'Decide now shows what it would do.'
                   : 'The next decision comes right after the next slot starts.'}
               </Empty>
             ) : (
@@ -310,7 +310,7 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
           <table>
             <thead>
               <tr>
-                <SortableTh label="Slot" sortKey="slot" sort={list.sort} onSort={onSort} />
+                <SortableTh label="Slot" sortKey="slot" sort={list.sort} onSort={onSort} title={`Times in ${timeZone ?? "your browser's timezone"}`} />
                 <th>Decision</th>
                 <SortableTh label="Rule" sortKey="rule" sort={list.sort} onSort={onSort} />
                 <SortableTh label="Automation" sortKey="automation" sort={list.sort} onSort={onSort} />
@@ -357,7 +357,6 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
           </table>
         </div>
       )}
-      <div className="panel-body cell-sub">Times in {timeZone ?? "your browser's timezone"}.</div>
     </section>
   )
 }
@@ -421,11 +420,10 @@ function PressHistory({ presses, timeZone }: { presses: ButtonPress[] | undefine
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Button presses</h2>
-        <span className="muted">
-          The last 7 days{all.length >= 200 ? ', the latest 200' : ''}: {all.length} presses, {outside.length} outside
-          EMHASS Lens
-        </span>
+        <h2 title="Every press writes the inverter's EEPROM. Who pressed comes from Home Assistant: an automation, or a user in the UI or through a script. Presses while EMHASS Lens wasn't running aren't counted.">
+          Button presses
+        </h2>
+        <span className="muted">The last 7 days{all.length >= 200 ? ', the latest 200' : ''}</span>
       </div>
       <div className="panel-body">
         <div className="toolbar list-controls">
@@ -448,7 +446,7 @@ function PressHistory({ presses, timeZone }: { presses: ButtonPress[] | undefine
           <table>
             <thead>
               <tr>
-                <th>Time</th>
+                <th title={`Times in ${timeZone ?? "your browser's timezone"}`}>Time</th>
                 <th>Button</th>
                 <th>Pressed by</th>
               </tr>
@@ -476,11 +474,6 @@ function PressHistory({ presses, timeZone }: { presses: ButtonPress[] | undefine
           </table>
         </div>
       )}
-      <div className="panel-body cell-sub">
-        Every press writes the inverter's EEPROM. Who pressed comes from Home Assistant: an automation, or a user in the
-        UI or through a script. Presses while EMHASS Lens wasn't running aren't counted. Times in{' '}
-        {timeZone ?? "your browser's timezone"}.
-      </div>
     </section>
   )
 }

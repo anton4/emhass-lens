@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { useJobs, useRuns } from '../../api/queries'
+import { useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
-import { TimeChart, type ChartSeries, type ChartTick } from '../../components/charts/TimeChart'
+import { TimeChart, type ChartLane, type ChartOverlay, type ChartSeries, type ChartTick } from '../../components/charts/TimeChart'
 import { Lamp } from '../../components/Lamp'
 import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
+import { marketLane, marketOverlay, marketRows } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { snapWindow } from '../../lib/chartRange'
 import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
@@ -123,6 +124,37 @@ const POWER = [
 
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
 
+/** What the Power chart's chips switch: a quantity (its measured, planned and planned-then lines), the deferrable
+ *  loads, and Qilowatt's commands as a line and as a lane. */
+type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'market-power' | 'market-commands'
+
+// The parts hidden are remembered in this browser only; blocked storage just means all shown.
+const HIDDEN_KEY = 'emhass-lens.plan.power.hidden'
+
+function loadHidden(): Set<PowerPart> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? 'null')
+    if (Array.isArray(saved)) return new Set(saved.filter((p): p is PowerPart => typeof p === 'string') as PowerPart[])
+  } catch {
+    // fall through to the default
+  }
+  return new Set()
+}
+
+function saveHidden(hidden: Set<PowerPart>) {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden]))
+  } catch {
+    // not remembered, still works for this visit
+  }
+}
+
+interface PowerChip {
+  part: PowerPart
+  label: string
+  color: string
+}
+
 const negated = (values: (number | null)[]) => values.map((v) => (v === null ? null : -v))
 
 /** Power, state of charge and prices on one synced time axis: measured history (solid) with what the plan
@@ -149,22 +181,24 @@ export function PlanCharts({
   const shade = useMemo(() => pastShade(x, pastEndS), [x, pastEndS])
 
   const power = useMemo(() => {
-    const series: ChartSeries[] = []
+    const parts: { chip: PowerChip; series: ChartSeries[] }[] = []
     for (const q of POWER) {
       const inPlan = hasColumn(rows, q.column)
       const measured = hasMeasured(past, q.measured)
       const planned = hasPlanned(past, q.planned)
       if (!inPlan && !measured && !planned) continue
       const values = pastAndFuture(x, past, q.measured, rows, q.column, pastEndS)
-      series.push({
-        label: q.label,
-        popupLabel: q.popupLabel,
-        color: q.color,
-        fill: q.fill,
-        values: q.flip ? negated(values) : values,
-        format: q.format,
-        describe: q.describe,
-      })
+      const series: ChartSeries[] = [
+        {
+          label: q.label,
+          popupLabel: q.popupLabel,
+          color: q.color,
+          fill: q.fill,
+          values: q.flip ? negated(values) : values,
+          format: q.format,
+          describe: q.describe,
+        },
+      ]
       if (planned) {
         const then = plannedAtTheTime(x, past, q.planned)
         series.push({
@@ -176,17 +210,20 @@ export function PlanCharts({
           then: true,
         })
       }
+      parts.push({ chip: { part: q.measured, label: q.label, color: q.color }, series })
     }
     const deferrables = deferrableColumns(data.columns)
     const plannedDeferrable = hasPlanned(past, 'P_deferrable')
     if (deferrables.length > 0 || plannedDeferrable) {
       const label = deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads'
-      series.push({
-        label,
-        color: '--q-ev',
-        values: deferrableFuture(x, rows, deferrables, pastEndS),
-        format: formatPower,
-      })
+      const series: ChartSeries[] = [
+        {
+          label,
+          color: '--q-ev',
+          values: deferrableFuture(x, rows, deferrables, pastEndS),
+          format: formatPower,
+        },
+      ]
       if (plannedDeferrable) {
         series.push({
           label: `${label}, planned at the time`,
@@ -197,8 +234,9 @@ export function PlanCharts({
           then: true,
         })
       }
+      parts.push({ chip: { part: 'deferrable', label, color: '--q-ev' }, series })
     }
-    return series
+    return parts
   }, [x, rows, past, pastEndS, data.columns])
 
   const soc = useMemo(() => {
@@ -284,41 +322,26 @@ export function PlanCharts({
   return (
     <div className="chart-stack">
       <p className="chart-note chart-zoom" role="status">
-        {zoom ? (
+        {zoom && (
           <>
             Showing {windowLabel(zoom, data.timezone)}
             <button type="button" className="quiet" onClick={() => setZoom(null)}>
               Reset zoom
             </button>
           </>
-        ) : (
-          `Point at a chart to read every line at that moment. Drag across a chart to zoom in; double-click to see the whole ${hasPast ? 'range' : 'plan'} again.`
         )}
       </p>
-      <section className="chart-block">
-        <h3>Power</h3>
-        <TimeChart
-          x={x}
-          series={power}
-          ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads"
-          syncKey={SYNC}
-          yFormat={kwTick}
-          fit={POWER_FIT}
-          xRange={zoom}
-          onZoom={zoomTo}
-          shade={shade}
-          now={nowS}
-          timeZone={data.timezone}
-          height={300}
-          popup={slotTag}
-        />
-        {hasPast && (
-          <p className="chart-note">
-            Left of the now line: measured values (solid) and what the plan said at the time (dashed, &ldquo;planned
-            then&rdquo; in the popup). Right of it: the current plan.
-          </p>
-        )}
-      </section>
+      <PowerChart
+        x={x}
+        parts={power}
+        hasPast={hasPast}
+        zoom={zoom}
+        onZoom={zoomTo}
+        shade={shade}
+        nowS={nowS}
+        timeZone={data.timezone}
+        slotTag={slotTag}
+      />
       {soc && (
         <section className="chart-block">
           <h3>Battery state of charge</h3>
@@ -422,6 +445,122 @@ function MpcRunStrip({
         onTick={(tick) => tick.id && navigate(`/runs/${tick.id}`)}
       />
       <RunCounts runs={list} timeZone={timeZone} />
+    </section>
+  )
+}
+
+/** The Power chart: battery, grid, PV, house load and the deferrable loads, and Qilowatt's commands (a dotted line
+ *  for the power, a lane for what was asked) read from the Home Assistant recorder; chips under it switch each part. */
+function PowerChart({
+  x,
+  parts,
+  hasPast,
+  zoom,
+  onZoom,
+  shade,
+  nowS,
+  timeZone,
+  slotTag,
+}: {
+  x: number[]
+  parts: { chip: PowerChip; series: ChartSeries[] }[]
+  hasPast: boolean
+  zoom: [number, number] | null
+  onZoom: (range: [number, number] | null) => void
+  shade: [number, number][]
+  nowS: number
+  timeZone: string
+  slotTag: { tag: (t: number) => { text: string; tone: 'neutral' | 'blue' } }
+}) {
+  const [hidden, setHidden] = useState(loadHidden)
+  const toggle = (part: PowerPart) => {
+    const next = new Set(hidden)
+    if (next.has(part)) next.delete(part)
+    else next.add(part)
+    setHidden(next)
+    saveHidden(next)
+  }
+  // Whole hours keep the query key steady while the chart's first slot moves on
+  const first = x[0]
+  const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
+  const commands = useMarketCommands(since)
+  const spans = useMemo(() => commands.data?.spans ?? [], [commands.data])
+  const showPower = spans.length > 0 && !hidden.has('market-power')
+  const showCommands = spans.length > 0 && !hidden.has('market-commands')
+  const series = useMemo(
+    () => parts.filter((p) => !hidden.has(p.chip.part)).flatMap((p) => p.series),
+    [parts, hidden],
+  )
+  // a command still on runs on to the now line
+  const overlays = useMemo<ChartOverlay[]>(
+    () => (showPower ? [marketOverlay(spans, nowS)] : []),
+    [showPower, spans, nowS],
+  )
+  const lanes = useMemo<ChartLane[]>(() => (showCommands ? [marketLane(spans, nowS)] : []), [showCommands, spans, nowS])
+  const popup = useMemo(
+    () => ({
+      ...slotTag,
+      extra: showPower || showCommands ? (t: number) => marketRows(spans, t, timeZone) : undefined,
+    }),
+    [slotTag, showPower, showCommands, spans, timeZone],
+  )
+  const chips: PowerChip[] = [
+    ...parts.map((p) => p.chip),
+    ...(spans.length > 0
+      ? [
+          { part: 'market-power' as const, label: 'Market power (+ buy)', color: '--q-market' },
+          { part: 'market-commands' as const, label: 'Market commands', color: '--line-green' },
+        ]
+      : []),
+  ]
+  return (
+    <section className="chart-block">
+      <h3>Power</h3>
+      <TimeChart
+        x={x}
+        series={series}
+        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, and the market's commands"
+        syncKey={SYNC}
+        yFormat={kwTick}
+        fit={POWER_FIT}
+        xRange={zoom}
+        onZoom={onZoom}
+        shade={shade}
+        now={nowS}
+        timeZone={timeZone}
+        height={300}
+        popup={popup}
+        legend={false}
+        overlays={overlays}
+        lanes={lanes}
+      />
+      <ul className="legend" role="group" aria-label="Lines shown in the Power chart">
+        {chips.map((c) => (
+          <li key={c.part}>
+            <button
+              type="button"
+              className="legend-toggle"
+              aria-pressed={!hidden.has(c.part)}
+              title={hidden.has(c.part) ? 'Show in the chart' : 'Hide from the chart'}
+              onClick={() => toggle(c.part)}
+            >
+              <span
+                className="legend-swatch"
+                data-dotted={c.part === 'market-power' || undefined}
+                data-split={c.part === 'market-commands' || undefined}
+                style={{ background: `var(${c.color})`, color: `var(${c.color})` }}
+              />
+              {c.label}
+            </button>
+          </li>
+        ))}
+        {hasPast && (
+          <li className="legend-key" title="Left of the now line, solid lines are measured; right of it, the current plan">
+            <span className="legend-dash" aria-hidden="true" />
+            planned at the time
+          </li>
+        )}
+      </ul>
     </section>
   )
 }

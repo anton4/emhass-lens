@@ -137,33 +137,45 @@ export function ChargerRulesExplainer({
   /** The branch of the last decision. */
   current?: string | null
 }) {
+  const list = chargerRules(limits)
+  const chosen = list.find((r) => r.id === current)
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>How a branch is chosen</h2>
-        <span className="muted">The first match wins, top to bottom</span>
       </div>
       <div className="panel-body">
-        <ol className="rule-steps">
-          {chargerRules(limits).map((r) => (
-            <li key={r.id}>
-              <div className="cell-title">
-                <span className="rule-badge small word">{r.id}</span> {r.label}
-                {r.id === current && (
-                  <span className="chip" data-color="blue">
-                    chosen last
-                  </span>
-                )}
-              </div>
-              <div>
-                <span className="muted">When</span> {r.when}
-              </div>
-              <div>
-                <span className="muted">Does</span> {r.sets}
-              </div>
-            </li>
-          ))}
-        </ol>
+        <details className="more rules-list">
+          <summary>
+            The {list.length} branches, first match wins
+            {chosen && (
+              <>
+                {' · last '}
+                <span className="rule-badge small word">{chosen.id}</span> {chosen.label}
+              </>
+            )}
+          </summary>
+          <ol className="rule-steps">
+            {list.map((r) => (
+              <li key={r.id}>
+                <div className="cell-title">
+                  <span className="rule-badge small word">{r.id}</span> {r.label}
+                  {r.id === current && (
+                    <span className="chip" data-color="blue">
+                      chosen last
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="muted">When</span> {r.when}
+                </div>
+                <div>
+                  <span className="muted">Does</span> {r.sets}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </details>
         <details className="more rules-more">
           <summary>More about decisions</summary>
           <p>

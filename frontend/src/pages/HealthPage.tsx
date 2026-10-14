@@ -29,10 +29,7 @@ export function HealthPage() {
 
   return (
     <>
-      <PageHead
-        title="Health"
-        intro="Whether every part of EMHASS Lens is working, and when each job runs next."
-      />
+      <PageHead title="Health" />
       <ErrorNotice error={status.error ?? jobs.error} />
 
       <SectionLinks problems={s?.problems.length ?? 0} />
@@ -147,7 +144,7 @@ function ProblemsPanel() {
       </div>
       <ErrorNotice error={problems.error} />
       {problems.isSuccess && active.length === 0 ? (
-        <Empty title="No problems">Failed fetches, unreadable sensors, an unreachable EMHASS and missed jobs show up here.</Empty>
+        <Empty title="No problems" />
       ) : (
         <div className="panel-body">
           <ProblemList problems={active} />
@@ -252,9 +249,8 @@ function JobRow({ job, writable }: { job: JobInfo; writable: boolean }) {
   return (
     <tr>
       <td>
-        <div className="cell-title">{job.title}</div>
-        <div className="cell-sub" style={{ maxWidth: '52ch' }}>
-          {job.description}
+        <div className="cell-title" title={job.description}>
+          {job.title}
         </div>
         {action.error && <div className="field-error">{(action.error as Error).message}</div>}
       </td>

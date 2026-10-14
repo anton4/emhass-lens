@@ -76,7 +76,8 @@ export function ControllerHead({
       </div>
       <p className="controller-explain">
         <LabelledLamp color={current.color} text={current.text} />
-        <span className="muted">{current.explain}</span>
+        {/* live: the notice under it says what to watch out for */}
+        {mode !== 'live' && <span className="muted">{current.explain}</span>}
       </p>
       {mode === 'live' && (
         <div className="notice" data-color="amber" role="note">
