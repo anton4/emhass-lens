@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.33
+
+- Inputs: with **24 h measured** on, *Prices sent* also shows the prices before the anchor. These are the Nord Pool prices that applied, with today's tariff; nothing is sent to EMHASS for past slots. The **Tariff** lane and the popup cover them too.
+- Plan: a new first fact, **Mode**, says what drives the inverter now:
+  - *EMHASS*: the plan does.
+  - *Market*: a Qilowatt session does, with its direction, power, source and start time, and a link to the Market page. The hover text says whether EMHASS Lens or the Home Assistant automation runs the session.
+  - *market not watched*: neither market control nor the market session hold is on, so EMHASS Lens can't see a session.
+- API: `GET /api/inputs/sent` adds `load_cost`, `prod_price` and `period` to each `measured` slot. `GET /api/plan/now` adds `control`.
+
 ## 0.4.32
 
 - Plan: a more compact top. The plan's facts (Planned at, Solve took, Horizon, Total cost function) share one row with the **Previous slot / This slot / Next slot** switch, and the slot's times (and when it was published and read) move to the line under its headline.
