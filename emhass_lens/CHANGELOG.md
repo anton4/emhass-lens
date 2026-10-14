@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.35
+
+- Plan: the line over **This slot** names a source only for the power that reaches what it feeds, and only when it adds 300 W or more. PV covers the house first, so 145 W from the grid while PV charges the battery no longer reads "Charging the battery from PV and the grid". The line also changes only once two reads in a row (10 s apart) agree, so the few seconds of import while the inverter catches up with a load that just switched on don't flip it. The boxes still show every reading.
+- Plan: the **Power** chart shows Qilowatt's market commands, read from the Home Assistant recorder whoever ran the sessions:
+  - **Market power** is the commanded power as a dotted line at the commands' own times (a buy +, a sell −);
+  - **Market commands** is a row under the chart ("sell 9.40 kW · kratt"), green for a sell and blue for a buy;
+  - the popup lists the commands in the quarter-hour with their exact start and end.
+- Plan: chips under the Power chart switch each line on and off, and the choice is remembered in this browser.
+- Less text on every page. What only repeated something said nearby is gone, and longer explanations sit behind *Details*, *More* or hover text:
+  - Plan: the line under the headline keeps only the slot's times (published and read times are in their hover text); the plan's time and run are in *Planned at*; the inverter line leaves the mode to the chip; the zoom hint shows only while zoomed; *by HACS* replaces the HACS notice.
+  - Inputs, Accuracy, Cost functions, Health (ML, outputs, storage, the job list): explanations fold away.
+  - Inverter, EV charger, Market: the rules and guards fold away, and their summary names the rule chosen now; *Times in …* moved to the time column's hover text; shorter empty states.
+  - Settings: help over about 40 words shows its first sentence and a *more* link.
+  - Runs, Logs, Health and Inputs lose their intro sentence.
+- API: `GET /api/market/commands?since&until` returns Qilowatt's commands from the recorder (at most 8 days).
+
 ## 0.4.34
 
 - Inverter: the market's writes to the inverter now show alongside the plan's.
