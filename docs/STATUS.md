@@ -37,6 +37,25 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-14: past prices on *Prices sent*, and the Plan page says what drives the inverter (0.4.33)
+- **Why:** the owner asked why *Prices sent* (Inputs → What EMHASS gets) was empty before the anchor with
+  *24 h measured* on, and asked the Plan page to say whether EMHASS or a market session is in charge.
+- **Prices before the anchor:** nothing is sent for past slots, so the `measured` rows had only load, PV and SoC.
+  `MeasuredSlot` adds `load_cost`, `prod_price` and `period`: the stored Nord Pool prices through `PriceService.priced`
+  with today's tariff, rounded to `PRICE_DECIMALS` like the payload. The chart draws Import and Export back to the
+  start of the axis, and the Tariff lane (`tariffLane`, via `runsOf(…, 0)`) and the popup do too. The Export lane stays
+  payload-only (`maximum_power_to_grid` is a payload key).
+- **Mode:** `GET /api/plan/now` adds `control` (`control_now` in services/plan_now.py):
+  - `market`/`app` while live market control has an open session;
+  - `market`/`automation` while the hold is busy, with the command power and source when market control is on;
+  - otherwise `emhass`.
+  - `watched` is false when neither market control nor the hold is on, because EMHASS Lens can't see sessions then.
+  - The Plan page shows it as the first fact: an amber *Market · sell 5.00 kW (kratt) since 10:12* linking to the
+    Market page, a green *EMHASS*, or *EMHASS · market not watched*. The hover text explains it (`controlFact` in
+    lib/planNow.ts).
+- **Checked:** e2e stack 24/24. In the UI, past prices, the tariff and the popup show before the anchor. The Mode fact
+  shows both states (the hold on, the session select set to sell), and there is no side scroll at 390 px.
+
 ### 2026-10-13: a more compact top of the Plan page (0.4.32)
 - **Why:** the owner found the facts row and the *This slot* head two rows too many, *Made for* and *Times in* not
   worth a place, and the flow centred with the SoC and prices far off at the right edge.

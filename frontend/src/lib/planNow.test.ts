@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NowQuantity } from '../api/types'
-import { byKey, evSensor, expectedText, inverterParts, powerDiffers } from './planNow'
+import { byKey, controlFact, evSensor, expectedText, inverterParts, powerDiffers } from './planNow'
 
 const q = (key: string, measured: number | null, extra: Partial<NowQuantity> = {}): NowQuantity => ({ key, measured, sign_hint: false, ...extra })
 
@@ -45,5 +45,34 @@ describe('this slot, measured now', () => {
         feedin_max_w: 0,
       }),
     ).toEqual(['Passive Mode · Self-use battery or PV', 'grid target 0 W', 'battery -20 … 20 kW', 'feed-in limit 0 W'])
+  })
+})
+
+describe('the Plan page\'s mode', () => {
+  const TZ = 'Europe/Tallinn'
+  const since = '2026-10-14T07:12:00.000Z' // 10:12 in Tallinn
+  const now = new Date('2026-10-14T07:30:00Z')
+
+  it('names the market session, who runs it and since when', () => {
+    const app = controlFact({ mode: 'market', run_by: 'app', value: 'sell', power_w: 5000, source: 'kratt', since, watched: true }, now, TZ)
+    expect(app).toMatchObject({ market: true, label: 'Market', detail: 'sell 5.00 kW (kratt) since 10:12' })
+    expect(app?.title).toMatch(/^EMHASS Lens runs this Qilowatt market session/)
+    const automation = controlFact(
+      { mode: 'market', run_by: 'automation', value: 'buy', since, entity: 'input_select.qilowatt_session_state', watched: true },
+      now,
+      TZ,
+    )
+    expect(automation?.detail).toBe('buy since 10:12')
+    // a session from yesterday shows its day
+    expect(controlFact({ mode: 'market', run_by: 'app', value: 'buy', since, watched: true }, new Date('2026-10-15T07:30:00Z'), TZ)?.detail).toBe(
+      'buy since Wed 10:12',
+    )
+    expect(automation?.title).toMatch(/^The Home Assistant automation runs this market session \(input_select\.qilowatt_session_state is buy\)/)
+  })
+
+  it('says EMHASS, and when no market session is watched it says so', () => {
+    expect(controlFact({ mode: 'emhass', watched: true }, now, TZ)).toMatchObject({ market: false, label: 'EMHASS', detail: '' })
+    expect(controlFact({ mode: 'emhass', watched: false }, now, TZ)?.detail).toBe('market not watched')
+    expect(controlFact(null, now, TZ)).toBeNull()
   })
 })

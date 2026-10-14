@@ -222,3 +222,46 @@ def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(
         assert ended["load"]["measured"] is None and ended["batt"]["age_s"] is None
     finally:
         client.__exit__(None, None, None)
+
+
+def control_container(market: object = None, external: object = None, states: dict | None = None) -> object:
+    from types import SimpleNamespace
+
+    from emhass_lens.settings.model import Settings
+
+    ha = SimpleNamespace(state=lambda entity: (states or {}).get(entity))
+    return SimpleNamespace(
+        extras={"market": market, "external": external, "ha": ha},
+        settings=SimpleNamespace(current=Settings()),
+    )
+
+
+def test_the_apps_own_market_session_drives_the_inverter() -> None:
+    from types import SimpleNamespace
+
+    from emhass_lens.services.market import Session
+    from emhass_lens.services.plan_now import control_now
+
+    session = Session(7, "sell", "kratt", "sell", 5000, T, T)
+    market = SimpleNamespace(active=lambda: True, holds_inverter=lambda: True, session=session)
+    external = SimpleNamespace(enabled=lambda: False, busy=False)
+    assert control_now(control_container(market, external)) == {  # type: ignore[arg-type]
+        "mode": "market",
+        "run_by": "app",
+        "value": "sell",
+        "power_w": 5000,
+        "source": "kratt",
+        "since": "2026-10-10T14:30:00.000+00:00",
+        "watched": True,
+    }
+
+
+def test_without_market_control_or_a_hold_the_plan_drives_but_sessions_are_not_watched() -> None:
+    from types import SimpleNamespace
+
+    from emhass_lens.services.plan_now import control_now
+
+    market = SimpleNamespace(active=lambda: False, holds_inverter=lambda: False, session=None)
+    external = SimpleNamespace(enabled=lambda: False, busy=False)
+    assert control_now(control_container(market, external)) == {"mode": "emhass", "watched": False}  # type: ignore[arg-type]
+    assert control_now(control_container()) == {"mode": "emhass", "watched": False}  # type: ignore[arg-type]

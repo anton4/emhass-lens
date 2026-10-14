@@ -110,6 +110,31 @@ def test_a_session_holds_mpc_publish_and_the_inverter(tmp_path: Path, world: Wor
         client.__exit__(None, None, None)
 
 
+def test_the_plan_page_says_a_market_session_drives_the_inverter(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock)
+    try:
+        assert client.get("/api/plan/now").json()["control"] == {
+            "mode": "emhass",
+            "run_by": None,
+            "value": None,
+            "power_w": None,
+            "source": None,
+            "since": None,
+            "entity": None,
+            "watched": True,
+        }
+        set_session(client, world, "sell")
+        control = client.get("/api/plan/now").json()["control"]
+        assert (control["mode"], control["run_by"], control["value"]) == ("market", "automation", "sell")
+        assert control["entity"] == SESSION and control["since"] == "2026-10-09T11:13:00.000+00:00"
+        assert control["power_w"] is None  # the market's command sensors are watched only with market control on
+        set_session(client, world, "none")
+        assert client.get("/api/plan/now").json()["control"]["mode"] == "emhass"
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_the_resume_reapplies_the_plan_with_one_inverter_write(tmp_path: Path, world: World) -> None:
     clock = FakeClock(START)
     client = client_for(tmp_path, world, clock, inverter_mode="live")
@@ -243,8 +268,13 @@ def test_a_shadow_market_session_holds_and_hands_back_without_the_hold_switch(tm
         assert hold["enabled"] is True and hold["entity"] == SESSION  # the market's select, not the hold's entity
         set_session(client, world, "sell")
         world.set_state(ENABLE, "off")
+        world.set_state("sensor.qw_powerlimit", 5000)
+        world.set_state("sensor.qw_source", "kratt")
         prime(client, world)
         assert client.get("/api/emhass").json()["mpc"]["held"] is True
+        control = client.get("/api/plan/now").json()["control"]
+        assert (control["mode"], control["run_by"], control["value"]) == ("market", "automation", "sell")
+        assert (control["power_w"], control["source"]) == (5000, "kratt")
         decide = manual_run(client, "inverter.decide")
         assert decide["outcome"] == "noop" and "market session holds the inverter" in decide["summary"]
 

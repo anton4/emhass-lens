@@ -1519,6 +1519,28 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * ControlNow
+         * @description What drives the inverter now: the EMHASS plan, or a Qilowatt market session.
+         */
+        ControlNow: {
+            /** Entity */
+            entity?: string | null;
+            /** Mode */
+            mode: string;
+            /** Power W */
+            power_w?: number | null;
+            /** Run By */
+            run_by?: string | null;
+            /** Since */
+            since?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Value */
+            value?: string | null;
+            /** Watched */
+            watched: boolean;
+        };
         /** CostfunCompareResponse */
         CostfunCompareResponse: {
             /** Anchor */
@@ -3534,6 +3556,7 @@ export interface components {
          */
         PlanNow: {
             charger?: components["schemas"]["ChargerNow"] | null;
+            control?: components["schemas"]["ControlNow"] | null;
             inverter?: components["schemas"]["InverterNow"] | null;
             /** Next Row */
             next_row?: {

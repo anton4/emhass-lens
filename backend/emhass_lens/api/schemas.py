@@ -475,6 +475,19 @@ class ChargerNow(BaseModel):
     age_s: float | None = None  # seconds since that entity was last updated
 
 
+class ControlNow(BaseModel):
+    """What drives the inverter now: the EMHASS plan, or a Qilowatt market session."""
+
+    mode: str  # emhass | market
+    run_by: str | None = None  # market: app (EMHASS Lens runs the session) | automation (Home Assistant does)
+    value: str | None = None  # market: buy / sell, or the session entity's state
+    power_w: float | None = None  # the commanded power, when known
+    source: str | None = None  # who sent the command (kratt, fusebox), when known
+    since: str | None = None
+    entity: str | None = None  # the session entity a hold follows
+    watched: bool  # False: EMHASS Lens doesn't watch market sessions (no market control and no hold)
+
+
 class PlanNow(BaseModel):
     """The plan row in force for the current quarter next to what is measured and set now."""
 
@@ -492,6 +505,7 @@ class PlanNow(BaseModel):
     quantities: list[NowQuantity]
     inverter: InverterNow | None = None
     charger: ChargerNow | None = None
+    control: ControlNow | None = None
     soc_min: float | None = None  # EMHASS's battery_minimum_state_of_charge, 0–1
     soc_max: float | None = None  # EMHASS's battery_maximum_state_of_charge, 0–1
 

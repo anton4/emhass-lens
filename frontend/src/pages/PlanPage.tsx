@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { usePlan, usePlanHistory, useStatus } from '../api/queries'
+import { usePlan, usePlanHistory, usePlanNow, useStatus } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
@@ -17,6 +17,7 @@ import {
   planColumnUnit,
   rowAt,
 } from '../lib/plan'
+import { controlFact } from '../lib/planNow'
 import { planSummary } from '../lib/planSummary'
 import {
   HISTORY_WINDOWS,
@@ -44,6 +45,7 @@ const DRIVERS: Record<string, string> = {
 export function PlanPage() {
   const plan = usePlan()
   const appStatus = useStatus()
+  const planNow = usePlanNow() // shared with NowSlot
   const now = useNow(15_000)
   const nowS = now.getTime() / 1000
   const data = plan.data
@@ -92,6 +94,7 @@ export function PlanPage() {
 
   const summary = planSummary(rows, nowS, tz)
   const costFun = costFunTotal(rows)
+  const control = controlFact(planNow.data?.control, now, tz)
   const viewToggle = (
     <div className="segmented" role="group" aria-label="Show the plan as">
       <button type="button" aria-pressed={!table} onClick={() => setTable(false)}>
@@ -140,6 +143,16 @@ export function PlanPage() {
         now={now}
         facts={
           <dl className="facts facts-inline">
+            {control && (
+              <div>
+                <dt>Mode</dt>
+                <dd title={control.title}>
+                  <Lamp color={control.market ? 'amber' : 'green'} label={control.label} />{' '}
+                  {control.market ? <Link to="/market">{control.label}</Link> : control.label}
+                  {control.detail && <span className="muted"> · {control.detail}</span>}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Planned at</dt>
               <dd>

@@ -1,6 +1,7 @@
 // The Plan page's this slot: what is measured now next to the plan, and what the inverter is set to.
 
-import type { ChargerNow, InverterNow, NowQuantity } from '../api/types'
+import type { ChargerNow, ControlNow, InverterNow, NowQuantity } from '../api/types'
+import { formatSlot } from './format'
 import { batteryDirection, formatPower, gridDirection, isNumber } from './units'
 
 export type NowByKey = Partial<Record<'batt' | 'grid' | 'pv' | 'load' | 'soc', NowQuantity>>
@@ -15,6 +16,48 @@ export function byKey(quantities: NowQuantity[] | null | undefined): NowByKey {
 export function evSensor(charger: ChargerNow | null | undefined): NowQuantity | undefined {
   if (!charger?.entity) return undefined
   return { key: 'ev', entity: charger.entity, age_s: charger.age_s, sign_hint: false }
+}
+
+export interface ControlFact {
+  market: boolean
+  /** "EMHASS" or "Market" */
+  label: string
+  /** "sell 5.00 kW (kratt) since 10:12", or "market not watched" */
+  detail: string
+  title: string
+}
+
+/** The Plan page's Mode: whether the EMHASS plan or a Qilowatt market session drives the inverter now. A session
+ *  that began on another day shows its weekday. */
+export function controlFact(control: ControlNow | null | undefined, now: Date, timeZone: string): ControlFact | null {
+  if (!control) return null
+  if (control.mode !== 'market') {
+    return control.watched
+      ? { market: false, label: 'EMHASS', detail: '', title: 'The EMHASS plan drives the inverter: no market session holds it' }
+      : {
+          market: false,
+          label: 'EMHASS',
+          detail: 'market not watched',
+          title:
+            'EMHASS Lens doesn’t watch market sessions, so one may hold the inverter unseen. Turn on Settings → Market session hold, or Qilowatt market control.',
+        }
+  }
+  const parts = [
+    control.value ?? 'session',
+    isNumber(control.power_w) ? formatPower(control.power_w) : null,
+    control.source ? `(${control.source})` : null,
+    control.since ? `since ${formatSlot(control.since, now, timeZone)}` : null,
+  ]
+  const by =
+    control.run_by === 'app'
+      ? 'EMHASS Lens runs this Qilowatt market session and hands the inverter back to the plan when it ends'
+      : `The Home Assistant automation runs this market session${control.entity ? ` (${control.entity} is ${control.value ?? '?'})` : ''}; the plan is re-applied when it ends`
+  return {
+    market: true,
+    label: 'Market',
+    detail: parts.filter(Boolean).join(' '),
+    title: `${by}. Until then MPC runs are built but not sent, and the plan isn’t applied.`,
+  }
 }
 
 /** A power is off when it is this far off and this share of the larger of the two (domain/plan_now.py's rule). */

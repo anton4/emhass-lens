@@ -9,7 +9,7 @@ from emhass_lens.core.clock import iso
 from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.inverter import Targets
 from emhass_lens.domain.plan_now import Reading, compare, row_for, row_targets
-from emhass_lens.services.ha_values import last_updated, num
+from emhass_lens.services.ha_values import last_updated, num, text
 from emhass_lens.services.measurements import FIELDS, QUANTITIES
 
 if TYPE_CHECKING:
@@ -84,6 +84,45 @@ def charger_now(c: Container) -> dict[str, Any] | None:
         "entity": newest[1] if newest else None,
         "age_s": (c.clock.now() - newest[0]).total_seconds() if newest else None,
     }
+
+
+def control_now(c: Container) -> dict[str, Any]:
+    """What drives the inverter now: a Qilowatt market session (EMHASS Lens's own in live market control, or the
+    Home Assistant automation's that the hold follows) or else the EMHASS plan."""
+    market = c.extras.get("market")
+    external = c.extras.get("external")
+    watched = bool((market is not None and market.active()) or (external is not None and external.enabled()))
+    if market is not None and market.holds_inverter() and market.session is not None:
+        s = market.session
+        return {
+            "mode": "market",
+            "run_by": "app",
+            "value": s.direction,
+            "power_w": s.power_w,
+            "source": s.source,
+            "since": iso(s.started_at),
+            "watched": watched,
+        }
+    if external is not None and external.busy:
+        source = external.source()
+        out: dict[str, Any] = {
+            "mode": "market",
+            "run_by": "automation",
+            "value": external.busy_value,
+            "since": iso(external.busy_since),
+            "entity": source[0] if source else None,
+            "watched": watched,
+        }
+        if market is not None and market.active():  # the command sensors are watched only then
+            e = c.settings.current.market.entities
+            ha = c.extras["ha"]
+            source_text = text(ha.state(e.source_sensor))
+            out.update(
+                power_w=num(ha.state(e.powerlimit_sensor)),
+                source=source_text if source_text not in (None, "", "unknown", "unavailable") else None,
+            )
+        return out
+    return {"mode": "emhass", "watched": watched}
 
 
 def _emhass_config_number(c: Container, name: str) -> float | None:
@@ -183,6 +222,7 @@ async def plan_now(c: Container) -> dict[str, Any]:
         "quantities": [],
         "inverter": inverter,
         "charger": charger_now(c),
+        "control": control_now(c),
         **soc_limits(c),
     }
     if found is None:
