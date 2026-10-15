@@ -16,6 +16,13 @@ def _hhmm(value: str) -> time:
     return time(int(h), int(m))
 
 
+def _when(dt: datetime, now: datetime, tz: Any) -> str:
+    """A moment for a problem's detail in local time: "08:56" today, "Wed 14 Oct 08:56" on another day. No "ago":
+    the detail must stay the same from one evaluation to the next."""
+    local = dt.astimezone(tz)
+    return f"{local:%H:%M}" if local.date() == now.astimezone(tz).date() else f"{local:%a %d %b %H:%M}"
+
+
 def evaluate(c: Container, now: datetime) -> list[Problem]:
     settings = c.settings.current
     x = c.extras
@@ -210,26 +217,28 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 "#/health",
             )
         )
-    if mode == "live" and settings.emhass.mpc.auto:
+    external = x.get("external")
+    # a market session holds MPC on purpose: runs are built but not sent, so there is no success to wait for
+    held = external is not None and external.holding
+    if mode == "live" and settings.emhass.mpc.auto and not held:
         last = mpc.last_success_at
         stale_after = timedelta(minutes=15 * settings.health.plan_max_age_slots)
         # the grace counts from the moment the App became the driver, not from the process start
         since = max(c.started_at, mpc.live_since or c.started_at)
-        if (last is None and now - since > stale_after) or (last is not None and now - last > stale_after):
-            out.append(
-                Problem(
-                    "mpc.stale",
-                    "error",
-                    "No successful MPC run recently",
-                    f"last success {last.isoformat()}"
-                    if last
-                    else f"no live run has succeeded since EMHASS Lens took over at {since.astimezone(tz):%H:%M}",
-                    link="#/runs",
-                )
+        # ... and after a session, from the last run it held
+        held_until = mpc.last_held_at
+        newest = max(t for t in (last, since, held_until) if t is not None)
+        if now - newest > stale_after:
+            detail = (
+                f"last success at {_when(last, now, tz)}"
+                if last
+                else f"no live run has succeeded since EMHASS Lens took over at {_when(since, now, tz)}"
             )
+            if held_until is not None and held_until > (last or since):
+                detail += f"; MPC was held for a market session until {_when(held_until, now, tz)}"
+            out.append(Problem("mpc.stale", "error", "No successful MPC run recently", detail, link="#/runs"))
 
     # Market session hold
-    external = x.get("external")
     source = external.source() if external is not None else None
     if external is not None and source is not None and ha.connected and ha.state(source[0]) is None:
         market_select = external.follows_market()
@@ -525,12 +534,15 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
         warn_days = settings.storage.backup_warn_days
         if warn_days and backup is not None and backup.get("available") and backup.get("stale"):
             newest = backup.get("newest_at")
+            newest_at = parse_iso_safe(newest)
             out.append(
                 Problem(
                     "backup.stale",
                     "warning",
                     "No recent backup contains EMHASS Lens",
-                    f"the newest one is from {newest}" if newest else "no Home Assistant backup includes the App",
+                    f"the newest one is from {_when(newest_at, now, tz) if newest_at else newest}"
+                    if newest
+                    else "no Home Assistant backup includes the App",
                     "Check the Home Assistant Google Drive Backup add-on (full backups, or a partial backup that "
                     "includes EMHASS Lens).",
                     "#/health?card=storage",

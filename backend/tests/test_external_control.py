@@ -2,13 +2,14 @@
 entity is busy, and the plan is re-applied once (one inverter write at most) when the session ends."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from emhass_lens.core.clock import FakeClock
+from emhass_lens.services.health_rules import evaluate
 from emhass_lens.services.outputs import state_messages
 from tests.test_inverter_service import SOFAR
 from tests.test_phase1 import prime, run_job, ticks
@@ -214,6 +215,35 @@ def test_no_resume_without_the_hand_back(tmp_path: Path, world: World) -> None:
         assert resume["outcome"] == "noop", resume
         assert resume["summary"].startswith("Hand-back not seen")
         assert world.emhass_actions[actions_before:] == []
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_session_does_not_make_mpc_stale(tmp_path: Path, world: World) -> None:
+    """Held runs aren't sent, so there is no success to wait for; after the session the grace counts from the last
+    held run, and the detail says when in local time."""
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock)
+    try:
+        c = container(client)
+
+        def stale(at: datetime) -> str | None:
+            problem = {p.key: p for p in evaluate(c, at)}.get("mpc.stale")
+            return problem.detail if problem else None
+
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"  # 14:13 local
+        set_session(client, world, "sell")
+        clock.advance(minutes=1)  # still inside the slot, so nothing scheduled runs in between
+        assert run_job(client, "emhass.mpc")["outcome"] == "shadow"  # held at 14:14
+        held_at = clock.now()
+        assert stale(held_at + timedelta(hours=2)) is None  # a long session isn't an MPC problem
+
+        set_session(client, world, "none")
+        wait_for_run(client, "external.resume", 0)
+        assert stale(held_at + timedelta(minutes=29)) is None
+        assert stale(held_at + timedelta(minutes=31)) == (
+            "last success at 14:13; MPC was held for a market session until 14:14"
+        )
     finally:
         client.__exit__(None, None, None)
 

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from emhass_lens.app import create_app
 from emhass_lens.bootstrap import Bootstrap
 from emhass_lens.core.clock import FakeClock
+from emhass_lens.services.health_rules import _when
 from emhass_lens.services.outputs import discovery, topics
 from emhass_lens.settings.model import Settings
 from tests.test_phase1 import prime, run_job, ticks
@@ -245,3 +246,9 @@ def test_taking_over_does_not_raise_a_stale_mpc_problem_before_the_first_run(tmp
         assert "mpc.stale" in problems and "took over at" in problems["mpc.stale"]["detail"]
     finally:
         client.__exit__(None, None, None)
+
+
+def test_problem_times_are_local_and_name_the_day_only_when_it_isnt_today() -> None:
+    now = datetime(2026, 10, 15, 21, 30, tzinfo=UTC)  # 00:30 on Friday in Tallinn
+    assert _when(datetime(2026, 10, 15, 21, 10, 5, 406689, tzinfo=UTC), now, TZ) == "00:10"
+    assert _when(datetime(2026, 10, 15, 20, 56, tzinfo=UTC), now, TZ) == "Thu 15 Oct 23:56"  # same UTC day
