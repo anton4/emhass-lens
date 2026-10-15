@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.40
+
+- Inverter: the slot popup marks the feed-in limit **changed** only when the inverter held something else. Before, the first slot of the day that named a limit always said changed, even when the run kept the 15500 W the inverter already had and wrote nothing (run 6727 on 2026-10-15).
+- Inverter: a decide run's summary says what the feed-in register held: "feed-in 15500 W (kept)" or "feed-in 15500 W (was 0 W)". Under a slot that leaves the limit as it is, a limit found already set (yesterday, or by a market session) reads "15500 W since before 07:30".
+
 ## 0.4.39
 
 - Market: a change in a market command that the 15 % deadband hid is now written once it has held for the cooldown (180 s), as long as it is more than 300 W. On 2026-10-14 Kratt raised a sell from 9400 W to 10600 W, and the inverter kept exporting 9400 W for the ten minutes left of the command. A quick change that comes back within the cooldown is still left alone.
