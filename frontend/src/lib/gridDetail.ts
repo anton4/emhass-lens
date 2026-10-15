@@ -1,11 +1,10 @@
 // The grid power measured finer than the quarter-hour means: on the Plan page's Power chart it is the grid line itself
-// left of now (the quarter-hour means stay in the popup), beside the market's commands. See
+// left of now (the popup's Grid row reads it at the pointer, the quarter-hour mean beside it), beside the market's
+// commands. See
 // backend/emhass_lens/services/grid_detail.py.
 
 import type { GridDetail } from '../api/types'
-import type { PopupExtra } from '../components/charts/cursorStore'
 import type { ChartOverlay } from './chartRange'
-import { formatSignedPower } from './units'
 
 const HOUR_S = 3600
 const SLOT_S = 900
@@ -60,8 +59,9 @@ export function detailCover(detail: GridDetail | undefined): [number, number] | 
   return [unix(detail.start), unix(detail.end)]
 }
 
-/** The grid's quarter-hour values with the measured slots the detail covers left out, so its line draws the grid
- *  there instead (`x` are slot starts; slots from `pastEndS` on are the plan and stay). */
+/** The grid's quarter-hour values with the slots the detail covers left out, so its line draws the grid there instead
+ *  (`x` are slot starts; slots from `pastEndS` on are the plan). The plan's slot the detail ends in (the one in
+ *  progress) is left out too: `planTail` draws it from where the detail ends. */
 export function withoutCovered(
   x: number[],
   values: (number | null)[],
@@ -69,10 +69,37 @@ export function withoutCovered(
   pastEndS: number,
 ): (number | null)[] {
   if (!cover) return values
+  const tail = tailIndex(x, cover, pastEndS)
   return values.map((v, i) => {
     const t = x[i]
-    return t !== undefined && t < pastEndS && t >= cover[0] && t + SLOT_S <= cover[1] ? null : v
+    return i === tail || (t !== undefined && t >= cover[0] && t + SLOT_S <= cover[1]) ? null : v
   })
+}
+
+/** The plan's slot the detail ends in, or -1. */
+function tailIndex(x: number[], cover: [number, number], pastEndS: number): number {
+  return x.findIndex((t) => t >= pastEndS && t < cover[1] && cover[1] < t + SLOT_S)
+}
+
+/** The plan's grid line in the slot in progress from where the detail ends (now) to the slot's end, rising there to
+ *  the next slot's value, so the slot isn't drawn twice; null when the detail doesn't end in a plan slot. */
+export function planTail(
+  x: number[],
+  values: (number | null)[],
+  cover: [number, number] | null,
+  pastEndS: number,
+): ChartOverlay['spans'] | null {
+  if (!cover) return null
+  const i = tailIndex(x, cover, pastEndS)
+  const t = x[i]
+  const value = values[i]
+  if (t === undefined || value === null || value === undefined) return null
+  const end = x[i + 1] ?? t + SLOT_S
+  const next = values[i + 1]
+  return [
+    { from: cover[1], to: end, value },
+    ...(next !== null && next !== undefined ? [{ from: end, to: end, value: next }] : []),
+  ]
 }
 
 /** How fine the line is, for the Grid chip's title: "measured every 10 s", "measured at each change". */
@@ -96,10 +123,4 @@ export function gridAt(detail: GridDetail | undefined, time: number): number | n
   }
   const point = detail.points[lo]!
   return point.w === null || unix(point.t) > time ? null : point.w
-}
-
-/** The popup's row for the measured grid power at the pointer ("−9.31 kW"; the popup's header has the time). */
-export function gridRows(detail: GridDetail | undefined, time: number): PopupExtra[] {
-  const w = gridAt(detail, time)
-  return w === null ? [] : [{ name: 'Grid measured', value: formatSignedPower(w), color: '--q-grid' }]
 }

@@ -25,6 +25,11 @@ export interface ChartOverlay {
   base?: 'zero' | 'none'
   /** A ring in the surface colour under the line, so it stands clear of the lines it crosses. */
   halo?: boolean
+  /** false: the y-axis doesn't fit it (a market command far past the measured lines). Beyond the axis it runs along
+   *  the edge it leaves through, with `offScale`'s text at its start. */
+  fit?: false
+  /** The text for a span beyond the axis ("↓ 15.5 kW"). */
+  offScale?: (value: number) => string
   spans: { from: number; to: number; value: number }[]
 }
 
@@ -60,7 +65,8 @@ export function overlayRuns(spans: ChartOverlay['spans'], base: 'zero' | 'none' 
   return runs
 }
 
-/** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null. */
+/** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null.
+ *  Overlays with `fit: false` don't count. */
 export function overlayExtent(
   overlays: ChartOverlay[],
   from: number | null | undefined,
@@ -69,6 +75,7 @@ export function overlayExtent(
   let lo = Infinity
   let hi = -Infinity
   for (const overlay of overlays) {
+    if (overlay.fit === false) continue
     for (const span of overlay.spans) {
       if ((to !== null && to !== undefined && span.from > to) || (from !== null && from !== undefined && span.to < from)) {
         continue

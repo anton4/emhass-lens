@@ -80,4 +80,11 @@ describe('overlayRuns', () => {
     expect(overlayExtent([overlay], 25, 50)).toEqual([-5, -5])
     expect(overlayExtent([overlay], null, null)).toEqual([-5, 3])
   })
+
+  it("leaves out an overlay the axis doesn't fit (a command far past the measured lines)", () => {
+    const measured = { label: 'Grid', color: 'red', spans: [{ from: 0, to: 10, value: 7600 }] }
+    const commanded = { label: 'Commanded', color: 'black', fit: false as const, spans: [{ from: 0, to: 10, value: 15500 }] }
+    expect(overlayExtent([commanded, measured], null, null)).toEqual([7600, 7600])
+    expect(overlayExtent([commanded], null, null)).toBeNull()
+  })
 })

@@ -44,7 +44,7 @@ export function ChartPopup({
   const docked = at.width < DOCK_BELOW
   if (docked && at.pointerY === null) return null
   const { series, x, timeZone, tag: tagFor, extra: extraFor, head: headFor, block: blockFor } = read()
-  const { rows, hasThen } = popupRows(series, at.idx)
+  const { rows, hasThen } = popupRows(series, at.idx, at.time)
   const t = x[at.idx]
   const extra = t !== undefined ? (extraFor?.(t, at.time) ?? []) : []
   const block = t !== undefined ? (blockFor?.(t, at.time) ?? null) : null
@@ -56,6 +56,7 @@ export function ChartPopup({
   const estimate =
     46 +
     20 * (rows.length + extra.length) +
+    14 * rows.filter((r) => r.note).length +
     (hasThen ? 18 : 0) +
     (rows.length && extra.length ? 6 : 0) +
     (head && rows.length ? 18 : 0) +
@@ -133,6 +134,7 @@ export function ChartPopup({
               <span className="chart-pop-value">
                 <b>{r.value}</b>
                 {r.describe && <i> {r.describe}</i>}
+                {r.note && <small className="chart-pop-note">{r.note}</small>}
               </span>
               {hasThen && <span className="chart-pop-then">{r.then ?? ''}</span>}
             </div>

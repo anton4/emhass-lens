@@ -12,6 +12,9 @@ export interface PopupSeries {
   values: (number | null)[]
   /** What the popup shows when the drawn values are stacked sums. */
   readout?: (number | null)[]
+  /** The value at the pointer's own moment (the grid measured finer than the slots), or null: shown instead of the
+   *  slot's, which becomes the row's note. */
+  moment?: (time: number) => number | null
   format?: (value: number) => string
   /** A word for the value's direction ("charging"). */
   describe?: (value: number) => string
@@ -36,19 +39,24 @@ export interface PopupRow {
   total: boolean
   value: string
   describe: string
+  /** Under the value: the slot's own when the row shows the pointer's moment ("¼ h +5.90 kW"); null otherwise. */
+  note: string | null
   /** The plan at the time, formatted; null when there is none. */
   then: string | null
 }
 
 const known = (v: number | null | undefined): v is number => v !== null && v !== undefined && Number.isFinite(v)
 
-/** One row per series at `idx` (its "planned at the time" partner folded into it); series with nothing there are left out. */
-export function popupRows(series: PopupSeries[], idx: number): { rows: PopupRow[]; hasThen: boolean } {
+/** One row per series at `idx` (its "planned at the time" partner folded into it); series with nothing there are left
+ *  out. A series with a value at the pointer's moment `time` shows that, with the slot's value as its note. */
+export function popupRows(series: PopupSeries[], idx: number, time?: number): { rows: PopupRow[]; hasThen: boolean } {
   const rows: PopupRow[] = []
   series.forEach((s, i) => {
     if (s.then || s.helper) return
     const partner = series[i + 1]?.then ? series[i + 1] : undefined
-    const value = (s.readout ?? s.values)[idx]
+    const slot = (s.readout ?? s.values)[idx]
+    const moment = time !== undefined ? s.moment?.(time) : null
+    const value = known(moment) ? moment : slot
     const then = partner?.values[idx]
     if (!known(value) && !known(then)) return
     const format = (v: number, by: PopupSeries) => (by.format ? by.format(v) : String(v))
@@ -62,6 +70,7 @@ export function popupRows(series: PopupSeries[], idx: number): { rows: PopupRow[
       total: Boolean(s.total),
       value: known(value) ? format(value, s) : '—',
       describe: known(value) && s.describe ? s.describe(value) : '',
+      note: known(moment) && known(slot) ? `¼ h ${format(slot, s)}` : null,
       then: known(then) && partner ? format(then, partner) : null,
     })
   })

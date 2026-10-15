@@ -207,6 +207,13 @@ describe('the commands on the Power chart', () => {
     ])
   })
 
+  it('leaves the y-axis to the measured lines, a command past it labelled with its direction and power', () => {
+    const overlay = marketOverlay([a, buy], NOW)
+    expect(overlay.fit).toBe(false)
+    expect(overlay.offScale?.(15500)).toBe('↓ 15.5 kW') // a buy: down
+    expect(overlay.offScale?.(-12900)).toBe('↑ 12.9 kW') // a sell: up
+  })
+
   it('says what the grid delivered over a command, counted in its direction', () => {
     expect(deliveredW(b)).toBe(7000)
     expect(deliveredW({ ...buy, measured_w: 4800 })).toBe(4800)
@@ -258,26 +265,28 @@ describe('the commands on the Power chart', () => {
         id: a.start,
         from: s(a.start),
         to: s(c.end),
+        group: 'sell',
         color: '--q-sell',
         ink: '--q-sell-ink',
-        label: '↓ SELL 5.2–9.0 kW',
-        detail: '↓ SELL · kratt · mfrrup · 08:45–08:50 · 88 % delivered',
-        short: '↓',
+        label: '↑ SELL 5.2–9.0 kW', // a sell regulates up, a buy down
+        detail: '↑ SELL · kratt · mfrrup · 08:45–08:50 · 88 % delivered',
+        short: '↑',
       },
       {
         id: buy.start,
         from: s(buy.start),
         to: NOW,
+        group: 'buy',
         color: '--q-buy',
         ink: '--q-buy-ink',
-        label: '↑ BUY 5.0 kW',
-        detail: '↑ BUY · kratt · mfrrdown · 09:58–now',
-        short: '↑',
+        label: '↓ BUY 5.0 kW',
+        detail: '↓ BUY · kratt · mfrrdown · 09:58–now',
+        short: '↓',
       },
     ])
   })
 
-  it('draws a bar per session in the lane, its shortfalls along the foot', () => {
+  it('draws a bar per session in the lane, its shortfalls hatched across it', () => {
     const lane = marketLane(sessions, shortfalls([a, b, c], detail))
     expect(lane.spans[0]).toEqual({
       from: s(a.start),
@@ -285,7 +294,7 @@ describe('the commands on the Power chart', () => {
       color: '--q-sell',
       ink: '--q-sell-ink',
       text: '88 %',
-      long: 'sell · 3 commands · 88 % delivered',
+      long: 'sell · 3 commands · 88 % delivered · shortfall 2 min',
       marks: [{ from: s('2026-10-14T05:47:30Z'), to: s('2026-10-14T05:49:00Z'), color: '--q-shortfall' }],
       id: a.start,
     })
@@ -301,18 +310,18 @@ describe('the commands on the Power chart', () => {
     const at = (iso: string, d: GridDetail | null = detail) =>
       marketBlock({ spans: [a, b, c, buy], sessions, runs, detail: d ?? undefined, time: s(iso), nowS: NOW, timeZone: tz })
     expect(at('2026-10-14T05:48:00Z')).toEqual({
-      title: '↓ SELL',
+      title: '↑ SELL',
       sub: 'kratt · mfrrup',
       tone: 'sell',
       rows: [
         { name: 'Commanded', value: '9.00 kW', note: 'since 08:47:00', color: '--q-market', swatch: 'line' },
-        { name: 'Grid measured', value: '−7.00 kW', note: '78 % of it', color: '--q-grid', swatch: 'thin' },
+        { name: 'Grid', value: '−7.00 kW', note: '78 % of it', color: '--q-grid', swatch: 'thin' },
         { name: 'Shortfall', value: '2.00 kW', color: '--q-shortfall', swatch: 'hatch', alert: true },
       ],
       foot: ['Session 08:45–08:50 · 3 commands', '5.2–9.0 kW · 88 % delivered'],
     })
     // past the shortfall: no shortfall row
-    expect(at('2026-10-14T05:46:10Z')?.rows.map((r) => r.name)).toEqual(['Commanded', 'Grid measured'])
+    expect(at('2026-10-14T05:46:10Z')?.rows.map((r) => r.name)).toEqual(['Commanded', 'Grid'])
     // without the grid detail: what the grid delivered over the command
     expect(at('2026-10-14T05:48:00Z', null)?.rows[1]).toEqual({
       name: 'Delivered',
@@ -321,7 +330,7 @@ describe('the commands on the Power chart', () => {
       color: '--q-grid',
       swatch: 'thin',
     })
-    expect(at('2026-10-14T07:00:00Z')).toMatchObject({ title: '↑ BUY', tone: 'buy', foot: ['Session 09:58–now · 1 command', '5.0 kW'] })
+    expect(at('2026-10-14T07:00:00Z')).toMatchObject({ title: '↓ BUY', tone: 'buy', foot: ['Session 09:58–now · 1 command', '5.0 kW'] })
     expect(at('2026-10-14T06:30:00Z')).toBeNull()
   })
 })

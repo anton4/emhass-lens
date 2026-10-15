@@ -19,7 +19,7 @@ export interface PopupExtra {
 /** A tinted block above the lines' rows: what was going on at the pointer's moment (a market command), its rows, and
  *  a few lines under a rule (the session it belongs to). */
 export interface PopupBlock {
-  /** "↓ SELL" */
+  /** "↑ SELL" */
   title: string
   /** "kratt · mfrrup" */
   sub?: string

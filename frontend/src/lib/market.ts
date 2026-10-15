@@ -262,6 +262,13 @@ export function watchdogText(
 
 const unix = (iso: string) => Date.parse(iso) / 1000
 
+const kw1 = (w: number) => (w / 1000).toFixed(1)
+
+// a sell regulates up (the grid takes power), a buy down
+const SELL_ARROW = '↑'
+const BUY_ARROW = '↓'
+const head = (sell: boolean) => (sell ? `${SELL_ARROW} SELL` : `${BUY_ARROW} BUY`)
+
 /** A span's end; one still on when it was read runs on to `nowS`. */
 const spanEnd = (s: MarketCommandSpan, nowS?: number) =>
   s.open && nowS !== undefined ? Math.max(unix(s.end), nowS) : unix(s.end)
@@ -272,7 +279,8 @@ export function commandPower(span: Pick<MarketCommandSpan, 'direction' | 'power_
 }
 
 /** The commanded power as an ink line over the Power chart, stepping at the commands' own times. The measured grid
- *  line's buckets break at those times too, so the two lines step together. */
+ *  line's buckets break at those times too, so the two lines step together. The y-axis fits the measured lines, not
+ *  the commands: one past it runs along the edge with its direction and power ("↓ 15.5 kW"). */
 export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartOverlay {
   return {
     label: 'Commanded',
@@ -280,6 +288,8 @@ export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartO
     width: 2.25,
     base: 'none',
     halo: true,
+    fit: false,
+    offScale: (value) => `${value > 0 ? BUY_ARROW : SELL_ARROW} ${kw1(Math.abs(value))} kW`,
     spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandPower(s) })),
   }
 }
@@ -401,8 +411,6 @@ export function shortfallGap(runs: Shortfall[]): ChartGap {
   }
 }
 
-const kw1 = (w: number) => (w / 1000).toFixed(1)
-
 /** "5.2–9.4 kW", or "12.0 kW" for one power. */
 function powerRange(s: CommandSession): string {
   return s.minW === s.maxW ? `${kw1(s.maxW)} kW` : `${kw1(s.minW)}–${kw1(s.maxW)} kW`
@@ -422,28 +430,35 @@ function sessionSources(s: CommandSession): string {
 
 const deliveredText = (s: CommandSession) => (s.delivered === null ? null : `${Math.round(s.delivered * 100)} % delivered`)
 
-/** The sessions as bands across the Power chart, each with a flag: "↓ SELL 5.2–9.4 kW", and while the pointer is in it
- *  "↓ SELL · kratt · mfrrup · 08:45–09:32 · 95 % delivered". */
+/** The sessions as bands across the Power chart, each with a flag: "↑ SELL 5.2–9.4 kW", and while the pointer is in
+ *  it "↑ SELL · kratt · mfrrup · 08:45–09:32 · 95 % delivered". Sessions of one direction share a flag where theirs
+ *  would touch. */
 export function sessionBands(sessions: CommandSession[], timeZone?: string): ChartSession[] {
   return sessions.map((s) => {
     const sell = s.direction === 'sell'
-    const head = sell ? '↓ SELL' : '↑ BUY'
     const delivered = deliveredText(s)
     return {
       id: s.id,
       from: s.from,
       to: s.to,
+      group: s.direction,
       color: sell ? '--q-sell' : '--q-buy',
       ink: sell ? '--q-sell-ink' : '--q-buy-ink',
-      label: `${head} ${powerRange(s)}`,
-      detail: [head, sessionSources(s), sessionTimes(s, timeZone), delivered].filter(Boolean).join(' · '),
-      short: sell ? '↓' : '↑',
+      label: `${head(sell)} ${powerRange(s)}`,
+      detail: [head(sell), sessionSources(s), sessionTimes(s, timeZone), delivered].filter(Boolean).join(' · '),
+      short: sell ? SELL_ARROW : BUY_ARROW,
     }
   })
 }
 
+/** "shortfall 3 min" over the session's shortfalls, or null without any. */
+function shortfallText(runs: Shortfall[]): string | null {
+  const seconds = runs.reduce((sum, r) => sum + r.to - r.from, 0)
+  return seconds > 0 ? `shortfall ${Math.max(1, Math.round(seconds / 60))} min` : null
+}
+
 /** The sessions as a lane under the chart: one bar each with its delivered share ("95 %", or "sell · 24 commands ·
- *  95 % delivered" where it fits), the shortfalls marked along its foot. */
+ *  95 % delivered · shortfall 3 min" where it fits), its shortfalls hatched across it as on the chart. */
 export function marketLane(sessions: CommandSession[], runs: Shortfall[] = []): ChartLane {
   return {
     label: 'Market',
@@ -451,14 +466,15 @@ export function marketLane(sessions: CommandSession[], runs: Shortfall[] = []): 
       const sell = s.direction === 'sell'
       const delivered = deliveredText(s)
       const commands = `${s.spans.length} ${s.spans.length === 1 ? 'command' : 'commands'}`
+      const short = runs.filter((r) => r.to > s.from && r.from < s.to)
       return {
         from: s.from,
         to: s.to,
         color: sell ? '--q-sell' : '--q-buy',
         ink: sell ? '--q-sell-ink' : '--q-buy-ink',
         text: s.delivered === null ? undefined : `${Math.round(s.delivered * 100)} %`,
-        long: [s.direction, commands, delivered].filter(Boolean).join(' · '),
-        marks: runs.filter((r) => r.to > s.from && r.from < s.to).map((r) => ({ from: r.from, to: r.to, color: '--q-shortfall' })),
+        long: [s.direction, commands, delivered, shortfallText(short)].filter(Boolean).join(' · '),
+        marks: short.map((r) => ({ from: r.from, to: r.to, color: '--q-shortfall' })),
         id: s.id,
       }
     }),
@@ -498,7 +514,7 @@ export function marketBlock(o: {
   const w = gridAt(o.detail, o.time)
   if (w !== null) {
     const got = sell ? -w : w
-    rows.push({ name: 'Grid measured', value: formatSignedPower(w), note: share(got), color: '--q-grid', swatch: 'thin' })
+    rows.push({ name: 'Grid', value: formatSignedPower(w), note: share(got), color: '--q-grid', swatch: 'thin' })
     if (o.runs.some((r) => r.from <= o.time && o.time < r.to)) {
       rows.push({ name: 'Shortfall', value: formatPower(span.power_w - got), color: '--q-shortfall', swatch: 'hatch', alert: true })
     }
@@ -517,5 +533,5 @@ export function marketBlock(o: {
         [powerRange(session), deliveredText(session)].filter(Boolean).join(' · '),
       ]
     : undefined
-  return { title: sell ? '↓ SELL' : '↑ BUY', sub: `${span.source} · ${span.mode}`, tone: sell ? 'sell' : 'buy', rows, foot }
+  return { title: head(sell), sub: `${span.source} · ${span.mode}`, tone: sell ? 'sell' : 'buy', rows, foot }
 }

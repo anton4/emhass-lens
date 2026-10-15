@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GridDetail } from '../api/types'
-import { DETAIL_MAX_S, detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, gridRows, withoutCovered } from './gridDetail'
+import { DETAIL_MAX_S, detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, planTail, withoutCovered } from './gridDetail'
 
 const s = (iso: string) => Date.parse(iso) / 1000
 const NOW = s('2026-10-14T09:13:20Z')
@@ -69,22 +69,35 @@ describe('the measured grid line', () => {
 
   it('reads the value under the pointer: its bucket, or its moment when every change is a point', () => {
     expect(gridAt(detail, s('2026-10-14T05:45:20Z'))).toBe(-9310)
-    expect(gridRows(detail, s('2026-10-14T05:45:20Z'))).toEqual([{ name: 'Grid measured', value: '−9.31 kW', color: '--q-grid' }])
     expect(gridAt({ ...detail, step_s: null }, s('2026-10-14T05:45:05Z'))).toBe(480)
     expect(gridAt(detail, s('2026-10-14T05:44:59Z'))).toBeNull()
-    expect(gridRows(detail, s('2026-10-14T05:45:35Z'))).toEqual([]) // the sensor had no value
+    expect(gridAt(detail, s('2026-10-14T05:45:35Z'))).toBeNull() // the sensor had no value
     expect(gridAt(detail, s(detail.end))).toBeNull()
-    expect(gridRows(undefined, s('2026-10-14T05:45:20Z'))).toEqual([])
+    expect(gridAt(undefined, s('2026-10-14T05:45:20Z'))).toBeNull()
   })
 
-  it('takes over the measured quarter-hours it covers from the grid line, not the plan', () => {
-    const cover = detailCover({ ...detail, start: '2026-10-14T05:00:00Z', end: '2026-10-14T06:20:00Z' })
-    expect(cover).toEqual([s('2026-10-14T05:00:00Z'), s('2026-10-14T06:20:00Z')])
-    const x = ['04:45', '05:00', '05:15', '05:30', '05:45', '06:00', '06:15', '06:30'].map((t) => s(`2026-10-14T${t}:00Z`))
-    const values = [1, 2, 3, 4, 5, 6, 7, 8]
-    // up to 06:00 is measured; the slot from 06:00 is the plan's and stays
-    expect(withoutCovered(x, values, cover, s('2026-10-14T06:00:00Z'))).toEqual([1, null, null, null, null, 6, 7, 8])
+  it('takes over the quarter-hours it covers from the grid line', () => {
+    const cover = detailCover({ ...detail, start: '2026-10-14T05:00:00Z', end: '2026-10-14T06:00:00Z' })
+    expect(cover).toEqual([s('2026-10-14T05:00:00Z'), s('2026-10-14T06:00:00Z')])
+    const x = ['04:45', '05:00', '05:15', '05:30', '05:45', '06:00', '06:15'].map((t) => s(`2026-10-14T${t}:00Z`))
+    const values = [1, 2, 3, 4, 5, 6, 7]
+    // 05:00 to 06:00 is measured and covered; the plan from 06:00 stays
+    expect(withoutCovered(x, values, cover, s('2026-10-14T06:00:00Z'))).toEqual([1, null, null, null, null, 6, 7])
+    expect(planTail(x, values, cover, s('2026-10-14T06:00:00Z'))).toBeNull()
     expect(withoutCovered(x, values, null, s('2026-10-14T06:00:00Z'))).toBe(values)
     expect(detailCover({ ...detail, points: [] })).toBeNull()
+  })
+
+  it("draws the plan's slot in progress only from where the measured line ends, so the grid is one line", () => {
+    // now is 06:07: the detail runs to now, inside the plan's slot from 06:00
+    const cover: [number, number] = [s('2026-10-14T05:30:00Z'), s('2026-10-14T06:07:00Z')]
+    const x = ['05:30', '05:45', '06:00', '06:15'].map((t) => s(`2026-10-14T${t}:00Z`))
+    const values = [1, 2, 3, 4]
+    expect(withoutCovered(x, values, cover, s('2026-10-14T06:00:00Z'))).toEqual([null, null, null, 4])
+    expect(planTail(x, values, cover, s('2026-10-14T06:00:00Z'))).toEqual([
+      { from: s('2026-10-14T06:07:00Z'), to: s('2026-10-14T06:15:00Z'), value: 3 },
+      { from: s('2026-10-14T06:15:00Z'), to: s('2026-10-14T06:15:00Z'), value: 4 }, // the step up to the next slot
+    ])
+    expect(planTail(x, values, null, s('2026-10-14T06:00:00Z'))).toBeNull()
   })
 })

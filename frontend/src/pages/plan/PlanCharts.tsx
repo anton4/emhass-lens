@@ -15,7 +15,7 @@ import { Lamp } from '../../components/Lamp'
 import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
-import { detailCover, detailRequest, gridDetailNote, gridOverlay, gridRows, withoutCovered } from '../../lib/gridDetail'
+import { detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, planTail, withoutCovered } from '../../lib/gridDetail'
 import {
   commandSessions,
   marketBlock,
@@ -530,22 +530,39 @@ function PowerChart({
         .flatMap((p) =>
           p.chip.part === 'grid' && cover
             ? p.series.map((line, i) =>
-                // the measured quarter-hours the detail covers are drawn by its line; the popup keeps their means
-                i === 0 ? { ...line, values: withoutCovered(x, line.values, cover, pastEndS), readout: line.values } : line,
+                // the measured quarter-hours the detail covers are drawn by its line; the popup reads that line at the
+                // pointer, with the quarter-hour's mean as its note
+                i === 0
+                  ? {
+                      ...line,
+                      values: withoutCovered(x, line.values, cover, pastEndS),
+                      readout: line.values,
+                      moment: (time: number) => (time < nowS ? gridAt(gridData, time) : null),
+                    }
+                  : line,
               )
             : p.series,
         ),
-    [parts, hidden, cover, x, pastEndS],
+    [parts, hidden, cover, x, pastEndS, nowS, gridData],
+  )
+  // the plan's grid in the slot in progress, from where the measured line ends: one grid line there too
+  const gridLine = parts.find((p) => p.chip.part === 'grid')?.series[0]
+  const tail = useMemo(
+    () => (gridLine && !hidden.has('grid') ? planTail(x, gridLine.values, cover, pastEndS) : null),
+    [gridLine, hidden, x, cover, pastEndS],
   )
   const sessions = useMemo(() => commandSessions(spans, nowS), [spans, nowS])
   const runs = useMemo(() => (showPower ? shortfalls(spans, gridData, nowS) : []), [showPower, spans, gridData, nowS])
   // the measured grid's thin line on top of the bold commanded one, so both show where they agree
   const overlays = useMemo<ChartOverlay[]>(
     () => [
+      ...(tail && gridLine
+        ? [{ label: 'Grid', color: gridLine.color, width: gridLine.width ?? 2, base: 'none' as const, spans: tail }]
+        : []),
       ...(showPower ? [marketOverlay(spans, nowS)] : []),
       ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
     ],
-    [gridData, showPower, spans, nowS],
+    [tail, gridLine, gridData, showPower, spans, nowS],
   )
   const gaps = useMemo<ChartGap[]>(() => (runs.length > 0 ? [shortfallGap(runs)] : []), [runs])
   const bands = useMemo<ChartSession[]>(
@@ -565,13 +582,13 @@ function PowerChart({
       // left of now the popup is about the pointer's own moment (the measured grid, a command); the slot heads the rows
       head: gridData || market ? (_t: number, time: number) => (time < nowS ? momentLabel(time, timeZone) : null) : undefined,
       block: market ? (_t: number, time: number) => block(time) : undefined,
-      // the measured grid at the pointer, unless the command's block has it
-      extra: gridData ? (_t: number, time: number) => (block(time) ? [] : gridRows(gridData, time)) : undefined,
     }
   }, [slotTag, gridData, showPower, showSessions, spans, sessions, runs, nowS, timeZone])
-  const zoomToSession = (id: string) => {
-    const session = sessions.find((s) => s.id === id)
-    if (session) onZoom(sessionWindow(session))
+  // a flag can stand for several sessions of one direction: zoom to all of them
+  const zoomToSession = (ids: string[]) => {
+    const chosen = sessions.filter((s) => ids.includes(s.id))
+    if (chosen.length === 0) return
+    onZoom(sessionWindow({ from: Math.min(...chosen.map((s) => s.from)), to: Math.max(...chosen.map((s) => s.to)) }))
   }
   const detailNote = gridDetailNote(gridData?.step_s)
   const gridTitle = gridData?.error
@@ -638,6 +655,15 @@ function PowerChart({
           </li>
         )}
         {marketChips.map((c) => chip(c))}
+        {runs.length > 0 && (
+          <li
+            className="legend-key"
+            title="Where the grid delivered less than commanded by more than 500 W or 10 % for a minute or more"
+          >
+            <span className="legend-hatch" aria-hidden="true" />
+            Shortfall
+          </li>
+        )}
         {hasPast && (
           <li className="legend-key" title="Left of the now line, solid lines are measured; right of it, the current plan">
             <span className="legend-dash" aria-hidden="true" />

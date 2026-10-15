@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
-import { layoutFlags } from '../../lib/chartFlags'
+import { groupFlags, layoutFlags } from '../../lib/chartFlags'
 import {
   fitRange,
   overlayExtent,
@@ -45,6 +45,9 @@ export interface ChartSeries {
   below?: number
   /** What the popup shows when `values` are stacked sums. */
   readout?: (number | null)[]
+  /** The value at the pointer's own moment (the grid measured finer than the slots), or null: the popup shows it, with
+   *  the slot's value as its note. */
+  moment?: (time: number) => number | null
   /** Only the edge another series fills down to: no line, no popup row, no cursor dot. */
   helper?: boolean
   /** A part switched off: faded in the popup, no cursor dot. */
@@ -85,7 +88,7 @@ export interface ChartLane {
     long?: string
     /** The text's colour (default --ink-2). */
     ink?: string
-    /** Stretches marked by a strip along the span's foot (a shortfall). */
+    /** Stretches hatched across the span in their colour (a shortfall), as the chart hatches its gaps. */
     marks?: { from: number; to: number; color: string }[]
     /** Clicking the span calls onSession with this. */
     id?: string
@@ -93,11 +96,14 @@ export interface ChartLane {
 }
 
 /** A stretch shaded across the plot in its own colour, with a flag above the plot that names it (a market session):
- *  longer while the pointer is in it, just `short` where there is no room. Clicking the flag calls onSession. */
+ *  longer while the pointer is in it, just `short` where there is no room. Sessions of one `group` whose flags would
+ *  touch share the first one's flag, with " +N" for the others. Clicking a flag calls onSession with its sessions. */
 export interface ChartSession {
   id: string
   from: number
   to: number
+  /** Sessions of one group (direction) share a flag where theirs would touch. */
+  group?: string
   /** CSS custom property or colour: the band's tint and the flag's fill. */
   color: string
   /** The flag's text colour. */
@@ -134,7 +140,8 @@ const DIMMED = 0.3
 
 /** A clickable rectangle drawn on the canvas outside the plot (a flag, a lane span), in CSS px. */
 interface Hit {
-  id: string
+  /** The sessions or lane span it stands for. */
+  ids: string[]
   left: number
   top: number
   right: number
@@ -206,20 +213,21 @@ interface TimeChartProps {
   lanes?: ChartLane[]
   /** Labels (and dots) on the plot. */
   notes?: ChartNote[]
-  /** Lines with times of their own, off the slot grid (market commands); the y-axis fits them too. */
+  /** Lines with times of their own, off the slot grid (market commands); the y-axis fits them too, except those with
+   *  `fit: false`, which run along the edge past it. */
   overlays?: ChartOverlay[]
   /** Hatched areas between two values (a shortfall), under the overlays. */
   gaps?: ChartGap[]
   /** Bands across the plot with a flag above it (market sessions). */
   sessions?: ChartSession[]
-  /** Called with the id of a clicked flag or lane span. */
-  onSession?: (id: string) => void
+  /** Called with the ids of a clicked flag's sessions, or of a clicked lane span. */
+  onSession?: (ids: string[]) => void
 }
 
 const NONE: never[] = []
 
-/** The lanes under the plot: a sunk track each, its spans (hatched when off, with their text where it fits, and their
- *  marks along the foot), and its label right-aligned in the y-axis gutter. Spans with an id go into `hits`. */
+/** The lanes under the plot: a sunk track each, its spans (hatched when off, with their marks hatched across them and
+ *  their text where it fits), and its label right-aligned in the y-axis gutter. Spans with an id go into `hits`. */
 function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
   if (lanes.length === 0) return
   const { ctx, bbox } = u
@@ -248,12 +256,15 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
         const ma = Math.max(a + gap, Math.round(u.valToPos(mark.from, 'x', true)))
         const mb = Math.min(b, Math.round(u.valToPos(mark.to, 'x', true)))
         if (mb <= ma) continue
-        ctx.fillStyle = cssColor(mark.color)
-        const strip = Math.round(4 * dpr)
-        ctx.fillRect(ma, top + h - strip, Math.max(mb - ma, Math.round(2 * dpr)), strip)
+        // the chart's hatching for the same stretch, on the panel so it reads the same in the bar
+        const width = Math.max(mb - ma, Math.round(2 * dpr))
+        ctx.fillStyle = cssColor('--panel')
+        ctx.fillRect(ma, top, width, h)
+        ctx.fillStyle = linePattern(ctx, cssColor(mark.color), dpr)
+        ctx.fillRect(ma, top, width, h)
       }
       if (span.id) {
-        hits.push({ id: span.id, left: a / dpr, top: top / dpr, right: b / dpr, bottom: (top + h) / dpr, title: span.long ?? span.text ?? '' })
+        hits.push({ ids: [span.id], left: a / dpr, top: top / dpr, right: b / dpr, bottom: (top + h) / dpr, title: span.long ?? span.text ?? '' })
       }
       ctx.font = `${11 * dpr}px ${mono}`
       // the longer text where it fits, else the short one where that does
@@ -263,6 +274,10 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
           // a quiet patch behind the text, so the hatching doesn't run through it
           ctx.fillStyle = cssColor('--surface-sunk')
           ctx.fillRect(a + gap + 2 * dpr, top + dpr, ctx.measureText(text).width + 6 * dpr, h - 2 * dpr)
+        } else if (span.marks?.length) {
+          // the span's own colour behind the text, over any marks
+          ctx.fillStyle = cssColor(span.color)
+          ctx.fillRect(a + gap, top, ctx.measureText(text).width + 10 * dpr, h)
         }
         ctx.fillStyle = cssColor(span.ink ?? '--ink-2')
         ctx.fillText(text, a + gap + 5 * dpr, top + h / 2)
@@ -278,7 +293,8 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
 }
 
 /** Overlays in the order given (the last on top): each run of back-to-back spans follows their values, from and back
- *  to zero unless its base is 'none', with an optional light fill between the line and zero. */
+ *  to zero unless its base is 'none', with an optional light fill between the line and zero. One the axis doesn't fit
+ *  runs along the edge where it is past the axis, with its `offScale` text there. */
 function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
   if (overlays.length === 0) return
   const { ctx, bbox } = u
@@ -289,6 +305,12 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
   ctx.clip()
   for (const overlay of overlays) {
     const color = cssColor(overlay.color)
+    // past the axis, a line it doesn't fit runs just inside the edge
+    const inset = ((overlay.width ?? 2) / 2) * dpr
+    const yOf = (v: number) => {
+      const y = u.valToPos(v, 'y', true)
+      return overlay.fit === false ? Math.min(Math.max(y, bbox.top + inset), bbox.top + bbox.height - inset) : y
+    }
     ctx.strokeStyle = color
     ctx.lineWidth = (overlay.width ?? 2) * dpr
     ctx.setLineDash((overlay.dash ?? []).map((d) => d * dpr))
@@ -304,7 +326,7 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
     for (const run of overlayRuns(overlay.spans, overlay.base)) {
       run.forEach(([t, v], i) => {
         const x = u.valToPos(t, 'x', true)
-        const y = u.valToPos(v, 'y', true)
+        const y = yOf(v)
         if (i === 0) path.moveTo(x, y)
         else path.lineTo(x, y)
       })
@@ -319,6 +341,46 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
       ctx.restore()
     }
     ctx.stroke(path)
+    if (overlay.offScale) drawOffScale(u, overlay, color, dpr)
+  }
+  ctx.restore()
+}
+
+/** The text of each span of `overlay` that is past the y-axis ("↓ 15.5 kW"), at its start against the edge it runs
+ *  along; one that would run into the text before it, or that continues a span with the same value, gets none. */
+function drawOffScale(u: uPlot, overlay: ChartOverlay, color: string, dpr: number) {
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  const min = u.scales.y?.min ?? -Infinity
+  const max = u.scales.y?.max ?? Infinity
+  const h = 16 * dpr
+  const pad = 4 * dpr
+  ctx.save()
+  ctx.font = `500 ${11.5 * dpr}px ${cssValue('--font-code') || 'monospace'}`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  let end = -Infinity
+  let prev: ChartOverlay['spans'][number] | undefined
+  for (const span of overlay.spans) {
+    const same = prev !== undefined && Math.abs(span.from - prev.to) < 1 && span.value === prev.value
+    prev = span
+    const above = span.value > max
+    if (same || (!above && span.value >= min)) continue
+    const a = u.valToPos(span.from, 'x', true)
+    if (a > right || u.valToPos(span.to, 'x', true) < bbox.left) continue
+    const text = overlay.offScale?.(span.value)
+    if (!text) continue
+    const width = ctx.measureText(text).width + 2 * pad
+    const left = Math.min(Math.max(a, bbox.left) + pad, right - width)
+    if (left < end + pad) continue
+    const top = above ? bbox.top + 5 * dpr : bbox.top + bbox.height - 5 * dpr - h
+    ctx.fillStyle = withAlpha(cssColor('--panel'), 0.9)
+    ctx.beginPath()
+    ctx.roundRect(left, top, width, h, 4 * dpr)
+    ctx.fill()
+    ctx.fillStyle = color
+    ctx.fillText(text, left + pad, top + h / 2 + 0.5 * dpr)
+    end = left + width
   }
   ctx.restore()
 }
@@ -388,30 +450,42 @@ function drawSessionBands(u: uPlot, sessions: ChartSession[]) {
   ctx.restore()
 }
 
-/** The sessions' flags in the room above the plot, laid out so they never overlap; the one under the pointer shows
- *  its longer text. Each goes into `hits`. */
+/** The sessions' flags in the room above the plot, laid out so they never overlap: sessions of one group whose flags
+ *  would touch share one (" +N"), and the one under the pointer shows its longer text. Each goes into `hits`. */
 function drawFlags(u: uPlot, sessions: ChartSession[], hovered: string | null, dpr: number, hits: Hit[]) {
   if (sessions.length === 0) return
   const { ctx, bbox } = u
   const right = bbox.left + bbox.width
   const pad = 8 * dpr
+  const gap = 4 * dpr
   ctx.save()
   ctx.font = `600 ${11.5 * dpr}px ${cssValue('--font-body') || 'sans-serif'}`
-  const texts = new Map<string, string[]>()
-  const items = sessions.flatMap((s) => {
+  const measure = (text: string) => ctx.measureText(text).width + 2 * pad
+  const shown = sessions.flatMap((s) => {
     const a = u.valToPos(s.from, 'x', true)
     const b = u.valToPos(s.to, 'x', true)
-    if (b < bbox.left || a > right) return []
-    const options = s.id === hovered ? [s.detail, s.label, s.short] : [s.label, s.short]
-    texts.set(s.id, options)
-    return [{ id: s.id, at: a, widths: options.map((t) => ctx.measureText(t).width + 2 * pad), hovered: s.id === hovered }]
+    return b < bbox.left || a > right ? [] : [{ s, at: a, group: s.group ?? s.id }]
+  })
+  const more = (run: unknown[]) => (run.length > 1 ? ` +${run.length - 1}` : '')
+  // grouped by the plain label, so the pointer's moving doesn't regroup them
+  const runs = groupFlags(shown, (run) => measure(run[0]!.s.label + more(run)), gap)
+  const texts = new Map<string, string[]>()
+  const members = new Map<string, ChartSession[]>()
+  const items = runs.map((run) => {
+    const first = run[0]!
+    const over = run.find((m) => m.s.id === hovered)?.s
+    const options = [...(over ? [over.detail] : []), first.s.label + more(run), first.s.short + more(run)]
+    texts.set(first.s.id, options)
+    members.set(first.s.id, run.map((m) => m.s))
+    return { id: first.s.id, at: first.at, widths: options.map(measure), hovered: over !== undefined }
   })
   const h = FLAG_H * dpr
   const top = bbox.top - (FLAG_ROOM - 3) * dpr
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
-  for (const flag of layoutFlags(items, bbox.left, right, 4 * dpr)) {
-    const s = sessions.find((x) => x.id === flag.id)
+  for (const flag of layoutFlags(items, bbox.left, right, gap)) {
+    const group = members.get(flag.id) ?? []
+    const s = group[0]
     const text = texts.get(flag.id)?.[flag.text]
     if (!s || text === undefined) continue
     ctx.fillStyle = cssColor(s.color)
@@ -421,12 +495,12 @@ function drawFlags(u: uPlot, sessions: ChartSession[], hovered: string | null, d
     ctx.fillStyle = cssColor(s.ink)
     ctx.fillText(text, flag.left + pad, top + h / 2 + 0.5 * dpr)
     hits.push({
-      id: s.id,
+      ids: group.map((m) => m.id),
       left: flag.left / dpr,
       top: top / dpr,
       right: (flag.left + flag.width) / dpr,
       bottom: (top + h) / dpr,
-      title: s.detail,
+      title: group.map((m) => m.detail).join('\n'),
     })
   }
   ctx.restore()
@@ -858,7 +932,7 @@ export function TimeChart({
             })
             wrapper.addEventListener('click', (event) => {
               const hit = hitAt(event)
-              if (hit) extras.current.onSession?.(hit.id)
+              if (hit) extras.current.onSession?.(hit.ids)
             })
           },
         ],

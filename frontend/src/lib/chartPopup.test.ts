@@ -37,6 +37,20 @@ describe('the popup rows', () => {
     expect(popupRows(SERIES, 1).rows.map((r) => r.value)).toEqual(['−11.89 kW', '0 W'])
   })
 
+  it("shows the grid at the pointer's moment, the slot's mean as its note", () => {
+    const at = (time: number) => (time < 100 ? -9310 : null) // measured up to now (100)
+    const grid: PopupSeries[] = [
+      { label: 'Grid', color: '--q-grid', values: [null, null, 2100], readout: [-7900, -8000, 2100], moment: at, format: formatSignedPower },
+      { label: 'Grid, planned at the time', color: '--q-grid', dash: [4, 4], then: true, values: [-8000, null, null], format: formatSignedPower },
+    ]
+    expect(popupRows(grid, 0, 50).rows.map((r) => [r.name, r.value, r.note, r.then])).toEqual([
+      ['Grid', '−9.31 kW', '¼ h −7.90 kW', '−8.00 kW'],
+    ])
+    // right of now there is no moment: the plan's slot, no note
+    expect(popupRows(grid, 2, 150).rows.map((r) => [r.value, r.note])).toEqual([['+2.10 kW', null]])
+    expect(popupRows(grid, 0).rows[0]?.note).toBeNull()
+  })
+
   it('marks the line nearest the pointer', () => {
     expect(nearestRow([{ series: 0, y: 100 }, { series: 2, y: 40 }], 52)).toBe(2)
     expect(nearestRow([], 52)).toBeNull()

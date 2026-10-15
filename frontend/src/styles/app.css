@@ -1940,6 +1940,15 @@ button.diff-locate {
   color: var(--ink-muted);
 }
 
+/* under a value read at the pointer: the slot's own ("¼ h −7.90 kW") */
+.chart-pop-note {
+  display: block;
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
 /* "planned then": a soft band from the header to the last row */
 .chart-pop-then {
   align-self: stretch;
@@ -2224,9 +2233,17 @@ button.diff-locate {
   color: var(--ink-muted);
 }
 
-/* A key item that isn't a switch: the dashed "planned at the time" lines */
+/* A key item that isn't a switch: the dashed "planned at the time" lines, the hatched shortfall */
 .legend-key {
   padding: 2px 4px;
+}
+
+.legend-hatch {
+  width: 12px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--q-shortfall);
+  background: repeating-linear-gradient(135deg, var(--q-shortfall) 0 1.5px, transparent 1.5px 4px);
 }
 
 .legend-dash {
