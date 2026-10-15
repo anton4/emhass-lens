@@ -14,6 +14,7 @@ export function StretchPopup({ stretch, timeZone }: { stretch: Stretch; timeZone
       </div>
       {stretch.title && (
         <div className="slot-pop-state">
+          {stretch.fill && <span className="day-strip-swatch" style={{ background: stretch.fill }} />}
           <strong>{stretch.title}</strong>
         </div>
       )}

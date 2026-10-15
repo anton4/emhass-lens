@@ -3,7 +3,7 @@
 
 import type { LampColor } from '../components/Lamp'
 import type { Agreement, ButtonPress, InverterSettings, InverterWrite, MarketSession, RunSummary } from '../api/types'
-import type { StripInput } from './dayStrip'
+import { STRIP_BAND, type StripInput } from './dayStrip'
 
 export interface InverterTargets {
   state: string
@@ -337,9 +337,6 @@ export interface SlotDetail {
 }
 
 const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
-
-/** The line under the inverter's strip. */
-export const STRIP_BAND = { same: 'var(--line-green)', differs: 'var(--lamp-amber)', wrote: 'var(--ink-2)' }
 
 /** The inverter's day strip from mergeBySlot rows: each slot coloured by its passive state (hatched where EMHASS Lens
  * wasn't in control, striped where a market session held it), and the line under it showing the comparison (dry run)

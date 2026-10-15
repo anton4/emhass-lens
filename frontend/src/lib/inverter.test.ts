@@ -20,8 +20,8 @@ import {
   RULE_GROUPS,
   rules,
   runSlot,
-  STRIP_BAND,
 } from './inverter'
+import { STRIP_BAND } from './dayStrip'
 
 function run(id: number, job: string, startedAt: string, outcome = 'ok', summary: string | null = null): RunSummary {
   return { id, job, trigger: 'schedule', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }

@@ -7,6 +7,7 @@ import {
   deliveredW,
   marketBlock,
   marketLane,
+  marketMark,
   marketOverlay,
   marketFieldValue,
   marketGuards,
@@ -20,10 +21,37 @@ import {
   watchdogText,
   type MarketDecision,
 } from './market'
+import { marketFill, NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
   return { id, job, trigger: 'event', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
 }
+
+describe('marketMark', () => {
+  it('fills a session like the Inverter strip, striped in the state it sets, and says whether it wrote', () => {
+    const live = marketMark("Kratt sell 7000W: set 'Force discharge', grid -7000 W, battery -20000…20000 W; feed-in 7000 W")
+    expect(live).toEqual({ label: 'Kratt sell 7000W', key: 'Market sell', fill: marketFill('sell'), quiet: false, wrote: true })
+    expect(marketMark('Kratt buy 5000W: feed-in 0 W')).toMatchObject({ key: 'Market buy', fill: marketFill('buy'), wrote: true })
+    expect(marketMark('Kratt sell 7000W: registers unchanged')?.wrote).toBe(false)
+    expect(marketMark('Would: Kratt sell 5000W')).toMatchObject({ key: 'Market sell', wrote: false })
+  })
+
+  it('names and fills the decisions without a session', () => {
+    expect(marketMark('No action: no command')).toMatchObject({ label: 'no action', fill: NO_SETTINGS_FILL, quiet: true })
+    expect(marketMark("Not in control (input_boolean.qilowatt_automation is 'off'); would: Kratt sell 5000W")).toMatchObject({
+      label: 'not in control',
+      fill: NOT_IN_CONTROL_FILL,
+      wrote: false,
+    })
+    expect(marketMark('Qilowatt safeguard: session ended (mode_cleared). Handed the inverter back to the plan.')).toMatchObject({
+      label: 'session end',
+      key: 'Session end',
+    })
+    expect(marketMark('Would: Qilowatt safeguard: ignored kratt mfrrup with powerlimit 0W.')?.key).toBe('Ignored')
+    expect(marketMark('Something new')).toMatchObject({ label: null, key: 'Other' })
+    expect(marketMark(null)).toBeNull()
+  })
+})
 
 describe('parseReconcileSummary', () => {
   it('reads commands, ends, ignores and blocks', () => {

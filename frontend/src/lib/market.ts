@@ -10,6 +10,8 @@ import { gridAt } from './gridDetail'
 import { formatPower, formatSignedPower } from './units'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
+import { marketFill, NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
+import type { StripMark } from './dayStrip'
 
 export interface MarketThrottle {
   grid_delta_w: number
@@ -125,6 +127,41 @@ export function parseReconcileSummary(summary: string | null | undefined): Parse
   const command = /^([A-Z][a-z]+ (?:buy|sell) \d+W)/.exec(s)
   if (command) return { kind: 'command', text: command[1]! }
   return { kind: 'other', text: summary }
+}
+
+/** The Market strip's key entries, in order. */
+export const MARKET_KEYS = ['Market sell', 'Market buy', 'No action', 'Session end', 'Not in control', 'Ignored', 'Other']
+
+/** A reconcile decision on the Market page's day strip: named by its command ("Kratt sell 7000W") or what it did, a
+ *  session striped in the colour of the passive state it sets (as on the Inverter strip), and whether it wrote to the
+ *  inverter (live: it set the passive registers or the feed-in limit). Null for runs without a summary. */
+export function marketMark(summary: string | null | undefined): StripMark | null {
+  const parsed = parseReconcileSummary(summary)
+  if (!parsed || !summary) return null
+  const mark = (label: string | null, key: string, fill: string, quiet = false) => ({
+    label,
+    key,
+    fill,
+    quiet,
+    wrote: false,
+  })
+  switch (parsed.kind) {
+    case 'command': {
+      const direction = /\b(buy|sell)\b/.exec(parsed.text)?.[1] ?? 'sell'
+      const wrote = !summary.startsWith('Would: ') && /: (set '|feed-in )/.test(summary)
+      return { ...mark(parsed.text, `Market ${direction}`, marketFill(direction)), wrote }
+    }
+    case 'none':
+      return mark('no action', 'No action', NO_SETTINGS_FILL, true)
+    case 'end':
+      return mark('session end', 'Session end', 'var(--ink-faint)')
+    case 'blocked':
+      return mark('not in control', 'Not in control', NOT_IN_CONTROL_FILL)
+    case 'ignored':
+      return mark('ignored', 'Ignored', 'var(--lamp-amber)')
+    default:
+      return mark(null, 'Other', NO_SETTINGS_FILL)
+  }
 }
 
 /** The decision id a compare run's summary refers to ("Decision #12: …"). */

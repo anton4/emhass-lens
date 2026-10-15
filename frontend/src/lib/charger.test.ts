@@ -1,10 +1,46 @@
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '../api/types'
-import { chargerFieldValue, chargerRules, decisionRef, pairCompares, parseChargerSummary } from './charger'
+import { chargerFieldValue, chargerMark, chargerRules, decisionRef, pairCompares, parseChargerSummary } from './charger'
+import { NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
   return { id, job, trigger: 'manual', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
 }
+
+describe('chargerMark', () => {
+  it('fills each rule by what it does: the plan in the EV colour, excess solar in PV\'s, a pause lighter', () => {
+    expect(chargerMark("Would 'EMHASS: start charging' (emhass_start): press start, limit 8 A")).toEqual({
+      label: 'emhass_start',
+      key: 'EMHASS: charging',
+      fill: 'var(--q-ev)',
+      quiet: false,
+      wrote: false,
+      title: 'EMHASS: start charging',
+    })
+    expect(chargerMark("Did 'Excess solar: adjust the current' (solar_adjust): limit 13 A · was 10 A")).toMatchObject({
+      key: 'Excess solar: charging',
+      fill: 'var(--q-pv)',
+      wrote: true,
+    })
+    expect(chargerMark("Would 'EMHASS: pause charging' (emhass_pause): press pause")?.fill).toContain('--q-ev')
+    expect(chargerMark("Did 'Target SoC reached: stop charging' (soc_limit): press stop, limit 0 A")?.key).toBe('Target SoC: stop')
+    expect(chargerMark('Nothing to do: charge mode is Manual')).toMatchObject({ fill: NO_SETTINGS_FILL, quiet: true, wrote: false })
+  })
+
+  it('marks a decision set back by the drift check as written, and one not in control hatched', () => {
+    const drift = "Drift: current 6 A, expected 8 A; set back · Did 'EMHASS: adjust the current' (emhass_adjust): limit 8 A"
+    expect(chargerMark(drift)).toMatchObject({ key: 'EMHASS: charging', wrote: true })
+    expect(chargerMark("Not in control (charge mode is Manual); would: 'EMHASS: start charging' (emhass_start): press start")).toEqual({
+      label: 'not in control',
+      key: 'Not in control',
+      fill: NOT_IN_CONTROL_FILL,
+      quiet: false,
+      wrote: false,
+      title: 'Not in control; would: EMHASS: start charging',
+    })
+    expect(chargerMark('Not connected to Home Assistant')).toBeNull()
+  })
+})
 
 describe('parseChargerSummary', () => {
   it('reads the rule from dry-run and live summaries', () => {

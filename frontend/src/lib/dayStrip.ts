@@ -4,6 +4,9 @@
 
 export type StripState = 'same' | 'differs' | 'none'
 
+/** The line under a filled strip: the automation did the same, it differed, or EMHASS Lens wrote (live). */
+export const STRIP_BAND = { same: 'var(--line-green)', differs: 'var(--lamp-amber)', wrote: 'var(--ink-2)' }
+
 export interface StripInput<D = unknown> {
   /** When the decision applies (unix seconds): the slot start, or the moment it was made. */
   t: number
@@ -85,6 +88,8 @@ export interface Stretch {
   decisions: number
   same: number
   differs: number
+  /** The mark's fill, for the popup's swatch. */
+  fill?: string | null
 }
 
 // a quarter-hour tick that starts a second late still continues the stretch
@@ -93,7 +98,9 @@ const STRETCH_SLACK = 60
 /** For decisions made at irregular moments (the charger, the market): consecutive decisions with the same label make
  *  one mark, which holds until the next mark, at most `max` seconds after its last decision and at least `min` in all.
  *  A label change, a missing label or a gap of more than `max` starts a new mark. A mark differs if any of its
- *  decisions did, and opens the first that differed (else its first). Each input's detail is the popup's title. */
+ *  decisions did, and opens the first that differed (else its first). Each input's detail is the popup's title. A
+ *  mark takes its first decision's fill; a filled mark's line is the comparison (differed if any did, else the same
+ *  if any was), else any decision's own line (a write). */
 export function holdStretches(inputs: StripInput<string>[], max: number, min = 60): StripInput<Stretch>[] {
   const sorted = [...inputs].sort((a, b) => a.t - b.t)
   const groups: StripInput<string>[][] = []
@@ -114,12 +121,17 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
     const differing = group.find((g) => g.compare === 'mismatch')
     const same = group.filter((g) => g.compare === 'ok').length
     const differs = group.filter((g) => g.compare === 'mismatch').length
+    const fill = first.fill ?? null
+    const own = group.find((g) => g.band)?.band ?? null
     return {
       t: first.t,
       span: Math.max(min, until - first.t),
       compare: differs > 0 ? 'mismatch' : same > 0 ? 'ok' : null,
       label: first.label ?? null,
       runId: (differing ?? first).runId ?? null,
+      fill,
+      band: fill === null ? own : differs > 0 ? STRIP_BAND.differs : same > 0 ? STRIP_BAND.same : own,
+      quiet: first.quiet ?? false,
       detail: {
         from: first.t,
         last: last.t,
@@ -127,9 +139,37 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
         decisions: group.length,
         same,
         differs,
+        fill,
       },
     }
   })
+}
+
+/** What a decision looks like on a strip the page fills: its name there, its key entry and fill, whether it is the
+ *  everyday one, and whether it wrote (live). */
+export interface StripMark {
+  label: string | null
+  key: string
+  fill: string
+  quiet: boolean
+  wrote: boolean
+}
+
+/** The strip's key from each decision's mark: one entry per key seen, in `order` (others after, as first seen), with
+ *  its fill and how many decisions. */
+export function keyCounts(
+  marks: (Pick<StripMark, 'key' | 'fill'> | null | undefined)[],
+  order: readonly string[] = [],
+): { text: string; fill: string; count: number }[] {
+  const seen = new Map<string, { text: string; fill: string; count: number }>()
+  for (const mark of marks) {
+    if (!mark) continue
+    const entry = seen.get(mark.key)
+    if (entry) entry.count++
+    else seen.set(mark.key, { text: mark.key, fill: mark.fill, count: 1 })
+  }
+  const rank = (key: string) => (order.includes(key) ? order.indexOf(key) : order.length)
+  return [...seen.values()].sort((x, y) => rank(x.text) - rank(y.text))
 }
 
 /** How a stretch compared with the automation, in words. */

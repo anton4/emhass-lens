@@ -12,11 +12,12 @@ import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
 import { StretchPopup } from '../components/controller/StretchPopup'
+import { StripKey, StripLine } from '../components/controller/StripKey'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds, todayKey } from '../lib/days'
-import { holdStretches } from '../lib/dayStrip'
+import { holdStretches, keyCounts, STRIP_BAND } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
@@ -24,7 +25,9 @@ import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
 import {
   MARKET_FIELD_LABELS,
+  MARKET_KEYS,
   marketFieldValue,
+  marketMark,
   marketModeSpec,
   pairMarketCompares,
   parseReconcileSummary,
@@ -41,18 +44,6 @@ const MODES = [
   { id: 'shadow', text: 'Shadow' },
   { id: 'live', text: 'Live' },
 ]
-
-/** A reconcile run's gist, short enough to name above the day strip. */
-function stripLabel(summary: string | null | undefined): string | null {
-  const parsed = parseReconcileSummary(summary)
-  if (!parsed) return null
-  if (parsed.kind === 'command') return parsed.text
-  if (parsed.kind === 'none') return 'no action'
-  if (parsed.kind === 'end') return 'session end'
-  if (parsed.kind === 'blocked') return 'not in control'
-  if (parsed.kind === 'ignored') return 'ignored'
-  return null
-}
 
 /** Qilowatt market control (experimental): the current command and session, what EMHASS Lens decides, whether the
  * Home Assistant automation did the same, and how often the inverter gets written. */
@@ -76,19 +67,25 @@ export function MarketPage() {
   const today = todayKey(tz, now)
   const todayReconciles = useRuns(runFilters('market.reconcile', today, tz, 0))
   const todayCompares = useRuns(runFilters('market.compare', today, tz, 0))
-  const strip = useMemo(
-    () =>
-      holdStretches(
-        pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? []).map((row) => ({
-          t: Date.parse(row.at) / 1000,
-          compare: row.compare?.outcome,
-          label: stripLabel(row.reconcile?.summary),
-          runId: row.reconcile?.id ?? row.compare?.id,
-        })),
-        900,
-      ),
-    [todayReconciles.data, todayCompares.data],
-  )
+  // each decision filled by what it did, as the Inverter strip fills its slots; the line under it says whether the
+  // automation did the same (shadow) or the decision wrote to the inverter (live)
+  const { strip, key } = useMemo(() => {
+    const rows = pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? [])
+    const marks = rows.map((row) => marketMark(row.reconcile?.summary))
+    const inputs = rows.map((row, i) => {
+      const mark = marks[i]
+      return {
+        t: Date.parse(row.at) / 1000,
+        compare: row.compare?.outcome,
+        label: mark?.label ?? null,
+        runId: row.reconcile?.id ?? row.compare?.id,
+        fill: mark?.fill ?? null,
+        quiet: mark?.quiet,
+        band: mark?.wrote ? STRIP_BAND.wrote : null,
+      }
+    })
+    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS) }
+  }, [todayReconciles.data, todayCompares.data])
 
   return (
     <>
@@ -177,6 +174,8 @@ export function MarketPage() {
             ? 'Nothing decided: market control is off.'
             : 'No decisions yet today.'
         }
+        legend={<StripKey items={key} />}
+        footer={<StripLine strip={strip} target="inverter" />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
       />
 

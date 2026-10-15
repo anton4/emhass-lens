@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { holdStretches, stretchText, stripCounts, stripItems, stripLabels, stripRuns } from './dayStrip'
+import { holdStretches, keyCounts, STRIP_BAND, stretchText, stripCounts, stripItems, stripLabels, stripRuns } from './dayStrip'
 
 const DAY = Date.parse('2026-10-09T21:00:00Z') / 1000 // Sat 10 Oct 00:00 in Tallinn
 const END = DAY + 86400
@@ -184,6 +184,41 @@ describe('holdStretches', () => {
     expect(mixed).toMatchObject({ compare: 'mismatch', runId: 2, detail: { same: 1, differs: 2, decisions: 4 } })
     expect(agreed).toMatchObject({ compare: 'ok', runId: 5, detail: { same: 1, differs: 0, title: 'b' } })
     expect(unknown).toMatchObject({ compare: null, detail: { title: 'Charge from the plan' } })
+  })
+
+  it("takes a filled mark's fill from its first decision, the comparison or a write on the line under it", () => {
+    const sell = 'orange'
+    const [shadow, live, plain] = holdStretches(
+      [
+        { t: DAY, label: 'Kratt sell 3000W', fill: sell, compare: 'ok' },
+        { t: DAY + 60, label: 'Kratt sell 3000W', fill: sell, compare: 'mismatch' },
+        { t: DAY + 120, label: 'no action', fill: 'grey', quiet: true },
+        { t: DAY + 180, label: 'no action', fill: 'grey', quiet: true, band: STRIP_BAND.wrote },
+        { t: DAY + 240, label: 'x', compare: 'ok' },
+      ],
+      900,
+    )
+    expect(shadow).toMatchObject({ fill: sell, band: STRIP_BAND.differs, quiet: false, detail: { fill: sell } })
+    expect(live).toMatchObject({ fill: 'grey', band: STRIP_BAND.wrote, quiet: true })
+    // without a fill the mark itself shows the comparison, and no line
+    expect(plain).toMatchObject({ fill: null, band: null, compare: 'ok' })
+  })
+})
+
+describe('keyCounts', () => {
+  it('counts the decisions per key entry, in the order given and the others after', () => {
+    const marks = [
+      { key: 'No action', fill: 'grey' },
+      { key: 'Market buy', fill: 'blue' },
+      null,
+      { key: 'Odd', fill: 'red' },
+      { key: 'No action', fill: 'grey' },
+    ]
+    expect(keyCounts(marks, ['Market sell', 'Market buy', 'No action'])).toEqual([
+      { text: 'Market buy', fill: 'blue', count: 1 },
+      { text: 'No action', fill: 'grey', count: 2 },
+      { text: 'Odd', fill: 'red', count: 1 },
+    ])
   })
 })
 

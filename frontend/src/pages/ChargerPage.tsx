@@ -10,14 +10,17 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
+import { StripKey, StripLine } from '../components/controller/StripKey'
 import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { todayKey } from '../lib/days'
-import { holdStretches } from '../lib/dayStrip'
+import { holdStretches, keyCounts, STRIP_BAND } from '../lib/dayStrip'
 import {
   CHARGER_FIELD_LABELS,
+  CHARGER_KEYS,
   chargerFieldValue,
+  chargerMark,
   chargerModeSpec,
   pairCompares,
   parseChargerSummary,
@@ -65,23 +68,26 @@ export function ChargerPage() {
   const today = todayKey(tz, now)
   const todayDecides = useRuns(runFilters('charger.decide', today, tz, 0))
   const todayCompares = useRuns(runFilters('charger.compare', today, tz, 0))
-  const strip = useMemo(
-    () =>
-      holdStretches(
-        pairCompares(todayDecides.data ?? [], todayCompares.data ?? []).map((row) => {
-          const parsed = parseChargerSummary(row.decide?.summary)
-          return {
-            t: Date.parse(row.at) / 1000,
-            compare: row.compare?.outcome,
-            label: parsed?.rule,
-            runId: row.decide?.id ?? row.compare?.id,
-            detail: parsed?.label,
-          }
-        }),
-        900,
-      ),
-    [todayDecides.data, todayCompares.data],
-  )
+  // each decision filled by what it did; the line under it says whether the automation did the same (dry run) or the
+  // decision wrote to the charger (live)
+  const { strip, key } = useMemo(() => {
+    const rows = pairCompares(todayDecides.data ?? [], todayCompares.data ?? [])
+    const marks = rows.map((row) => chargerMark(row.decide?.summary))
+    const inputs = rows.map((row, i) => {
+      const mark = marks[i]
+      return {
+        t: Date.parse(row.at) / 1000,
+        compare: row.compare?.outcome,
+        label: mark?.label ?? null,
+        runId: row.decide?.id ?? row.compare?.id,
+        detail: mark?.title,
+        fill: mark?.fill ?? null,
+        quiet: mark?.quiet,
+        band: mark?.wrote ? STRIP_BAND.wrote : null,
+      }
+    })
+    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS) }
+  }, [todayDecides.data, todayCompares.data])
 
   return (
     <>
@@ -196,6 +202,8 @@ export function ChargerPage() {
             ? 'Nothing decided: EV charger control is off.'
             : 'No decisions yet today.'
         }
+        legend={<StripKey items={key} />}
+        footer={<StripLine strip={strip} target="charger" />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
       />
 

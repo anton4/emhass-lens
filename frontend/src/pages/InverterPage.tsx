@@ -9,12 +9,12 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
+import { StripKey, StripLine } from '../components/controller/StripKey'
 import { InverterSlotPopup } from '../components/controller/InverterSlotPopup'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds, todayKey } from '../lib/days'
-import type { StripInput } from '../lib/dayStrip'
 import { driftText } from '../lib/drift'
 import { formatDateTime, formatSlotDate } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -38,10 +38,8 @@ import {
   inverterStrip,
   mergeBySlot,
   parseDecisionSummary,
-  STRIP_BAND,
   type InverterComparison,
   type InverterLast,
-  type SlotDetail,
 } from '../lib/inverter'
 import type { ButtonPress, RunSummary } from '../api/types'
 
@@ -177,8 +175,12 @@ export function InverterPage() {
             ? 'Nothing decided: inverter control is off.'
             : 'No decisions yet today.'
         }
-        legend={<StripKey strip={strip} presses={pressesToday} />}
-        footer={<StripLine strip={strip} />}
+        legend={
+          <StripKey items={inverterLegend(strip)}>
+            <PressKey presses={pressesToday} />
+          </StripKey>
+        }
+        footer={<StripLine strip={strip} target="inverter" />}
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
         ticks={ticks}
       />
@@ -361,16 +363,10 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
   )
 }
 
-/** What the strip's colours mean, with how many slots each today, and the button presses marked on it. */
-function StripKey({ strip, presses }: { strip: StripInput<SlotDetail>[]; presses: { outside: number; lens: number } }) {
+/** The strip key's button presses: outside EMHASS Lens and by it, where there were any. */
+function PressKey({ presses }: { presses: { outside: number; lens: number } }) {
   return (
     <>
-      {inverterLegend(strip).map((k) => (
-        <span key={k.text} className="day-strip-key-item">
-          <span className="day-strip-swatch" style={{ background: k.fill }} />
-          {k.text} <span className="num">{k.count}</span>
-        </span>
-      ))}
       {presses.outside > 0 && (
         <span className="day-strip-key-item">
           <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.outside }} />
@@ -383,30 +379,6 @@ function StripKey({ strip, presses }: { strip: StripInput<SlotDetail>[]; presses
           Pressed by EMHASS Lens <span className="num">{presses.lens}</span>
         </span>
       )}
-    </>
-  )
-}
-
-/** What the line under the strip means: the comparison (dry run) and the writes (live). */
-function StripLine({ strip }: { strip: StripInput<SlotDetail>[] }) {
-  const count = (band: string) => strip.filter((s) => s.band === band).length
-  const parts = [
-    { band: STRIP_BAND.same, text: 'same as the automation' },
-    { band: STRIP_BAND.differs, text: 'the automation differed' },
-    { band: STRIP_BAND.wrote, text: 'wrote to the inverter' },
-  ]
-    .map((p) => ({ ...p, n: count(p.band) }))
-    .filter((p) => p.n > 0)
-  if (parts.length === 0) return null
-  return (
-    <>
-      <span>Line under the strip:</span>
-      {parts.map((p) => (
-        <span key={p.band} className="day-strip-key-item">
-          <span className="day-strip-swatch line" style={{ background: p.band }} />
-          <span className="num">{p.n}</span> {p.text}
-        </span>
-      ))}
     </>
   )
 }
