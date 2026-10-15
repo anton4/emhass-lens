@@ -133,13 +133,18 @@ export interface DecisionTargets {
   battery_min_w: number
   battery_max_w: number
   feedin_max_w: number | null // null: the limit was left as it is
+  feedin_before_w: number | null // what the register showed before the run; null: not known (or left as it is)
 }
 
-const TARGETS = /'([^']+)' \(rule ([a-z_]+)\): grid (-?\d+) W, battery (-?\d+)…(-?\d+) W, feed-in (?:(-?\d+) W|unchanged)/
+const TARGETS = new RegExp(
+  String.raw`'([^']+)' \(rule ([a-z_]+)\): grid (-?\d+) W, battery (-?\d+)…(-?\d+) W, ` +
+    String.raw`feed-in (?:(-?\d+) W(?: \((?:(kept)|was (-?\d+) W)\))?|unchanged)`,
+)
 
 /** The settings from a decide run's summary, e.g. "Would set 'Force charge' (rule force_charge): grid 5600 W,
- * battery -3000…20000 W, feed-in 0 W" ("feed-in unchanged" when the limit is left as it is). Null for runs without
- * settings (nothing to decide, refused) and for runs made before the summary named them. */
+ * battery -3000…20000 W, feed-in 0 W (was 15500 W)" ("(kept)" when the register already held the limit, "feed-in
+ * unchanged" when the limit is left as it is; runs made before 0.4.40 don't say what the register held). Null for
+ * runs without settings (nothing to decide, refused) and for runs made before the summary named them. */
 export function parseDecisionTargets(summary: string | null | undefined): DecisionTargets | null {
   const m = summary ? TARGETS.exec(summary) : null
   if (!m) return null
@@ -150,6 +155,7 @@ export function parseDecisionTargets(summary: string | null | undefined): Decisi
     battery_min_w: Number(m[4]),
     battery_max_w: Number(m[5]),
     feedin_max_w: m[6] === undefined ? null : Number(m[6]),
+    feedin_before_w: m[7] !== undefined ? Number(m[6]) : m[8] !== undefined ? Number(m[8]) : null,
   }
 }
 
@@ -313,10 +319,12 @@ export interface SlotDetail {
   targets: DecisionTargets | null
   action: DecisionAction | null
   summary: string | null // the decide run's, shown when there are no settings
-  /** Settings that differ from the slot before (the feed-in limit: from the last one set). */
+  /** Settings that differ from the slot before (the feed-in limit: from what the register showed, or for older runs
+   * from the last one set). */
   changed: string[]
-  /** The feed-in limit set earlier today and since when, for a slot that left it as it is. */
-  feedinBefore: { value: number; slot: number } | null
+  /** The feed-in limit set earlier today and since when, for a slot that left it as it is. `held`: not set then, a
+   * run found the register already holding it (set yesterday, or by a market session). */
+  feedinBefore: { value: number; slot: number; held?: true } | null
   /** Where the automation set something else: field → what it set. */
   differs: Record<string, string>
   compare: string | null // the compare run's outcome: ok, mismatch, noop
@@ -360,7 +368,9 @@ export function inverterStrip(
     const changed: string[] = []
     if (targets) {
       if (before) changed.push(...SETTINGS.filter((f) => before[f] !== targets[f]))
-      if (targets.feedin_max_w !== null && targets.feedin_max_w !== last.feedin?.value) changed.push('feedin_max_w')
+      const feedin = targets.feedin_max_w
+      const was = targets.feedin_before_w ?? last.feedin?.value
+      if (feedin !== null && feedin !== was) changed.push('feedin_max_w')
     }
     const detail: SlotDetail = {
       slot: row.slot,
@@ -376,8 +386,10 @@ export function inverterStrip(
     }
     if (targets && !blocked) {
       last.targets = targets
-      if (targets.feedin_max_w !== null && changed.includes('feedin_max_w')) {
-        last.feedin = { value: targets.feedin_max_w, slot: row.slot }
+      const feedin = targets.feedin_max_w
+      if (feedin !== null && changed.includes('feedin_max_w')) last.feedin = { value: feedin, slot: row.slot }
+      else if (feedin !== null && feedin !== last.feedin?.value) {
+        last.feedin = { value: feedin, slot: row.slot, held: true }
       }
     }
     const tone = targets ? modeTone(targets.state) : null

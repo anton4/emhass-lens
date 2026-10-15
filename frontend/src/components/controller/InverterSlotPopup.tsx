@@ -98,7 +98,8 @@ export function InverterSlotPopup({ detail, timeZone }: { detail: SlotDetail; ti
                     {value === null && (
                       <span className="slot-pop-sub">
                         {detail.feedinBefore
-                          ? `${fieldValue(f, detail.feedinBefore.value)} since ${clock(detail.feedinBefore.slot)}`
+                          ? `${fieldValue(f, detail.feedinBefore.value)} since ${detail.feedinBefore.held ? 'before ' : ''}` +
+                            clock(detail.feedinBefore.slot)
                           : 'not set earlier today'}
                       </span>
                     )}

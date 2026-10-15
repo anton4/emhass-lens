@@ -251,8 +251,12 @@ describe('parseDecisionTargets', () => {
       battery_min_w: -3000,
       battery_max_w: 20000,
       feedin_max_w: null,
+      feedin_before_w: null,
     })
     expect(parseDecisionTargets(`Set ${PVX}`)?.feedin_max_w).toBe(15500)
+    expect(parseDecisionTargets(`Set ${PVX}`)?.feedin_before_w).toBeNull() // before 0.4.40
+    expect(parseDecisionTargets(`Set ${PVX} (kept)`)).toMatchObject({ feedin_max_w: 15500, feedin_before_w: 15500 })
+    expect(parseDecisionTargets(`Set ${PVX} (was 0 W)`)).toMatchObject({ feedin_max_w: 15500, feedin_before_w: 0 })
     expect(parseDecisionTargets(`Already set: ${PVX}`)?.battery_max_w).toBe(0)
     expect(parseDecisionTargets(`Not in control (x is 'off' (e.g. an mFRR session)); would: ${FC}`)?.state).toBe(
       'Force charge',
@@ -354,6 +358,29 @@ describe('inverterStrip', () => {
     )
     expect(strip.map((s) => s.detail?.changed.includes('feedin_max_w'))).toEqual([true, false, false])
     expect(strip[2]?.detail?.feedinBefore).toEqual({ value: 15500, slot: Date.parse('2026-10-10T00:00:00Z') })
+  })
+
+  it('marks the feed-in limit changed only where the register held something else', () => {
+    const strip = inverterStrip(
+      mergeBySlot(
+        [
+          run(1, 'inverter.decide', at('00:00'), 'ok', `Already set: ${SELF}`),
+          // run 6727: the first slot of the day to name the limit, which the inverter already held
+          run(2, 'inverter.decide', at('00:15'), 'ok', `Set ${PVX} (kept)`),
+          run(3, 'inverter.decide', at('00:30'), 'ok', `Already set: ${SELF}`),
+          run(4, 'inverter.decide', at('00:45'), 'ok', `Set ${PVX} (was 5000 W)`), // a market session lowered it
+          run(5, 'inverter.decide', at('01:00'), 'ok', `Already set: ${SELF}`),
+        ],
+        [],
+      ),
+    )
+    expect(strip.map((s) => s.detail?.changed.includes('feedin_max_w'))).toEqual([false, false, false, true, false])
+    expect(strip[2]?.detail?.feedinBefore).toEqual({
+      value: 15500,
+      slot: Date.parse('2026-10-10T00:15:00Z'),
+      held: true,
+    })
+    expect(strip[4]?.detail?.feedinBefore).toEqual({ value: 15500, slot: Date.parse('2026-10-10T00:45:00Z') })
   })
 
   it('marks the slots that wrote to the inverter in live', () => {

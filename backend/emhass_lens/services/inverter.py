@@ -163,7 +163,7 @@ class InverterService:
             "blocked": blocked,
         }
         ctx.run.artifact("decision", {**self.last, "values": values.__dict__, "observed_before": before.__dict__})
-        text = describe(decision)
+        text = describe(decision, before)
         catch_up = " (catch-up after Home Assistant came back)" if ctx.params.get("catch_up") else ""
         if blocked:
             if self.mode == "live":
@@ -200,13 +200,15 @@ class InverterService:
         if blocked:
             raise RunRefused(f"Not in control: {blocked}")
         writer.check_limits(decision.targets, decision.feedin_target)
+        before = self.observed()  # after the refresh: what the commit compares with
         result = await writer.commit(ctx, owner="plan", targets=decision.targets, feedin_w=decision.feedin_target)
         wrote = result.wrote_passive or result.wrote_feedin
         self.last_apply = {"slot": iso(slot_floor(now)), "run_id": ctx.run.id, "ok": result.ok, "wrote": wrote}
         if not result.ok:
             ctx.run.outcome = "error"
             ctx.run.error = result.error
-        ctx.run.summary = f"Set {describe(decision)}" if wrote else f"Already set: {describe(decision)}"
+        text = describe(decision, before)
+        ctx.run.summary = f"Set {text}" if wrote else f"Already set: {text}"
 
     def compare_job_active(self) -> bool:
         return self.mode == "dry_run"
@@ -320,9 +322,14 @@ class InverterService:
         }
 
 
-def describe(decision: Decision) -> str:
+def describe(decision: Decision, before: Observed | None = None) -> str:
+    """The decision in one line. `before` (what the registers showed) says whether the feed-in limit is kept or
+    changes: "feed-in 15500 W (kept)", "feed-in 15500 W (was 0 W)"; the UI marks a changed limit from it."""
     t = decision.targets
     feed = f"feed-in {decision.feedin_max_w} W" if decision.feedin_needed else "feed-in unchanged"
+    held = before.feedin_max_w if before is not None else None
+    if decision.feedin_needed and held is not None:
+        feed += " (kept)" if abs(held - decision.feedin_max_w) < 0.5 else f" (was {held:.0f} W)"
     if t is None:
         return f"no passive-mode change ({decision.why}); {feed}"
     return (
