@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.41
+
+- Plan: on the **Power** chart a sell (up-regulation) is **↑ SELL** and a buy **↓ BUY**, on the flags and in the popup.
+- Plan: sessions of one direction close together share one flag ("↓ BUY 15.5 kW +1") instead of one losing its text and the next disappearing; click it to zoom to them all.
+- Plan: with **Commanded** on, the power axis fits the measured and planned lines instead of stretching to every command. A command past the axis runs along its edge with its direction and power ("↓ 15.5 kW").
+- Plan: a shortfall (the grid delivering less than commanded) is hatched across the session's bar in the Market row, the same as on the chart, and the key under the chart shows **Shortfall**.
+- Plan: one **Grid** row in the popup: the measured line at the pointer, with the quarter-hour's mean under it. In the quarter-hour in progress the plan's grid line starts at now, so there is one grid line there too.
+
 ## 0.4.40
 
 - Inverter: the slot popup marks the feed-in limit **changed** only when the inverter held something else. Before, the first slot of the day that named a limit always said changed, even when the run kept the 15500 W the inverter already had and wrote nothing (run 6727 on 2026-10-15).
