@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.42
+
+- Market: the **Today, decision by decision** strip is coloured by what each decision did, like the Inverter strip: a sell in Force discharge orange and a buy in Force charge blue (striped), no action grey, a session end slate, not in control hatched, an ignored command amber, with a key that counts them. It was all grey in Live, where nothing is compared.
+- EV charger: the same strip is coloured too: the plan's charging in the EV colour, excess-solar charging in PV's, pauses lighter, the target-SoC stop in teal, nothing to do grey.
+- Both: the line under the strip shows whether the automation did the same (Shadow, Dry run) or the decision wrote to the inverter or the charger (Live), and a block's popup shows its colour.
+- Market session hold: MPC keeps planning every quarter-hour while a market session holds the inverter (the plan still isn't published and the inverter isn't touched), so the hand-back after a long session gets a plan at most a quarter-hour old instead of "The plan is stale" or the safe state. No ML fit and no cost-function comparison start during a session.
+- Health: "No successful MPC run recently" no longer fires while a session held MPC; after a session the grace counts from the last held run. The last success, the take-over and the newest backup show in local time ("08:56") instead of a UTC timestamp.
+
 ## 0.4.41
 
 - Plan: on the **Power** chart a sell (up-regulation) is **↑ SELL** and a buy **↓ BUY**, on the flags and in the popup.
