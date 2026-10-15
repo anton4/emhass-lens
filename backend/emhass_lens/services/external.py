@@ -1,10 +1,11 @@
 """Hold and resume around a market session (mFRR through Qilowatt).
 
 While a Home Assistant entity says that someone else drives the inverter (the Qilowatt automation's session
-select is 'buy' or 'sell'), EMHASS Lens builds MPC payloads but doesn't send them, doesn't publish and doesn't
-touch the inverter. The moment the session ends it re-applies the plan: one publish, one inverter decision, and
-only the registers that differ are written. Optionally MPC runs again afterwards; that re-plan is published but
-doesn't touch the inverter in the same slot, so a session end never costs more than one inverter write.
+select is 'buy' or 'sell'), EMHASS Lens keeps running MPC but doesn't publish and doesn't touch the inverter. The
+moment the session ends it re-applies the newest plan, made during the session, so even a long session hands back
+to a plan at most a slot old: one publish, one inverter decision, and only the registers that differ are written.
+Optionally MPC runs again afterwards; that re-plan is published but doesn't touch the inverter in the same slot, so
+a session end never costs more than one inverter write.
 
 With Qilowatt market control in shadow mode the automation runs the sessions, so the hold always follows the
 market's session select, whatever the hold's own settings say. In live mode the App runs the sessions itself and
@@ -97,7 +98,7 @@ class ExternalControlService:
         now = self.c.clock.now()
         if busy:
             self.busy, self.busy_value, self.busy_since = True, str((state or {}).get("state")), now
-            log.info("Hold: %s; MPC runs aren't sent and the inverter isn't touched until it ends", self.hold_text())
+            log.info("Hold: %s; MPC keeps planning, nothing is published or written until it ends", self.hold_text())
             self.c.bus.publish("hold.started", {"entity": entity_id, "value": self.busy_value, "since": iso(now)})
         else:
             ended = {"entity": entity_id, "value": self.busy_value, "since": iso(self.busy_since), "until": iso(now)}

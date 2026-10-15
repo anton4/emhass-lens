@@ -37,6 +37,38 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-15: MPC keeps planning during a market session (unreleased)
+- **Why:** HA raised "No successful MPC run recently: last success 2026-10-15T05:56:05.406689+00:00" about 40 min
+  into a market session.
+  - Held runs were built but not sent, so the last success went stale.
+  - Worse, after any session over `plan_max_age_slots` (30 min) the hand-back had no plan young enough:
+    `InverterService.apply` refuses "The plan is stale", and Live market control falls back to the safe state.
+  - Nothing written down said why MPC mustn't be sent during a session. The hold's reasons are all about inverter
+    writes, and those stay held.
+- **services/mpc.py:**
+  - `run()` sends during a hold as well. An `ok` run says "not published while a market session holds the
+    inverter (…)".
+  - No ML fit starts after a run during a session (it would block the runs and the re-plan at the end).
+  - Cost-function comparisons stay refused during a hold.
+  - Publish, the inverter decision and the catch-up stay held.
+- **services/health_rules.py:**
+  - `mpc.stale` counts during sessions again (49f540f had skipped it).
+  - Its detail and `backup.stale`'s date are in local time via `_when` ("08:56", or "Wed 14 Oct 08:56").
+- **Wording:**
+  - the hold and re-plan setting descriptions;
+  - external.py's docstring and log line;
+  - the Plan page's market tooltip (planNow.ts);
+  - DOCS.md "During a market session";
+  - PLAN.md's Phase 5c row.
+- **Publishing during a session too:** looked at and left held. A publish chains the EV charger's EMHASS decision
+  and fires `emhass_lens_plan_published`, and EMHASS's `p_deferrable*` sensors drive loads in HA. The plan doesn't
+  know about the session, so it could start the car or a deferrable load during a sell and eat into the power owed
+  to the aggregator.
+- **Checked:** 467 backend tests, ruff, pyright, and on the frontend typecheck, lint and 268 tests.
+  - New: `test_a_long_session_hands_back_to_a_plan_made_during_it`. It fails with the old send rule: the hand-back
+    decision is `noop`.
+  - **Not checked:** a real session.
+
 ### 2026-10-14: a market gap inside the deadband is written once it holds for the cooldown (0.4.39)
 - **Why:** the owner asked why this morning's Kratt sell didn't get full power (runs 5627–5658, 08:45:54–09:04:04).
   - Kratt raised the frrup sell from 9400 W to 10600 W at 08:48:53, and the grid register stayed at -9400 W.

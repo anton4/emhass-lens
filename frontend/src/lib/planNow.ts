@@ -56,7 +56,7 @@ export function controlFact(control: ControlNow | null | undefined, now: Date, t
     market: true,
     label: 'Market',
     detail: parts.filter(Boolean).join(' '),
-    title: `${by}. Until then MPC runs are built but not sent, and the plan isn’t applied.`,
+    title: `${by}. Until then MPC keeps planning, but the plan isn’t published or applied.`,
   }
 }
 

@@ -2256,7 +2256,7 @@ export interface components {
             busy_values?: string[];
             /**
              * Hold while a market session owns the inverter
-             * @description While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC runs are built but not sent, the plan isn't published and the inverter isn't touched. When the session ends, the plan is re-applied right away. With Qilowatt market control on Shadow the hold is always on and follows the market's session state select instead of the entity below.
+             * @description While the entity below shows one of the busy values (e.g. a Qilowatt mFRR session), MPC keeps planning, but the plan isn't published and the inverter isn't touched. When the session ends, the newest plan is re-applied right away. With Qilowatt market control on Shadow the hold is always on and follows the market's session state select instead of the entity below.
              * @default false
              */
             enabled: boolean;
@@ -2273,7 +2273,7 @@ export interface components {
             handback_wait_s: number;
             /**
              * Re-run MPC after a session
-             * @description Off: the existing plan is re-applied, with at most one inverter write. On: MPC also runs again with the battery state after the session; the inverter follows that plan from the next slot.
+             * @description Off: the newest plan, made during the session, is re-applied, with at most one inverter write. On: MPC also runs again with the battery state after the session; the inverter follows that plan from the next slot.
              * @default false
              */
             replan: boolean;

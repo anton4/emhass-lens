@@ -217,28 +217,26 @@ def evaluate(c: Container, now: datetime) -> list[Problem]:
                 "#/health",
             )
         )
-    external = x.get("external")
-    # a market session holds MPC on purpose: runs are built but not sent, so there is no success to wait for
-    held = external is not None and external.holding
-    if mode == "live" and settings.emhass.mpc.auto and not held:
+    if mode == "live" and settings.emhass.mpc.auto:  # MPC keeps planning during a market session too
         last = mpc.last_success_at
         stale_after = timedelta(minutes=15 * settings.health.plan_max_age_slots)
         # the grace counts from the moment the App became the driver, not from the process start
         since = max(c.started_at, mpc.live_since or c.started_at)
-        # ... and after a session, from the last run it held
-        held_until = mpc.last_held_at
-        newest = max(t for t in (last, since, held_until) if t is not None)
-        if now - newest > stale_after:
-            detail = (
-                f"last success at {_when(last, now, tz)}"
-                if last
-                else f"no live run has succeeded since EMHASS Lens took over at {_when(since, now, tz)}"
+        if (last is None and now - since > stale_after) or (last is not None and now - last > stale_after):
+            out.append(
+                Problem(
+                    "mpc.stale",
+                    "error",
+                    "No successful MPC run recently",
+                    f"last success at {_when(last, now, tz)}"
+                    if last
+                    else f"no live run has succeeded since EMHASS Lens took over at {_when(since, now, tz)}",
+                    link="#/runs",
+                )
             )
-            if held_until is not None and held_until > (last or since):
-                detail += f"; MPC was held for a market session until {_when(held_until, now, tz)}"
-            out.append(Problem("mpc.stale", "error", "No successful MPC run recently", detail, link="#/runs"))
 
     # Market session hold
+    external = x.get("external")
     source = external.source() if external is not None else None
     if external is not None and source is not None and ha.connected and ha.state(source[0]) is None:
         market_select = external.follows_market()

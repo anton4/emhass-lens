@@ -82,8 +82,6 @@ class MpcService:
         self.last_shadow: Shadow | None = None
         self.last_live_run_id: int | None = None
         self.last_success_at: datetime | None = None
-        # the last run a market session held (built, not sent); health counts the grace after a session from here
-        self.last_held_at: datetime | None = None
         # when the App became the driver (live mode with Auto MPC on); health counts the first run's grace from here
         self.live_since: datetime | None = c.started_at if self._driving(c.settings.current) else None
         self._replan: asyncio.Task[None] | None = None
@@ -142,18 +140,17 @@ class MpcService:
         assert ctx.run is not None
         settings = self.c.settings.current
         mode = self.mode
+        # a market session doesn't stop the planning: only the publish and the inverter wait for its end, which then
+        # hands the inverter back to a plan at most a slot old
         external = self.c.extras.get("external")
         held = external is not None and external.holding
-        send = mode == "live" and (settings.emhass.mpc.auto or ctx.trigger == "manual") and not held
+        send = mode == "live" and (settings.emhass.mpc.auto or ctx.trigger == "manual")
 
         built = await self.build_now(ctx, send=send if mode != "off" else None)
         blocking, horizon, warn_note = built.blocking, built.horizon, built.warn_note
 
         if not send:
             why = {"off": "mode Off", "dry_run": "dry run", "live": "Auto MPC is off"}[mode]
-            if held and external is not None:
-                why = f"held: a market session owns the inverter, {external.hold_text()}"
-                self.last_held_at = self.c.clock.now()
             if blocking:
                 ctx.run.outcome = "refused" if mode == "dry_run" else "shadow"
                 ctx.run.summary = f"Would refuse ({why}): " + "; ".join(i.message for i in blocking)
@@ -169,6 +166,13 @@ class MpcService:
             await costfun.compare_then_send(ctx, built)
         else:
             await self.send(ctx, built.result, horizon, warn_note)
+        if held and external is not None:
+            if ctx.run.outcome == "ok":
+                ctx.run.summary = (
+                    f"{ctx.run.summary}; not published while a market session holds the inverter "
+                    f"({external.hold_text()})"
+                )
+            return  # no fit during a session: it would block the runs, and the re-plan when the session ends
         await self.c.extras["ml"].after_mpc_run()  # a nightly fit, or one because the model can't serve the runs
 
     async def build_now(self, ctx: JobContext, *, send: bool | None) -> Built:

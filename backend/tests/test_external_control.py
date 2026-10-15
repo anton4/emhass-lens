@@ -2,7 +2,7 @@
 entity is busy, and the plan is re-applied once (one inverter write at most) when the session ends."""
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -85,7 +85,7 @@ def newest_id(client: TestClient, job: str) -> int:
     return runs[0]["id"] if runs else 0
 
 
-def test_a_session_holds_mpc_publish_and_the_inverter(tmp_path: Path, world: World) -> None:
+def test_a_session_holds_the_publish_and_the_inverter_but_mpc_keeps_planning(tmp_path: Path, world: World) -> None:
     clock = FakeClock(START)
     client = client_for(tmp_path, world, clock)
     try:
@@ -96,10 +96,12 @@ def test_a_session_holds_mpc_publish_and_the_inverter(tmp_path: Path, world: Wor
         assert mpc["hold"]["value"] == "sell" and mpc["hold"]["enabled"] is True
         assert json.loads(state_messages(container(client))[0].payload)["hold"] == "ON"
 
-        held = manual_run(client, "emhass.mpc")
-        assert held["outcome"] == "shadow", held
-        assert "held" in held["summary"] and "'sell'" in held["summary"]
-        assert len([a for a in world.emhass_actions if a[0] == "naive-mpc-optim"]) == 1  # not sent again
+        planned = manual_run(client, "emhass.mpc")
+        assert planned["outcome"] == "ok", planned
+        assert "not published while a market session holds the inverter" in planned["summary"]
+        assert "'sell'" in planned["summary"]
+        assert len([a for a in world.emhass_actions if a[0] == "naive-mpc-optim"]) == 2
+        assert "publish-data" not in [a[0] for a in world.emhass_actions]
 
         publish = manual_run(client, "emhass.publish")
         assert publish["outcome"] == "noop" and publish["summary"].startswith("Held")
@@ -219,31 +221,29 @@ def test_no_resume_without_the_hand_back(tmp_path: Path, world: World) -> None:
         client.__exit__(None, None, None)
 
 
-def test_a_session_does_not_make_mpc_stale(tmp_path: Path, world: World) -> None:
-    """Held runs aren't sent, so there is no success to wait for; after the session the grace counts from the last
-    held run, and the detail says when in local time."""
+def test_a_long_session_hands_back_to_a_plan_made_during_it(tmp_path: Path, world: World) -> None:
+    """The plan from before a session is too old to apply after 30 min; the runs during the session keep it fresh."""
     clock = FakeClock(START)
-    client = client_for(tmp_path, world, clock)
+    client = client_for(tmp_path, world, clock, inverter_mode="live")
     try:
-        c = container(client)
-
-        def stale(at: datetime) -> str | None:
-            problem = {p.key: p for p in evaluate(c, at)}.get("mpc.stale")
-            return problem.detail if problem else None
-
         assert run_job(client, "emhass.mpc")["outcome"] == "ok"  # 14:13 local
         set_session(client, world, "sell")
-        clock.advance(minutes=1)  # still inside the slot, so nothing scheduled runs in between
-        assert run_job(client, "emhass.mpc")["outcome"] == "shadow"  # held at 14:14
-        held_at = clock.now()
-        assert stale(held_at + timedelta(hours=2)) is None  # a long session isn't an MPC problem
+        world.set_state(ENABLE, "off")
+        world.set_state("input_select.emhass_passive_state", "Force discharge")
+        world.set_state("number.sofar_passive_mode_grid_power", -5000)
+        prime(client, world)
+        clock.set(datetime(2026, 10, 9, 11, 50, tzinfo=UTC))  # 37 min into the session
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        assert not any(p.key == "mpc.stale" for p in evaluate(container(client), clock.now()))
 
+        decides_before = newest_id(client, "inverter.decide")
+        world.set_state(ENABLE, "on")
+        prime(client, world)
         set_session(client, world, "none")
-        wait_for_run(client, "external.resume", 0)
-        assert stale(held_at + timedelta(minutes=29)) is None
-        assert stale(held_at + timedelta(minutes=31)) == (
-            "last success at 14:13; MPC was held for a market session until 14:14"
-        )
+        resume = wait_for_run(client, "external.resume", 0)
+        assert resume["outcome"] == "ok", resume
+        decide = wait_for_run(client, "inverter.decide", decides_before)
+        assert decide["outcome"] == "ok", decide  # not "The plan is stale"
     finally:
         client.__exit__(None, None, None)
 
