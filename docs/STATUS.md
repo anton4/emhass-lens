@@ -271,6 +271,13 @@ These come from docs/PLAN.md §10:
   - **The anchor** replaces the now line on all four charts. Only the battery chart has time labels, with an
     "anchor 15:30" pill; the cursor is a slot-wide band.
   - The unused `priceExtras` is gone (its rows became `priceNote` in I5).
+- **I7, arrow keys and a faded past:**
+  - The prices chart takes the keys: ← → step a slot, ⇧ an hour, + − zoom, Home goes back to the whole payload
+    with the cursor on the anchor (fixed steps: the charts snap to slots). The footnote and the chart's label say so.
+  - Before the anchor the prices, PV and house load are drawn at 0.55 without their fills (`split` at the anchor).
+  - **Fix (TimeChart):** uPlot commits a new window in a microtask per chart, so after Home from a zoomed window
+    the cursor landed elsewhere and the synced charts read the slot before. The `setScale` hook now places it
+    again once every chart has the window (seen on Inputs; the Plan page's Home had the same bug).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

@@ -11,6 +11,7 @@ import type { PopupTag } from '../../components/charts/cursorStore'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Empty, ErrorNotice } from '../../components/PageHead'
 import { snapWindow } from '../../lib/chartRange'
+import { keyHint } from '../../lib/chartKeys'
 import { cursorTimeLabel } from '../../lib/chartTime'
 import { outcomeLabel } from '../../lib/outcomes'
 import { closeSteps, loadPref, savePref } from '../../lib/planHistory'
@@ -54,6 +55,10 @@ const POWER_FIT = { minSpan: 500 }
 // room above the highest hump for its day's total
 const PV_FIT = { minSpan: 500, pad: 0.2, zero: true, clamp: [0, null] as [number, null] }
 const PRICE_FIT = { minSpan: 0.01 }
+// the charts snap to slots: the arrow keys step one (Shift an hour)
+const KEY_STEP = { step: SLOT_S, big: 3600 }
+// what was measured before the anchor is fainter, without its fill
+const PAST = { line: 0.55, fill: 0 }
 
 const MEASURED: PopupTag = { text: 'measured', tone: 'neutral' }
 const NOT_SENT: PopupTag = { text: 'not sent', tone: 'neutral' }
@@ -195,6 +200,7 @@ function SentView({
     snapToSlot: true,
     cursorBand: true,
     timeAxis: 'ticks' as const,
+    split: { at: axis.anchorS, side: 'before' as const },
   }
   const measuredBy = (q: string) => data.measured_entities[q]
   const heads = useMemo(() => sentHeads(data, { cents: unit === 'cents', hoursBack }), [data, unit, hoursBack])
@@ -261,6 +267,7 @@ function SentView({
             ariaLabel="Import and export price per quarter-hour: those that applied before the anchor, those sent to EMHASS, and the forecast after the plan's horizon, with the tariff period, the export limit and the horizon under the chart"
             yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
             fit={PRICE_FIT}
+            keyboard={{ step: KEY_STEP, home: axis.anchorS }}
             hatches={charts.forecastHatches}
             notes={charts.priceNotes}
             height={230}
@@ -365,8 +372,8 @@ function SentView({
         </section>
       </div>
       <p className="chart-note">
-        Point at a chart to read its inputs at that quarter-hour; every chart shows the same slot. Prices include fees
-        and VAT.
+        Point at a chart to read its inputs at that quarter-hour; every chart shows the same slot. On the prices chart,{' '}
+        {keyHint(KEY_STEP).replace(/^A/, 'a')}; Home goes back to the anchor. Prices include fees and VAT.
         {isNumber(data.no_export_at_or_below) && (
           <>
             {' '}
@@ -676,8 +683,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     beyond.map((b) => b.prod_price * f),
   )
   const prices: ChartSeries[] = [
-    { label: 'Import', color: '--q-import', values: closeSteps(importValues), readout: importValues, format: priceFormat },
-    { label: 'Export', color: '--q-export', values: closeSteps(exportValues), readout: exportValues, format: priceFormat },
+    { label: 'Import', color: '--q-import', values: closeSteps(importValues), readout: importValues, format: priceFormat, fade: PAST },
+    { label: 'Export', color: '--q-export', values: closeSteps(exportValues), readout: exportValues, format: priceFormat, fade: PAST },
   ]
   const exportRow = exportLane(axis, data)
   const pricePopup = {
@@ -699,7 +706,9 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     beyond.map((b) => b.pv_w),
   )
   const hasReserve = slots.some((s) => (s.ev_reserved_w ?? 0) > 0)
-  const pv: ChartSeries[] = [{ label: 'PV', color: '--q-pv', fill: 0.16, values: closeSteps(pvValues), readout: pvValues, format: formatPower }]
+  const pv: ChartSeries[] = [
+    { label: 'PV', color: '--q-pv', fill: 0.16, values: closeSteps(pvValues), readout: pvValues, format: formatPower, fade: PAST },
+  ]
   if (hasReserve) {
     const reserved = onAxis(axis, null, slots.map((s) => ((s.ev_reserved_w ?? 0) > 0 ? (s.ev_reserved_w ?? 0) : null)))
     pv.push({
@@ -728,6 +737,7 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
       values: closeSteps(loadValues),
       readout: loadValues,
       format: formatPower,
+      fade: PAST,
     },
   ]
   const loadTag = data.load_source === 'plan' ? 'EMHASS forecast' : 'sent'
