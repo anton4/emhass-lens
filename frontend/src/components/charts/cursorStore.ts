@@ -100,3 +100,25 @@ export function createCursorStore() {
 }
 
 export type CursorStore = ReturnType<typeof createCursorStore>
+
+/** A value that changes often (the cursor's time) for one part of a page to follow without re-rendering the rest. */
+export function createValueStore<T>(initial: T) {
+  let value = initial
+  const listeners = new Set<() => void>()
+  return {
+    get: () => value,
+    set(next: T) {
+      if (Object.is(next, value)) return
+      value = next
+      listeners.forEach((l) => l())
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+  }
+}
+
+export type ValueStore<T> = ReturnType<typeof createValueStore<T>>

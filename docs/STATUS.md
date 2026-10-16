@@ -165,6 +165,13 @@ These come from docs/PLAN.md §10:
     hatched with "no readings", and named under the Power chart ("11:34 – 12:09: no grid readings in Home
     Assistant's history"). An unavailable sensor and an empty recorder can't be told apart, so the text says
     neither.
+- **P8, the table around the cursor:** the Chart/Table toggle is gone. Under the charts, "Table view: the 6 hours
+  around the cursor" lists 24 quarter-hours (grid, PV, house, battery + charge, SOC, import, export), measured left of
+  now and the plan right of it, the cursor's row marked (`lib/planTable.ts` `tableAround`; no Inverter column: there
+  is no per-slot mode for the plan). It follows the Power chart's cursor through `TimeChart.onCursor` and a value
+  store (`createValueStore`), so the charts don't re-render with it, and it is only worked out while open; it stays
+  on the last cursor after the pointer leaves. The full EMHASS table is the second collapsible, "Every column of this
+  plan".
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

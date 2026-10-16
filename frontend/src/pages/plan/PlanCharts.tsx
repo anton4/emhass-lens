@@ -51,6 +51,8 @@ import { energyIn, formatKwh, socSummary } from '../../lib/planTotals'
 import { HEAT_STEPS, priceHeatLane, windowExtremes } from '../../lib/prices'
 import { eurTick } from '../../lib/units'
 import { ChartHints } from './ChartHints'
+import { CursorTable } from './CursorTable'
+import { createValueStore } from '../../components/charts/cursorStore'
 
 const SYNC = 'plan'
 
@@ -238,6 +240,20 @@ export function PlanCharts({
     () => (prices?.bands ?? []).map(([from, to]) => ({ from, to, label: 'forecast' })),
     [prices],
   )
+  // the cursor's time for the table under the charts, kept after the pointer leaves (a store: the charts don't
+  // re-render with it)
+  const [cursorAt] = useState(() => createValueStore<number | null>(null))
+  const onCursor = useCallback((t: number | null) => t !== null && cursorAt.set(t), [cursorAt])
+  const priceBySlot = useMemo(() => {
+    const m = new Map<number, { import: number | null; export: number | null }>()
+    if (!prices) return m
+    prices.x.forEach((t, i) => {
+      const imp = prices.series[0]?.values[i] ?? null
+      const exp = prices.series[1]?.values[i] ?? null
+      m.set(t, { import: imp, export: exp })
+    })
+    return m
+  }, [prices])
   const runId = data.current?.run_id
   const plannedAt = data.current?.generated_at
   return (
@@ -268,6 +284,7 @@ export function PlanCharts({
         gridData={gridData}
         thenName={thenLabel(horizon)}
         staleHatches={staleHatches}
+        onCursor={onCursor}
         onZoom={zoomTo}
         split={ahead}
         markers={midnights}
@@ -390,6 +407,15 @@ export function PlanCharts({
         </section>
       )}
       <ChartHints windowS={shown ? shown[1] - shown[0] : 8 * 3600} />
+      <CursorTable
+        cursor={cursorAt}
+        x={x}
+        flows={flows}
+        soc={soc?.[0]?.values ?? null}
+        prices={priceBySlot}
+        nowS={nowS}
+        timeZone={tz}
+      />
     </div>
   )
 }
@@ -492,6 +518,7 @@ function PowerChart({
   gridData,
   thenName,
   staleHatches,
+  onCursor,
   onZoom,
   split,
   markers,
@@ -512,6 +539,8 @@ function PowerChart({
   thenName: string
   /** The plan ahead hatched when it is too old to trust. */
   staleHatches: ChartHatch[]
+  /** Told the cursor's time as it moves. */
+  onCursor: (time: number | null) => void
   onZoom: (range: [number, number] | null) => void
   split: ChartSplit
   markers: number[]
@@ -690,6 +719,7 @@ function PowerChart({
         onSession={zoomToSession}
         hatches={hatches}
         keyboard={{ step: adaptiveStep, home: nowS }}
+        onCursor={onCursor}
       />
       {missing.length > 0 && (
         <p className="chart-note">

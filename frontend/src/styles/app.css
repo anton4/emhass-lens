@@ -1885,6 +1885,33 @@ button.diff-locate {
   font-size: 11.5px;
 }
 
+/* under the charts: the quarter-hours around the cursor, and every column of the plan */
+.table-around {
+  margin-top: 8px;
+}
+
+.table-around > summary {
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.table-around .table-wrap {
+  max-height: 320px;
+  margin-top: 6px;
+  overflow: auto;
+}
+
+.table-around tr[data-current] td {
+  background: var(--tint-blue);
+}
+
+.table-around tr[data-plan] td {
+  color: var(--ink-2);
+}
+
 /* a wider window on its way: the charts stay, faded */
 .chart-stack[data-loading] > :not(.timeline-intro) {
   opacity: 0.45;

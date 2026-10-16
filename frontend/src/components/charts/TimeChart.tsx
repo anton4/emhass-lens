@@ -307,6 +307,9 @@ interface TimeChartProps {
    *  `home` or now) and Escape putting the cursor away. `step` may follow the window shown (s) and the plot's width
    *  (px). A screen reader hears the values at the cursor. */
   keyboard?: { step: KeyStep | ((windowS: number, plotPx: number) => KeyStep); home?: number }
+  /** Called with the cursor's time once a frame as it moves (null when it leaves), for a part of the page that
+   *  follows it (needs a popup or a cursor pill). */
+  onCursor?: (time: number | null) => void
 }
 
 const NONE: never[] = []
@@ -891,7 +894,7 @@ export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
   snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession, split,
-  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel, keyboard, hatches = NONE, cursorBand = false,
+  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel, keyboard, hatches = NONE, cursorBand = false, onCursor,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -899,12 +902,12 @@ export function TimeChart({
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
     bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-    sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches,
+    sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches, onCursor,
   })
   useEffect(() => {
     extras.current = {
       bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-      sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches,
+      sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches, onCursor,
     }
   })
   // the cursor the keyboard placed (unix s), until the mouse takes over
@@ -1099,8 +1102,10 @@ export function TimeChart({
       const left = u.cursor.left ?? -1
       if (u.cursor.idx === null || u.cursor.idx === undefined || left < 0 || u.select.width > 0) {
         cursor.setAt(null)
+        extras.current.onCursor?.(null)
         return
       }
+      extras.current.onCursor?.(u.posToVal(left, 'x'))
       // the quarter-hour the pointer is in (a step holds from its start), not the nearest start
       const idx = slotIndex(u.data[0], u.posToVal(left, 'x'))
       const points: CursorAt['points'] = []

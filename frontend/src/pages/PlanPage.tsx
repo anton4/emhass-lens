@@ -56,7 +56,6 @@ export function PlanPage() {
   const previousRows = data?.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
   const changes = useMemo(() => planChanges(rows, (previousRows ?? []) as PlanRow[]), [rows, previousRows])
-  const [table, setTable] = useState(false)
   const [view, setView] = useState<ViewHours>(() => loadPref(VIEW_KEY, VIEW_HOURS, 8))
   const [horizon, setHorizon] = useState<HorizonSlots>(() => loadPref(HORIZON_KEY, HORIZON_SLOTS, 0))
   const history = usePlanHistory(viewHistory(view), horizon)
@@ -103,22 +102,9 @@ export function PlanPage() {
   const summary = planSummary(rows, nowS, tz)
   const costFun = costFunTotal(rows)
   const control = controlFact(planNow.data?.control, now, tz)
-  const viewToggle = (
-    <div className="segmented" role="group" aria-label="Show the plan as">
-      <button type="button" aria-pressed={!table} onClick={() => setTable(false)}>
-        Chart
-      </button>
-      <button type="button" aria-pressed={table} onClick={() => setTable(true)}>
-        Table
-      </button>
-    </div>
-  )
-
   return (
     <>
-      <PageHead title="Plan" intro={summary ? <span className="plan-summary">{summary}</span> : undefined}>
-        {viewToggle}
-      </PageHead>
+      <PageHead title="Plan" intro={summary ? <span className="plan-summary">{summary}</span> : undefined} />
       <ErrorNotice error={plan.error} />
       {leftover && (
         <div className="notice" data-color="amber" role="note">
@@ -215,39 +201,37 @@ export function PlanPage() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>{table ? 'The plan as a table' : 'Timeline'}</h2>
-          {!table && (
-            <div className="timeline-controls">
-              <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
-              <button
-                type="button"
-                className="follow-now"
-                aria-pressed={zoom === null}
-                title={zoom === null ? 'The charts follow the clock' : 'Show the window around now again'}
-                onClick={() => setZoom(null)}
-              >
-                <span className="follow-dot" data-live={zoom === null || undefined} aria-hidden="true" />
-                {zoom === null ? 'Following now' : 'Back to now'}
-              </button>
-            </div>
-          )}
+          <h2>Timeline</h2>
+          <div className="timeline-controls">
+            <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
+            <button
+              type="button"
+              className="follow-now"
+              aria-pressed={zoom === null}
+              title={zoom === null ? 'The charts follow the clock' : 'Show the window around now again'}
+              onClick={() => setZoom(null)}
+            >
+              <span className="follow-dot" data-live={zoom === null || undefined} aria-hidden="true" />
+              {zoom === null ? 'Following now' : 'Back to now'}
+            </button>
+          </div>
         </div>
         <div className="panel-body">
-          {table ? (
+          <PlanCharts
+            data={data}
+            history={history.data}
+            nowS={nowS}
+            view={view}
+            horizon={horizon}
+            zoom={zoom}
+            onZoom={setZoom}
+            loading={history.isPlaceholderData}
+            stale={age?.stale ?? false}
+          />
+          <details className="table-around">
+            <summary>Every column of this plan</summary>
             <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
-          ) : (
-            <PlanCharts
-              data={data}
-              history={history.data}
-              nowS={nowS}
-              view={view}
-              horizon={horizon}
-              zoom={zoom}
-              onZoom={setZoom}
-              loading={history.isPlaceholderData}
-              stale={age?.stale ?? false}
-            />
-          )}
+          </details>
         </div>
       </section>
 
