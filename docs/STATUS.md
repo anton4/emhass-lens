@@ -227,6 +227,15 @@ These come from docs/PLAN.md §10:
     on all four.
   - **Not checked:** dark mode, a real phone through Ingress (touch, pinch).
 - **M2, release 0.5.1** (the phone layout): config.yaml, CHANGELOG.md, DOCS.md.
+- **I1, where the deferrable loads may start, and the SOC limits** (backend):
+  - `domain/mpc/sent.deferrables(…, emhass_config)` gives each load `start_timesteps` and `start_source`: the
+    payload's `start_timesteps_of_each_deferrable_load` (or the old `def_start_timestep`) when it has them, else
+    EMHASS's config (EMHASS Lens doesn't send one; a start can only come in through Extra runtime parameters).
+  - `soc_limits(payload, emhass_config)`: `battery_minimum/maximum_state_of_charge`, payload first.
+  - `SentInputs.soc_min`/`soc_max`; EMHASS's config as it is now, not as it was for an old run.
+  - Tests: `test_where_a_load_may_start_comes_from_the_payload_else_emhass_config`,
+    `test_the_soc_limits_come_from_the_payload_else_emhass_config`, and the live run's 0.05–1.0 with start 0 from
+    EMHASS's config.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

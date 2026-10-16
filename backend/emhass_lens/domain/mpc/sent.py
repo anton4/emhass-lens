@@ -33,10 +33,26 @@ def load_series(
     return "plan", values
 
 
-def deferrables(payload: dict[str, Any], described: list[dict[str, Any]]) -> list[dict[str, Any]]:
+START_KEYS = ("start_timesteps_of_each_deferrable_load", "def_start_timestep")
+
+
+def _starts(source: dict[str, Any] | None) -> list[Any] | None:
+    """The deferrable loads' first allowed timesteps a payload or EMHASS's config gives (either name), or None."""
+    for key in START_KEYS:
+        value = (source or {}).get(key)
+        if isinstance(value, list):
+            return value
+    return None
+
+
+def deferrables(
+    payload: dict[str, Any], described: list[dict[str, Any]], emhass_config: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """One row per deferrable load: what the payload sent for it, beside what its Home Assistant entities say it
-    would ask for when it is switched on (a load that is off is sent as 0 W for 0 h)."""
+    would ask for when it is switched on (a load that is off is sent as 0 W for 0 h); and the first timestep it may
+    run in, which EMHASS takes from the payload when it is there and else from its own config."""
     count = int(payload.get("number_of_deferrable_loads") or 0)
+    sent_starts, config_starts = _starts(payload), _starts(emhass_config)
     nominal = payload.get("nominal_power_of_deferrable_loads") or []
     hours = payload.get("operating_hours_of_each_deferrable_load") or []
     ends = payload.get("end_timesteps_of_each_deferrable_load") or []
@@ -59,9 +75,28 @@ def deferrables(payload: dict[str, Any], described: list[dict[str, Any]]) -> lis
                 "configured_hours": _number((about.get("operating_hours") or {}).get("value")),
                 "configured_end_timesteps": _whole((about.get("deadline_timesteps") or {}).get("value")),
                 "enabled_source": enabled.get("source"),
+                **_start(i, sent_starts, config_starts),
             }
         )
     return out
+
+
+def _start(i: int, sent: list[Any] | None, config: list[Any] | None) -> dict[str, Any]:
+    for values, source in ((sent, "payload"), (config, "emhass_config")):
+        if values is not None and i < len(values):
+            return {"start_timesteps": _whole(values[i]), "start_source": source}
+    return {"start_timesteps": None, "start_source": None}
+
+
+def soc_limits(payload: dict[str, Any], emhass_config: dict[str, Any] | None) -> tuple[float | None, float | None]:
+    """The battery's state-of-charge limits (0–1) the plan stays between: the payload's (extra runtime parameters)
+    when it has them, else EMHASS's config."""
+
+    def pick(key: str) -> float | None:
+        value = _number(payload.get(key))
+        return value if value is not None else _number((emhass_config or {}).get(key))
+
+    return pick("battery_minimum_state_of_charge"), pick("battery_maximum_state_of_charge")
 
 
 def _number(value: Any) -> float | None:

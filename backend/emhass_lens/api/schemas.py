@@ -822,6 +822,9 @@ class SentDeferrable(BaseModel):
     configured_hours: float | None = None
     configured_end_timesteps: int | None = None
     enabled_source: str | None = None
+    # the first timestep (from the anchor) it may run in, and whose it is: the payload's or EMHASS's config
+    start_timesteps: int | None = None
+    start_source: str | None = None  # payload | emhass_config
 
 
 class SentModel(BaseModel):
@@ -901,6 +904,9 @@ class SentInputs(BaseModel):
     forecast_source: str = "none"
     extend_days: int = 0  # the setting (0 without a price forecast)
     horizon_options: list[HorizonOption] = []
+    # the battery's state-of-charge limits (0–1): the payload's, else EMHASS's config as it is now
+    soc_min: float | None = None
+    soc_max: float | None = None
 
 
 class DriverResult(BaseModel):

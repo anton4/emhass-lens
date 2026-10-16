@@ -8725,6 +8725,28 @@
           "single_constant": {
             "title": "Single Constant",
             "type": "boolean"
+          },
+          "start_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Source"
+          },
+          "start_timesteps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Timesteps"
           }
         },
         "required": [
@@ -8975,6 +8997,28 @@
                 "type": "null"
               }
             ]
+          },
+          "soc_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Max"
+          },
+          "soc_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soc Min"
           },
           "source": {
             "title": "Source",

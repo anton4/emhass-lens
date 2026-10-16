@@ -4436,6 +4436,10 @@ export interface components {
             operating_hours: number;
             /** Single Constant */
             single_constant: boolean;
+            /** Start Source */
+            start_source?: string | null;
+            /** Start Timesteps */
+            start_timesteps?: number | null;
         };
         /**
          * SentInputs
@@ -4508,6 +4512,10 @@ export interface components {
             /** Soc Init */
             soc_init: number | null;
             soc_init_reading: components["schemas"]["Reading"] | null;
+            /** Soc Max */
+            soc_max?: number | null;
+            /** Soc Min */
+            soc_min?: number | null;
             /** Source */
             source: string;
             /** Timezone */

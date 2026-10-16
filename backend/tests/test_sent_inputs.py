@@ -7,7 +7,7 @@ import pytest
 
 from emhass_lens.core.clock import FakeClock
 from emhass_lens.domain.mpc.payload import PRICE_DECIMALS
-from emhass_lens.domain.mpc.sent import deferrables, load_series
+from emhass_lens.domain.mpc.sent import deferrables, load_series, soc_limits
 from tests.test_phase1 import make_client, prime, run_job
 from tests.test_phase2 import START, live_client
 from tests.world import TZ, World
@@ -69,6 +69,8 @@ def test_a_load_that_is_off_shows_what_it_would_ask_for() -> None:
             "configured_hours": 0.45,
             "configured_end_timesteps": 6,
             "enabled_source": "input_boolean.ev_charging_enabled",
+            "start_timesteps": None,
+            "start_source": None,
         }
     ]
 
@@ -77,6 +79,24 @@ def test_a_load_without_a_description_is_named_by_its_position() -> None:
     payload = {"number_of_deferrable_loads": 1, "nominal_power_of_deferrable_loads": [3000]}
     [row] = deferrables(payload, [])
     assert (row["name"], row["on"], row["nominal_power_w"], row["end_timesteps"]) == ("Load 1", True, 3000.0, 0)
+
+
+def test_where_a_load_may_start_comes_from_the_payload_else_emhass_config() -> None:
+    payload = {"number_of_deferrable_loads": 2, "nominal_power_of_deferrable_loads": [11000, 3000]}
+    config = {"start_timesteps_of_each_deferrable_load": [0, 4]}
+    rows = deferrables(payload, [], config)
+    assert [(r["start_timesteps"], r["start_source"]) for r in rows] == [(0, "emhass_config"), (4, "emhass_config")]
+    sent = {**payload, "start_timesteps_of_each_deferrable_load": [8, 2]}
+    assert [r["start_timesteps"] for r in deferrables(sent, [], config)] == [8, 2]
+    assert deferrables({**payload, "def_start_timestep": [6]}, [])[0]["start_source"] == "payload"  # the old name
+    assert deferrables(payload, [])[1]["start_timesteps"] is None
+
+
+def test_the_soc_limits_come_from_the_payload_else_emhass_config() -> None:
+    config = {"battery_minimum_state_of_charge": 0.05, "battery_maximum_state_of_charge": 1}
+    assert soc_limits({}, config) == (0.05, 1.0)
+    assert soc_limits({"battery_minimum_state_of_charge": 0.2}, config) == (0.2, 1.0)
+    assert soc_limits({}, None) == (None, None)
 
 
 @pytest.fixture
@@ -133,6 +153,9 @@ def test_the_last_run_slot_by_slot_with_the_plans_load(tmp_path: Path, world: Wo
         anchor = priced[datetime(2026, 10, 9, 11, 15, tzinfo=UTC)]
         assert round(anchor.import_price, PRICE_DECIMALS) == payload["load_cost_forecast"][0]
         assert body["measured_entities"]["load"] == "sensor.house_power_without_deferrable"
+        # what EMHASS's config gives for what the payload doesn't say
+        assert (body["soc_min"], body["soc_max"]) == (0.05, 1.0)
+        assert [(d["start_timesteps"], d["start_source"]) for d in body["deferrables"]] == [(0, "emhass_config")]
     finally:
         client.__exit__(None, None, None)
 

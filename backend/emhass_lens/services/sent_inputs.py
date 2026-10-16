@@ -22,7 +22,7 @@ from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import SLOT, slot_floor
 from emhass_lens.domain.mpc.anchor import anchor_slot
 from emhass_lens.domain.mpc.payload import PRICE_DECIMALS, BuildResult, build, derive
-from emhass_lens.domain.mpc.sent import deferrables, load_series
+from emhass_lens.domain.mpc.sent import deferrables, load_series, soc_limits
 from emhass_lens.services.inputs import describe
 from emhass_lens.services.prices import area_tz
 
@@ -130,6 +130,12 @@ class SentInputsService:
     def _tz(self) -> str:
         return str(area_tz(self.c.settings.current))
 
+    def _emhass_config(self) -> dict[str, Any] | None:
+        """EMHASS's config as it is now (what it falls back on for what a payload doesn't say)."""
+        emhass = self.c.extras.get("emhass")
+        config = getattr(emhass, "config", None)
+        return config if isinstance(config, dict) else None
+
     async def _assemble(
         self,
         *,
@@ -177,6 +183,7 @@ class SentInputsService:
                 )
 
         ahead = await self._ahead(anchor, starts[-1] + SLOT if starts and starts[-1] else anchor, beyond)
+        soc_min, soc_max = soc_limits(payload, self._emhass_config())
         pv = inputs.get("pv") or {}
         m = settings.measurements
         return SentInputs(
@@ -203,12 +210,17 @@ class SentInputsService:
                 num_lags=payload.get("num_lags"),
                 historic_days=payload.get("historic_days_to_retrieve"),
             ),
-            deferrables=[SentDeferrable(**d) for d in deferrables(payload, inputs.get("deferrable_loads") or [])],
+            deferrables=[
+                SentDeferrable(**d)
+                for d in deferrables(payload, inputs.get("deferrable_loads") or [], self._emhass_config())
+            ],
             pv_sensors=len(pv.get("sensors_used") or []),
             pv_slots_missing=int(pv.get("slots_missing") or 0),
             no_export_at_or_below=settings.emhass.mpc.no_export_at_or_below,
             measured=measured,
             measured_entities={q: getattr(m, q).entity for q in ("load", "pv", "soc") if getattr(m, q).entity},
+            soc_min=soc_min,
+            soc_max=soc_max,
             **ahead,
         )
 
