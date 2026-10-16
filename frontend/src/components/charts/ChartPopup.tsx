@@ -67,6 +67,14 @@ export function ChartPopup({
   const ring = near !== null && !docked ? at.points.find((p) => p.series === near) : undefined
   return createPortal(
     <>
+      {at.marks?.map((m, i) => (
+        <span
+          key={`mark-${i}`}
+          className="chart-pop-dot"
+          style={{ left: at.left, top: m.y, background: cssColor(m.color) }}
+          aria-hidden="true"
+        />
+      ))}
       {ring && <span className="chart-pop-ring" style={{ left: at.left, top: ring.y }} aria-hidden="true" />}
       {at.column && (
         <span

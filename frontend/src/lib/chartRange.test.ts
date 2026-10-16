@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_WINDOW_S, brushGrab, brushWindow, clampWindow, fitRange, overlayExtent, overlayRuns, snapWindow, wheelWindow } from './chartRange'
+import {
+  brushGrab,
+  brushWindow,
+  clampWindow,
+  fitRange,
+  MIN_WINDOW_S,
+  overlayAt,
+  overlayExtent,
+  overlayRuns,
+  snapWindow,
+  wheelWindow,
+} from './chartRange'
 
 describe('fitRange', () => {
   it('hugs the data with a small margin instead of starting at zero', () => {
@@ -133,5 +144,31 @@ describe('the overview brush', () => {
     expect(brushWindow('start', [10_000, 20_000], 10_000, 4_000, bounds)).toEqual([4_000, 20_000])
     expect(brushWindow('start', [10_000, 20_000], 10_000, 19_900, bounds)).toEqual([20_000 - MIN_WINDOW_S, 20_000])
     expect(brushWindow('end', [10_000, 20_000], 20_000, 200_000, bounds)).toEqual([10_000, 100_000])
+  })
+})
+
+describe('overlayAt', () => {
+  const overlay = {
+    spans: [
+      { from: 200, to: 300, value: 5 },
+      { from: 100, to: 200, value: 3 },
+      { from: 400, to: 500, value: 7 },
+    ],
+  }
+
+  it('is the value of the span the time is in, whatever order the spans come in', () => {
+    expect(overlayAt(overlay, 150)).toBe(3)
+    expect(overlayAt(overlay, 250)).toBe(5)
+  })
+
+  it('takes a span from its start, not at its end', () => {
+    expect(overlayAt(overlay, 200)).toBe(5)
+    expect(overlayAt(overlay, 500)).toBeNull()
+  })
+
+  it('is null in a gap and outside the spans', () => {
+    expect(overlayAt(overlay, 350)).toBeNull()
+    expect(overlayAt(overlay, 50)).toBeNull()
+    expect(overlayAt({ spans: [] }, 50)).toBeNull()
   })
 })

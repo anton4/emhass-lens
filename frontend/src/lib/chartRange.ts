@@ -34,6 +34,8 @@ export interface ChartOverlay {
   spans: { from: number; to: number; value: number; lo?: number; hi?: number }[]
   /** Drawn at this share of its opacity on the chart's split side (the plan right of now). */
   fade?: number
+  /** A dot on the line at the cursor, as the chart's series have. */
+  dot?: boolean
 }
 
 /** The area between two values over stretches of time, hatched in a colour: where the grid delivered less than a
@@ -68,6 +70,30 @@ export function overlayRuns(spans: ChartOverlay['spans'], base: 'zero' | 'none' 
     runs.push(run)
   }
   return runs
+}
+
+// each overlay's spans sorted by start, once per spans array
+const byStart = new WeakMap<ChartOverlay['spans'], ChartOverlay['spans']>()
+
+/** The overlay's value at `t` (unix s): the span it is in, or null in a gap or outside them. */
+export function overlayAt(overlay: Pick<ChartOverlay, 'spans'>, t: number): number | null {
+  let spans = byStart.get(overlay.spans)
+  if (!spans) {
+    spans = [...overlay.spans].sort((a, b) => a.from - b.from)
+    byStart.set(overlay.spans, spans)
+  }
+  let lo = 0
+  let hi = spans.length - 1
+  let found = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (spans[mid]!.from <= t) {
+      found = mid
+      lo = mid + 1
+    } else hi = mid - 1
+  }
+  const span = spans[found]
+  return span && t < span.to ? span.value : null
 }
 
 /** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null.

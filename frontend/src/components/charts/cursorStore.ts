@@ -52,6 +52,8 @@ export interface CursorAt {
   height: number
   /** The column at idx, on a chart of columns: ringed, and the popup sits beside it. */
   column?: { left: number; width: number; top: number; height: number }
+  /** Dots on the overlays that have one, at the cursor (plot px, CSS colour). */
+  marks?: { y: number; color: string }[]
 }
 
 interface Snapshot {

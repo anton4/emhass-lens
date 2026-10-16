@@ -102,7 +102,8 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
 const charging = (w: number) => (w >= IDLE_W ? 'charging' : w <= -IDLE_W ? 'discharging' : 'idle')
 const importing = (w: number) => (w >= IDLE_W ? 'importing' : w <= -IDLE_W ? 'exporting' : 'no flow')
 
-const DASHED = { width: 1.5, dash: [4, 4] as number[] }
+// what the plan said at the time: thin, grey and dashed under the measured line
+const THEN = { color: '--chart-then', width: 1.25, dash: [3, 3] as number[] }
 
 // right of now the plan is drawn fainter than what was measured: its areas, its lines, its grid
 const PLAN_AREA = { fill: 0.2 / 0.45 }
@@ -236,8 +237,7 @@ export function PlanCharts({
     if (plannedSoc) {
       series.push({
         label: columns.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
-        color: '--q-soc',
-        ...DASHED,
+        ...THEN,
         step: false,
         values: plannedAtTheTime(x, past, 'SOC', 100, false),
         format: fmt,
@@ -607,8 +607,7 @@ function PowerChart({
       if (flows.gridThen) {
         out.push({
           label: 'Grid, planned at the time',
-          color: '--q-grid',
-          ...DASHED,
+          ...THEN,
           values: flows.gridThen,
           format: formatSignedPower,
           then: true,

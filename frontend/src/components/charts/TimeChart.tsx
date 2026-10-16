@@ -13,6 +13,7 @@ import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartCo
 import { groupFlags, layoutFlags } from '../../lib/chartFlags'
 import {
   fitRange,
+  overlayAt,
   overlayExtent,
   overlayRuns,
   wheelWindow,
@@ -913,6 +914,16 @@ export function TimeChart({
         if (v !== null && v !== undefined) points.push({ series: i - 1, y: u.valToPos(v, 'y') })
       })
       const column = hasColumns ? columnAt(u, idx) : undefined
+      // the overlays' dots at the pointer's time; one the axis doesn't fit stays at the edge it runs along
+      const time = u.posToVal(left, 'x')
+      const marks: CursorAt['marks'] = []
+      for (const overlay of extras.current.overlays) {
+        if (!overlay.dot) continue
+        const v = overlayAt(overlay, time)
+        if (v === null) continue
+        const y = u.valToPos(v, 'y')
+        marks.push({ y: Math.min(Math.max(y, 1), u.over.clientHeight - 1), color: overlay.color })
+      }
       cursor.setAt({
         idx,
         time: u.posToVal(left, 'x'),
@@ -922,6 +933,7 @@ export function TimeChart({
         width: u.over.clientWidth,
         height: u.over.clientHeight,
         column,
+        marks,
       })
     }
     const opts: uPlot.Options = {

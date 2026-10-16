@@ -2110,7 +2110,19 @@ button.diff-locate {
   display: inline-block;
   width: 12px;
   height: 0;
-  border-top: 1.5px dashed var(--ink-faint);
+  border-top: 1.5px dashed var(--chart-then);
+}
+
+/* a line drawn off the slot grid (the grid's readings, a command) at the cursor */
+.chart-pop-dot {
+  position: absolute;
+  z-index: 2;
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .chart-pop-square {
@@ -2412,7 +2424,7 @@ button.diff-locate {
 
 .legend-dash {
   width: 16px;
-  border-top: 2px dashed var(--ink-muted);
+  border-top: 1.5px dashed var(--chart-then);
 }
 
 /* ---------- Inputs: what EMHASS gets ---------- */

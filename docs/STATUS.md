@@ -65,6 +65,9 @@ These come from docs/PLAN.md §10:
     at each local midnight (`--chart-midnight`).
   - `lib/chartTime.ts`: `localMidnights` (moved from Overview, 900 s steps so 23- and 25-hour days work), `spanLabel`,
     `rangeLabel`, `cursorTimeLabel`, `clearOf`.
+- **G3, dots and quieter lines:** `ChartOverlay.dot` puts a dot at the cursor on an overlay (`overlayAt`, a binary
+  search over spans sorted once per array); the grid's readings and the commanded line have one. "Planned then" is a
+  thin grey dashed line (`--chart-then`) for the grid and the SOC, and the commanded line is dashed black, no halo.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

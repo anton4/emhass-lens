@@ -228,7 +228,7 @@ describe('the commands on the Power chart', () => {
     expect(commandPower(a)).toBe(-5200)
     expect(commandPower(buy)).toBe(5000)
     const overlay = marketOverlay([a, buy], NOW)
-    expect(overlay).toMatchObject({ color: '--q-market', base: 'none', halo: true })
+    expect(overlay).toMatchObject({ color: '--q-market', base: 'none', dash: [6, 4], dot: true })
     expect(overlay.spans).toEqual([
       { from: s(a.start), to: s(a.end), value: -5200 },
       { from: s(buy.start), to: NOW, value: 5000 }, // still on: runs on to now

@@ -322,10 +322,11 @@ export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartO
   return {
     label: 'Commanded',
     color: '--q-market',
-    width: 2.25,
+    width: 1.5,
+    dash: [6, 4],
     base: 'none',
-    halo: true,
     fit: false,
+    dot: true,
     offScale: (value) => `${value > 0 ? BUY_ARROW : SELL_ARROW} ${kw1(Math.abs(value))} kW`,
     spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandPower(s) })),
   }

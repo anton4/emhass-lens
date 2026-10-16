@@ -54,7 +54,7 @@ export function gridOverlay(detail: GridDetail): ChartOverlay {
     const span = { from: unix(p.t), to: next ? unix(next.t) : end, value: p.w }
     spans.push(p.lo != null && p.hi != null ? { ...span, lo: p.lo, hi: p.hi } : span)
   })
-  return { label: 'Grid', color: '--q-grid', width: 1.25, base: 'none', spans }
+  return { label: 'Grid', color: '--q-grid', width: 1.25, base: 'none', dot: true, spans }
 }
 
 /** The time [start, end) the detail has points for (unix s), or null. */
