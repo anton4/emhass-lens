@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
+import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
   type ChartGap,
@@ -15,7 +16,17 @@ import { Lamp } from '../../components/Lamp'
 import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
-import { detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, planTail, withoutCovered } from '../../lib/gridDetail'
+import { clampWindow } from '../../lib/chartRange'
+import {
+  detailCover,
+  detailRequest,
+  gridAt,
+  gridDetailNote,
+  gridOverlay,
+  gridRangeAt,
+  planTail,
+  withoutCovered,
+} from '../../lib/gridDetail'
 import {
   commandSessions,
   marketBlock,
@@ -27,10 +38,10 @@ import {
   shortfalls,
 } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
-import { snapWindow } from '../../lib/chartRange'
 import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
 import { IDLE_W } from '../../lib/planSummary'
-import { isForecast, originLabel } from '../../lib/prices'
+import { powerStack, type FlowKey } from '../../lib/powerStack'
+import { isForecast, originLabel, priceHeatLane } from '../../lib/prices'
 import {
   deferrableFuture,
   hasMeasured,
@@ -41,6 +52,8 @@ import {
   pastShade,
   plannedAtTheTime,
   timeGrid,
+  viewRange,
+  type ViewHours,
 } from '../../lib/planHistory'
 import { eurTick, formatPower, formatSignedPower } from '../../lib/units'
 
@@ -88,66 +101,24 @@ function forecastBands(prices: PlanPrice[]): [number, number][] {
 const charging = (w: number) => (w >= IDLE_W ? 'charging' : w <= -IDLE_W ? 'discharging' : 'idle')
 const importing = (w: number) => (w >= IDLE_W ? 'importing' : w <= -IDLE_W ? 'exporting' : 'no flow')
 
-// Power quantities, each in its own colour on every chart: battery, grid, PV (an area), load; the deferrable loads
-// follow. The battery is drawn with charging up (EMHASS counts discharging as positive), like the grid's import.
-const POWER = [
-  {
-    column: 'P_batt',
-    measured: 'batt',
-    planned: 'P_batt',
-    label: 'Battery',
-    popupLabel: 'Battery',
-    color: '--q-batt',
-    fill: undefined,
-    flip: true,
-    format: formatSignedPower,
-    describe: charging,
-  },
-  {
-    column: 'P_grid',
-    measured: 'grid',
-    planned: 'P_grid',
-    label: 'Grid',
-    popupLabel: 'Grid',
-    color: '--q-grid',
-    fill: undefined,
-    flip: false,
-    format: formatSignedPower,
-    describe: importing,
-  },
-  {
-    column: 'P_PV',
-    measured: 'pv',
-    planned: 'P_PV',
-    label: 'PV',
-    popupLabel: 'PV',
-    color: '--q-pv',
-    fill: 0.16,
-    flip: false,
-    format: formatPower,
-    describe: undefined,
-  },
-  {
-    column: 'P_Load',
-    measured: 'load',
-    planned: 'P_Load',
-    label: 'House load',
-    popupLabel: 'House load',
-    color: '--q-load',
-    fill: undefined,
-    flip: false,
-    format: formatPower,
-    describe: undefined,
-  },
-] as const
-
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
 
-/** What the Power chart's chips switch: a quantity (its measured, planned and planned-then lines; the grid's measured
- *  line is the grid power finer than the slots where there is one), the deferrable loads, and Qilowatt's commands: the
- *  commanded power with its shortfalls ('market-power'), and the sessions as bands, flags and a lane
- *  ('market-commands'). */
-type PowerPart = 'batt' | 'grid' | 'pv' | 'load' | 'deferrable' | 'market-power' | 'market-commands'
+/** Measured left of now and planned right of it, per quarter-hour, for the Power chart (W; the battery in EMHASS's
+ *  sign, + discharge). */
+interface Flows {
+  pv: (number | null)[] | null
+  battery: (number | null)[] | null
+  load: (number | null)[] | null
+  grid: (number | null)[] | null
+  /** What the plan said at the time for the grid, left of now. */
+  gridThen: (number | null)[] | null
+  deferrable: (number | null)[] | null
+  deferrableLabel: string
+}
+
+/** What the Power chart's chips switch: the grid line, each stacked flow, and Qilowatt's commands: the commanded power
+ *  with its shortfalls ('market-power'), and the sessions as bands, flags and a lane ('market-commands'). */
+type PowerPart = 'grid' | 'pv' | 'batt' | 'load' | 'deferrable' | 'market-power' | 'market-commands'
 
 // The parts hidden are remembered in this browser only; blocked storage just means all shown.
 const HIDDEN_KEY = 'emhass-lens.plan.power.hidden'
@@ -174,24 +145,26 @@ interface PowerChip {
   part: PowerPart
   label: string
   color: string
+  /** Drawn as an area (a square swatch) rather than a line. */
+  area?: boolean
 }
 
-const negated = (values: (number | null)[]) => values.map((v) => (v === null ? null : -v))
-
-/** Power, state of charge and prices on one synced time axis: measured history (solid) with what the plan
- *  said at the time (dashed) left of the now line, the current plan right of it. */
+/** Power, state of charge and prices on one synced time axis, with the MPC runs and an overview of everything
+ *  loaded under them. They show a window around now (`view`) that follows the clock, until a zoom, a scroll or the
+ *  overview's brush picks a window of its own; double-click or "Back to now" returns to following. */
 export function PlanCharts({
   data,
   history,
   nowS,
+  view,
 }: {
   data: PlanResponse
   history?: PlanHistoryResponse
   nowS: number
+  view: ViewHours
 }) {
-  // One zoom window for all three charts (unix seconds); null shows the whole range
+  // a window picked by zooming, scrolling or the overview (unix seconds); null follows now
   const [zoom, setZoom] = useState<[number, number] | null>(null)
-  const zoomTo = (range: [number, number] | null) => setZoom(range && snapWindow(range, 900))
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
@@ -200,64 +173,29 @@ export function PlanCharts({
   const pastEndS = pastEnd(past, nowS)
   const x = useMemo(() => timeGrid(past, rows), [past, rows])
   const shade = useMemo(() => pastShade(x, pastEndS), [x, pastEndS])
+  const first = x[0]
+  const last = x[x.length - 1]
+  const bounds = useMemo<[number, number] | null>(
+    () => (first !== undefined && last !== undefined && last > first ? [first, last] : null),
+    [first, last],
+  )
+  const shown = zoom ?? (bounds ? viewRange(view, nowS, bounds) : null)
+  const zoomTo = (range: [number, number] | null) => setZoom(range && bounds ? clampWindow(range, bounds) : null)
 
-  const power = useMemo(() => {
-    const parts: { chip: PowerChip; series: ChartSeries[] }[] = []
-    for (const q of POWER) {
-      const inPlan = hasColumn(rows, q.column)
-      const measured = hasMeasured(past, q.measured)
-      const planned = hasPlanned(past, q.planned)
-      if (!inPlan && !measured && !planned) continue
-      const values = pastAndFuture(x, past, q.measured, rows, q.column, pastEndS)
-      const series: ChartSeries[] = [
-        {
-          label: q.label,
-          popupLabel: q.popupLabel,
-          color: q.color,
-          fill: q.fill,
-          values: q.flip ? negated(values) : values,
-          format: q.format,
-          describe: q.describe,
-        },
-      ]
-      if (planned) {
-        const then = plannedAtTheTime(x, past, q.planned)
-        series.push({
-          label: `${q.label}, planned at the time`,
-          color: q.color,
-          ...DASHED,
-          values: q.flip ? negated(then) : then,
-          format: q.format,
-          then: true,
-        })
-      }
-      parts.push({ chip: { part: q.measured, label: q.label, color: q.color }, series })
-    }
+  const flows = useMemo<Flows>(() => {
+    const has = (key: 'pv' | 'batt' | 'load' | 'grid', column: string) => hasColumn(rows, column) || hasMeasured(past, key)
+    const values = (key: 'pv' | 'batt' | 'load' | 'grid', column: string) =>
+      has(key, column) ? pastAndFuture(x, past, key, rows, column, pastEndS) : null
     const deferrables = deferrableColumns(data.columns)
-    const plannedDeferrable = hasPlanned(past, 'P_deferrable')
-    if (deferrables.length > 0 || plannedDeferrable) {
-      const label = deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads'
-      const series: ChartSeries[] = [
-        {
-          label,
-          color: '--q-ev',
-          values: deferrableFuture(x, rows, deferrables, pastEndS),
-          format: formatPower,
-        },
-      ]
-      if (plannedDeferrable) {
-        series.push({
-          label: `${label}, planned at the time`,
-          color: '--q-ev',
-          ...DASHED,
-          values: plannedAtTheTime(x, past, 'P_deferrable'),
-          format: formatPower,
-          then: true,
-        })
-      }
-      parts.push({ chip: { part: 'deferrable', label, color: '--q-ev' }, series })
+    return {
+      pv: values('pv', 'P_PV'),
+      battery: values('batt', 'P_batt'),
+      load: values('load', 'P_Load'),
+      grid: values('grid', 'P_grid'),
+      gridThen: hasPlanned(past, 'P_grid') ? plannedAtTheTime(x, past, 'P_grid') : null,
+      deferrable: deferrables.length > 0 ? deferrableFuture(x, rows, deferrables, pastEndS) : null,
+      deferrableLabel: deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads',
     }
-    return parts
   }, [x, rows, past, pastEndS, data.columns])
 
   const soc = useMemo(() => {
@@ -266,12 +204,13 @@ export function PlanCharts({
     if (columns.length === 0 && !plannedSoc && !hasMeasured(past, 'soc')) return null
     const fmt = (v: number) => `${v.toFixed(1)} %`
     const series: ChartSeries[] = []
-    const first = columns[0] ?? 'SOC_opt'
+    const firstSoc = columns[0] ?? 'SOC_opt'
     series.push({
       label: columns.length > 1 ? 'Battery 1 SOC' : 'Battery SOC',
+      popupLabel: columns.length > 1 ? 'Battery 1' : 'State of charge',
       color: '--q-soc',
       step: false,
-      values: pastAndFuture(x, past, 'soc', rows, first, pastEndS, 100, false),
+      values: pastAndFuture(x, past, 'soc', rows, firstSoc, pastEndS, 100, false),
       format: fmt,
     })
     if (plannedSoc) {
@@ -302,7 +241,7 @@ export function PlanCharts({
         width: 1.5,
         dash: [2, 3],
         step: false,
-        values: alignTo(x, previous, first).map(pct),
+        values: alignTo(x, previous, firstSoc).map(pct),
         format: fmt,
       })
     }
@@ -315,9 +254,10 @@ export function PlanCharts({
     const px = slots.map((p) => Date.parse(p.start) / 1000)
     const imp: (number | null)[] = slots.map((p) => p.import_price)
     const exp: (number | null)[] = slots.map((p) => p.export_price)
-    const last = px[px.length - 1]
-    if (last !== undefined) {
-      px.push(last + 900)
+    const heat: ChartLane = priceHeatLane(px, imp)
+    const lastPx = px[px.length - 1]
+    if (lastPx !== undefined) {
+      px.push(lastPx + 900)
       imp.push(imp[imp.length - 1] ?? null)
       exp.push(exp[exp.length - 1] ?? null)
     }
@@ -331,8 +271,21 @@ export function PlanCharts({
       const origin = origins.get(t)
       return origin ? { text: originLabel(origin), tone: isForecast(origin) ? ('blue' as const) : ('neutral' as const) } : null
     }
-    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS), tag }
+    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS), tag, heat }
   }, [history, data.prices, pastEndS])
+
+  // the overview's sessions: the same commands the Power chart reads (one query)
+  const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
+  const commands = useMarketCommands(since)
+  const overviewSessions = useMemo(
+    () =>
+      sessionBands(commandSessions(commands.data?.spans ?? [], nowS), data.timezone).map((b) => ({
+        from: b.from,
+        to: b.to,
+        color: b.color,
+      })),
+    [commands.data, nowS, data.timezone],
+  )
 
   const hasPast = past.length > 0
   // the popup's tag: measured left of the now line, the plan right of it
@@ -342,22 +295,33 @@ export function PlanCharts({
   }
   return (
     <div className="chart-stack">
-      <p className="chart-note chart-zoom" role="status">
-        {zoom && (
-          <>
-            Showing {windowLabel(zoom, data.timezone)}
-            <button type="button" className="quiet" onClick={() => setZoom(null)}>
-              Reset zoom
-            </button>
-          </>
+      <div className="chart-window" role="status">
+        {shown && (
+          <span>
+            Showing <b>{windowLabel(shown, data.timezone)}</b>
+          </span>
         )}
-      </p>
+        {zoom ? (
+          <button type="button" className="quiet" onClick={() => setZoom(null)}>
+            Back to now
+          </button>
+        ) : (
+          <span className="chart-live">
+            <span className="chart-live-dot" aria-hidden="true" />
+            following now
+          </span>
+        )}
+        <span className="chart-hint">
+          Point at a chart for its values · scroll to zoom · drag to zoom in · Shift+scroll to move · double-click: back
+          to now
+        </span>
+      </div>
       <PowerChart
         x={x}
-        parts={power}
+        flows={flows}
         hasPast={hasPast}
-        measuredGrid={hasMeasured(past, 'grid')}
-        zoom={zoom}
+        zoom={shown}
+        following={zoom === null}
         onZoom={zoomTo}
         shade={shade}
         nowS={nowS}
@@ -367,7 +331,9 @@ export function PlanCharts({
       />
       {soc && (
         <section className="chart-block">
-          <h3>Battery state of charge</h3>
+          <h3>
+            Battery state of charge <span className="chart-unit">%</span>
+          </h3>
           <TimeChart
             x={x}
             series={soc}
@@ -375,41 +341,60 @@ export function PlanCharts({
             syncKey={SYNC}
             yFormat={(v) => `${v.toFixed(0)} %`}
             fit={SOC_FIT}
-            xRange={zoom}
+            xRange={shown}
             onZoom={zoomTo}
             shade={shade}
             now={nowS}
             timeZone={data.timezone}
-            height={210}
+            height={190}
             popup={slotTag}
           />
         </section>
       )}
       {prices && (
         <section className="chart-block">
-          <h3>Prices</h3>
+          <h3>
+            Price <span className="chart-unit">€/kWh, fees and VAT included</span>
+          </h3>
           <TimeChart
             x={prices.x}
             series={prices.series}
-            ariaLabel="Import and export price per quarter-hour; shaded where the price is a forecast"
+            ariaLabel="Import and export price per quarter-hour, with a ribbon of the import price from cheap (light) to dear (deep); shaded where the price is a forecast"
             syncKey={SYNC}
             yFormat={eurTick}
             fit={PRICE_FIT}
-            xRange={zoom}
+            xRange={shown}
             onZoom={zoomTo}
             bands={prices.bands}
             shade={prices.shade}
             now={nowS}
             timeZone={data.timezone}
-            height={210}
+            height={200}
             popup={{ tag: prices.tag }}
+            lanes={[prices.heat]}
           />
           {prices.bands.length > 0 && (
             <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>
           )}
         </section>
       )}
-      <MpcRunStrip x={x} zoom={zoom} onZoom={zoomTo} shade={shade} nowS={nowS} timeZone={data.timezone} />
+      <MpcRunStrip x={x} zoom={shown} onZoom={zoomTo} shade={shade} nowS={nowS} timeZone={data.timezone} />
+      {bounds && shown && (
+        <section className="chart-block">
+          <h3>
+            Overview <span className="chart-unit">everything loaded · drag the box to move the window</span>
+          </h3>
+          <Overview
+            bounds={bounds}
+            window={shown}
+            onWindow={zoomTo}
+            line={{ x, values: flows.grid ?? [] }}
+            sessions={overviewSessions}
+            nowS={nowS}
+            timeZone={data.timezone}
+          />
+        </section>
+      )}
     </div>
   )
 }
@@ -472,16 +457,19 @@ function MpcRunStrip({
   )
 }
 
-/** The Power chart: battery, grid, PV, house load and the deferrable loads, with the grid measured finer than the slots
- *  left of now where there is a grid sensor, and Qilowatt's commands from the Home Assistant recorder: each session a
- *  band with a flag and a bar in the lane under the chart (a click zooms to it), the commanded power as an ink line on
- *  the same steps as the measured grid, and where the grid fell short of it, hatched. Chips under it switch each part. */
+/** The Power chart: where the house's power comes from (PV, the battery discharging: stacked above zero) and where it
+ *  goes (the house load, the battery charging, the deferrable loads: stacked below), per quarter-hour, with the grid
+ *  on top as a line: every reading of the grid sensor left of now where there is one (each bucket's lowest and highest
+ *  reading on a long window), the plan's quarter-hours right of it, and what the plan said at the time. Qilowatt's
+ *  commands from the Home Assistant recorder too: each session a band with a flag and a bar in the lane under the
+ *  chart (a click zooms to it), the commanded power as an ink line, and where the grid fell short of it, hatched.
+ *  Chips under it switch each part. */
 function PowerChart({
   x,
-  parts,
+  flows,
   hasPast,
-  measuredGrid,
   zoom,
+  following,
   onZoom,
   shade,
   nowS,
@@ -490,10 +478,10 @@ function PowerChart({
   slotTag,
 }: {
   x: number[]
-  parts: { chip: PowerChip; series: ChartSeries[] }[]
+  flows: Flows
   hasPast: boolean
-  measuredGrid: boolean
   zoom: [number, number] | null
+  following: boolean
   onZoom: (range: [number, number] | null) => void
   shade: [number, number][]
   nowS: number
@@ -516,53 +504,91 @@ function PowerChart({
   const spans = useMemo(() => commands.data?.spans ?? [], [commands.data])
   const showPower = spans.length > 0 && !hidden.has('market-power')
   const showSessions = spans.length > 0 && !hidden.has('market-commands')
-  // the measured part of the window shown, finer than the slots: the grid's line there
-  const last = x[x.length - 1]
-  const shown: [number, number] | null = zoom ?? (first !== undefined && last !== undefined ? [first, last] : null)
-  const showDetail = measuredGrid && !hidden.has('grid')
-  const detail = useGridDetail(shown ? detailRequest(shown, nowS, zoom !== null) : null, showDetail)
-  const gridData = showDetail ? detail.data : undefined
+  // the measured part of the window shown, every reading the grid sensor gave: the grid's line there
+  const showGrid = flows.grid !== null && !hidden.has('grid')
+  const detail = useGridDetail(zoom ? detailRequest(zoom, nowS, !following) : null, showGrid)
+  const gridData = showGrid ? detail.data : undefined
   const cover = useMemo(() => detailCover(gridData), [gridData])
-  const series = useMemo(
-    () =>
-      parts
-        .filter((p) => !hidden.has(p.chip.part))
-        .flatMap((p) =>
-          p.chip.part === 'grid' && cover
-            ? p.series.map((line, i) =>
-                // the measured quarter-hours the detail covers are drawn by its line; the popup reads that line at the
-                // pointer, with the quarter-hour's mean as its note
-                i === 0
-                  ? {
-                      ...line,
-                      values: withoutCovered(x, line.values, cover, pastEndS),
-                      readout: line.values,
-                      moment: (time: number) => (time < nowS ? gridAt(gridData, time) : null),
-                    }
-                  : line,
-              )
-            : p.series,
-        ),
-    [parts, hidden, cover, x, pastEndS, nowS, gridData],
-  )
+
+  const series = useMemo(() => {
+    const layers = powerStack({
+      pv: hidden.has('pv') ? null : flows.pv,
+      battery: hidden.has('batt') ? null : flows.battery,
+      load: hidden.has('load') ? null : flows.load,
+      deferrable: hidden.has('deferrable') ? null : flows.deferrable,
+    })
+    const LAYERS: Record<FlowKey, { label: string; color: string }> = {
+      pv: { label: 'PV', color: '--q-pv' },
+      discharge: { label: 'Battery', color: '--q-batt' },
+      load: { label: 'House load', color: '--q-load' },
+      charge: { label: 'Battery charging', color: '--q-batt' },
+      deferrable: { label: flows.deferrableLabel, color: '--q-ev' },
+    }
+    const out: ChartSeries[] = []
+    const index = new Map<FlowKey, number>()
+    for (const layer of layers) {
+      const meta = LAYERS[layer.key]
+      const battery = layer.key === 'discharge'
+      index.set(layer.key, out.length)
+      out.push({
+        label: meta.label,
+        color: meta.color,
+        values: layer.edge,
+        width: 0,
+        fill: 0.45,
+        below: layer.on ? index.get(layer.on) : undefined,
+        // the battery's one popup row, on its discharging layer: + charge, like the grid's import
+        readout: battery ? (flows.battery?.map((v) => (v === null ? null : -v)) ?? layer.own) : layer.own,
+        format: battery ? formatSignedPower : formatPower,
+        describe: battery ? charging : undefined,
+        helper: layer.key === 'charge',
+      })
+    }
+    if (flows.grid && !hidden.has('grid')) {
+      const grid = flows.grid
+      out.push({
+        label: 'Grid',
+        color: '--q-grid',
+        width: 2,
+        // the measured quarter-hours the readings cover are drawn by their line; the popup reads that line at the
+        // pointer, with the quarter-hour's mean and the bucket's lowest and highest reading under it
+        values: cover ? withoutCovered(x, grid, cover, pastEndS) : grid,
+        readout: grid,
+        moment: (time: number) => (time < nowS ? gridAt(gridData, time) : null),
+        momentRange: (time: number) => (time < nowS ? gridRangeAt(gridData, time) : null),
+        format: formatSignedPower,
+        describe: importing,
+        lead: true,
+      })
+      if (flows.gridThen) {
+        out.push({
+          label: 'Grid, planned at the time',
+          color: '--q-grid',
+          ...DASHED,
+          values: flows.gridThen,
+          format: formatSignedPower,
+          then: true,
+        })
+      }
+    }
+    return out
+  }, [flows, hidden, cover, x, pastEndS, nowS, gridData])
+
   // the plan's grid in the slot in progress, from where the measured line ends: one grid line there too
-  const gridLine = parts.find((p) => p.chip.part === 'grid')?.series[0]
   const tail = useMemo(
-    () => (gridLine && !hidden.has('grid') ? planTail(x, gridLine.values, cover, pastEndS) : null),
-    [gridLine, hidden, x, cover, pastEndS],
+    () => (flows.grid && !hidden.has('grid') ? planTail(x, flows.grid, cover, pastEndS) : null),
+    [flows.grid, hidden, x, cover, pastEndS],
   )
   const sessions = useMemo(() => commandSessions(spans, nowS), [spans, nowS])
   const runs = useMemo(() => (showPower ? shortfalls(spans, gridData, nowS) : []), [showPower, spans, gridData, nowS])
-  // the measured grid's thin line on top of the bold commanded one, so both show where they agree
+  // the measured grid's line on top of the bold commanded one, so both show where they agree
   const overlays = useMemo<ChartOverlay[]>(
     () => [
-      ...(tail && gridLine
-        ? [{ label: 'Grid', color: gridLine.color, width: gridLine.width ?? 2, base: 'none' as const, spans: tail }]
-        : []),
+      ...(tail ? [{ label: 'Grid', color: '--q-grid', width: 2, base: 'none' as const, spans: tail }] : []),
       ...(showPower ? [marketOverlay(spans, nowS)] : []),
       ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
     ],
-    [tail, gridLine, gridData, showPower, spans, nowS],
+    [tail, gridData, showPower, spans, nowS],
   )
   const gaps = useMemo<ChartGap[]>(() => (runs.length > 0 ? [shortfallGap(runs)] : []), [runs])
   const bands = useMemo<ChartSession[]>(
@@ -579,7 +605,7 @@ function PowerChart({
       market ? marketBlock({ spans, sessions, runs, detail: gridData, time, nowS, timeZone }) : null
     return {
       ...slotTag,
-      // left of now the popup is about the pointer's own moment (the measured grid, a command); the slot heads the rows
+      // left of now the popup is about the pointer's own moment (the grid's reading, a command); the slot heads the rows
       head: gridData || market ? (_t: number, time: number) => (time < nowS ? momentLabel(time, timeZone) : null) : undefined,
       block: market ? (_t: number, time: number) => block(time) : undefined,
     }
@@ -593,10 +619,20 @@ function PowerChart({
   const detailNote = gridDetailNote(gridData?.step_s)
   const gridTitle = gridData?.error
     ? gridData.error
-    : detailNote
-      ? `Left of now ${detailNote}, the plan right of it`
-      : undefined
-  const chips = parts.map((p) => p.chip)
+    : gridData?.step_s
+      ? `Left of now every reading: means ${detailNote?.replace('measured ', '')}, drawn through each one's lowest and highest reading; the plan right of now`
+      : detailNote
+        ? `Left of now ${detailNote}, the plan right of it`
+        : undefined
+  const chips: PowerChip[] = [
+    ...(flows.grid ? [{ part: 'grid' as const, label: 'Grid', color: '--q-grid' }] : []),
+    ...(flows.pv ? [{ part: 'pv' as const, label: 'PV', color: '--q-pv', area: true }] : []),
+    ...(flows.battery ? [{ part: 'batt' as const, label: 'Battery', color: '--q-batt', area: true }] : []),
+    ...(flows.load ? [{ part: 'load' as const, label: 'House load', color: '--q-load', area: true }] : []),
+    ...(flows.deferrable
+      ? [{ part: 'deferrable' as const, label: flows.deferrableLabel, color: '--q-ev', area: true }]
+      : []),
+  ]
   const marketChips: PowerChip[] =
     spans.length > 0
       ? [
@@ -615,6 +651,8 @@ function PowerChart({
       >
         <span
           className="legend-swatch"
+          data-area={c.area || undefined}
+          data-line={c.part === 'grid' || undefined}
           data-bold={c.part === 'market-power' || undefined}
           data-split={c.part === 'market-commands' || undefined}
           style={{ background: `var(${c.color})`, color: `var(${c.color})` }}
@@ -625,11 +663,13 @@ function PowerChart({
   )
   return (
     <section className="chart-block">
-      <h3>Power</h3>
+      <h3>
+        Power <span className="chart-unit">kW · above zero: into the house · below: out of it · the grid line covers the rest</span>
+      </h3>
       <TimeChart
         x={x}
         series={series}
-        ariaLabel="Power per quarter-hour: measured history and the plan for battery, grid, PV, house load and deferrable loads, the grid power measured in detail, and the market's sessions and commanded power"
+        ariaLabel="Power: PV and the battery discharging stacked above zero, the house load, the battery charging and the deferrable loads below, per quarter-hour; the grid as a line on top, every reading left of now and the plan right of it; the market's sessions and commanded power"
         syncKey={SYNC}
         yFormat={kwTick}
         fit={POWER_FIT}
@@ -638,7 +678,7 @@ function PowerChart({
         shade={shade}
         now={nowS}
         timeZone={timeZone}
-        height={bands.length > 0 ? 326 : 300}
+        height={bands.length > 0 ? 356 : 330}
         popup={popup}
         legend={false}
         overlays={overlays}
@@ -647,7 +687,7 @@ function PowerChart({
         sessions={bands}
         onSession={zoomToSession}
       />
-      <ul className="legend" role="group" aria-label="Lines shown in the Power chart">
+      <ul className="legend" role="group" aria-label="Parts shown in the Power chart">
         {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}
         {marketChips.length > 0 && (
           <li className="legend-group" aria-hidden="true">
@@ -664,10 +704,10 @@ function PowerChart({
             Shortfall
           </li>
         )}
-        {hasPast && (
-          <li className="legend-key" title="Left of the now line, solid lines are measured; right of it, the current plan">
+        {hasPast && flows.gridThen && (
+          <li className="legend-key" title="Left of the now line: what the plan said at the time for the grid">
             <span className="legend-dash" aria-hidden="true" />
-            planned at the time
+            grid planned at the time
           </li>
         )}
       </ul>

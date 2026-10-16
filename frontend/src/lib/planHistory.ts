@@ -16,6 +16,32 @@ export const HORIZONS = [
 export type HorizonSlots = (typeof HORIZONS)[number]['slots']
 export const HORIZON_SLOTS = HORIZONS.map((h) => h.slots) as readonly HorizonSlots[]
 
+/** The Timeline's windows around now: how far back and ahead each shows (hours; null ahead: to the plan's end), and how
+ *  much history it loads, so the window can be moved back a little without a new request. 8 h is the default: every
+ *  10-second grid reading gets about two pixels. */
+export const VIEW_WINDOWS = [
+  { hours: 8, label: '8 h', back: 4, ahead: 4, history: 24 },
+  { hours: 24, label: '24 h', back: 12, ahead: 12, history: 24 },
+  { hours: 48, label: '2 d', back: 24, ahead: 24, history: 48 },
+  { hours: 168, label: '7 d', back: 168, ahead: null, history: 168 },
+] as const
+export type ViewHours = (typeof VIEW_WINDOWS)[number]['hours']
+export const VIEW_HOURS = VIEW_WINDOWS.map((w) => w.hours) as readonly ViewHours[]
+export const VIEW_KEY = 'emhass-lens.plan.view-window'
+
+/** The history a window loads. */
+export function viewHistory(view: ViewHours): HistoryHours {
+  return VIEW_WINDOWS.find((w) => w.hours === view)?.history ?? 24
+}
+
+/** The time a window shows around `nowS` (unix s), kept inside `bounds` (the first and last time there is data for). */
+export function viewRange(view: ViewHours, nowS: number, bounds: [number, number]): [number, number] {
+  const w = VIEW_WINDOWS.find((v) => v.hours === view) ?? VIEW_WINDOWS[0]
+  const start = Math.max(bounds[0], nowS - w.back * 3600)
+  const end = w.ahead === null ? bounds[1] : Math.min(bounds[1], nowS + w.ahead * 3600)
+  return end > start ? [start, end] : bounds
+}
+
 export const HOURS_KEY = 'emhass-lens.plan.history-hours'
 export const HORIZON_KEY = 'emhass-lens.plan.horizon'
 

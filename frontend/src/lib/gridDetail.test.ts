@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GridDetail } from '../api/types'
-import { DETAIL_MAX_S, detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, planTail, withoutCovered } from './gridDetail'
+import { DETAIL_MAX_S, detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, gridRangeAt, planTail, withoutCovered } from './gridDetail'
 
 const s = (iso: string) => Date.parse(iso) / 1000
 const NOW = s('2026-10-14T09:13:20Z')
@@ -8,7 +8,7 @@ const NOW = s('2026-10-14T09:13:20Z')
 describe('detailRequest', () => {
   it('asks for the measured part of the whole axis from its hour, up to now', () => {
     const req = detailRequest([s('2026-10-13T09:15:00Z'), s('2026-10-15T00:00:00Z')], NOW, false)
-    expect(req).toEqual({ since: '2026-10-13T09:00:00.000Z', until: null, maxPoints: 1000 })
+    expect(req).toEqual({ since: '2026-10-13T09:00:00.000Z', until: null, maxPoints: 3000 })
     // a quarter-hour later the axis has moved on, the request hasn't
     expect(detailRequest([s('2026-10-13T09:30:00Z'), s('2026-10-15T00:15:00Z')], NOW + 900, false)).toEqual(req)
   })
@@ -24,7 +24,7 @@ describe('detailRequest', () => {
     expect(detailRequest(zoom, NOW, true)).toEqual({
       since: '2026-10-14T05:30:00.000Z',
       until: '2026-10-14T06:30:00.000Z',
-      maxPoints: 1500,
+      maxPoints: 3000,
     })
     const longAgo: [number, number] = [NOW - 4 * 86400, NOW - 3 * 86400]
     expect(detailRequest(longAgo, NOW, true)?.since).toBe(new Date((NOW - 3 * 86400 - DETAIL_MAX_S + 86400) * 1000).toISOString())
@@ -58,6 +58,23 @@ describe('the measured grid line', () => {
       { from: s(detail.points[1]!.t), to: s(detail.points[2]!.t), value: -9310 },
       { from: s(detail.points[3]!.t), to: s(detail.end), value: -9280 },
     ])
+  })
+
+  it("carries a mean's lowest and highest reading, and reads them at the pointer", () => {
+    const means: GridDetail = {
+      ...detail,
+      step_s: 30,
+      points: [
+        { t: '2026-10-14T05:45:00.000+00:00', w: 503, lo: 490, hi: 510 },
+        { t: '2026-10-14T05:45:30.000+00:00', w: -8100, lo: -12900, hi: 480 },
+      ],
+    }
+    expect(gridOverlay(means).spans).toEqual([
+      { from: s(means.points[0]!.t), to: s(means.points[1]!.t), value: 503, lo: 490, hi: 510 },
+      { from: s(means.points[1]!.t), to: s(means.end), value: -8100, lo: -12900, hi: 480 },
+    ])
+    expect(gridRangeAt(means, s('2026-10-14T05:45:40Z'))).toEqual([-12900, 480])
+    expect(gridRangeAt(detail, s('2026-10-14T05:45:20Z'))).toBeNull() // a raw change has no range
   })
 
   it('says how fine the line is', () => {

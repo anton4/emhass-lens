@@ -1,10 +1,11 @@
 // The value popup next to a chart's cursor (TimeChart's `popup`): the slot (or the pointer's own moment, the slot then
 // heading the rows), whether it is measured or plan, an optional tinted block (the market command at the pointer), and
-// one row per line with the plan at the time beside the measured value. Charts that share a syncKey all show theirs at the
+// one row per value, value first: each line's value, then on rows of their own under it the plan at the time, the
+// quarter-hour's mean and the readings' range where there are any. Charts that share a syncKey all show theirs at the
 // same moment; the one under the pointer marks the line nearest it, and a chart of columns rings the column. Below
 // 520 px of plot only the chart under the pointer shows one, across the top of its plot.
 
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { Fragment, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from '../../lib/chartPopup'
 import type { CursorStore, PopupBlock, PopupExtra, PopupTag } from './cursorStore'
@@ -44,7 +45,7 @@ export function ChartPopup({
   const docked = at.width < DOCK_BELOW
   if (docked && at.pointerY === null) return null
   const { series, x, timeZone, tag: tagFor, extra: extraFor, head: headFor, block: blockFor } = read()
-  const { rows, hasThen } = popupRows(series, at.idx, at.time)
+  const { rows } = popupRows(series, at.idx, at.time)
   const t = x[at.idx]
   const extra = t !== undefined ? (extraFor?.(t, at.time) ?? []) : []
   const block = t !== undefined ? (blockFor?.(t, at.time) ?? null) : null
@@ -53,11 +54,11 @@ export function ChartPopup({
   const head = headFor?.(t, at.time) ?? null
   const near = at.pointerY !== null ? nearestRow(at.points, at.pointerY) : null
   const anchorY = at.column?.top ?? at.points.find((p) => p.series === near)?.y ?? at.points[0]?.y ?? at.height / 2
+  const subRows = rows.reduce((n, r) => n + (r.then ? 1 : 0) + (r.slot ? 1 : 0) + (r.range ? 1 : 0), 0)
   const estimate =
     46 +
     20 * (rows.length + extra.length) +
-    14 * rows.filter((r) => r.note).length +
-    (hasThen ? 18 : 0) +
+    18 * subRows +
     (rows.length && extra.length ? 6 : 0) +
     (head && rows.length ? 18 : 0) +
     (block ? 40 + 20 * block.rows.length + 17 * (block.foot?.length ?? 0) : 0)
@@ -98,67 +99,67 @@ export function ChartPopup({
           )}
         </div>
         {block && <PopupBlockView block={block} />}
-        <div className="chart-pop-rows" data-then={hasThen || undefined}>
+        <div className="chart-pop-rows">
           {head && rows.length > 0 && (
             <div className="chart-pop-sub">Quarter-hour {slotRange(t, end, timeZone, false)}</div>
           )}
-          {hasThen && (
-            <div className="chart-pop-row chart-pop-cols">
-              <span />
-              <span>measured</span>
-              <span className="chart-pop-then">
-                <span className="chart-pop-dash" />
-                planned then
-              </span>
-            </div>
-          )}
           {rows.map((r) => (
-            <div
-              key={r.series}
-              className="chart-pop-row"
-              data-near={r.series === near || undefined}
-              data-muted={r.muted || undefined}
-              data-total={r.total || undefined}
-            >
-              <span className="chart-pop-name">
-                {r.area ? (
-                  <span className="chart-pop-square" style={{ background: cssColor(r.color) }} />
-                ) : (
-                  <span
-                    className="chart-pop-swatch"
-                    style={{ borderTopColor: cssColor(r.color), borderTopStyle: r.dashed ? 'dashed' : 'solid' }}
-                  />
-                )}
-                {r.name}
-              </span>
-              <span className="chart-pop-value">
-                <b>{r.value}</b>
-                {r.describe && <i> {r.describe}</i>}
-                {r.note && <small className="chart-pop-note">{r.note}</small>}
-              </span>
-              {hasThen && <span className="chart-pop-then">{r.then ?? ''}</span>}
-            </div>
+            <Fragment key={r.series}>
+              <div
+                className="chart-pop-row"
+                data-near={r.series === near || undefined}
+                data-muted={r.muted || undefined}
+                data-total={r.total || undefined}
+              >
+                <span className="chart-pop-key">
+                  {r.area ? (
+                    <span className="chart-pop-square" style={{ background: cssColor(r.color) }} />
+                  ) : (
+                    <span
+                      className="chart-pop-swatch"
+                      style={{ borderTopColor: cssColor(r.color), borderTopStyle: r.dashed ? 'dashed' : 'solid' }}
+                    />
+                  )}
+                </span>
+                <b className="chart-pop-value">{r.value}</b>
+                <span className="chart-pop-name">
+                  {r.name}
+                  {r.describe && <i>, {r.describe}</i>}
+                </span>
+              </div>
+              {r.range && <SubRow value={r.range} name="lowest … highest reading" />}
+              {r.slot && <SubRow value={r.slot} name="quarter-hour mean" />}
+              {r.then && <SubRow value={r.then} name="planned then" dashed />}
+            </Fragment>
           ))}
           {extra.map((r, i) => (
             <div key={`extra-${i}`} className="chart-pop-row" data-rule={(i === 0 && rows.length > 0) || undefined}>
-              <span className="chart-pop-name">
+              <span className="chart-pop-key">
                 <span
                   className="chart-pop-square"
                   data-hatch={r.hatch || undefined}
                   style={r.hatch ? undefined : { background: cssColor(r.color) }}
                 />
-                {r.name}
               </span>
-              <span className="chart-pop-value">
-                <b>{r.value}</b>
-              </span>
-              {hasThen && <span className="chart-pop-then" />}
+              <b className="chart-pop-value">{r.value}</b>
+              <span className="chart-pop-name">{r.name}</span>
             </div>
           ))}
         </div>
       </div>
     </>,
     over,
+  )
+}
+
+/** A row under a value: the plan at the time (a dashed key), the quarter-hour's mean, the readings' range. */
+function SubRow({ value, name, dashed = false }: { value: string; name: string; dashed?: boolean }) {
+  return (
+    <div className="chart-pop-row chart-pop-detail">
+      <span className="chart-pop-key">{dashed && <span className="chart-pop-dash" />}</span>
+      <span className="chart-pop-value">{value}</span>
+      <span className="chart-pop-name">{name}</span>
+    </div>
   )
 }
 

@@ -10,6 +10,8 @@ import {
   plannedAtTheTime,
   savePref,
   timeGrid,
+  viewHistory,
+  viewRange,
   windowLabel,
 } from './planHistory'
 
@@ -111,5 +113,22 @@ describe('plan history series', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('the Timeline windows', () => {
+  const NOW = 1_000_000
+  const bounds: [number, number] = [NOW - 30 * 3600, NOW + 38 * 3600]
+
+  it('shows 8 hours around now by default, more on wider windows, and the 7 days up to the plan\'s end', () => {
+    expect(viewRange(8, NOW, bounds)).toEqual([NOW - 4 * 3600, NOW + 4 * 3600])
+    expect(viewRange(24, NOW, bounds)).toEqual([NOW - 12 * 3600, NOW + 12 * 3600])
+    expect(viewRange(168, NOW, bounds)).toEqual(bounds)
+  })
+
+  it('stays inside the data, and loads enough history to move back a little', () => {
+    expect(viewRange(8, NOW, [NOW - 3600, NOW + 7200])).toEqual([NOW - 3600, NOW + 7200])
+    expect(viewHistory(8)).toBe(24)
+    expect(viewHistory(48)).toBe(48)
   })
 })

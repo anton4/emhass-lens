@@ -56,8 +56,8 @@
   --link: #0277bd;
 
   /* One colour per quantity, the same on every chart (the power ones validated for colour-vision deficiency, light
-     and dark). The state of charge has its own teal, so it doesn't read as the battery's power; import and export
-     are one violet in two clearly different shades (the dark one is what you pay). */
+     and dark). The state of charge has its own teal, so it doesn't read as the battery's power; import (what you pay)
+     is violet and export (what you're paid) green: two hues, validated as a pair in both themes. */
   --q-pv: #eda100;
   /* text in PV's colour, dark enough to read (the PV chart's day totals) */
   --q-pv-ink: #7a4f00;
@@ -66,8 +66,8 @@
   --q-grid: #eb6834;
   --q-ev: #1baf7a;
   --q-soc: #0f8f86;
-  --q-import: #33197d;
-  --q-export: #a874de;
+  --q-import: #6250d6;
+  --q-export: #008300;
   --q-spot: #8a8984;
   /* Qilowatt's commands on the Power chart: the commanded power as an ink line; each session a band, a flag and a
      lane bar, sell green and buy blue like the market's action chips, with text in --q-*-ink on the flag and the bar;
@@ -85,12 +85,21 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
-  /* The price breakdown's columns: spot in a darker grey than its line elsewhere, and the parts on top of it in the
-     import price's violets, light to deep, so each part differs from its neighbours in lightness */
-  --stack-spot: #6e6d68;
-  --stack-fees: #c4b6f3;
-  --stack-network: #8a6ee0;
-  --stack-vat: #4a2fb0;
+  /* The price breakdown's columns, bottom to top: spot, network, fees, VAT in four hues whose neighbours pass the
+     colour-vision check in both themes (blue, aqua, yellow, magenta) */
+  --stack-spot: #2a78d6;
+  --stack-network: #1baf7a;
+  --stack-fees: #eda100;
+  --stack-vat: #e87ba4;
+  /* The price ribbon under the Plan's price chart: the import price in seven steps of one violet, light (cheap) to
+     deep (dear) */
+  --heat-0: #ece8fc;
+  --heat-1: #d6cdf8;
+  --heat-2: #bcaef2;
+  --heat-3: #9b88e8;
+  --heat-4: #7a64db;
+  --heat-5: #5a43c2;
+  --heat-6: #3c2896;
   /* The inverter's passive states on the day strip (Control → Inverter). Blue, orange, aqua and lavender pass the
      all-pairs colour-vision check in both themes; grid-only stays slate; the two mixed states are textures of their
      parts, and a hatch marks slots EMHASS Lens wasn't in control of. */
@@ -190,8 +199,8 @@
     --q-grid: #d95926;
     --q-ev: #199e70;
     --q-soc: #2bb3a8;
-    --q-import: #d4c8ff;
-    --q-export: #8f55c9;
+    --q-import: #9085e9;
+    --q-export: #008300;
     --q-spot: #8f8e88;
     --q-market: #f2f3f5;
     --q-sell: #66bb6a;
@@ -205,10 +214,18 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
-    --stack-spot: #7d7c77;
-    --stack-fees: #4a3b8f;
-    --stack-network: #7b62d3;
-    --stack-vat: #b8a8f8;
+    --stack-spot: #3987e5;
+    --stack-network: #199e70;
+    --stack-fees: #c98500;
+    --stack-vat: #d55181;
+    /* on the dark surface the cheap end sits near the surface and the dear end is bright */
+    --heat-0: #231d3f;
+    --heat-1: #30275e;
+    --heat-2: #43357f;
+    --heat-3: #5948a3;
+    --heat-4: #7462c6;
+    --heat-5: #978ae3;
+    --heat-6: #c4bcf6;
     --mode-force-charge: #3987e5;
     --mode-grid-only: #9da0a8;
     --mode-self-use: #5e5699;

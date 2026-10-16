@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { PriceSlot } from '../api/types'
 import {
   forecastRanges,
+  priceExtremes,
+  priceHeatLane,
   importComponents,
   localDay,
   localDays,
@@ -74,8 +76,8 @@ describe('price breakdown stacking', () => {
   it('stacks the shown parts on top of each other without gaps', () => {
     expect(stackLayers([c], all)).toEqual({
       spot: { lo: [0], hi: [10] },
-      fees: { lo: [10], hi: [12] },
-      network: { lo: [12], hi: [15] },
+      network: { lo: [10], hi: [13] },
+      fees: { lo: [13], hi: [15] },
       vat: { lo: [15], hi: [19] },
     })
   })
@@ -83,8 +85,8 @@ describe('price breakdown stacking', () => {
   it('leaves a hidden part as a layer of no thickness where it would start', () => {
     expect(stackLayers([c], new Set<PricePart>(['fees', 'vat']))).toEqual({
       spot: { lo: [0], hi: [0] },
+      network: { lo: [0], hi: [0] },
       fees: { lo: [0], hi: [2] },
-      network: { lo: [2], hi: [2] },
       vat: { lo: [2], hi: [6] },
     })
   })
@@ -92,7 +94,41 @@ describe('price breakdown stacking', () => {
   it('draws a negative spot below zero and stacks the rest from zero', () => {
     const layers = stackLayers([{ ...c, spot: -5 }], new Set<PricePart>(['spot', 'network']))
     expect(layers.spot).toEqual({ lo: [0], hi: [-5] })
-    expect(layers.fees).toEqual({ lo: [0], hi: [0] })
     expect(layers.network).toEqual({ lo: [0], hi: [3] })
+    expect(layers.fees).toEqual({ lo: [3], hi: [3] })
+  })
+})
+
+describe('the price ribbon', () => {
+  it('colours each quarter-hour by its import price in seven steps, neighbours in a step as one span', () => {
+    const lane = priceHeatLane([0, 900, 1800, 2700, 3600], [0.1, 0.1, 0.4, null, 0.25])
+    expect(lane.label).toBe('Import')
+    expect(lane.spans).toEqual([
+      { from: 0, to: 1800, color: '--heat-0' },
+      { from: 1800, to: 2700, color: '--heat-6' },
+      { from: 3600, to: 4500, color: '--heat-3' },
+    ])
+  })
+
+  it('has one step when every price is the same', () => {
+    expect(priceHeatLane([0], [0.2]).spans).toEqual([{ from: 0, to: 900, color: '--heat-0' }])
+  })
+})
+
+describe('the cheapest and dearest quarter-hours', () => {
+  it('finds them per local day', () => {
+    const days = priceExtremes(
+      [
+        slot('2026-10-08T21:30:00Z', 'actual', { import_price: 0.2 }), // Fri 00:30 in Tallinn
+        slot('2026-10-08T21:45:00Z', 'actual', { import_price: 0.1 }),
+        slot('2026-10-09T21:00:00Z', 'actual', { import_price: 0.3 }), // Sat 00:00
+        slot('2026-10-09T21:15:00Z', 'actual', { import_price: 0.3 }),
+      ],
+      TZ,
+    )
+    expect(days).toEqual([
+      { cheapest: { t: Date.parse('2026-10-08T21:45:00Z') / 1000, value: 0.1 }, dearest: { t: Date.parse('2026-10-08T21:30:00Z') / 1000, value: 0.2 } },
+      { cheapest: { t: Date.parse('2026-10-09T21:00:00Z') / 1000, value: 0.3 }, dearest: { t: Date.parse('2026-10-09T21:00:00Z') / 1000, value: 0.3 } },
+    ])
   })
 })

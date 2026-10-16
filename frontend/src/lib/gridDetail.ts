@@ -1,6 +1,7 @@
 // The grid power measured finer than the quarter-hour means: on the Plan page's Power chart it is the grid line itself
 // left of now (the popup's Grid row reads it at the pointer, the quarter-hour mean beside it), beside the market's
-// commands. See
+// commands. Where the backend had to average (a long window), each point brings its bucket's lowest and highest
+// reading, and the line is drawn through them, so every 10-second spike still shows. See
 // backend/emhass_lens/services/grid_detail.py.
 
 import type { GridDetail } from '../api/types'
@@ -10,8 +11,9 @@ const HOUR_S = 3600
 const SLOT_S = 900
 /** The backend serves at most the last 48 h. */
 export const DETAIL_MAX_S = 48 * HOUR_S
-const POINTS = [250, 500, 1000] as const
-const MOST_POINTS = 1500
+// Enough for every 10-second reading of an 8-hour window, and buckets of a pixel or so for a longer one
+const POINTS = [750, 1500, 3000] as const
+const MOST_POINTS = 3000
 
 export interface DetailRequest {
   since: string
@@ -41,16 +43,18 @@ export function detailRequest(window: [number, number], nowS: number, zoomed: bo
 
 const unix = (iso: string) => Date.parse(iso) / 1000
 
-/** The measured grid line: each point holds until the next one; a point without a value leaves a gap. */
+/** The measured grid line: each point holds until the next one; a point without a value leaves a gap. A bucket's mean
+ *  carries its lowest and highest reading, which the chart draws through. */
 export function gridOverlay(detail: GridDetail): ChartOverlay {
   const end = unix(detail.end)
   const spans: ChartOverlay['spans'] = []
   detail.points.forEach((p, i) => {
     if (p.w === null) return
     const next = detail.points[i + 1]
-    spans.push({ from: unix(p.t), to: next ? unix(next.t) : end, value: p.w })
+    const span = { from: unix(p.t), to: next ? unix(next.t) : end, value: p.w }
+    spans.push(p.lo != null && p.hi != null ? { ...span, lo: p.lo, hi: p.hi } : span)
   })
-  return { label: 'Grid', color: '--q-grid', width: 1.5, base: 'none', spans }
+  return { label: 'Grid', color: '--q-grid', width: 1.25, base: 'none', spans }
 }
 
 /** The time [start, end) the detail has points for (unix s), or null. */
@@ -109,9 +113,8 @@ export function gridDetailNote(stepS: number | null | undefined): string | null 
   return stepS < 60 ? `measured every ${stepS} s` : `measured every ${stepS / 60} min`
 }
 
-/** The measured grid power at `time`: the bucket's mean (or the value since the last change) the pointer is in; null
- *  outside the detail or where the sensor had no value. */
-export function gridAt(detail: GridDetail | undefined, time: number): number | null {
+/** The point the pointer at `time` is in, or null outside the detail. */
+function pointAt(detail: GridDetail | undefined, time: number): GridDetail['points'][number] | null {
   if (!detail || detail.points.length === 0) return null
   if (time < unix(detail.start) || time >= unix(detail.end)) return null
   let lo = 0
@@ -122,5 +125,17 @@ export function gridAt(detail: GridDetail | undefined, time: number): number | n
     else hi = mid - 1
   }
   const point = detail.points[lo]!
-  return point.w === null || unix(point.t) > time ? null : point.w
+  return unix(point.t) > time ? null : point
+}
+
+/** The measured grid power at `time`: the bucket's mean (or the value since the last change) the pointer is in; null
+ *  outside the detail or where the sensor had no value. */
+export function gridAt(detail: GridDetail | undefined, time: number): number | null {
+  return pointAt(detail, time)?.w ?? null
+}
+
+/** The lowest and highest reading in the bucket the pointer is in, when the point is a mean; null otherwise. */
+export function gridRangeAt(detail: GridDetail | undefined, time: number): [number, number] | null {
+  const point = pointAt(detail, time)
+  return point && point.w !== null && point.lo != null && point.hi != null ? [point.lo, point.hi] : null
 }

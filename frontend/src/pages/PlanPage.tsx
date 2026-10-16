@@ -20,14 +20,15 @@ import {
 import { controlFact } from '../lib/planNow'
 import { planSummary } from '../lib/planSummary'
 import {
-  HISTORY_WINDOWS,
   HORIZON_KEY,
   HORIZON_SLOTS,
-  HOURS_KEY,
+  VIEW_HOURS,
+  VIEW_KEY,
   loadPref,
   savePref,
-  type HistoryHours,
+  viewHistory,
   type HorizonSlots,
+  type ViewHours,
 } from '../lib/planHistory'
 import { formatPower } from '../lib/units'
 import { AccuracyCard } from './plan/AccuracyCard'
@@ -54,12 +55,12 @@ export function PlanPage() {
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
   const changes = useMemo(() => planChanges(rows, (previousRows ?? []) as PlanRow[]), [rows, previousRows])
   const [table, setTable] = useState(false)
-  const [hours, setHours] = useState<HistoryHours>(() => loadPref(HOURS_KEY, HISTORY_WINDOWS, 24))
+  const [view, setView] = useState<ViewHours>(() => loadPref(VIEW_KEY, VIEW_HOURS, 8))
   const [horizon, setHorizon] = useState<HorizonSlots>(() => loadPref(HORIZON_KEY, HORIZON_SLOTS, 0))
-  const history = usePlanHistory(hours, horizon)
-  const chooseHours = (h: HistoryHours) => {
-    setHours(h)
-    savePref(HOURS_KEY, h)
+  const history = usePlanHistory(viewHistory(view), horizon)
+  const chooseView = (v: ViewHours) => {
+    setView(v)
+    savePref(VIEW_KEY, v)
   }
   const chooseHorizon = (h: HorizonSlots) => {
     setHorizon(h)
@@ -204,14 +205,14 @@ export function PlanPage() {
         <div className="panel-head">
           <h2>{table ? 'The plan as a table' : 'Timeline'}</h2>
           {!table && (
-            <HistoryControls hours={hours} horizon={horizon} onHours={chooseHours} onHorizon={chooseHorizon} />
+            <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
           )}
         </div>
         <div className="panel-body">
           {table ? (
             <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
           ) : (
-            <PlanCharts data={data} history={history.data} nowS={nowS} />
+            <PlanCharts key={view} data={data} history={history.data} nowS={nowS} view={view} />
           )}
         </div>
       </section>

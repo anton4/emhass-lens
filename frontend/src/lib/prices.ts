@@ -2,6 +2,7 @@
 // breakdown used by the stacked chart, and forecast ranges for shading.
 
 import type { PriceSlot } from '../api/types'
+import type { ChartLane } from '../components/charts/TimeChart'
 
 export const PERIOD_LABELS: Record<string, string> = {
   day: 'Day',
@@ -68,7 +69,8 @@ export function importComponents(slot: PriceSlot): Components {
 
 export type PricePart = 'spot' | 'fees' | 'network' | 'vat'
 
-export const PRICE_PARTS: readonly PricePart[] = ['spot', 'fees', 'network', 'vat']
+// bottom to top: neighbours in this order pass the colour-vision check in both themes (--stack-*)
+export const PRICE_PARTS: readonly PricePart[] = ['spot', 'network', 'fees', 'vat']
 
 /** The breakdown's layers, slot by slot: each part's lower and upper edge. Spot goes from zero (down when
  *  negative), the other shown parts stack upward from the top of a positive spot (or from zero when spot is
@@ -87,7 +89,7 @@ export function stackLayers(
     out.spot.lo.push(0)
     out.spot.hi.push(shown.has('spot') ? c.spot : 0)
     let base = shown.has('spot') ? Math.max(c.spot, 0) : 0
-    for (const key of ['fees', 'network', 'vat'] as const) {
+    for (const key of ['network', 'fees', 'vat'] as const) {
       out[key].lo.push(base)
       if (shown.has(key)) base += c[key]
       out[key].hi.push(base)
@@ -120,4 +122,51 @@ export function midnights(slots: PriceSlot[], timeZone: string): number[] {
     previous = day
   }
   return out
+}
+
+/** The steps of the price ribbon (--heat-0 … --heat-6, cheap to dear). */
+export const HEAT_STEPS = 7
+
+/** A ribbon under the Plan's price chart: each quarter-hour coloured by its import price, in seven steps of one violet
+ *  from the cheapest to the dearest in `prices` (slot starts in unix s; a slot without a price is left out). Neighbours
+ *  in the same step are one span. */
+export function priceHeatLane(starts: number[], prices: (number | null)[], slotS = 900): ChartLane {
+  const known = prices.filter((p): p is number => p !== null && Number.isFinite(p))
+  const lo = Math.min(...known)
+  const hi = Math.max(...known)
+  const step = (p: number) => (hi > lo ? Math.min(HEAT_STEPS - 1, Math.floor(((p - lo) / (hi - lo)) * HEAT_STEPS)) : 0)
+  const spans: ChartLane['spans'] = []
+  starts.forEach((t, i) => {
+    const p = prices[i]
+    if (p === null || p === undefined || !Number.isFinite(p)) return
+    const color = `--heat-${step(p)}`
+    const last = spans[spans.length - 1]
+    if (last && last.color === color && last.to === t) last.to = t + slotS
+    else spans.push({ from: t, to: t + slotS, color })
+  })
+  return { label: 'Import', spans }
+}
+
+/** Each local day's cheapest and dearest quarter-hour by import price (the first of equals), in `timeZone`. */
+export function priceExtremes(
+  slots: PriceSlot[],
+  timeZone: string,
+): { cheapest: { t: number; value: number }; dearest: { t: number; value: number } }[] {
+  const days = new Map<string, PriceSlot[]>()
+  for (const s of slots) {
+    const day = localDay(s.start, timeZone)
+    days.set(day, [...(days.get(day) ?? []), s])
+  }
+  return [...days.values()].map((day) => {
+    let lo = day[0]!
+    let hi = day[0]!
+    for (const s of day) {
+      if (s.import_price < lo.import_price) lo = s
+      if (s.import_price > hi.import_price) hi = s
+    }
+    return {
+      cheapest: { t: Date.parse(lo.start) / 1000, value: lo.import_price },
+      dearest: { t: Date.parse(hi.start) / 1000, value: hi.import_price },
+    }
+  })
 }

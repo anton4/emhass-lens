@@ -37,18 +37,26 @@ describe('the popup rows', () => {
     expect(popupRows(SERIES, 1).rows.map((r) => r.value)).toEqual(['−11.89 kW', '0 W'])
   })
 
-  it("shows the grid at the pointer's moment, the slot's mean as its note", () => {
+  it("shows the grid at the pointer's moment, with the slot's mean beside it", () => {
     const at = (time: number) => (time < 100 ? -9310 : null) // measured up to now (100)
     const grid: PopupSeries[] = [
       { label: 'Grid', color: '--q-grid', values: [null, null, 2100], readout: [-7900, -8000, 2100], moment: at, format: formatSignedPower },
       { label: 'Grid, planned at the time', color: '--q-grid', dash: [4, 4], then: true, values: [-8000, null, null], format: formatSignedPower },
     ]
-    expect(popupRows(grid, 0, 50).rows.map((r) => [r.name, r.value, r.note, r.then])).toEqual([
-      ['Grid', '−9.31 kW', '¼ h −7.90 kW', '−8.00 kW'],
+    expect(popupRows(grid, 0, 50).rows.map((r) => [r.name, r.value, r.slot, r.range, r.then])).toEqual([
+      ['Grid', '−9.31 kW', '−7.90 kW', null, '−8.00 kW'],
     ])
-    // right of now there is no moment: the plan's slot, no note
-    expect(popupRows(grid, 2, 150).rows.map((r) => [r.value, r.note])).toEqual([['+2.10 kW', null]])
-    expect(popupRows(grid, 0).rows[0]?.note).toBeNull()
+    // right of now there is no moment: the plan's slot, nothing beside it
+    expect(popupRows(grid, 2, 150).rows.map((r) => [r.value, r.slot])).toEqual([['+2.10 kW', null]])
+    expect(popupRows(grid, 0).rows[0]?.slot).toBeNull()
+    // a long window's bucket: its lowest and highest reading too
+    const ranged = [{ ...grid[0]!, momentRange: (time: number) => (time < 100 ? ([-12900, 480] as [number, number]) : null) }]
+    expect(popupRows(ranged, 0, 50).rows[0]?.range).toBe('−12.90 kW … +480 W')
+  })
+
+  it('puts a leading line first, wherever it is drawn', () => {
+    const series = [SERIES[2]!, { ...SERIES[0]!, lead: true }]
+    expect(popupRows(series, 0).rows.map((r) => r.name)).toEqual(['Battery', 'PV'])
   })
 
   it('marks the line nearest the pointer', () => {

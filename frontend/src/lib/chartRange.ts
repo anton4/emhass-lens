@@ -30,7 +30,8 @@ export interface ChartOverlay {
   fit?: false
   /** The text for a span beyond the axis ("↓ 15.5 kW"). */
   offScale?: (value: number) => string
-  spans: { from: number; to: number; value: number }[]
+  /** `lo` and `hi`: the lowest and highest reading behind a span's mean; the line is drawn through them. */
+  spans: { from: number; to: number; value: number; lo?: number; hi?: number }[]
 }
 
 /** The area between two values over stretches of time, hatched in a colour: where the grid delivered less than a
@@ -80,8 +81,8 @@ export function overlayExtent(
       if ((to !== null && to !== undefined && span.from > to) || (from !== null && from !== undefined && span.to < from)) {
         continue
       }
-      lo = Math.min(lo, span.value)
-      hi = Math.max(hi, span.value)
+      lo = Math.min(lo, span.lo ?? span.value)
+      hi = Math.max(hi, span.hi ?? span.value)
     }
   }
   return lo <= hi ? [lo, hi] : null
@@ -122,6 +123,76 @@ export function fitRange(
 }
 
 /** A zoom window rounded to whole steps (e.g. 900 s slots), at least one step wide. */
+/** The narrowest window a zoom goes to, in seconds: still a few dozen 10-second readings. */
+export const MIN_WINDOW_S = 600
+
+/** `window` moved inside `bounds` (unix seconds) without changing its width, or narrowed to them when wider. */
+export function clampWindow([a, b]: [number, number], [lo, hi]: [number, number]): [number, number] {
+  const span = Math.min(b - a, hi - lo)
+  const start = Math.max(lo, Math.min(a, hi - span))
+  return [start, start + span]
+}
+
+/** Where a wheel turn takes the window shown: an up/down turn zooms around the pointer's time `at` (at most by half
+ *  per event); a sideways turn, or any turn with `pan` (Shift held), moves the window by the turn's share of the plot
+ *  `width`. Kept inside `bounds` and at least MIN_WINDOW_S wide; null when it doesn't move. */
+export function wheelWindow(
+  shown: [number, number],
+  bounds: [number, number],
+  o: { at: number; dx: number; dy: number; pan: boolean; width: number },
+): [number, number] | null {
+  const [a, b] = shown
+  const span = b - a
+  let { dx, dy } = o
+  if (o.pan && dx === 0) {
+    dx = dy
+    dy = 0
+  }
+  let next: [number, number]
+  if (Math.abs(dx) > Math.abs(dy)) {
+    const dt = (dx / Math.max(1, o.width)) * span
+    next = [a + dt, b + dt]
+  } else {
+    if (dy === 0) return null
+    const factor = Math.exp(Math.max(-0.5, Math.min(0.5, dy * 0.0025)))
+    const at = Math.min(Math.max(o.at, a), b)
+    let start = at - (at - a) * factor
+    let end = at + (b - at) * factor
+    if (end - start < MIN_WINDOW_S) {
+      const mid = (start + end) / 2
+      start = mid - MIN_WINDOW_S / 2
+      end = mid + MIN_WINDOW_S / 2
+    }
+    next = [start, end]
+  }
+  const out = clampWindow(next, bounds)
+  return Math.abs(out[0] - a) < 0.5 && Math.abs(out[1] - b) < 0.5 ? null : out
+}
+
+/** What a press on the overview's brush grabs at `px` (the brush spans x0–x1 px): an edge within `grip` px, the brush
+ *  itself, or nothing (the press is outside it). */
+export function brushGrab(px: number, x0: number, x1: number, grip = 9): 'start' | 'end' | 'move' | null {
+  if (Math.abs(px - x0) <= grip && px <= (x0 + x1) / 2) return 'start'
+  if (Math.abs(px - x1) <= grip) return 'end'
+  if (px > x0 && px < x1) return 'move'
+  return null
+}
+
+/** The window after dragging what was grabbed from time `grabT` to `t` (unix s): the brush moves whole, or one edge
+ *  moves and the window stays at least MIN_WINDOW_S wide; always inside `bounds`. */
+export function brushWindow(
+  grabbed: 'start' | 'end' | 'move',
+  from: [number, number],
+  grabT: number,
+  t: number,
+  bounds: [number, number],
+): [number, number] {
+  const [a, b] = from
+  if (grabbed === 'move') return clampWindow([a + t - grabT, b + t - grabT], bounds)
+  if (grabbed === 'start') return [Math.max(bounds[0], Math.min(t, b - MIN_WINDOW_S)), b]
+  return [a, Math.min(bounds[1], Math.max(t, a + MIN_WINDOW_S))]
+}
+
 export function snapWindow([a, b]: [number, number], step: number): [number, number] {
   const start = Math.round(Math.min(a, b) / step) * step
   const end = Math.round(Math.max(a, b) / step) * step

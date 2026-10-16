@@ -1735,6 +1735,159 @@ button.diff-locate {
   color: var(--ink-muted);
 }
 
+/* over the Plan's charts: the window shown, whether it follows now, how to move it */
+.chart-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.chart-window b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-green);
+  font-weight: 500;
+}
+
+.chart-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lamp-green);
+  box-shadow: 0 0 0 3px var(--tint-green);
+}
+
+.chart-hint {
+  margin-left: auto;
+}
+
+/* a chart's unit beside its title */
+.chart-unit {
+  margin-left: 6px;
+  font-size: var(--step--1);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/* the overview under the Plan's charts (components/charts/Overview.tsx) */
+.overview {
+  position: relative;
+  height: 58px;
+}
+
+.overview-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+
+.overview-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus);
+  border-radius: 6px;
+}
+
+.overview-track svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.overview-zero {
+  fill: none;
+  stroke: var(--chart-axis);
+  stroke-width: 1px;
+}
+
+.overview-line {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1px;
+}
+
+.overview-day {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--chart-grid);
+}
+
+.overview-day span {
+  position: absolute;
+  bottom: 0;
+  left: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.overview-session {
+  position: absolute;
+  top: 0;
+  height: 36px;
+  opacity: 0.85;
+}
+
+.overview-now {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 40px;
+  margin-left: -1px;
+  background: var(--chart-now);
+}
+
+.overview-shade {
+  position: absolute;
+  top: 0;
+  height: 36px;
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+}
+
+.overview-brush {
+  position: absolute;
+  top: 0;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  cursor: grab;
+}
+
+.overview-grip {
+  position: absolute;
+  top: 7px;
+  width: 8px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--accent);
+  cursor: ew-resize;
+}
+
+.overview-grip[data-edge='start'] {
+  left: -5px;
+}
+
+.overview-grip[data-edge='end'] {
+  right: -5px;
+}
+
 .chart-zoom {
   display: flex;
   flex-wrap: wrap;
@@ -1814,7 +1967,7 @@ button.diff-locate {
   display: none;
 }
 
-/* with a popup the legend is a key: the dashed "planned at the time" lines are in the popup's "planned then" column */
+/* with a popup the legend is a key: the dashed "planned at the time" lines are in the popup's "planned then" rows */
 .time-chart .u-legend .is-then {
   display: none;
 }
@@ -1878,15 +2031,12 @@ button.diff-locate {
   color: var(--on-blue);
 }
 
-/* columns as wide as their widest value: every row is a subgrid of the rows' grid */
+/* one value per row, value first: a key, the value, its name; the value column as wide as the widest value, every
+   row a subgrid of the rows' grid */
 .chart-pop-rows {
   display: grid;
-  grid-template-columns: auto auto;
-  column-gap: 10px;
-}
-
-.chart-pop-rows[data-then] {
-  grid-template-columns: auto auto auto;
+  grid-template-columns: 12px auto auto;
+  column-gap: 8px;
 }
 
 .chart-pop-row {
@@ -1895,7 +2045,7 @@ button.diff-locate {
   grid-template-columns: subgrid;
   align-items: center;
   min-height: 20px;
-  padding: 0 4px;
+  padding: 0 6px 0 4px;
   border-radius: 5px;
 }
 
@@ -1904,81 +2054,63 @@ button.diff-locate {
 }
 
 .chart-pop-row[data-near] .chart-pop-name,
-.chart-pop-row[data-near] b {
-  font-weight: 600;
+.chart-pop-row[data-near] .chart-pop-value {
+  font-weight: 650;
   color: var(--ink);
 }
 
-.chart-pop-cols {
-  min-height: 18px;
-  font-size: 11px;
-  color: var(--ink-muted);
+.chart-pop-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-pop-value {
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
 }
 
 .chart-pop-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   color: var(--ink-2);
 }
 
-.chart-pop-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 0;
-  border-top-width: 2px;
-}
-
-.chart-pop-value b {
-  font-family: var(--font-code);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.chart-pop-value i {
+.chart-pop-name i {
   font-style: normal;
   color: var(--ink-muted);
 }
 
-/* under a value read at the pointer: the slot's own ("¼ h −7.90 kW") */
-.chart-pop-note {
-  display: block;
-  font-family: var(--font-code);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-muted);
+.chart-pop-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 0;
+  border-top-width: 2px;
 }
 
-/* "planned then": a soft band from the header to the last row */
-.chart-pop-then {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-right: -4px;
-  padding: 0 8px;
-  background: var(--then-band);
-  color: var(--then-ink);
-  font-family: var(--font-code);
-  font-variant-numeric: tabular-nums;
+/* under a value: the plan at the time, the quarter-hour's mean, the readings' range */
+.chart-pop-detail {
+  min-height: 18px;
 }
 
-.chart-pop-cols .chart-pop-then {
-  font-family: var(--font-body);
+.chart-pop-detail .chart-pop-value {
+  font-size: 11.5px;
   font-weight: 500;
-  border-radius: 6px 6px 0 0;
+  color: var(--ink-2);
 }
 
-.chart-pop-row:last-child .chart-pop-then {
-  border-radius: 0 0 6px 6px;
+.chart-pop-detail .chart-pop-name {
+  font-size: 11.5px;
+  color: var(--ink-muted);
 }
 
 .chart-pop-dash {
   display: inline-block;
   width: 12px;
   height: 0;
-  border-top: 1.5px dashed currentColor;
+  border-top: 1.5px dashed var(--ink-faint);
 }
 
 .chart-pop-square {
@@ -2207,6 +2339,20 @@ button.diff-locate {
 .legend-toggle[aria-pressed='false'] .legend-swatch {
   background: transparent !important;
   box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* A line (the grid, drawn as a line over the areas) */
+.legend-swatch[data-line] {
+  width: 16px;
+  height: 0;
+  border-radius: 0;
+  border-top: 2px solid currentColor;
+  background: none !important;
+}
+
+.legend-toggle[aria-pressed='false'] .legend-swatch[data-line] {
+  box-shadow: none;
+  border-top-style: dashed;
 }
 
 /* A bold line (the market's commanded power) */
@@ -4315,9 +4461,9 @@ button.icon-button {
 
 .day-strip-labels {
   position: relative;
-  height: 18px;
+  height: 20px;
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-2);
 }
 
@@ -4335,8 +4481,8 @@ button.icon-button {
 
 .day-strip-track {
   position: relative;
-  height: 28px;
-  border-radius: 4px;
+  height: 46px;
+  border-radius: 6px;
   background: var(--surface-sunk);
 }
 
@@ -4389,39 +4535,69 @@ button.icon-button {
   pointer-events: none;
 }
 
-/* the comparison or the writes, under the marks they belong to */
+/* the comparison or the writes, a row of their own under the marks they belong to */
 .day-strip-band {
   position: relative;
-  height: 4px;
-  margin-top: 3px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 4px;
+  background: var(--surface-sunk);
 }
 
 .day-strip-band > span {
   position: absolute;
   top: 0;
   bottom: 0;
+  border-radius: 3px;
 }
 
+/* an hourly tick, a label every three hours, and now's time */
 .day-strip-axis {
   position: relative;
-  height: 16px;
-  margin-top: 4px;
+  height: 26px;
+  margin-top: 2px;
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.day-strip-axis > span {
+.day-strip-hour {
   position: absolute;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: var(--chart-axis);
+}
+
+.day-strip-hour[data-major] {
+  height: 7px;
+}
+
+.day-strip-hour-label {
+  position: absolute;
+  top: 8px;
   transform: translateX(-50%);
 }
 
-.day-strip-axis > span:first-child {
+.day-strip-hour-label[data-edge='start'] {
   transform: none;
 }
 
-.day-strip-axis > span:last-child {
+.day-strip-hour-label[data-edge='end'] {
   transform: translateX(-100%);
+}
+
+.day-strip-now-tag {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--chart-now);
+  color: var(--panel);
+  font-weight: 600;
+  line-height: 18px;
 }
 
 /* the rules, branches or guards in the order they are tried */

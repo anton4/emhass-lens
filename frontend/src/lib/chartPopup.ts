@@ -13,8 +13,10 @@ export interface PopupSeries {
   /** What the popup shows when the drawn values are stacked sums. */
   readout?: (number | null)[]
   /** The value at the pointer's own moment (the grid measured finer than the slots), or null: shown instead of the
-   *  slot's, which becomes the row's note. */
+   *  slot's, which gets a row of its own under it. */
   moment?: (time: number) => number | null
+  /** The lowest and highest reading behind the moment's value (a long window's bucket), or null: a row of its own. */
+  momentRange?: (time: number) => [number, number] | null
   format?: (value: number) => string
   /** A word for the value's direction ("charging"). */
   describe?: (value: number) => string
@@ -26,6 +28,8 @@ export interface PopupSeries {
   total?: boolean
   /** Drawn as an area: a square swatch. */
   area?: boolean
+  /** The popup's first row, wherever the line is drawn (the grid, drawn on top of the Power chart's areas). */
+  lead?: boolean
 }
 
 export interface PopupRow {
@@ -39,8 +43,10 @@ export interface PopupRow {
   total: boolean
   value: string
   describe: string
-  /** Under the value: the slot's own when the row shows the pointer's moment ("¼ h +5.90 kW"); null otherwise. */
-  note: string | null
+  /** The quarter-hour's own value when the row shows the pointer's moment ("+5.90 kW"); null otherwise. */
+  slot: string | null
+  /** The lowest and highest reading behind the moment's value ("−12.90 kW … 480 W"); null otherwise. */
+  range: string | null
   /** The plan at the time, formatted; null when there is none. */
   then: string | null
 }
@@ -48,7 +54,8 @@ export interface PopupRow {
 const known = (v: number | null | undefined): v is number => v !== null && v !== undefined && Number.isFinite(v)
 
 /** One row per series at `idx` (its "planned at the time" partner folded into it); series with nothing there are left
- *  out. A series with a value at the pointer's moment `time` shows that, with the slot's value as its note. */
+ *  out. A series with a value at the pointer's moment `time` shows that, with the slot's value (and the readings'
+ *  range) beside it for the popup to put on rows of their own. */
 export function popupRows(series: PopupSeries[], idx: number, time?: number): { rows: PopupRow[]; hasThen: boolean } {
   const rows: PopupRow[] = []
   series.forEach((s, i) => {
@@ -56,6 +63,7 @@ export function popupRows(series: PopupSeries[], idx: number, time?: number): { 
     const partner = series[i + 1]?.then ? series[i + 1] : undefined
     const slot = (s.readout ?? s.values)[idx]
     const moment = time !== undefined ? s.moment?.(time) : null
+    const range = known(moment) && time !== undefined ? (s.momentRange?.(time) ?? null) : null
     const value = known(moment) ? moment : slot
     const then = partner?.values[idx]
     if (!known(value) && !known(then)) return
@@ -70,10 +78,12 @@ export function popupRows(series: PopupSeries[], idx: number, time?: number): { 
       total: Boolean(s.total),
       value: known(value) ? format(value, s) : '—',
       describe: known(value) && s.describe ? s.describe(value) : '',
-      note: known(moment) && known(slot) ? `¼ h ${format(slot, s)}` : null,
+      slot: known(moment) && known(slot) ? format(slot, s) : null,
+      range: range ? `${format(range[0], s)} … ${format(range[1], s)}` : null,
       then: known(then) && partner ? format(then, partner) : null,
     })
   })
+  rows.sort((a, b) => Number(Boolean(series[b.series]?.lead)) - Number(Boolean(series[a.series]?.lead)))
   return { rows, hasThen: rows.some((r) => r.then !== null) }
 }
 

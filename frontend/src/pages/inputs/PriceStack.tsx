@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PriceSlot } from '../../api/types'
-import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
-import { forecastRanges, importComponents, midnights, periodLabel, PRICE_PARTS, stackLayers, type PricePart } from '../../lib/prices'
+import { TimeChart, type ChartNote, type ChartSeries } from '../../components/charts/TimeChart'
+import {
+  forecastRanges,
+  importComponents,
+  midnights,
+  periodLabel,
+  PRICE_PARTS,
+  priceExtremes,
+  stackLayers,
+  type PricePart,
+} from '../../lib/prices'
 import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
 
-// Spot in a grey (darker than its line on the other charts, so its columns stand out); what is added on top of it in
-// the import price's violets, light to deep, so neighbours always differ in lightness.
-const PARTS: readonly { key: PricePart; label: string; color: string }[] = [
+// Bottom to top in four hues whose neighbours pass the colour-vision check in both themes (tokens.css --stack-*).
+const PARTS: readonly { key: PricePart; label: string; color: string; title?: string }[] = [
   { key: 'spot', label: 'Spot', color: '--stack-spot' },
-  { key: 'fees', label: 'Fees (margin, renewable, excise, balancing, supply security)', color: '--stack-fees' },
   { key: 'network', label: 'Network', color: '--stack-network' },
+  { key: 'fees', label: 'Fees', color: '--stack-fees', title: 'Margin, renewable, excise, balancing and supply security' },
   { key: 'vat', label: 'VAT', color: '--stack-vat' },
 ]
 
@@ -41,9 +49,9 @@ function closed(values: number[], factor: number): (number | null)[] {
   return out
 }
 
-/** What each quarter-hour's import price is made of: a column per slot of spot, fees, network and VAT stacked, on the
- *  price chart's time axis, with the import price as a cap; the cursor, the zoom and the popup go along with the price
- *  chart. */
+/** What each quarter-hour's import price is made of: a column per slot of spot, network, fees and VAT stacked, on the
+ *  price chart's time axis, with the import price as a cap and each day's cheapest and dearest quarter-hour named; the
+ *  cursor, the zoom and the popup go along with the price chart. */
 export function PriceStack({
   slots,
   unit,
@@ -81,7 +89,6 @@ export function PriceStack({
     const layers = stackLayers(parts, shown)
     const part = (key: PricePart, below: number | undefined): ChartSeries => ({
       label: PARTS.find((p) => p.key === key)!.label,
-      popupLabel: key === 'fees' ? 'Fees' : undefined,
       color: PARTS.find((p) => p.key === key)!.color,
       values: closed(layers[key].hi, f),
       readout: closed(
@@ -97,9 +104,9 @@ export function PriceStack({
     const series: ChartSeries[] = [
       part('spot', undefined),
       // the edge the other parts stack from: the top of a positive spot, zero under a negative one
-      { label: 'Stack base', color: '--stack-spot', values: closed(layers.fees.lo, f), helper: true },
-      part('fees', 1),
-      part('network', 2),
+      { label: 'Stack base', color: '--stack-spot', values: closed(layers.network.lo, f), helper: true },
+      part('network', 1),
+      part('fees', 2),
       part('vat', 3),
       {
         label: 'Import',
@@ -119,7 +126,13 @@ export function PriceStack({
       const period = periods.get(t)
       return period ? { text: `${periodLabel(period)} rate` } : null
     }
-    return { x, series, tag, bands: forecastRanges(slots), markers: midnights(slots, timeZone), minSpan: 0.01 * f }
+    // each day's cheapest and dearest quarter-hour, named over its column
+    const at = (v: number) => (unit === 'cents' ? `${(v * f).toFixed(1)} c` : (v * f).toFixed(3))
+    const notes: ChartNote[] = priceExtremes(slots, timeZone).flatMap((d) => [
+      { t: d.cheapest.t + 450, value: d.cheapest.value * f, text: `cheapest ${at(d.cheapest.value)}`, color: '--ink-2' },
+      { t: d.dearest.t + 450, value: d.dearest.value * f, text: `dearest ${at(d.dearest.value)}`, color: '--ink-2' },
+    ])
+    return { x, series, tag, notes, bands: forecastRanges(slots), markers: midnights(slots, timeZone), minSpan: 0.01 * f }
   }, [slots, unit, shown, timeZone])
 
   return (
@@ -127,7 +140,7 @@ export function PriceStack({
       <TimeChart
         x={chart.x}
         series={chart.series}
-        ariaLabel="What each quarter-hour's import price is made of: a column of spot, fees, network and VAT, stacked. The table below has every value."
+        ariaLabel="What each quarter-hour's import price is made of: a column of spot, network, fees and VAT, stacked, with each day's cheapest and dearest quarter-hour named. The table below has every value."
         syncKey={syncKey}
         timeZone={timeZone}
         yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
@@ -140,6 +153,7 @@ export function PriceStack({
         height={240}
         popup={{ tag: chart.tag }}
         legend={false}
+        notes={chart.notes}
         snapToSlot
       />
       <ul className="legend" role="group" aria-label="Parts shown in the chart">
@@ -149,7 +163,7 @@ export function PriceStack({
               type="button"
               className="legend-toggle"
               aria-pressed={shown.has(p.key)}
-              title={shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}
+              title={`${p.title ? `${p.title}. ` : ''}${shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}`}
               onClick={() => toggle(p.key)}
             >
               <span className="legend-swatch" style={{ background: `var(${p.color})`, color: `var(${p.color})` }} />

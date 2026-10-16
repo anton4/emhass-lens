@@ -1,25 +1,25 @@
-import { HISTORY_WINDOWS, HORIZONS, windowLabel, type HistoryHours, type HorizonSlots } from '../../lib/planHistory'
+import { HORIZONS, VIEW_WINDOWS, type HorizonSlots, type ViewHours } from '../../lib/planHistory'
 
-/** How far back the charts reach, and which earlier plan a past slot is compared with. */
+/** How much time the charts show around now, and which earlier plan a past slot is compared with. */
 export function HistoryControls({
-  hours,
+  view,
   horizon,
-  onHours,
+  onView,
   onHorizon,
 }: {
-  hours: HistoryHours
+  view: ViewHours
   horizon: HorizonSlots
-  onHours: (hours: HistoryHours) => void
+  onView: (view: ViewHours) => void
   onHorizon: (horizon: HorizonSlots) => void
 }) {
   return (
     <div className="history-controls">
       <span>
-        History
-        <div className="segmented" role="group" aria-label="How far back to show">
-          {HISTORY_WINDOWS.map((h) => (
-            <button key={h} type="button" aria-pressed={h === hours} onClick={() => onHours(h)}>
-              {windowLabel(h)}
+        Window
+        <div className="segmented" role="group" aria-label="How much time the charts show around now">
+          {VIEW_WINDOWS.map((w) => (
+            <button key={w.hours} type="button" aria-pressed={w.hours === view} onClick={() => onView(w.hours)}>
+              {w.label}
             </button>
           ))}
         </div>

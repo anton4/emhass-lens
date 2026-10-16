@@ -31,6 +31,9 @@ const FILL: Record<StripState, string> = {
   none: 'var(--line-neutral)',
 }
 
+// the axis's hourly ticks
+const HOURS = Array.from({ length: 25 }, (_, h) => h)
+
 const STATE_TEXT: Record<StripState, string> = {
   same: 'same as the automation',
   differs: 'the automation differed',
@@ -89,6 +92,8 @@ export function DayStrip<D = unknown>({
   const nowX = Math.min(1, Math.max(0, (now.getTime() / 1000 - start) / (end - start)))
   const clock = (x: number) =>
     formatClock(new Date((start + x * (end - start)) * 1000).toISOString(), timeZone).slice(0, 5)
+  // a label every three hours, every six on a narrow strip
+  const labelEvery = width < 520 ? 6 : 3
   const shown = detail ? (hover ?? pinned ?? focused) : null
   const shownItem = shown === null ? undefined : items[shown]
   const tabStop = cursor !== null && cursor < items.length ? cursor : items.length - 1
@@ -264,11 +269,29 @@ export function DayStrip<D = unknown>({
                   </div>
                 )}
                 <div className="day-strip-axis" aria-hidden="true">
-                  {[0, 0.25, 0.5, 0.75, 1].map((x) => (
-                    <span key={x} style={{ left: `${x * 100}%` }}>
-                      {x === 1 ? '24:00' : clock(x)}
+                  {HOURS.map((h) => (
+                    <span
+                      key={`tick-${h}`}
+                      className="day-strip-hour"
+                      data-major={h % labelEvery === 0 || undefined}
+                      style={{ left: `${(h / 24) * 100}%` }}
+                    />
+                  ))}
+                  {HOURS.filter((h) => h % labelEvery === 0 && Math.abs(h / 24 - nowX) * width > 34).map((h) => (
+                    <span
+                      key={`label-${h}`}
+                      className="day-strip-hour-label"
+                      data-edge={h === 0 ? 'start' : h === 24 ? 'end' : undefined}
+                      style={{ left: `${(h / 24) * 100}%` }}
+                    >
+                      {h === 24 ? '24:00' : clock(h / 24)}
                     </span>
                   ))}
+                  {nowX > 0 && nowX < 1 && (
+                    <span className="day-strip-now-tag" style={{ left: `${nowX * 100}%` }}>
+                      {formatClock(now.toISOString(), timeZone).slice(0, 5)}
+                    </span>
+                  )}
                 </div>
                 {detail && shownItem && (
                   <>

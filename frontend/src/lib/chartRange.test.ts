@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitRange, overlayExtent, overlayRuns, snapWindow } from './chartRange'
+import { MIN_WINDOW_S, brushGrab, brushWindow, clampWindow, fitRange, overlayExtent, overlayRuns, snapWindow, wheelWindow } from './chartRange'
 
 describe('fitRange', () => {
   it('hugs the data with a small margin instead of starting at zero', () => {
@@ -86,5 +86,52 @@ describe('overlayRuns', () => {
     const commanded = { label: 'Commanded', color: 'black', fit: false as const, spans: [{ from: 0, to: 10, value: 15500 }] }
     expect(overlayExtent([commanded, measured], null, null)).toEqual([7600, 7600])
     expect(overlayExtent([commanded], null, null)).toBeNull()
+  })
+})
+
+describe('wheelWindow', () => {
+  const bounds: [number, number] = [0, 100_000]
+  const base = { dx: 0, pan: false, width: 1000 }
+
+  it('zooms in and out around the pointer, keeping its time where it was', () => {
+    const shown: [number, number] = [10_000, 20_000]
+    const zoomedIn = wheelWindow(shown, bounds, { ...base, at: 12_000, dy: -100 })!
+    expect(zoomedIn[1] - zoomedIn[0]).toBeLessThan(10_000)
+    // the pointer's time stays at the same share of the window
+    expect((12_000 - zoomedIn[0]) / (zoomedIn[1] - zoomedIn[0])).toBeCloseTo(0.2)
+    const zoomedOut = wheelWindow(shown, bounds, { ...base, at: 12_000, dy: 100 })!
+    expect(zoomedOut[1] - zoomedOut[0]).toBeGreaterThan(10_000)
+  })
+
+  it('pans with a sideways turn or Shift, by the turn’s share of the plot', () => {
+    expect(wheelWindow([10_000, 20_000], bounds, { ...base, at: 0, dx: 100, dy: 0 })).toEqual([11_000, 21_000])
+    expect(wheelWindow([10_000, 20_000], bounds, { ...base, at: 0, dy: -100, pan: true })).toEqual([9_000, 19_000])
+  })
+
+  it('stays inside the bounds, no narrower than ten minutes, and says when nothing moves', () => {
+    expect(wheelWindow([0, 10_000], bounds, { ...base, at: 0, dx: -500, dy: 0 })).toBeNull()
+    expect(wheelWindow([95_000, 100_000], bounds, { ...base, at: 0, dx: 400, dy: 0 })).toBeNull()
+    const narrow = wheelWindow([1_000, 1_700], bounds, { ...base, at: 1_350, dy: -500 })!
+    expect(narrow[1] - narrow[0]).toBe(MIN_WINDOW_S)
+    expect(clampWindow([-50, 150], [0, 100])).toEqual([0, 100])
+    expect(clampWindow([90, 120], [0, 100])).toEqual([70, 100])
+  })
+})
+
+describe('the overview brush', () => {
+  it('grabs an edge, the brush or nothing', () => {
+    expect(brushGrab(102, 100, 300)).toBe('start')
+    expect(brushGrab(295, 100, 300)).toBe('end')
+    expect(brushGrab(200, 100, 300)).toBe('move')
+    expect(brushGrab(50, 100, 300)).toBeNull()
+  })
+
+  it('moves the window whole or by one edge, inside the data and never too narrow', () => {
+    const bounds: [number, number] = [0, 100_000]
+    expect(brushWindow('move', [10_000, 20_000], 15_000, 18_000, bounds)).toEqual([13_000, 23_000])
+    expect(brushWindow('move', [10_000, 20_000], 15_000, 110_000, bounds)).toEqual([90_000, 100_000])
+    expect(brushWindow('start', [10_000, 20_000], 10_000, 4_000, bounds)).toEqual([4_000, 20_000])
+    expect(brushWindow('start', [10_000, 20_000], 10_000, 19_900, bounds)).toEqual([20_000 - MIN_WINDOW_S, 20_000])
+    expect(brushWindow('end', [10_000, 20_000], 20_000, 200_000, bounds)).toEqual([10_000, 100_000])
   })
 })

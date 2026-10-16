@@ -37,6 +37,35 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
+- **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
+  with every value in a popup per chart and the grid's 10-second readings shown by default.
+- **Backend:** when the grid detail has to average, each mean carries its bucket's lowest and highest reading
+  (`GridPoint.lo`/`hi`; `domain/measure.detail` returns the bounds); `max_points` goes up to 6000.
+- **Plan timeline:**
+  - **Power** is one chart: PV and the battery discharging stacked above zero; the house load, the battery charging and
+    the deferrable loads below (`lib/powerStack.ts`). The grid is a line on top: every reading left of now, drawn
+    through each bucket's lowest and highest reading on a long window, and the plan right of it. Battery, PV and house
+    are no longer separate lines with "planned then" twins; the grid keeps its.
+  - **Window** (8 h, 24 h, 2 d, 7 d around now) replaces History (`VIEW_WINDOWS`, pref `emhass-lens.plan.view-window`).
+    The charts follow now until a zoom, a scroll or the overview picks a window; "Back to now" or a double-click
+    returns.
+  - Scrolling zooms around the pointer; Shift or a sideways scroll pans (`wheelWindow`). An overview strip under the
+    charts shows everything loaded with a brush to drag or resize (`components/charts/Overview.tsx`).
+  - **Popups:** one value per row, value first; "planned then", the quarter-hour's mean and the readings' range on rows
+    of their own. They read the quarter-hour the pointer is in (they took the nearest slot start before).
+  - **Price:** a ribbon of the import price in seven violet steps under the chart (`priceHeatLane`).
+  - The axes use Geist.
+- **Colours:** import violet and export green, two hues instead of two violets. The price breakdown is spot, network,
+  fees, VAT from the bottom in blue, aqua, yellow, magenta; the order changed so neighbours pass the colour-vision
+  check in both themes.
+- **Price breakdown:** each day's cheapest and dearest quarter-hour is named over its column; the fees chip is "Fees"
+  with the parts in its tooltip.
+- **Day strips:** taller, an hourly axis with a label every 3 h, and now's time on it.
+- **Checked:** backend 468 tests, ruff, pyright; frontend typecheck, lint, 289 tests and the build. The Plan and Inputs
+  pages were looked at in Chrome against a mock API with simulated 10-second readings and a sell session.
+  - **Not checked:** a real Home Assistant, and the controller pages' day strips in a browser.
+
 ### 2026-10-15: MPC keeps planning during a market session (unreleased)
 - **Why:** HA raised "No successful MPC run recently: last success 2026-10-15T05:56:05.406689+00:00" about 40 min
   into a market session.

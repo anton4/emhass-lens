@@ -14,6 +14,7 @@ import {
   fitRange,
   overlayExtent,
   overlayRuns,
+  wheelWindow,
   type ChartGap,
   type ChartOverlay,
   type FitOptions,
@@ -48,6 +49,10 @@ export interface ChartSeries {
   /** The value at the pointer's own moment (the grid measured finer than the slots), or null: the popup shows it, with
    *  the slot's value as its note. */
   moment?: (time: number) => number | null
+  /** The lowest and highest reading behind `moment`'s value (a long window's bucket), or null: a popup row of its own. */
+  momentRange?: (time: number) => [number, number] | null
+  /** The popup's first row, wherever the series is drawn. */
+  lead?: boolean
   /** Only the edge another series fills down to: no line, no popup row, no cursor dot. */
   helper?: boolean
   /** A part switched off: faded in the popup, no cursor dot. */
@@ -323,14 +328,16 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
       }
     }
     const path = new Path2D()
-    for (const run of overlayRuns(overlay.spans, overlay.base)) {
-      run.forEach(([t, v], i) => {
-        const x = u.valToPos(t, 'x', true)
-        const y = yOf(v)
-        if (i === 0) path.moveTo(x, y)
-        else path.lineTo(x, y)
-      })
-    }
+    if (overlay.spans.some((span) => span.lo !== undefined && span.hi !== undefined)) envelopePath(u, overlay, yOf, path)
+    else
+      for (const run of overlayRuns(overlay.spans, overlay.base)) {
+        run.forEach(([t, v], i) => {
+          const x = u.valToPos(t, 'x', true)
+          const y = yOf(v)
+          if (i === 0) path.moveTo(x, y)
+          else path.lineTo(x, y)
+        })
+      }
     if (overlay.halo) {
       ctx.save()
       ctx.strokeStyle = cssColor('--panel')
@@ -344,6 +351,30 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
     if (overlay.offScale) drawOffScale(u, overlay, color, dpr)
   }
   ctx.restore()
+}
+
+/** An overlay whose spans are means with their lowest and highest reading: within each span the line goes through its
+ *  mean, down to its low, up to its high and back, so a long window still shows every spike the means would hide.
+ *  Spans without bounds hold their value as steps; a gap between spans breaks the line. */
+function envelopePath(u: uPlot, overlay: ChartOverlay, yOf: (v: number) => number, path: Path2D) {
+  const spans = [...overlay.spans].sort((a, b) => a.from - b.from)
+  let end: number | null = null
+  for (const span of spans) {
+    const a = u.valToPos(span.from, 'x', true)
+    const b = u.valToPos(span.to, 'x', true)
+    const y = yOf(span.value)
+    if (end === null || Math.abs(span.from - end) >= 1) path.moveTo(a, y)
+    else path.lineTo(a, y)
+    if (span.lo !== undefined && span.hi !== undefined) {
+      const mid = (a + b) / 2
+      path.lineTo(mid, y)
+      path.lineTo(mid, yOf(span.lo))
+      path.lineTo(mid, yOf(span.hi))
+      path.lineTo(mid, y)
+    }
+    path.lineTo(b, y)
+    end = span.to
+  }
 }
 
 /** The text of each span of `overlay` that is past the y-axis ("↓ 15.5 kW"), at its start against the edge it runs
@@ -655,6 +686,7 @@ export function TimeChart({
     if (!el) return
     const ink = cssColor('--ink-muted')
     const grid = cssColor('--chart-grid')
+    const axisFont = `12px ${cssValue('--font-body') || 'sans-serif'}`
     // lanes sit between the plot and the time axis's labels, which move down to make room
     const lanesPx = lanes.length ? LANE_GAP + lanes.length * LANE_H : 0
     const flagged = sessions.length > 0
@@ -755,12 +787,13 @@ export function TimeChart({
     let frame: number | null = null
     const follow = (u: uPlot) => {
       frame = null
-      const idx = u.cursor.idx
       const left = u.cursor.left ?? -1
-      if (idx === null || idx === undefined || left < 0 || u.select.width > 0) {
+      if (u.cursor.idx === null || u.cursor.idx === undefined || left < 0 || u.select.width > 0) {
         cursor.setAt(null)
         return
       }
+      // the quarter-hour the pointer is in (a step holds from its start), not the nearest start
+      const idx = slotIndex(u.data[0], u.posToVal(left, 'x'))
       const points: CursorAt['points'] = []
       u.series.forEach((s, i) => {
         const meta = extras.current.series[i - 1]
@@ -792,6 +825,9 @@ export function TimeChart({
         drag: zoomable ? { x: true, y: false, setScale: false } : { x: false, y: false },
         // uPlot's own double-click reset would bypass the parent's zoom state; ours is in the ready hook
         bind: zoomable ? { dblclick: () => null } : undefined,
+        // a step line's dot on the slot the pointer is in, as the popup reads it
+        dataIdx: (u: uPlot, seriesIdx: number, closestIdx: number, xValue: number) =>
+          seriesIdx > 0 && extras.current.series[seriesIdx - 1]?.step !== false ? slotIndex(u.data[0], xValue) : closestIdx,
         // on the start of the slot under the pointer, so the nearest index is that slot (and synced charts agree)
         ...(snapToSlot
           ? {
@@ -829,6 +865,7 @@ export function TimeChart({
       axes: [
         {
           stroke: ink,
+          font: axisFont,
           grid: { stroke: grid, width: 1 },
           ticks: { stroke: grid, width: 1, show: lanesPx === 0 },
           values: (_u, splits) => axisLabels(splits, timeZone),
@@ -837,6 +874,7 @@ export function TimeChart({
         },
         {
           stroke: ink,
+          font: axisFont,
           grid: { stroke: grid, width: 1, show: !compact },
           ticks: { stroke: grid, width: 1, show: !compact },
           size: 64,
@@ -892,6 +930,28 @@ export function TimeChart({
               })
             }
             u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
+            if (zoomable) {
+              u.over.addEventListener(
+                'wheel',
+                (event) => {
+                  const xs = extras.current.x
+                  const first = xs[0]
+                  const last = xs[xs.length - 1]
+                  if (first === undefined || last === undefined) return
+                  event.preventDefault()
+                  const shown = extras.current.xRange ?? [first, last]
+                  const next = wheelWindow(shown, [first, last], {
+                    at: u.posToVal(event.offsetX, 'x'),
+                    dx: event.deltaX * (event.deltaMode === 1 ? 16 : 1),
+                    dy: event.deltaY * (event.deltaMode === 1 ? 16 : 1),
+                    pan: event.shiftKey,
+                    width: u.over.clientWidth,
+                  })
+                  if (next) extras.current.onZoom?.(next)
+                },
+                { passive: false },
+              )
+            }
             // The tick nearest the pointer, within 6 px: its label as the tooltip, a click opens it
             const nearest = (event: MouseEvent): ChartTick | undefined => {
               const px = event.offsetX
