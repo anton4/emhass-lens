@@ -1287,6 +1287,16 @@ class MarketThresholds(Section):
     sell_cap_w: int = Field(
         default=15500, ge=0, le=100000, title="Sell: grid and feed-in cap", json_schema_extra=ui(unit="W")
     )
+    baseline_s: int = Field(
+        default=60,
+        ge=0,
+        le=900,
+        title="Baseline: the grid's mean before a session over",
+        description="What a session's delivery is judged from on the Plan and Market pages: the grid's mean over "
+        "this long before the session's first command, the target being that baseline less a sell's power (plus a "
+        "buy's). 0 judges a command against zero instead. The inverter is always written the command's own target.",
+        json_schema_extra=ui(unit="s", advanced=True),
+    )
     buy_modes: list[str] = Field(
         default_factory=lambda: ["buy", "mfrrdown", "frrdown"],
         title="Buy commands",

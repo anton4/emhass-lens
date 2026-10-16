@@ -179,6 +179,32 @@ class GridDetailService:
         ]
         return out
 
+    async def baselines(self, starts: list[datetime], window_s: float) -> list[int | None]:
+        """The measured grid power's time-weighted mean (W, EMHASS's sign) over the `window_s` before each start that
+        is within the last 48 h; None for the others, without a sensor, when the window is 0 or the recorder couldn't
+        be read."""
+        out: list[int | None] = [None] * len(starts)
+        cfg = self._cfg()
+        now_dt = self.c.clock.now()
+        now = now_dt.timestamp()
+        wanted = [i for i, t in enumerate(starts) if t > now_dt - WINDOW_MAX and t.timestamp() <= now]
+        if cfg is None or window_s <= 0 or not wanted:
+            return out
+        try:
+            async with asyncio.timeout(DELIVERED_TIMEOUT_S):
+                bounds = {i: (starts[i].timestamp() - window_s, starts[i].timestamp()) for i in wanted}
+                await self._ensure(cfg.entity, {h for a, b in bounds.values() for h in _hours(a, b)}, now)
+                means: dict[tuple[float, float], int | None] = {}
+                for i, (a, b) in bounds.items():
+                    if (a, b) not in means:
+                        mean, _ = bucket_means(await self._points(cfg.entity, a, b, now), [a, b])[0]
+                        means[(a, b)] = round(cfg.to_emhass(mean)) if mean is not None else None
+                    out[i] = means[(a, b)]
+        except Exception as exc:  # the commands are still shown, judged against zero
+            log.debug("Reading the grid power before the market sessions failed: %s", exc)
+            return [None] * len(starts)
+        return out
+
     async def delivered(self, spans: list[CommandSpan]) -> tuple[list[tuple[int | None, float | None]], str | None]:
         """The measured grid power's mean (W, EMHASS's sign) and its coverage over each span, for the spans that
         ended within the last 48 h; (None, None) for the others, and when there's no grid sensor or the recorder

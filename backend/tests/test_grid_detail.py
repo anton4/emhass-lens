@@ -160,3 +160,24 @@ def test_the_delivered_power_skips_commands_older_than_48_h(tmp_path: Path, mark
         assert (at(8, 0), at(9, 0)) not in meter_reads(world)  # the command's hour isn't read
     finally:
         client.__exit__(None, None, None)
+
+
+def test_a_session_gets_the_grid_mean_before_it_as_its_baseline(tmp_path: Path, market_world: World) -> None:  # noqa: F811
+    world = market_world
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, measurements=GRID)
+    history(world)
+    try:
+        commands = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
+        [span] = commands["spans"]
+        assert span["baseline_w"] == 500  # 490 and 510 W import, the minute before 08:45:12
+        # no baseline when it is set to 0 s
+        rev = client.get("/api/settings").json()["revision"]
+        saved = client.patch(
+            "/api/settings", json={"base_revision": rev, "changes": {"market": {"thresholds": {"baseline_s": 0}}}}
+        )
+        assert saved.status_code == 200, saved.text
+        commands = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
+        assert commands["spans"][0]["baseline_w"] is None
+    finally:
+        client.__exit__(None, None, None)

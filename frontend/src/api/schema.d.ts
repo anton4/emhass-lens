@@ -2958,6 +2958,7 @@ export interface components {
             /**
              * Thresholds
              * @default {
+             *       "baseline_s": 60,
              *       "big_change_w": 2500,
              *       "buy_cap_w": 18200,
              *       "buy_modes": [
@@ -3001,6 +3002,8 @@ export interface components {
         };
         /** MarketCommandSpan */
         MarketCommandSpan: {
+            /** Baseline W */
+            baseline_w?: number | null;
             /** Direction */
             direction: string;
             /** End */
@@ -3145,6 +3148,12 @@ export interface components {
         };
         /** MarketThresholds */
         MarketThresholds: {
+            /**
+             * Baseline: the grid's mean before a session over
+             * @description What a session's delivery is judged from on the Plan and Market pages: the grid's mean over this long before the session's first command, the target being that baseline less a sell's power (plus a buy's). 0 judges a command against zero instead. The inverter is always written the command's own target.
+             * @default 60
+             */
+            baseline_s: number;
             /**
              * Bypass the cooldown for changes of
              * @default 2500
@@ -4733,6 +4742,7 @@ export interface components {
              *       "reconcile_offset_s": 15,
              *       "soc_low_for_s": 10,
              *       "thresholds": {
+             *         "baseline_s": 60,
              *         "big_change_w": 2500,
              *         "buy_cap_w": 18200,
              *         "buy_modes": [

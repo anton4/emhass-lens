@@ -172,6 +172,21 @@ These come from docs/PLAN.md §10:
   store (`createValueStore`), so the charts don't re-render with it, and it is only worked out while open; it stays
   on the last cursor after the pointer leaves. The full EMHASS table is the second collapsible, "Every column of this
   plan".
+- **P9, a baseline for market sessions** (the owner's choice):
+  - Setting Market → Thresholds → Baseline, `baseline_s` (default 60 s, 0–900, advanced; no schema bump, a default
+    fills it in).
+  - Backend: `domain/market.session_starts` (back-to-back spans of one direction are one session, as the Plan page
+    groups them); `GridDetailService.baselines(starts, window_s)` (the grid's time-weighted mean before each start
+    within 48 h, from the hours it already holds; `bucket_means`); `MarketCommandSpan.baseline_w`. Tests:
+    `test_a_session_gets_the_grid_mean_before_it_as_its_baseline` (500 W before the 08:45:12 sell, none at 0 s) and
+    `test_back_to_back_commands_of_one_direction_share_their_session_start`.
+  - Frontend:
+    - `commandTarget` = baseline − a sell's power (+ a buy's), which the commanded line now draws.
+    - `deliveredW`, `sessionDelivery` and `shortfalls` all count from the baseline.
+    - The popup's rows read "commanded target, since …" and "baseline, before the session".
+    - Display only: the controller keeps writing the command's absolute target.
+  - With the mock's baseline of 2.44 kW exported, the same −6.85 kW reads 4.41 of 10.40 kW delivered (42 %), where
+    from zero it read 66 %.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

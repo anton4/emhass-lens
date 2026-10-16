@@ -32,6 +32,7 @@ from emhass_lens.domain.market import (
     compare_expected,
     decide,
     expected_after,
+    session_starts,
 )
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
@@ -684,6 +685,12 @@ class MarketService:
         measured, measured_error = (
             await grid.delivered(spans) if grid is not None else ([(None, None)] * len(spans), None)
         )
+        # each session's baseline: the grid's mean just before its first command
+        baselines = (
+            await grid.baselines(session_starts(spans), self._t().baseline_s)
+            if grid is not None
+            else [None] * len(spans)
+        )
         return {
             "spans": [
                 {
@@ -696,8 +703,9 @@ class MarketService:
                     "open": s.open,
                     "measured_w": w,
                     "measured_coverage": coverage,
+                    "baseline_w": baseline,
                 }
-                for s, (w, coverage) in zip(spans, measured, strict=True)
+                for s, (w, coverage), baseline in zip(spans, measured, baselines, strict=True)
             ],
             "error": None,
             "measured_error": measured_error,

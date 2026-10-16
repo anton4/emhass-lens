@@ -2,7 +2,7 @@
 feed-in limit during a sell, which EMHASS Lens writes far less often, and a gap only the proportional deadband hides,
 which EMHASS Lens writes once it holds for the cooldown (the automation's calls are kept as parity_*)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from emhass_lens.domain.market import (
     CommandSpan,
@@ -343,3 +343,18 @@ def test_command_spans_start_with_the_state_in_force() -> None:
     # a source the thresholds don't know isn't a command
     unknown = MarketThresholds(sources=["fusebox"])
     assert command_spans(source, mode, power, unknown, at(5, 0), at(7, 30)) == []
+
+
+def test_back_to_back_commands_of_one_direction_share_their_session_start() -> None:
+    from emhass_lens.domain.market import CommandSpan, session_starts
+
+    t = datetime(2026, 10, 9, 8, 0, tzinfo=UTC)
+
+    def span(a: int, b: int, direction: str = "sell") -> CommandSpan:
+        return CommandSpan(
+            t + timedelta(seconds=a), t + timedelta(seconds=b), direction, "kratt", "mfrrup", 9000, False
+        )
+
+    spans = [span(60, 120), span(0, 60), span(120, 130, "buy"), span(400, 500)]
+    assert session_starts(spans) == [t, t, t + timedelta(seconds=120), t + timedelta(seconds=400)]
+    assert session_starts([]) == []

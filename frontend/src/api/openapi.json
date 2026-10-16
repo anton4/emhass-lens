@@ -4693,6 +4693,7 @@
           "thresholds": {
             "$ref": "#/components/schemas/MarketThresholds",
             "default": {
+              "baseline_s": 60,
               "big_change_w": 2500,
               "buy_cap_w": 18200,
               "buy_modes": [
@@ -4739,6 +4740,17 @@
       },
       "MarketCommandSpan": {
         "properties": {
+          "baseline_w": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline W"
+          },
           "direction": {
             "title": "Direction",
             "type": "string"
@@ -5184,6 +5196,18 @@
       "MarketThresholds": {
         "additionalProperties": false,
         "properties": {
+          "baseline_s": {
+            "default": 60,
+            "description": "What a session's delivery is judged from on the Plan and Market pages: the grid's mean over this long before the session's first command, the target being that baseline less a sell's power (plus a buy's). 0 judges a command against zero instead. The inverter is always written the command's own target.",
+            "maximum": 900.0,
+            "minimum": 0.0,
+            "title": "Baseline: the grid's mean before a session over",
+            "type": "integer",
+            "ui": {
+              "advanced": true,
+              "unit": "s"
+            }
+          },
           "big_change_w": {
             "default": 2500,
             "maximum": 50000.0,
@@ -9248,6 +9272,7 @@
               "reconcile_offset_s": 15,
               "soc_low_for_s": 10,
               "thresholds": {
+                "baseline_s": 60,
                 "big_change_w": 2500,
                 "buy_cap_w": 18200,
                 "buy_modes": [

@@ -1053,6 +1053,9 @@ class MarketCommandSpan(BaseModel):
     open: bool  # still on at the end of the window
     measured_w: int | None = None  # the grid power measured over it (EMHASS's sign: + import); None past 48 h
     measured_coverage: float | None = None  # 0–1: how much of it the grid sensor had a value for
+    # the grid's mean (EMHASS's sign) over Market → Thresholds → Baseline before its session's first command; delivery
+    # is judged from it. None past 48 h, without a sensor, or with the baseline at 0 s
+    baseline_w: int | None = None
 
 
 class MarketCommands(BaseModel):

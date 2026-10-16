@@ -437,6 +437,21 @@ class CommandSpan:
     open: bool  # still on at the end of the window
 
 
+def session_starts(spans: list[CommandSpan]) -> list[datetime]:
+    """Each span's session start: back-to-back spans (less than a second apart) of one direction are one session,
+    the way the Plan page groups them."""
+    starts = [s.start for s in spans]
+    prev: CommandSpan | None = None
+    first = starts[0] if starts else None
+    for i in sorted(range(len(spans)), key=lambda k: spans[k].start):
+        s = spans[i]
+        if prev is None or prev.direction != s.direction or abs((s.start - prev.end).total_seconds()) >= 1:
+            first = s.start
+        starts[i] = first or s.start
+        prev = s
+    return starts
+
+
 def _changes(states: list[dict[str, Any]]) -> list[tuple[datetime, Any]]:
     """(when, state) from recorder history items, oldest first; a state holds until the next one."""
     out: list[tuple[datetime, Any]] = []

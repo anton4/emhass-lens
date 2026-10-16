@@ -7,6 +7,7 @@ import {
   deliveredW,
   marketBlock,
   marketLead,
+  commandTarget,
   marketProduct,
   sessionProduct,
   marketLane,
@@ -93,6 +94,7 @@ describe('marketGuards and values', () => {
     expect(guards[3]?.text).toContain('raised to 15500 W at once')
     expect(guards[3]?.text).toContain('at 97 % or more')
     const custom: MarketSettings['thresholds'] = {
+      baseline_s: 60,
       enter_w: 1000,
       exit_w: 400,
       cooldown_s: 180,
@@ -390,5 +392,58 @@ describe('marketProduct', () => {
     const span = (mode: string) => ({ mode }) as MarketCommandSpan
     expect(sessionProduct({ spans: [span('frrup'), span('frrup')] })).toBe('aFRR')
     expect(sessionProduct({ spans: [span('frrup'), span('mfrrup')] })).toBeNull()
+  })
+})
+
+describe('the baseline', () => {
+  const s = (iso: string) => Date.parse(iso) / 1000
+  const tz = 'Europe/Tallinn'
+  const base = (over: Partial<MarketCommandSpan>): MarketCommandSpan =>
+    ({
+      start: '2026-10-14T05:45:00Z',
+      end: '2026-10-14T05:50:00Z',
+      direction: 'sell',
+      source: 'kratt',
+      mode: 'mfrrup',
+      power_w: 9000,
+      open: false,
+      ...over,
+    }) as MarketCommandSpan
+
+  it('puts the target at the baseline less a sell, plus a buy', () => {
+    expect(commandTarget(base({ baseline_w: 500 }))).toBe(-8500)
+    expect(commandTarget(base({ direction: 'buy', baseline_w: 500 }))).toBe(9500)
+    expect(commandTarget(base({}))).toBe(-9000)
+  })
+
+  it('counts what was delivered from the baseline', () => {
+    // 8.5 kW exported from 500 W imported: 9 kW of sell delivered
+    expect(deliveredW(base({ baseline_w: 500, measured_w: -8500 }))).toBe(9000)
+    expect(deliveredW(base({ direction: 'buy', baseline_w: 500, measured_w: 9500 }))).toBe(9000)
+    expect(deliveredW(base({ measured_w: -8500 }))).toBe(8500)
+  })
+
+  it('puts the target and the baseline under the grid in the popup', () => {
+    const span = base({ baseline_w: 500 })
+    expect(marketLead({ spans: [span], time: s('2026-10-14T05:46:00Z'), timeZone: tz })).toEqual([
+      { name: 'commanded target, since 08:45:00', value: '−8.50 kW', color: '--q-market', swatch: 'dash' },
+      { name: 'baseline, before the session', value: '+500 W', color: '--ink-faint', swatch: 'none' },
+    ])
+  })
+
+  it('judges a shortfall from the baseline', () => {
+    const span = base({ baseline_w: 500 })
+    const detail: GridDetail = {
+      entity: 'sensor.grid',
+      start: '2026-10-14T05:45:00Z',
+      end: '2026-10-14T05:50:00Z',
+      step_s: null,
+      points: [{ t: '2026-10-14T05:45:00Z', w: -8400 }],
+      error: null,
+    }
+    // −8.4 kW from +500 W is 8.9 kW delivered: within 10 % of 9 kW, no shortfall
+    expect(shortfalls([span], detail)).toEqual([])
+    // from 1.5 kW exported before the session the same reading is only 6.9 kW delivered: short
+    expect(shortfalls([{ ...span, baseline_w: -1500 }], detail)).toHaveLength(1)
   })
 })

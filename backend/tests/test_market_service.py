@@ -494,6 +494,7 @@ def test_the_commands_come_from_the_recorder_whatever_runs_the_sessions(tmp_path
                     "open": False,
                     "measured_w": None,  # no grid sensor set
                     "measured_coverage": None,
+                    "baseline_w": None,
                 }
             ],
             "error": None,

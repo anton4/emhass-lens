@@ -315,6 +315,16 @@ export function commandPower(span: Pick<MarketCommandSpan, 'direction' | 'power_
   return span.direction === 'buy' ? span.power_w : -span.power_w
 }
 
+/** The grid's mean just before the command's session (W, + import), 0 when there is none. */
+export function baselineOf(span: Pick<MarketCommandSpan, 'baseline_w'>): number {
+  return span.baseline_w ?? 0
+}
+
+/** Where the command asks the grid to be: its session's baseline less a sell's power, plus a buy's. */
+export function commandTarget(span: Pick<MarketCommandSpan, 'direction' | 'power_w' | 'baseline_w'>): number {
+  return baselineOf(span) + commandPower(span)
+}
+
 /** The commanded power as an ink line over the Power chart, stepping at the commands' own times. The measured grid
  *  line's buckets break at those times too, so the two lines step together. The y-axis fits the measured lines, not
  *  the commands: one past it runs along the edge with its direction and power ("↓ 15.5 kW"). */
@@ -328,16 +338,18 @@ export function marketOverlay(spans: MarketCommandSpan[], nowS?: number): ChartO
     fit: false,
     dot: true,
     offScale: (value) => `${value > 0 ? BUY_ARROW : SELL_ARROW} ${kw1(Math.abs(value))} kW`,
-    spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandPower(s) })),
+    spans: spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), value: commandTarget(s) })),
   }
 }
 
-/** What the grid delivered in the command's direction: the measured mean, with a sell's export counted positive like
- *  its power; null when it wasn't measured. */
-export function deliveredW(span: Pick<MarketCommandSpan, 'direction' | 'measured_w'>): number | null {
+/** What the grid delivered in the command's direction, from its session's baseline: the measured mean less the
+ *  baseline for a buy, the baseline less it for a sell (so a sell's export counts positive like its power); null when
+ *  it wasn't measured. */
+export function deliveredW(span: Pick<MarketCommandSpan, 'direction' | 'measured_w' | 'baseline_w'>): number | null {
   const w = span.measured_w
   if (w === null || w === undefined) return null
-  return span.direction === 'buy' ? w : -w
+  const base = baselineOf(span)
+  return span.direction === 'buy' ? w - base : base - w
 }
 
 /** Back-to-back commands in one direction: a session as the Power chart shows it. */
@@ -409,7 +421,13 @@ export interface Shortfall {
 export function shortfalls(spans: MarketCommandSpan[], detail: GridDetail | undefined, nowS?: number): Shortfall[] {
   if (!detail || detail.points.length === 0 || spans.length === 0) return []
   const end = unix(detail.end)
-  const commands = spans.map((s) => ({ from: unix(s.start), to: spanEnd(s, nowS), sign: s.direction === 'buy' ? 1 : -1, w: s.power_w }))
+  const commands = spans.map((s) => ({
+    from: unix(s.start),
+    to: spanEnd(s, nowS),
+    sign: s.direction === 'buy' ? 1 : -1,
+    w: s.power_w,
+    base: baselineOf(s),
+  }))
   const pieces: (Shortfall['pieces'][number] & { missing: number })[] = []
   detail.points.forEach((p, i) => {
     if (p.w === null) return
@@ -420,9 +438,10 @@ export function shortfalls(spans: MarketCommandSpan[], detail: GridDetail | unde
       const from = Math.max(a, c.from)
       const to = Math.min(b, c.to)
       if (to <= from) continue
-      const missing = c.w - c.sign * p.w
+      // what the grid delivered from the baseline, in the command's direction
+      const missing = c.w - c.sign * (p.w - c.base)
       if (missing > Math.max(SHORT_MIN_W, SHORT_SHARE * c.w)) {
-        pieces.push({ from, to, commanded: c.sign * c.w, measured: p.w, missing })
+        pieces.push({ from, to, commanded: c.base + c.sign * c.w, measured: p.w, missing })
       }
     }
   })
@@ -608,21 +627,27 @@ export function sessionDelivery(
   time: number,
 ): { got: number; share: number; moment: boolean } | null {
   const w = gridAt(detail, time)
-  const got = w !== null ? (span.direction === 'sell' ? -w : w) : deliveredW(span)
+  const base = baselineOf(span)
+  const got = w !== null ? (span.direction === 'sell' ? base - w : w - base) : deliveredW(span)
   if (got === null) return null
   return { got, share: span.power_w > 0 ? got / span.power_w : 0, moment: w !== null }
 }
 
-/** The popup's rows right under the grid's reading during a command: what it commanded, since when. */
+/** The popup's rows right under the grid's reading during a command: where it put the grid (the baseline less a
+ *  sell's power, plus a buy's), since when, and the baseline. */
 export function marketLead(o: { spans: MarketCommandSpan[]; time: number; nowS?: number; timeZone?: string }): PopupExtra[] {
   const span = spanAt(o.spans, o.time, o.nowS)
   if (!span) return []
-  return [
+  const rows: PopupExtra[] = [
     {
-      name: `commanded, since ${formatClock(span.start, o.timeZone)}`,
-      value: formatSignedPower(commandPower(span)),
+      name: `${span.baseline_w !== null && span.baseline_w !== undefined ? 'commanded target' : 'commanded'}, since ${formatClock(span.start, o.timeZone)}`,
+      value: formatSignedPower(commandTarget(span)),
       color: '--q-market',
       swatch: 'dash',
     },
   ]
+  if (span.baseline_w !== null && span.baseline_w !== undefined) {
+    rows.push({ name: 'baseline, before the session', value: formatSignedPower(span.baseline_w), color: '--ink-faint', swatch: 'none' })
+  }
+  return rows
 }
