@@ -1458,12 +1458,19 @@ export function TimeChart({
             if (chip) showChip(u)
           },
         ],
-        ...(cursorBand
-          ? {
-              setScale: [(u: uPlot) => slotWidth(u)],
-              setSize: [(u: uPlot) => slotWidth(u)],
+        setScale: [
+          (u: uPlot, key: string) => {
+            if (cursorBand) slotWidth(u)
+            // uPlot sets a new window a moment later than asked, each synced chart on its own: the keyboard's cursor
+            // follows once they all have it, or they would read it on their old windows
+            if (key === 'x' && keyAt.current !== null) {
+              window.setTimeout(() => {
+                if (keyAt.current !== null) placeCursor(u, keyAt.current)
+              }, 0)
             }
-          : {}),
+          },
+        ],
+        ...(cursorBand ? { setSize: [(u: uPlot) => slotWidth(u)] } : {}),
         setSelect: [
           (u) => {
             const { left, width } = u.select
