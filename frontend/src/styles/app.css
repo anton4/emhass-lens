@@ -1939,6 +1939,13 @@ button.diff-locate {
   stroke-width: 1px;
 }
 
+/* the plan right of now: dashed and lighter */
+.overview-line[data-plan] {
+  stroke: var(--ink-decor);
+  stroke-width: 1.25px;
+  stroke-dasharray: 2 2;
+}
+
 .overview-day {
   position: absolute;
   top: 0;
@@ -1958,6 +1965,7 @@ button.diff-locate {
 .overview-session {
   position: absolute;
   top: 0;
+  width: 3px;
   height: 36px;
   opacity: 0.85;
 }
@@ -1985,8 +1993,41 @@ button.diff-locate {
   box-sizing: border-box;
   border: 1.5px solid var(--accent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: transparent;
   cursor: grab;
+}
+
+/* pointed at: filled, the edge's handle grows; dragged: a firmer edge and a glow */
+.overview-track[data-state='handle'] .overview-brush {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.overview-track[data-state='drag'] .overview-brush {
+  border-width: 2px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+  cursor: grabbing;
+}
+
+.overview-grip[data-pointed] {
+  transform: scale(1.25);
+}
+
+/* the window while the brush is dragged, over its right edge */
+.overview-chip {
+  position: absolute;
+  top: -26px;
+  z-index: 2;
+  transform: translateX(-100%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .overview-grip {

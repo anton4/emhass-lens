@@ -57,6 +57,17 @@ export function rangeLabel(a: number, b: number, timeZone: string): string {
   return `${fmt.day.format(da)} → ${fmt.day.format(db)}`
 }
 
+const dateFormats = new Map<string, Intl.DateTimeFormat>()
+/** A day as "Fri 16 Oct". */
+export function dayDateLabel(t: number, timeZone: string): string {
+  let fmt = dateFormats.get(timeZone)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', day: 'numeric', month: 'short' })
+    dateFormats.set(timeZone, fmt)
+  }
+  return fmt.format(new Date(t * 1000)).replace(',', '')
+}
+
 /** A slot's start with its weekday: "Sat 03:00". */
 export function dayTimeLabel(t: number, timeZone: string): string {
   return formats(timeZone).day.format(new Date(t * 1000))

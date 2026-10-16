@@ -1,12 +1,14 @@
-// The overview under the Plan page's charts: the whole loaded range (grid power per quarter-hour, the market sessions,
-// the days, now) with a brush over the window the charts show. Drag the brush to move the window, its edges to widen
-// or narrow it, or press beside it to centre the window there; the arrow keys move it by half its width.
+// The overview under the Plan page's charts: the whole loaded range (grid power per quarter-hour, solid where it was
+// measured and dashed where it is the plan, a tick at each market session, the days, now) with a brush over the
+// window the charts show. Drag the brush to move the window, its edges to widen or narrow it, or press beside it to
+// centre the window there; the arrow keys move it by half its width. While dragged, a chip names the window.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { brushGrab, brushWindow, clampWindow } from '../../lib/chartRange'
-import { localMidnights } from '../../lib/chartTime'
+import { localMidnights, rangeLabel, spanLabel } from '../../lib/chartTime'
+import { brushState, dayLabelEvery, overviewPaths } from '../../lib/overview'
 
-// in line with the charts' plot: uPlot's y-axis takes the first 64 px
+// in line with the charts' plot: uPlot's y-axis takes the first 64 px (by default)
 const LEFT = 64
 const RIGHT = 8
 const LINE_H = 34
@@ -29,6 +31,7 @@ export function Overview({
   sessions,
   nowS,
   timeZone,
+  left = LEFT,
 }: {
   bounds: [number, number]
   window: [number, number]
@@ -38,10 +41,14 @@ export function Overview({
   sessions: { from: number; to: number; color: string }[]
   nowS: number
   timeZone: string
+  /** Where the plot starts, in line with the charts' y-axis (px). */
+  left?: number
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const drag = useRef<{ grabbed: 'start' | 'end' | 'move'; from: [number, number]; grabT: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [pointed, setPointed] = useState<'start' | 'end' | 'move' | null>(null)
   useEffect(() => {
     const el = wrap.current
     if (!el) return
@@ -51,7 +58,7 @@ export function Overview({
     return () => observer.disconnect()
   }, [])
 
-  const plotW = Math.max(1, width - LEFT - RIGHT)
+  const plotW = Math.max(1, width - left - RIGHT)
   const [t0, t1] = bounds
   const toX = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * plotW
   const toT = (px: number) => t0 + (Math.min(Math.max(px, 0), plotW) / plotW) * (t1 - t0)
@@ -59,23 +66,17 @@ export function Overview({
   const lo = Math.min(0, ...known)
   const hi = Math.max(0, ...known)
   const toY = (v: number) => 2 + (1 - (v - lo) / Math.max(1, hi - lo)) * (LINE_H - 4)
-  let d = ''
-  line.x.forEach((t, i) => {
-    const v = line.values[i]
-    if (v === null || v === undefined || !Number.isFinite(v)) return
-    const prev = line.values[i - 1]
-    const a = toX(t).toFixed(1)
-    const b = toX(line.x[i + 1] ?? t + 900).toFixed(1)
-    const y = toY(v).toFixed(1)
-    d += prev === null || prev === undefined || i === 0 ? `M${a} ${y}H${b}` : `V${y}H${b}`
-  })
+  const paths = overviewPaths(line.x, line.values, nowS, toX, toY)
   const x0 = toX(window[0])
   const x1 = toX(window[1])
+  const days = localMidnights(t0, t1, timeZone)
+  const every = dayLabelEvery((plotW * 86400) / Math.max(1, t1 - t0))
+  const range = `${rangeLabel(window[0], window[1], timeZone)} · ${spanLabel(window[1] - window[0])}`
 
   const local = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
     const scale = box.width / (event.currentTarget.offsetWidth || box.width || 1) || 1
-    return (event.clientX - box.left) / scale - LEFT
+    return (event.clientX - box.left) / scale - left
   }
   const onDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -91,6 +92,7 @@ export function Overview({
       grabbed = 'move'
     }
     drag.current = { grabbed, from, grabT: t }
+    setDragging(true)
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
     } catch {
@@ -99,11 +101,15 @@ export function Overview({
   }
   const onMove = (event: PointerEvent<HTMLDivElement>) => {
     const d = drag.current
-    if (!d) return
+    if (!d) {
+      setPointed(brushGrab(local(event), x0, x1))
+      return
+    }
     onWindow(brushWindow(d.grabbed, d.from, d.grabT, toT(local(event)), bounds))
   }
   const onUp = (event: PointerEvent<HTMLDivElement>) => {
     drag.current = null
+    setDragging(false)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -120,44 +126,53 @@ export function Overview({
     <div className="overview" ref={wrap}>
       <div
         className="overview-track"
-        style={{ left: LEFT, right: RIGHT }}
+        style={{ left, right: RIGHT }}
         role="slider"
         tabIndex={0}
         aria-label="The window the charts show, within everything loaded. Arrow keys move it by half its width."
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round((x0 / plotW) * 100)}
+        aria-valuetext={range}
+        data-state={brushState(pointed, dragging)}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        onPointerLeave={() => setPointed(null)}
         onKeyDown={onKey}
       >
         {width > 0 && (
           <>
-            {localMidnights(t0, t1, timeZone).map((t) => (
+            {days.map((t, i) => (
               <span key={t} className="overview-day" style={{ left: toX(t) }}>
-                <span>{dayLabel(t, timeZone)}</span>
+                {i % every === 0 && <span>{dayLabel(t, timeZone)}</span>}
               </span>
             ))}
             <svg width={plotW} height={LINE_H} aria-hidden="true">
               <path d={`M0 ${toY(0).toFixed(1)}H${plotW}`} className="overview-zero" />
-              <path d={d || 'M0 0'} className="overview-line" />
+              <path d={paths.past || 'M0 0'} className="overview-line" />
+              <path d={paths.future || 'M0 0'} className="overview-line" data-plan />
             </svg>
             {sessions.map((s) => (
               <span
                 key={`${s.from}-${s.color}`}
                 className="overview-session"
-                style={{ left: toX(s.from), width: Math.max(2, toX(s.to) - toX(s.from)), background: `var(${s.color})` }}
+                style={{ left: toX(s.from) - 1, background: `var(${s.color})` }}
               />
             ))}
             {nowS > t0 && nowS < t1 && <span className="overview-now" style={{ left: toX(nowS) }} />}
             <span className="overview-shade" style={{ left: 0, width: Math.max(0, x0) }} />
             <span className="overview-shade" style={{ left: x1, right: 0 }} />
             <span className="overview-brush" style={{ left: x0, width: Math.max(6, x1 - x0) }}>
-              <span className="overview-grip" data-edge="start" />
-              <span className="overview-grip" data-edge="end" />
+              <span className="overview-grip" data-edge="start" data-pointed={pointed === 'start' || undefined} />
+              <span className="overview-grip" data-edge="end" data-pointed={pointed === 'end' || undefined} />
             </span>
+            {dragging && (
+              <span className="overview-chip" style={{ left: x1 }} aria-hidden="true">
+                {range}
+              </span>
+            )}
           </>
         )}
       </div>

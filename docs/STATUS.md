@@ -144,6 +144,17 @@ These come from docs/PLAN.md §10:
   in its outcome's colour, and the next scheduled run is an outlined box (`lib/runBlocks.ts`; `ChartTick.until` and
   `outline`). A chip at the cursor names the run ("run #4522 · OK", `popup.style: 'chip'`) instead of the browser's
   tooltip, and a click anywhere in a block opens it. The counts and "Next MPC" moved into the strip's head.
+- **P6, the overview:**
+  - The grid's line is solid where it was measured and dashed where it is the plan (`lib/overview.ts`
+    `overviewPaths`).
+  - Sessions are 3 px ticks at their start.
+  - A day gets its name every second day when a day has under 70 px (`dayLabelEvery`).
+  - The brush has three looks (`data-state` idle, handle, drag; `brushState`): empty, filled when pointed at with that
+    edge's handle grown, and a firmer edge with a glow while dragged, with a chip naming the window ("Fri 14:45 → Sat
+    20:17 · 8.2 days").
+  - `aria-valuetext` carries the same text.
+  - The heading reads "Overview · grid power and market sessions, Fri 9 Oct to Sat 17 Oct … showing … (8.2 days)".
+  - Overview takes `left` (the charts' y-axis width) for the phone.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

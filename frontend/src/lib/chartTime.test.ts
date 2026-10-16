@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearOf, cursorTimeLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from './chartTime'
+import { clearOf, cursorTimeLabel, dayDateLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from './chartTime'
 
 const TZ = 'Europe/Tallinn'
 const at = (iso: string) => Date.parse(iso) / 1000
@@ -64,5 +64,11 @@ describe('clearOf', () => {
 describe('dayTimeLabel', () => {
   it('gives the weekday and the time', () => {
     expect(dayTimeLabel(Date.parse('2026-10-17T00:00:00Z') / 1000, TZ)).toBe('Sat 03:00')
+  })
+})
+
+describe('dayDateLabel', () => {
+  it('gives the weekday, the day and the month', () => {
+    expect(dayDateLabel(Date.parse('2026-10-16T09:00:00Z') / 1000, TZ)).toBe('Fri 16 Oct')
   })
 })

@@ -19,7 +19,7 @@ import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
-import { cursorTimeLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from '../../lib/chartTime'
+import { cursorTimeLabel, dayDateLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
@@ -56,23 +56,6 @@ const SYNC = 'plan'
 const POWER_FIT = { minSpan: 500 }
 const SOC_FIT = { minSpan: 5, clamp: [0, 100] as [number, number] }
 const PRICE_FIT = { minSpan: 0.01 } // €/kWh
-
-const windowFormats = new Map<string, Intl.DateTimeFormat>()
-function windowLabel([a, b]: [number, number], timeZone?: string): string {
-  const key = timeZone ?? ''
-  let fmt = windowFormats.get(key)
-  if (!fmt) {
-    fmt = new Intl.DateTimeFormat(undefined, {
-      timeZone,
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-    windowFormats.set(key, fmt)
-  }
-  return `${fmt.format(new Date(a * 1000))} – ${fmt.format(new Date(b * 1000))}`
-}
 
 function kwTick(v: number): string {
   return `${(v / 1000).toFixed(Math.abs(v) < 10_000 ? 1 : 0)} kW`
@@ -374,12 +357,15 @@ export function PlanCharts({
       />
       {bounds && shown && (
         <section className="chart-block">
-          <h3>
-            Overview{' '}
-            <span className="chart-unit">
-              everything loaded · showing <b>{windowLabel(shown, data.timezone)}</b>
-            </span>
-          </h3>
+          <ChartHead
+            title="Overview"
+            unit={`grid power and market sessions, ${dayDateLabel(bounds[0], tz)} to ${dayDateLabel(bounds[1] - 1, tz)}`}
+            summary={
+              <>
+                showing <b>{rangeLabel(shown[0], shown[1], tz)}</b> ({spanLabel(shown[1] - shown[0])})
+              </>
+            }
+          />
           <Overview
             bounds={bounds}
             window={shown}
