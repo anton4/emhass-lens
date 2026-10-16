@@ -2852,7 +2852,8 @@ button.diff-locate {
   margin-top: 8px;
 }
 
-.sent-keys code {
+.sent-keys code,
+.chart-params code {
   padding: 0 6px;
   border: 1px solid var(--frame);
   border-radius: 5px;
@@ -2862,6 +2863,22 @@ button.diff-locate {
   font-size: 11px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+/* the payload keys a chart comes from, at the right of its head */
+.chart-params {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* a tile's quantity colour before its name */
+.card-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
 }
 
 .sent-toolbar {

@@ -240,6 +240,15 @@ These come from docs/PLAN.md §10:
   the fees, the network rates it resolves to through `network_rates`, the night window, VAT, the export fees) as
   `PricesResponse.tariff` (`PriceTariff`). Tests: `test_the_tariff_summary_names_the_fees_and_the_rates_the_package_resolves_to`
   and `/api/prices` carries VAT 24 % and 22:00–07:00.
+- **I3, tiles and chart heads on What EMHASS gets:**
+  - The tiles are `pages/inputs/Tile.tsx`, with the quantity's colour before the name; `Breakable` moved there too.
+  - Each chart has a `ChartHead`: title, unit ("€/kWh, fees and VAT included", "kW · Solcast, 7 day sensors", "kW ·
+    EMHASS's own ML forecast, not sent", or "House load sent" when it was), a key, and the payload keys at the right.
+    This comes from `lib/sent.ts` `sentHeads`, tested.
+  - uPlot's legends are off.
+  - A footnote under the charts carries the export cap (moved out of Details).
+  - The mock API got a generated `/api/inputs/sent` (24 h measured, about 30 h sent, an EV window starting at slot
+    8, two days after the horizon); `/api/prices` comes from the local backend's real Nord Pool fetch.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

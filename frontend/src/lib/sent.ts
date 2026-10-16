@@ -299,3 +299,76 @@ function hours(h: number): string {
 function num(value: number | null | undefined): number | null {
   return isNumber(value) ? value : null
 }
+
+/** A chart's head on What EMHASS gets: its title, unit text, the payload keys it shows, and its key. */
+export interface SentHead {
+  title: string
+  unit: string
+  params: string[]
+  keys: { label: string; color: string; look: 'line' | 'faded' | 'dash' | 'area' | 'hatch' }[]
+}
+
+/** The four charts' heads: what each draws and which of the payload's keys it comes from. */
+export function sentHeads(
+  data: Pick<SentInputs, 'load_source' | 'pv_sensors' | 'measured' | 'deferrables' | 'slots' | 'model'> &
+    Partial<Pick<SentInputs, 'soc_min' | 'soc_max' | 'beyond'>>,
+  o: { cents: boolean; hoursBack: number },
+): { prices: SentHead; pv: SentHead; load: SentHead; soc: SentHead } {
+  const measured = o.hoursBack > 0 && data.measured.length > 0
+  const past = (color: string) => (measured ? [{ label: 'measured', color, look: 'faded' as const }] : [])
+  const forecast = data.slots.some((s) => isForecast(s.origin)) || (data.beyond ?? []).length > 0
+  const exportCap = data.slots.some((s) => isNumber(s.export_max_w))
+  const windows = data.deferrables.filter((d) => d.on)
+  const starts = data.deferrables.some((d) => d.start_source)
+  const sent = data.load_source === 'sent'
+  return {
+    prices: {
+      title: 'Prices sent',
+      unit: `${o.cents ? 'c/kWh' : '€/kWh'}, fees and VAT included`,
+      params: ['load_cost_forecast', 'prod_price_forecast', ...(exportCap ? ['maximum_power_to_grid'] : [])],
+      keys: [
+        { label: 'import', color: '--q-import', look: 'line' },
+        { label: 'export', color: '--q-export', look: 'line' },
+        ...(forecast ? [{ label: 'forecast', color: '--chart-hatch', look: 'hatch' as const }] : []),
+      ],
+    },
+    pv: {
+      title: 'PV forecast sent',
+      unit: `kW · Solcast, ${data.pv_sensors} day sensor${data.pv_sensors === 1 ? '' : 's'}`,
+      params: ['pv_power_forecast'],
+      keys: [{ label: 'forecast sent', color: '--q-pv', look: 'area' }, ...past('--q-pv')],
+    },
+    load: {
+      title: sent ? 'House load sent' : 'House load',
+      unit: sent ? 'kW · from the extra runtime parameters' : "kW · EMHASS's own ML forecast, not sent",
+      params: [
+        sent ? 'load_power_forecast' : (data.model?.var_model ? 'var_model' : 'load_forecast_method'),
+        ...(windows.length > 0 ? ['end_timesteps_of_each_deferrable_load'] : []),
+        ...(starts ? ['start_timesteps_of_each_deferrable_load'] : []),
+      ],
+      keys: [
+        { label: sent ? 'sent' : 'forecast', color: '--q-load', look: 'area' },
+        ...past('--q-load'),
+        ...windows.map((d) => ({ label: `${d.name} window`, color: '--q-ev', look: 'hatch' as const })),
+      ],
+    },
+    soc: {
+      title: 'Battery',
+      unit: '% · from the measured state of charge to the target at the end of the horizon',
+      params: ['soc_init', 'soc_final'],
+      keys: [
+        ...past('--q-soc'),
+        { label: 'soc_init → soc_final', color: '--ink-faint', look: 'dash' },
+        ...(isNumber(data.soc_min) || isNumber(data.soc_max)
+          ? [
+              {
+                label: `limits ${isNumber(data.soc_min) ? Math.round(data.soc_min * 100) : 0}–${isNumber(data.soc_max) ? Math.round(data.soc_max * 100) : 100} %`,
+                color: '--chart-axis',
+                look: 'dash' as const,
+              },
+            ]
+          : []),
+      ],
+    },
+  }
+}

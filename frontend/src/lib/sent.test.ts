@@ -14,6 +14,7 @@ import {
   pvDays,
   pvNotes,
   sentAxis,
+  sentHeads,
   tariffLane,
 } from './sent'
 
@@ -238,5 +239,53 @@ describe('after the horizon', () => {
       ['none', 'some'],
     ])
     expect(pvNotes(days).map((n) => n.sub)).toEqual([undefined, 'partly sent'])
+  })
+})
+
+describe('sentHeads', () => {
+  const base = {
+    load_source: 'plan',
+    pv_sensors: 7,
+    measured: [{ start: '2026-10-16T10:00:00Z', load: 1000, pv: 0, soc: 0.5 }],
+    deferrables: [
+      {
+        name: 'EV',
+        on: true,
+        nominal_power_w: 11000,
+        operating_hours: 2.5,
+        end_timesteps: 34,
+        single_constant: true,
+        start_timesteps: 8,
+        start_source: 'payload',
+      },
+    ],
+    slots: [{ i: 0, start: '2026-10-16T12:00:00Z', origin: 'forecast:ee_eupowerprices', period: 'day', spot: 0.05, load_cost: 0.12, prod_price: 0.04, pv_w: 0, export_max_w: 0 }],
+    model: { var_model: 'sensor.house_power' },
+    soc_min: 0.1,
+    soc_max: 1,
+  } as unknown as Parameters<typeof sentHeads>[0]
+
+  it('names each chart, its unit and the payload keys behind it', () => {
+    const heads = sentHeads(base, { cents: false, hoursBack: 24 })
+    expect(heads.prices.unit).toBe('€/kWh, fees and VAT included')
+    expect(heads.prices.params).toEqual(['load_cost_forecast', 'prod_price_forecast', 'maximum_power_to_grid'])
+    expect(heads.prices.keys.map((k) => k.label)).toEqual(['import', 'export', 'forecast'])
+    expect(heads.pv.unit).toBe('kW · Solcast, 7 day sensors')
+    expect(heads.load).toMatchObject({ title: 'House load', unit: "kW · EMHASS's own ML forecast, not sent" })
+    expect(heads.load.params).toEqual([
+      'var_model',
+      'end_timesteps_of_each_deferrable_load',
+      'start_timesteps_of_each_deferrable_load',
+    ])
+    expect(heads.load.keys.map((k) => k.label)).toEqual(['forecast', 'measured', 'EV window'])
+    expect(heads.soc.keys.map((k) => k.label)).toEqual(['measured', 'soc_init → soc_final', 'limits 10–100 %'])
+  })
+
+  it('says a sent load is sent, and leaves out the measured key without the 24 h before the anchor', () => {
+    const heads = sentHeads({ ...base, load_source: 'sent' }, { cents: true, hoursBack: 0 })
+    expect(heads.load.title).toBe('House load sent')
+    expect(heads.load.params[0]).toBe('load_power_forecast')
+    expect(heads.prices.unit).toBe('c/kWh, fees and VAT included')
+    expect(heads.pv.keys.map((k) => k.label)).toEqual(['forecast sent'])
   })
 })

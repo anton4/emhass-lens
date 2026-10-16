@@ -1,10 +1,11 @@
 import { useMutation } from '@tanstack/react-query'
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useSetExtendDays } from '../../api/actions'
 import { api, query } from '../../api/client'
 import { useSentInputs, useSettings, useStatus } from '../../api/queries'
 import type { HorizonOption, SentInputs } from '../../api/types'
+import { ChartHead } from '../../components/charts/ChartHead'
 import { TimeChart, type ChartNote, type ChartSeries } from '../../components/charts/TimeChart'
 import type { PopupTag } from '../../components/charts/cursorStore'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -27,11 +28,14 @@ import {
   pvDays,
   pvNotes,
   sentAxis,
+  sentHeads,
+  type SentHead,
   SLOT_S,
   slotAt,
   tariffLane,
 } from '../../lib/sent'
 import { eurTick, formatAge, formatPower, isNumber, priceFactor, type PriceUnit } from '../../lib/units'
+import { Breakable, Tile } from './Tile'
 
 const SYNC = 'sent'
 const HOURS_BACK_KEY = 'emhass-lens.inputs.hours-back'
@@ -56,21 +60,6 @@ function dayTime(t: number, timeZone: string): string {
     dayTimes.set(timeZone, f)
   }
   return f.format(new Date(t * 1000))
-}
-
-/** An entity id or payload key that may wrap after its dots and underscores. */
-function Breakable({ text }: { text: string }) {
-  const parts = text.split(/(?<=[._])/)
-  return (
-    <>
-      {parts.map((part, i) => (
-        <Fragment key={i}>
-          {part}
-          {i < parts.length - 1 && <wbr />}
-        </Fragment>
-      ))}
-    </>
-  )
 }
 
 const percent = (v: number | null | undefined) => (isNumber(v) ? `${Math.round(v * 100)} %` : '—')
@@ -202,6 +191,7 @@ function SentView({
     snapToSlot: true,
   }
   const measuredBy = (q: string) => data.measured_entities[q]
+  const heads = useMemo(() => sentHeads(data, { cents: unit === 'cents', hoursBack }), [data, unit, hoursBack])
 
   return (
     <>
@@ -258,7 +248,7 @@ function SentView({
 
       <div className="chart-stack">
         <section className="chart-block">
-          <h3>Prices sent</h3>
+          <SentChartHead head={heads.prices} />
           <TimeChart
             {...common}
             series={charts.prices}
@@ -269,6 +259,7 @@ function SentView({
             height={230}
             lanes={priceLanes}
             popup={charts.pricePopup}
+            legend={false}
           />
           <details className="chart-note more">
             <summary>Details</summary>
@@ -277,15 +268,13 @@ function SentView({
             {charts.hasPastPrices &&
               hoursBack > 0 &&
               ' Before the anchor: the Nord Pool prices that applied, with today’s tariff (nothing is sent for past slots).'}
-            {isNumber(data.no_export_at_or_below) &&
-              ` Export is capped at 0 W where the export price is at or below ${data.no_export_at_or_below} €/kWh (maximum_power_to_grid).`}
             {axis.axisEndS > axis.endS &&
               ' After the horizon (washed, hatched in the Horizon lane): the forecast as it is now, not sent. Plan length picks how many days of it the plan takes after the Nord Pool prices (Settings → Price forecast → Extend by).'}
           </details>
         </section>
 
         <section className="chart-block">
-          <h3>PV forecast sent</h3>
+          <SentChartHead head={heads.pv} />
           <TimeChart
             {...common}
             series={charts.pv}
@@ -295,6 +284,7 @@ function SentView({
             height={210}
             notes={charts.pvNotes}
             popup={charts.sentPopup}
+            legend={false}
           />
           {data.pv_slots_missing > 0 && (
             <p className="chart-note">{data.pv_slots_missing} slots had no Solcast value and were sent as 0 W.</p>
@@ -309,7 +299,7 @@ function SentView({
         </section>
 
         <section className="chart-block">
-          <h3>House load</h3>
+          <SentChartHead head={heads.load} />
           <TimeChart
             {...common}
             series={charts.load}
@@ -319,6 +309,7 @@ function SentView({
             height={200}
             lanes={charts.loadLanes}
             popup={charts.loadPopup}
+            legend={false}
           />
           {data.deferrables.some((d) => !d.on) && (
             <p className="chart-note">
@@ -340,7 +331,7 @@ function SentView({
         </section>
 
         <section className="chart-block">
-          <h3>Battery</h3>
+          <SentChartHead head={heads.soc} />
           <TimeChart
             {...common}
             series={charts.soc}
@@ -350,6 +341,7 @@ function SentView({
             height={160}
             notes={charts.socNotes}
             popup={charts.socPopup}
+            legend={false}
           />
           <details className="chart-note more">
             <summary>Details</summary>
@@ -361,7 +353,38 @@ function SentView({
           </details>
         </section>
       </div>
+      <p className="chart-note">
+        Point at a chart to read its inputs at that quarter-hour; every chart shows the same slot. Prices include fees
+        and VAT.
+        {isNumber(data.no_export_at_or_below) && (
+          <>
+            {' '}
+            Export is capped at 0 W wherever the export price is at or below {data.no_export_at_or_below} €/kWh (
+            <code>maximum_power_to_grid</code>).
+          </>
+        )}
+      </p>
     </>
+  )
+}
+
+/** A chart's head: its title, unit and key, with the payload keys it comes from at the right. */
+function SentChartHead({ head }: { head: SentHead }) {
+  return (
+    <ChartHead
+      title={head.title}
+      unit={head.unit}
+      keys={head.keys}
+      summary={
+        <span className="chart-params">
+          {head.params.map((p) => (
+            <code key={p}>
+              <Breakable text={p} />
+            </code>
+          ))}
+        </span>
+      }
+    />
   )
 }
 
@@ -507,23 +530,6 @@ function LoadNote({ data }: { data: SentInputs }) {
   )
 }
 
-function Card({ title, value, sub, keys }: { title: string; value: string; sub: ReactNode; keys: string[] }) {
-  return (
-    <div className="card">
-      <div className="card-title muted">{title}</div>
-      <div className="card-value">{value}</div>
-      <div className="cell-sub">{sub}</div>
-      <div className="sent-keys">
-        {keys.map((k) => (
-          <code key={k}>
-            <Breakable text={k} />
-          </code>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function SentCards({ data }: { data: SentInputs }) {
   const tz = data.timezone
   const slots = data.slots
@@ -539,14 +545,16 @@ function SentCards({ data }: { data: SentInputs }) {
   const m = data.model
   return (
     <div className="cards sent-cards">
-      <Card
+      <Tile
         title="Horizon"
+        color="--ink-faint"
         value={`${slots.length} slots`}
         sub={`${(slots.length / 4).toFixed(slots.length % 4 ? 2 : 0)} h, ${dayTime(anchorS, tz)} → ${dayTime(endS, tz)}`}
         keys={['prediction_horizon']}
       />
-      <Card
+      <Tile
         title="Prices"
+        color="--q-import"
         value={forecastSlot ? `${actual} + ${slots.length - actual}` : `${actual}`}
         sub={
           forecastSlot && forecastFrom !== null
@@ -555,8 +563,9 @@ function SentCards({ data }: { data: SentInputs }) {
         }
         keys={['load_cost_forecast', 'prod_price_forecast']}
       />
-      <Card
+      <Tile
         title="PV forecast"
+        color="--q-pv"
         value={`${pvKwh.toFixed(1)} kWh`}
         sub={
           <>
@@ -566,17 +575,25 @@ function SentCards({ data }: { data: SentInputs }) {
         }
         keys={['pv_power_forecast']}
       />
-      <Card
+      <Tile
         title="Battery"
+        color="--q-soc"
         value={`${percent(data.soc_init)} → ${percent(data.soc_final)}`}
         sub="now → the target at the end of the horizon"
         keys={['soc_init', 'soc_final']}
       />
       {data.load_source === 'sent' ? (
-        <Card title="House load" value="Sent" sub="From the extra runtime parameters" keys={['load_power_forecast']} />
-      ) : (
-        <Card
+        <Tile
           title="House load"
+          color="--q-load"
+          value="Sent"
+          sub="From the extra runtime parameters"
+          keys={['load_power_forecast']}
+        />
+      ) : (
+        <Tile
+          title="House load"
+          color="--q-load"
           value={m?.historic_days ? `ML, ${m.historic_days} days` : 'ML'}
           sub={
             <>
@@ -593,8 +610,9 @@ function SentCards({ data }: { data: SentInputs }) {
           keys={['var_model', 'num_lags']}
         />
       )}
-      <Card
+      <Tile
         title="Deferrable loads"
+        color="--q-ev"
         value={loads.length === 0 ? 'None' : one ? `${one.name} ${one.on ? 'on' : 'off'}` : `${loads.filter((d) => d.on).length} of ${loads.length} on`}
         sub={
           loads.length === 0
