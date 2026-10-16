@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Plan on a phone: below 640 px the Timeline has its own charts: **Grid**, **Power balance** (the grid stacked as a layer, so both sides add up), **State of charge** and **Import price**, each with a narrow axis and its values in a chip at the cursor.
+- Plan on a phone: the windows are 4 h, 24 h and 2 days, as three buttons across the width; the head shows today's date and now.
+- Plan: the charts shrink with the screen instead of keeping the width they were drawn at.
+
 ## 0.5.0
 
 The Plan page's charts, redrawn after the "Flight deck" design.

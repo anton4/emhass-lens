@@ -226,6 +226,7 @@ These come from docs/PLAN.md §10:
   - Checked in Chrome in a 390 and a 360 px frame (no side scroll at either), hovering the Grid chart for the chips
     on all four.
   - **Not checked:** dark mode, a real phone through Ingress (touch, pinch).
+- **M2, release 0.5.1** (the phone layout): config.yaml, CHANGELOG.md, DOCS.md.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
