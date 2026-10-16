@@ -57,6 +57,11 @@ export function rangeLabel(a: number, b: number, timeZone: string): string {
   return `${fmt.day.format(da)} → ${fmt.day.format(db)}`
 }
 
+/** A slot's start with its weekday: "Sat 03:00". */
+export function dayTimeLabel(t: number, timeZone: string): string {
+  return formats(timeZone).day.format(new Date(t * 1000))
+}
+
 const secondFormats = new Map<string, Intl.DateTimeFormat>()
 /** The cursor's moment on the time axis: "13:25:20" with `seconds` (a 10-second reading), else "13:25". */
 export function cursorTimeLabel(t: number, timeZone: string, seconds: boolean): string {

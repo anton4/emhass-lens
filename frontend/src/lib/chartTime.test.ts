@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearOf, cursorTimeLabel, localMidnights, rangeLabel, spanLabel } from './chartTime'
+import { clearOf, cursorTimeLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from './chartTime'
 
 const TZ = 'Europe/Tallinn'
 const at = (iso: string) => Date.parse(iso) / 1000
@@ -58,5 +58,11 @@ describe('clearOf', () => {
   it('is false within the gap of any position, and ignores unknown ones', () => {
     expect(clearOf(100, [140, null], 52)).toBe(false)
     expect(clearOf(100, [160, undefined], 52)).toBe(true)
+  })
+})
+
+describe('dayTimeLabel', () => {
+  it('gives the weekday and the time', () => {
+    expect(dayTimeLabel(Date.parse('2026-10-17T00:00:00Z') / 1000, TZ)).toBe('Sat 03:00')
   })
 })

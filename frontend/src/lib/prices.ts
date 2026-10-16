@@ -128,13 +128,22 @@ export function midnights(slots: PriceSlot[], timeZone: string): number[] {
 export const HEAT_STEPS = 7
 
 /** A ribbon under the Plan's price chart: each quarter-hour coloured by its import price, in seven steps of one violet
- *  from the cheapest to the dearest in `prices` (slot starts in unix s; a slot without a price is left out). Neighbours
- *  in the same step are one span. */
-export function priceHeatLane(starts: number[], prices: (number | null)[], slotS = 900): ChartLane {
-  const known = prices.filter((p): p is number => p !== null && Number.isFinite(p))
-  const lo = Math.min(...known)
-  const hi = Math.max(...known)
-  const step = (p: number) => (hi > lo ? Math.min(HEAT_STEPS - 1, Math.floor(((p - lo) / (hi - lo)) * HEAT_STEPS)) : 0)
+ *  from the cheapest to the dearest (slot starts in unix s; a slot without a price is left out). With `window` the
+ *  steps run from the cheapest to the dearest in it, and the slots outside take the nearest step. Neighbours in the
+ *  same step are one span. */
+export function priceHeatLane(
+  starts: number[],
+  prices: (number | null)[],
+  slotS = 900,
+  window?: [number, number],
+): ChartLane {
+  const inWindow = (t: number) => !window || (t + slotS > window[0] && t < window[1])
+  const known = prices.filter((p, i): p is number => p !== null && Number.isFinite(p) && inWindow(starts[i] ?? 0))
+  const all = known.length > 0 ? known : prices.filter((p): p is number => p !== null && Number.isFinite(p))
+  const lo = Math.min(...all)
+  const hi = Math.max(...all)
+  const step = (p: number) =>
+    hi > lo ? Math.min(HEAT_STEPS - 1, Math.max(0, Math.floor(((p - lo) / (hi - lo)) * HEAT_STEPS))) : 0
   const spans: ChartLane['spans'] = []
   starts.forEach((t, i) => {
     const p = prices[i]
@@ -145,6 +154,22 @@ export function priceHeatLane(starts: number[], prices: (number | null)[], slotS
     else spans.push({ from: t, to: t + slotS, color })
   })
   return { label: 'Import', spans }
+}
+
+/** The cheapest and dearest quarter-hour that overlaps `window` (the first of equals), or null when none does. */
+export function windowExtremes(
+  prices: { t: number; value: number }[],
+  window: [number, number],
+  slotS = 900,
+): { cheapest: { t: number; value: number }; dearest: { t: number; value: number } } | null {
+  let cheapest: { t: number; value: number } | null = null
+  let dearest: { t: number; value: number } | null = null
+  for (const p of prices) {
+    if (p.t + slotS <= window[0] || p.t >= window[1]) continue
+    if (!cheapest || p.value < cheapest.value) cheapest = p
+    if (!dearest || p.value > dearest.value) dearest = p
+  }
+  return cheapest && dearest ? { cheapest, dearest } : null
 }
 
 /** Each local day's cheapest and dearest quarter-hour by import price (the first of equals), in `timeZone`. */

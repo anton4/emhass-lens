@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { GridDetail, PlanHistoryResponse, PlanResponse, PlanRow, RunSummary } from '../../api/types'
+import { ChartHead, type ChartKeyItem } from '../../components/charts/ChartHead'
 import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
@@ -18,7 +19,7 @@ import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
-import { cursorTimeLabel, localMidnights, spanLabel } from '../../lib/chartTime'
+import { cursorTimeLabel, dayTimeLabel, localMidnights, spanLabel } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
@@ -43,6 +44,8 @@ import {
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { pastEnd, thenLabel, timeGrid, viewRange, type HorizonSlots, type ViewHours } from '../../lib/planHistory'
 import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
+import { energyIn, formatKwh, socSummary } from '../../lib/planTotals'
+import { HEAT_STEPS, priceHeatLane, windowExtremes } from '../../lib/prices'
 import { eurTick } from '../../lib/units'
 import { ChartHints } from './ChartHints'
 
@@ -202,6 +205,45 @@ export function PlanCharts({
     tag: (t: number) =>
       t < pastEndS ? { text: 'measured', tone: 'neutral' as const } : { text: 'plan', tone: 'blue' as const },
   }
+  // what the heads add up for the window shown
+  const socNow = useMemo(() => socSummary(x, soc?.[0]?.values ?? [], nowS), [x, soc, nowS])
+  const thenName = thenLabel(horizon)
+  const socKeys: ChartKeyItem[] = [
+    { label: 'measured', color: '--q-soc', look: 'line' },
+    ...(soc?.some((s) => s.then) ? [{ label: thenName, color: '--chart-then', look: 'dash' as const }] : []),
+    { label: 'plan', color: '--q-soc', look: 'faded' },
+    ...(previous.length > 0 ? [{ label: 'previous plan', color: '--ink-faint', look: 'dash' as const }] : []),
+  ]
+  const extremes = useMemo(() => (prices && shown ? windowExtremes(prices.imports, shown) : null), [prices, shown])
+  const heat = useMemo(
+    () =>
+      prices && shown
+        ? [priceHeatLane(prices.imports.map((p) => p.t), prices.imports.map((p) => p.value), 900, shown)]
+        : [],
+    [prices, shown],
+  )
+  const priceKeys: ChartKeyItem[] = [
+    { label: 'import', color: '--q-import', look: 'line' },
+    { label: 'export', color: '--q-export', look: 'line' },
+    ...(extremes
+      ? [
+          {
+            label: `${extremes.cheapest.value.toFixed(2)}–${extremes.dearest.value.toFixed(2)}`,
+            color: '--heat-3',
+            look: 'gradient' as const,
+            gradient: Array.from({ length: HEAT_STEPS }, (_, i) => `--heat-${i}`),
+            title: 'The import price ribbon under the chart, from the cheapest to the dearest quarter-hour shown',
+          },
+        ]
+      : []),
+    ...(prices?.bands.length
+      ? [{ label: 'forecast, not yet from Nord Pool', color: '--chart-hatch', look: 'hatch' as const }]
+      : []),
+  ]
+  const forecastHatches = useMemo(
+    () => (prices?.bands ?? []).map(([from, to]) => ({ from, to, label: 'forecast' })),
+    [prices],
+  )
   const runId = data.current?.run_id
   const plannedAt = data.current?.generated_at
   return (
@@ -241,9 +283,28 @@ export function PlanCharts({
       />
       {soc && (
         <section className="chart-block">
-          <h3>
-            Battery state of charge <span className="chart-unit">%</span>
-          </h3>
+          <ChartHead
+            title="Battery state of charge"
+            unit="%"
+            keys={socKeys}
+            summary={
+              socNow.now !== null || socNow.end !== null ? (
+                <>
+                  {socNow.now !== null && (
+                    <>
+                      now <b>{Math.round(socNow.now)} %</b>
+                    </>
+                  )}
+                  {socNow.now !== null && socNow.end !== null && ' · '}
+                  {socNow.end !== null && (
+                    <>
+                      plan reaches <b>{Math.round(socNow.end)} %</b>
+                    </>
+                  )}
+                </>
+              ) : undefined
+            }
+          />
           <TimeChart
             x={x}
             series={soc}
@@ -260,14 +321,25 @@ export function PlanCharts({
             timeZone={data.timezone}
             height={150}
             popup={slotTag}
+            legend={false}
           />
         </section>
       )}
       {prices && (
         <section className="chart-block">
-          <h3>
-            Price <span className="chart-unit">€/kWh, fees and VAT included</span>
-          </h3>
+          <ChartHead
+            title="Price"
+            unit="€/kWh, fees and VAT included"
+            keys={priceKeys}
+            summary={
+              extremes ? (
+                <>
+                  cheapest <b>{extremes.cheapest.value.toFixed(3)}</b> at {dayTimeLabel(extremes.cheapest.t, tz)} ·
+                  dearest <b>{extremes.dearest.value.toFixed(3)}</b> at {dayTimeLabel(extremes.dearest.t, tz)}
+                </>
+              ) : undefined
+            }
+          />
           <TimeChart
             x={prices.x}
             series={prices.series}
@@ -277,18 +349,16 @@ export function PlanCharts({
             fit={PRICE_FIT}
             xRange={shown}
             onZoom={zoomTo}
-            bands={prices.bands}
+            hatches={forecastHatches}
             markers={midnights}
             timeAxis="ticks"
             now={nowS}
             timeZone={data.timezone}
             height={160}
             popup={{ tag: prices.tag }}
-            lanes={[prices.heat]}
+            lanes={heat}
+            legend={false}
           />
-          {prices.bands.length > 0 && (
-            <p className="chart-note">Shaded: forecast prices, not yet published by Nord Pool.</p>
-          )}
         </section>
       )}
       <MpcRunStrip
@@ -553,9 +623,24 @@ function PowerChart({
   )
   return (
     <section className="chart-block">
-      <h3>
-        Power <span className="chart-unit">kW · above zero: into the house · below: out of it · the grid line covers the rest</span>
-      </h3>
+      <ChartHead
+        title="Power"
+        unit="kW · above zero: into the house · below: out of it"
+        summary={
+          zoom && flows.grid ? (
+            <>
+              imported <b>{formatKwh(energyIn(x, flows.grid, zoom, 1))}</b> · exported{' '}
+              <b>{formatKwh(energyIn(x, flows.grid, zoom, -1))}</b>
+              {flows.pv && (
+                <>
+                  {' '}
+                  · PV <b>{formatKwh(energyIn(x, flows.pv, zoom, 0))}</b>
+                </>
+              )}
+            </>
+          ) : undefined
+        }
+      />
       <TimeChart
         x={x}
         series={series}
@@ -602,6 +687,24 @@ function PowerChart({
             <span className="legend-dash" aria-hidden="true" />
             grid, {thenName}
           </li>
+        )}
+        {flows.grid && (
+          <li className="legend-key" title="Right of the now line: the grid as the plan has it">
+            <span className="legend-line" data-faded aria-hidden="true" />
+            grid plan
+          </li>
+        )}
+        {showSessions && (
+          <>
+            <li className="legend-key">
+              <span className="legend-square" style={{ background: 'var(--q-sell)' }} aria-hidden="true" />
+              sell
+            </li>
+            <li className="legend-key">
+              <span className="legend-square" style={{ background: 'var(--q-buy)' }} aria-hidden="true" />
+              buy
+            </li>
+          </>
         )}
       </ul>
     </section>

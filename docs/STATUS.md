@@ -120,6 +120,15 @@ These come from docs/PLAN.md §10:
     session's colour (`sessionDelivery`: at the moment where there is a reading, else the command's mean), the
     shortfall row, and the session lines. "Commanded −10.00 kW, since 12:48:40" moved into the rows, after the
     grid's quarter-hour mean and before what was planned (`marketLead`, `popup.lead`).
+- **P3, chart heads:** `components/charts/ChartHead.tsx` (title, unit, a key of swatches drawn the way the chart draws
+  them, and a summary at the right) on Power, SOC and Price; the SOC and price charts lost uPlot's legend for it.
+  - Power: "imported … · exported … · PV … kWh" over the window shown (`lib/planTotals.ts` `energyIn`, slots the
+    window cuts counted in part); the chip row gains "grid plan", "sell" and "buy".
+  - SOC: measured, planned then, plan (faded), previous plan; "now 56 % · plan reaches 68 %" (`socSummary`).
+  - Price: import, export, the ribbon's gradient with its low–high, the forecast; "cheapest 0.048 at Fri 19:00 ·
+    dearest …" (`windowExtremes`, `dayTimeLabel`). The ribbon now spans the cheapest to the dearest quarter-hour in
+    the window shown (`priceHeatLane(…, window)`). The forecast is hatched with a "forecast" label, and the note
+    under the chart is gone.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

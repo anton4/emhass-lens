@@ -11,6 +11,7 @@ import {
   originLabel,
   periodLabel,
   stackLayers,
+  windowExtremes,
   type PricePart,
 } from './prices'
 import { batteryDirection, formatAge, formatPower, formatPrice, gridDirection } from './units'
@@ -130,5 +131,22 @@ describe('the cheapest and dearest quarter-hours', () => {
       { cheapest: { t: Date.parse('2026-10-08T21:45:00Z') / 1000, value: 0.1 }, dearest: { t: Date.parse('2026-10-08T21:30:00Z') / 1000, value: 0.2 } },
       { cheapest: { t: Date.parse('2026-10-09T21:00:00Z') / 1000, value: 0.3 }, dearest: { t: Date.parse('2026-10-09T21:00:00Z') / 1000, value: 0.3 } },
     ])
+  })
+})
+
+describe('the price ribbon and the extremes in a window', () => {
+  const starts = [0, 900, 1800, 2700]
+  const prices = [0.1, 0.2, 0.3, 0.4]
+
+  it('spreads the ribbon over the window shown, slots outside it on the nearest step', () => {
+    const lane = priceHeatLane(starts, prices, 900, [900, 2700])
+    expect(lane.spans.map((s) => s.color)).toEqual(['--heat-0', '--heat-6'])
+    expect(lane.spans[0]).toMatchObject({ from: 0, to: 1800 })
+  })
+
+  it('finds the cheapest and dearest quarter-hour in the window', () => {
+    const pts = starts.map((t, i) => ({ t, value: prices[i]! }))
+    expect(windowExtremes(pts, [900, 2700])).toEqual({ cheapest: { t: 900, value: 0.2 }, dearest: { t: 1800, value: 0.3 } })
+    expect(windowExtremes(pts, [9000, 9900])).toBeNull()
   })
 })
