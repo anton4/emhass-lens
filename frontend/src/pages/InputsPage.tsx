@@ -122,6 +122,7 @@ export function InputsPage() {
                 <h3>What the import price is made of</h3>
                 <PriceStack
                   slots={data.slots}
+                  tariff={data.tariff}
                   unit={unit}
                   timeZone={tz}
                   nowS={nowS}

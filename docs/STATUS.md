@@ -278,6 +278,13 @@ These come from docs/PLAN.md §10:
   - **Fix (TimeChart):** uPlot commits a new window in a microtask per chart, so after Home from a zoomed window
     the cursor landed elsewhere and the synced charts read the slot before. The `setScale` hook now places it
     again once every chart has the window (seen on Inputs; the Plan page's Home had the same bug).
+- **I8, the price breakdown's tiles, title and footnote** (new `lib/priceBreakdown.ts`):
+  - **Tiles** over the slots in view (`slotsIn`, `priceSummary`): the average import price, the spot's share with
+    its VAT (the tariff's `vat_pct`, else each slot's VAT in proportion), and the cheapest and dearest quarter-hour.
+  - **The chart's head** names the window (`windowTitle`): "Fri 16 Oct · today", "Fri 16 Oct · 12:45–16:30",
+    "Thu 15 Oct – Sat 17 Oct" or "Thu 01:00 → Sun 01:00", with the unit; the parts' toggles sit beside it.
+  - **Footnote** from I2's `PricesResponse.tariff` (`tariffNote`): the fees, the network rates with the night
+    window, and the VAT, in the unit chosen.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

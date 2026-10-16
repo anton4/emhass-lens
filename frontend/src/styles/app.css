@@ -2838,6 +2838,16 @@ button.diff-locate {
   font-weight: 400;
 }
 
+/* the price breakdown's tiles over the slots in view */
+.cards.price-cards {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: 16px;
+}
+
+.price-cards .card-title {
+  font-weight: 400;
+}
+
 /* entity ids and payload keys wrap after their dots and underscores (<wbr>), not mid-word */
 .cards.sent-cards code {
   word-break: normal;
@@ -5115,6 +5125,11 @@ button.icon-button {
 /* Price breakdown: the parts as pills that switch on and off */
 .price-stack .legend {
   gap: 6px;
+}
+
+/* in the chart's head, beside its title */
+.price-stack .chart-head .legend {
+  margin: 0;
 }
 
 .price-stack .legend-toggle {

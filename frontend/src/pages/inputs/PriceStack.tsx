@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PriceSlot } from '../../api/types'
+import type { PriceSlot, PricesResponse } from '../../api/types'
+import { ChartHead } from '../../components/charts/ChartHead'
 import { TimeChart, type ChartNote, type ChartSeries } from '../../components/charts/TimeChart'
+import { cursorTimeLabel, dayTimeLabel } from '../../lib/chartTime'
+import { priceSummary, slotsIn, tariffNote, windowTitle } from '../../lib/priceBreakdown'
 import {
   forecastRanges,
   importComponents,
@@ -12,6 +15,7 @@ import {
   type PricePart,
 } from '../../lib/prices'
 import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
+import { Tile } from './Tile'
 
 // Bottom to top in four hues whose neighbours pass the colour-vision check in both themes (tokens.css --stack-*).
 const PARTS: readonly { key: PricePart; label: string; color: string; title?: string }[] = [
@@ -49,11 +53,13 @@ function closed(values: number[], factor: number): (number | null)[] {
   return out
 }
 
-/** What each quarter-hour's import price is made of: a column per slot of spot, network, fees and VAT stacked, on the
- *  price chart's time axis, with the import price as a cap and each day's cheapest and dearest quarter-hour named; the
- *  cursor, the zoom and the popup go along with the price chart. */
+/** What each quarter-hour's import price is made of: tiles over the slots in view (the average, how much of it is
+ *  spot, the cheapest and the dearest), then a column per slot of spot, network, fees and VAT stacked, on the price
+ *  chart's time axis, with the import price as a cap and each day's cheapest and dearest quarter-hour named, and the
+ *  tariff's parts under it; the cursor, the zoom and the popup go along with the price chart. */
 export function PriceStack({
   slots,
+  tariff,
   unit,
   timeZone,
   nowS,
@@ -62,6 +68,7 @@ export function PriceStack({
   onZoom,
 }: {
   slots: PriceSlot[]
+  tariff?: PricesResponse['tariff']
   unit: PriceUnit
   timeZone: string
   nowS: number
@@ -135,8 +142,57 @@ export function PriceStack({
     return { x, series, tag, notes, bands: forecastRanges(slots), markers: midnights(slots, timeZone), minSpan: 0.01 * f }
   }, [slots, unit, shown, timeZone])
 
+  const first = slots[0]
+  const last = slots[slots.length - 1]
+  const window: [number, number] | null =
+    xRange ?? (first && last ? [Date.parse(first.start) / 1000, Date.parse(last.end) / 1000] : null)
+  const summary = useMemo(() => priceSummary(slotsIn(slots, xRange), tariff?.vat_pct), [slots, xRange, tariff])
+  const f = priceFactor(unit)
+  const price = (v: number) => (unit === 'cents' ? `${(v * f).toFixed(1)} c/kWh` : `${v.toFixed(3)} €/kWh`)
+  const slotName = (s: PriceSlot) =>
+    `${dayTimeLabel(Date.parse(s.start) / 1000, timeZone)}–${cursorTimeLabel(Date.parse(s.end) / 1000, timeZone, false)}`
+
   return (
     <div className="price-stack">
+      {summary && (
+        <div className="cards price-cards">
+          <Tile
+            title="Average import price"
+            color="--q-import"
+            value={price(summary.average)}
+            sub={`over the ${summary.slots} quarter-hour${summary.slots === 1 ? '' : 's'} shown`}
+          />
+          <Tile
+            title="Spot share, with its VAT"
+            color="--stack-spot"
+            value={summary.spotShare === null ? '—' : `${Math.round(summary.spotShare * 100)} %`}
+            sub="the rest is network, fees and their VAT"
+          />
+          <Tile title="Cheapest" value={price(summary.cheapest.import_price)} sub={slotName(summary.cheapest)} />
+          <Tile title="Dearest" value={price(summary.dearest.import_price)} sub={slotName(summary.dearest)} />
+        </div>
+      )}
+      <ChartHead
+        title={window ? windowTitle(window, nowS, timeZone) : 'What the import price is made of'}
+        unit={`${unit === 'cents' ? 'c/kWh' : '€/kWh'}, VAT included`}
+      >
+        <ul className="legend" role="group" aria-label="Parts shown in the chart">
+          {PARTS.map((p) => (
+            <li key={p.key}>
+              <button
+                type="button"
+                className="legend-toggle"
+                aria-pressed={shown.has(p.key)}
+                title={`${p.title ? `${p.title}. ` : ''}${shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}`}
+                onClick={() => toggle(p.key)}
+              >
+                <span className="legend-swatch" style={{ background: `var(${p.color})`, color: `var(${p.color})` }} />
+                {p.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </ChartHead>
       <TimeChart
         x={chart.x}
         series={chart.series}
@@ -156,22 +212,7 @@ export function PriceStack({
         notes={chart.notes}
         snapToSlot
       />
-      <ul className="legend" role="group" aria-label="Parts shown in the chart">
-        {PARTS.map((p) => (
-          <li key={p.key}>
-            <button
-              type="button"
-              className="legend-toggle"
-              aria-pressed={shown.has(p.key)}
-              title={`${p.title ? `${p.title}. ` : ''}${shown.has(p.key) ? 'Hide from the chart' : 'Show in the chart'}`}
-              onClick={() => toggle(p.key)}
-            >
-              <span className="legend-swatch" style={{ background: `var(${p.color})`, color: `var(${p.color})` }} />
-              {p.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {tariff && <p className="chart-note">{tariffNote(tariff, unit === 'cents')}</p>}
     </div>
   )
 }
