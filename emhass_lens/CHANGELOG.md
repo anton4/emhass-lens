@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0
+
+The Plan page's charts, redrawn after the "Flight deck" design.
+- Plan: **Power** is one chart: PV and the battery discharging stacked above zero, the house load, the battery charging and the deferrable loads below, with the grid as a line on top through every 10-second reading (on a long window, through each bucket's lowest and highest).
+- Plan: the plan is drawn fainter right of the now line, on a light wash; every chart shares one time axis under the MPC runs, with "now 15:32" and the cursor's moment on it, and a hairline at each midnight.
+- Plan: a line over the charts says what they show: measured until when, how fine the grid's readings are, the plan's run and the time zone. **Following now** beside Window and Compare, or **Back to now**.
+- Plan: **Window** is 8 h, 24 h, 2 d (the last day and the whole plan) or 7 d; scrolling zooms at the pointer, Shift or a sideways scroll (or Shift-drag) moves, a drag zooms into a range (its times show while you drag, Escape cancels), and the **Overview** under the charts has a box to drag or resize.
+- Plan: the keyboard moves the cursor along the charts (Tab to the Power chart; arrows, Shift, + and −, Page Up/Down, Home, Escape), and a screen reader hears the values; on a phone, one finger reads and two pinch and move.
+- Plan: each chart's head has a key and adds up the window shown: imported, exported and PV kWh; the state of charge now and at the plan's end; the cheapest and dearest quarter-hour. The price ribbon spans the window shown, and forecast prices are hatched.
+- Plan: popups have one value per row, value first, with the date and "10 s reading" in the heading; "planned then" follows Compare with ("planned 6 h ahead").
+- Plan: market sessions are bands with an edge along the top, aFRR hatched, and the product on the flag ("↑ SELL · mFRR · 9.4–11.0 kW"); flags without room go to a second row with a stem. The commanded target is a dashed line with a dot at the cursor, and the session block says "9.97 of 10.00 kW delivered (100 %)" with a meter.
+- Plan: a session is judged from its **baseline**, the grid's mean over the minute before its first command (Settings → Qilowatt market control → Thresholds → Baseline). The target is the baseline less a sell's power (plus a buy's), and delivered and shortfall count from it. The inverter is still written the command's own target.
+- Plan: the grid's 10-second readings now reach back eight days, so 7 d shows them too; after a start the new run *Grid readings* reads the week, newest first.
+- Plan: a plan older than Settings → Health → Plan is stale after gets a note and the plan ahead is hatched; stretches without grid readings are hatched and named.
+- Plan: the MPC runs are blocks until the next run, the next one outlined, with a chip at the cursor; the counts sit in the strip's head.
+- Plan: the Overview draws the plan dashed and sessions as ticks, and names the days loaded and the window shown.
+- Plan: **Table view: the 6 hours around the cursor** and **Every column of this plan** under the charts replace the Chart/Table switch.
+- Colours: import violet and export green; the price breakdown is spot, network, fees, VAT from the bottom in blue, aqua, yellow, magenta. Each day's cheapest and dearest quarter-hour is named over its column.
+- EV charger, Inverter and Market: the day strips are taller, with an hourly axis and now's time on it.
+
 ## 0.4.42
 
 - Market: the **Today, decision by decision** strip is coloured by what each decision did, like the Inverter strip: a sell in Force discharge orange and a buy in Force charge blue (striped), no action grey, a session end slate, not in control hatched, an ignored command amber, with a key that counts them. It was all grey in Live, where nothing is compared.

@@ -37,7 +37,7 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
-### 2026-10-16 (afternoon): the rest of variant A, step by step (unreleased)
+### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
   variant A) wasn't built yet, and asked for all of it: the rest of the Plan timeline (A1, the interaction board X),
   the phone (A5), What EMHASS gets (A2), the price breakdown (A4) and the controller day strips (A3).
@@ -203,8 +203,13 @@ These come from docs/PLAN.md §10:
       pending, then the job until "The grid's readings for the last 8 days are in memory", no longer pending.
     - `test_the_delivered_power_covers_the_week_and_skips_older_commands`.
   - **Not checked:** the warm-up against the real recorder, and how long its reads take there.
+- **P11, release 0.5.0** (the Plan page: 44d8fe1 and G1–P10): config.yaml, CHANGELOG.md and DOCS.md ("Plan history
+  and accuracy" rewritten for the new page). The e2e stack passed 25/25 (backend 471 tests, frontend 374).
+  - **Not done:** the README screenshots. They show live data and have to be taken from the App
+    (`uv run scripts/readme_screenshots.py --base <the App's direct port>`); the SSH tunnel on 8099 is an old dev
+    instance.
 
-### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
+### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
   with every value in a popup per chart and the grid's 10-second readings shown by default.
 - **Backend:** when the grid detail has to average, each mean carries its bucket's lowest and highest reading
