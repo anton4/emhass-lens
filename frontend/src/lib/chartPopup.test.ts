@@ -159,3 +159,27 @@ describe('popupRows: shares, order and the total', () => {
     expect(popupRows(zero, 0).rows.every((r) => r.share === null)).toBe(true)
   })
 })
+
+describe('momentLabel with the date', () => {
+  it('gives the day, the month and the moment to the second', () => {
+    expect(momentLabel(Date.parse('2026-10-16T10:25:20Z') / 1000, 'Europe/Tallinn', { date: true })).toBe(
+      'Fri 16 Oct · 13:25:20',
+    )
+  })
+})
+
+describe('popupRows: the rule after the lead rows', () => {
+  it('puts a rule on the first row after the lead row, and names the plan at the time', () => {
+    const series: PopupSeries[] = [
+      { label: 'PV', color: '--q-pv', values: [1000] },
+      { label: 'Grid', color: '--q-grid', values: [500], lead: true },
+      { label: 'Grid, planned', color: '--x', values: [400], then: true, popupLabel: 'planned 6 h ahead' },
+    ]
+    const { rows } = popupRows(series, 0)
+    expect(rows.map((r) => [r.name, r.rule])).toEqual([
+      ['Grid', false],
+      ['PV', true],
+    ])
+    expect(rows[0]?.thenName).toBe('planned 6 h ahead')
+  })
+})

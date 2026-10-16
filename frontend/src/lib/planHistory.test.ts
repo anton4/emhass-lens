@@ -8,6 +8,7 @@ import {
   pastEnd,
   plannedAtTheTime,
   savePref,
+  thenLabel,
   timeGrid,
   viewHistory,
   viewRange,
@@ -107,6 +108,14 @@ describe('plan history series', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('thenLabel', () => {
+  it('names the plan a past slot is compared with', () => {
+    expect(thenLabel(0)).toBe('planned then')
+    expect(thenLabel(4)).toBe('planned 1 h ahead')
+    expect(thenLabel(96)).toBe('planned 24 h ahead')
   })
 })
 

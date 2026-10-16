@@ -75,6 +75,7 @@ export function socSeries(
   previous: PlanRow[],
   pastEndS: number,
   columns: string[],
+  thenName = 'planned then',
 ): ChartSeries[] | null {
   const socs = socColumns(columns).filter((c) => hasColumn(rows, c))
   const plannedSoc = hasPlanned(past, 'SOC')
@@ -94,6 +95,7 @@ export function socSeries(
   if (plannedSoc) {
     series.push({
       label: socs.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
+      popupLabel: thenName,
       ...THEN,
       step: false,
       values: plannedAtTheTime(x, past, 'SOC', 100, false),
@@ -202,6 +204,8 @@ export function powerSeries(o: {
   pastEndS: number
   nowS: number
   gridData: GridDetail | undefined
+  /** What the plan the past is compared with is called. */
+  thenName?: string
 }): ChartSeries[] {
   const { x, flows, hidden, cover, pastEndS, nowS, gridData } = o
   const layers = powerStack({
@@ -252,6 +256,7 @@ export function powerSeries(o: {
     if (flows.gridThen) {
       out.push({
         label: 'Grid, planned at the time',
+        popupLabel: o.thenName ?? 'planned then',
         ...THEN,
         values: flows.gridThen,
         format: formatSignedPower,

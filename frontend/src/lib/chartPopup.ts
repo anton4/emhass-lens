@@ -55,6 +55,8 @@ export interface PopupRow {
   range: string | null
   /** The plan at the time, formatted; null when there is none. */
   then: string | null
+  /** What that plan is called ("planned then", "planned 6 h ahead"). */
+  thenName: string
   /** Its share of the total ("41 %"), or null. */
   share: string | null
   /** Under a rule. */
@@ -103,6 +105,7 @@ export function popupRows(
       slot: known(moment) && known(slot) ? format(slot, s) : null,
       range: range ? `${format(range[0], s)} … ${format(range[1], s)}` : null,
       then: known(then) && partner ? format(then, partner) : null,
+      thenName: partner?.popupLabel ?? 'planned then',
       share,
       rule: Boolean(s.rule),
     })
@@ -112,6 +115,9 @@ export function popupRows(
     return s?.lead ? -Infinity : (s?.popupRank ?? 0)
   }
   rows.sort((a, b) => order(a) - order(b))
+  // a rule between the lead rows (the grid's reading) and the rest (the flows)
+  const firstAfter = rows.findIndex((r) => !series[r.series]?.lead)
+  if (firstAfter > 0) rows[firstAfter] = { ...rows[firstAfter]!, rule: true }
   const total = opts.totalInHead ? (rows.find((r) => r.total) ?? null) : null
   const shown = total ? rows.filter((r) => r !== total) : rows
   return { rows: shown, hasThen: shown.some((r) => r.then !== null), total }
@@ -178,9 +184,20 @@ export function slotRange(start: number, end: number, timeZone?: string, weekday
   return `${(weekday ? fmt.start : fmt.end).format(new Date(start * 1000))}–${fmt.end.format(new Date(end * 1000))}`
 }
 
-/** A moment to the second as "Mon 10:52:14" in `timeZone` (unix seconds). */
-export function momentLabel(t: number, timeZone?: string): string {
-  return formats(timeZone).moment.format(new Date(Math.floor(t) * 1000))
+const dayFormats = new Map<string, Intl.DateTimeFormat>()
+
+/** A moment to the second as "Mon 10:52:14" in `timeZone` (unix seconds), or "Mon 14 Oct · 10:52:14" with `date`. */
+export function momentLabel(t: number, timeZone?: string, opts: { date?: boolean } = {}): string {
+  const d = new Date(Math.floor(t) * 1000)
+  if (!opts.date) return formats(timeZone).moment.format(d)
+  const key = timeZone ?? ''
+  let day = dayFormats.get(key)
+  if (!day) {
+    day = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', day: 'numeric', month: 'short' })
+    dayFormats.set(key, day)
+  }
+  const clock = formats(timeZone).moment.format(d).split(' ').pop()
+  return `${day.format(d).replace(',', '')} · ${clock}`
 }
 
 /** The popup's rows as one line for a screen reader: "Fri 13:25:20: Grid −2.55 kW, exporting; PV 4.75 kW". */

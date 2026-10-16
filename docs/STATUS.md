@@ -110,6 +110,16 @@ These come from docs/PLAN.md §10:
   - 2 d now runs from 24 h back to the plan's end.
   - While a wider window's history loads, the charts stay at 45 % opacity with `aria-busy`.
   - To feed the intro, the hidden parts and the grid-detail query moved from PowerChart up into PlanCharts.
+- **P2, popup wording and the session block:**
+  - "Planned then" follows Compare with: "planned 6 h ahead" in the popup's row and the key (`thenLabel`, the then
+    series' `popupLabel`, `PopupRow.thenName`).
+  - A rule between the grid's rows and the flows (the first row after the lead rows).
+  - The heading reads "Fri 16 Oct · 12:49:55 · 10 s reading" (`momentLabel(…, { date: true })`), or "· mean of 2 min"
+    on a long window.
+  - The session block: "↑ SELL kratt · mfrrup", "9.97 of 10.00 kW delivered (100 %)" with a meter in the
+    session's colour (`sessionDelivery`: at the moment where there is a reading, else the command's mean), the
+    shortfall row, and the session lines. "Commanded −10.00 kW, since 12:48:40" moved into the rows, after the
+    grid's quarter-hour mean and before what was planned (`marketLead`, `popup.lead`).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

@@ -175,10 +175,10 @@ export function ChartPopup({
                 </span>
                 {r.share && <span className="chart-pop-share">{r.share}</span>}
               </div>
-              {i === 0 && leadRows.map((x, k) => <ExtraRow key={`lead-${k}`} row={x} />)}
               {r.range && <SubRow value={r.range} name="lowest … highest reading" />}
               {r.slot && <SubRow value={r.slot} name="quarter-hour mean" />}
-              {r.then && <SubRow value={r.then} name="planned then" dashed />}
+              {i === 0 && leadRows.map((x, k) => <ExtraRow key={`lead-${k}`} row={x} />)}
+              {r.then && <SubRow value={r.then} name={r.thenName} dashed />}
             </Fragment>
           ))}
           {extra.map((r, i) => (

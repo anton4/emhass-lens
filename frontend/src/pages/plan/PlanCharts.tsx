@@ -18,7 +18,7 @@ import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
-import { cursorTimeLabel, localMidnights } from '../../lib/chartTime'
+import { cursorTimeLabel, localMidnights, spanLabel } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
@@ -33,6 +33,7 @@ import {
   commandSessions,
   marketBlock,
   marketLane,
+  marketLead,
   marketOverlay,
   sessionBands,
   sessionWindow,
@@ -40,7 +41,7 @@ import {
   shortfalls,
 } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
-import { pastEnd, timeGrid, viewRange, type ViewHours } from '../../lib/planHistory'
+import { pastEnd, thenLabel, timeGrid, viewRange, type HorizonSlots, type ViewHours } from '../../lib/planHistory'
 import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
 import { eurTick } from '../../lib/units'
 import { ChartHints } from './ChartHints'
@@ -114,6 +115,7 @@ export function PlanCharts({
   history,
   nowS,
   view,
+  horizon = 0,
   zoom,
   onZoom: setZoom,
   loading = false,
@@ -122,6 +124,8 @@ export function PlanCharts({
   history?: PlanHistoryResponse
   nowS: number
   view: ViewHours
+  /** Which earlier plan a past slot is compared with. */
+  horizon?: HorizonSlots
   /** A window picked by zooming, scrolling or the overview (unix seconds); null follows now. */
   zoom: [number, number] | null
   onZoom: (range: [number, number] | null) => void
@@ -160,8 +164,8 @@ export function PlanCharts({
 
   const flows = useMemo<Flows>(() => planFlows(x, past, rows, pastEndS, data.columns), [x, rows, past, pastEndS, data.columns])
   const soc = useMemo(
-    () => socSeries(x, past, rows, previous, pastEndS, data.columns),
-    [x, rows, previous, past, pastEndS, data.columns],
+    () => socSeries(x, past, rows, previous, pastEndS, data.columns, thenLabel(horizon)),
+    [x, rows, previous, past, pastEndS, data.columns, horizon],
   )
   const prices = useMemo(() => priceSeries(history?.prices ?? [], data.prices), [history, data.prices])
 
@@ -226,6 +230,7 @@ export function PlanCharts({
         hidden={hidden}
         onToggle={toggle}
         gridData={gridData}
+        thenName={thenLabel(horizon)}
         onZoom={zoomTo}
         split={ahead}
         markers={midnights}
@@ -399,6 +404,7 @@ function PowerChart({
   hidden,
   onToggle: toggle,
   gridData,
+  thenName,
   onZoom,
   split,
   markers,
@@ -415,6 +421,8 @@ function PowerChart({
   onToggle: (part: PowerPart) => void
   /** The grid's readings in the window shown. */
   gridData: GridDetail | undefined
+  /** What the plan the past is compared with is called ("planned then"). */
+  thenName: string
   onZoom: (range: [number, number] | null) => void
   split: ChartSplit
   markers: number[]
@@ -442,8 +450,9 @@ function PowerChart({
         pastEndS,
         nowS,
         gridData,
+        thenName,
       }),
-    [flows, hidden, cover, x, pastEndS, nowS, gridData],
+    [flows, hidden, cover, x, pastEndS, nowS, gridData, thenName],
   )
 
   // the plan's grid in the slot in progress, from where the measured line ends: one grid line there too
@@ -477,11 +486,18 @@ function PowerChart({
     const market = showPower || showSessions
     const block = (time: number) =>
       market ? marketBlock({ spans, sessions, runs, detail: gridData, time, nowS, timeZone }) : null
+    // what the moment's value is: a reading, or a mean over a step on a long window
+    const cadence = gridCadence(gridData)
+    const what = cadence !== null ? ` · ${cadence} s reading` : gridData?.step_s ? ` · mean of ${spanLabel(gridData.step_s)}` : ''
     return {
       ...slotTag,
       // left of now the popup is about the pointer's own moment (the grid's reading, a command); the slot heads the rows
-      head: gridData || market ? (_t: number, time: number) => (time < nowS ? momentLabel(time, timeZone) : null) : undefined,
+      head:
+        gridData || market
+          ? (_t: number, time: number) => (time < nowS ? `${momentLabel(time, timeZone, { date: true })}${what}` : null)
+          : undefined,
       block: market ? (_t: number, time: number) => block(time) : undefined,
+      lead: showPower ? (_t: number, time: number) => marketLead({ spans, time, nowS, timeZone }) : undefined,
     }
   }, [slotTag, gridData, showPower, showSessions, spans, sessions, runs, nowS, timeZone])
   // a flag can stand for several sessions of one direction: zoom to all of them
@@ -584,7 +600,7 @@ function PowerChart({
         {hasPast && flows.gridThen && (
           <li className="legend-key" title="Left of the now line: what the plan said at the time for the grid">
             <span className="legend-dash" aria-hidden="true" />
-            grid planned at the time
+            grid, {thenName}
           </li>
         )}
       </ul>

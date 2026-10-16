@@ -3,7 +3,7 @@
 
 import type { LampColor } from '../components/Lamp'
 import type { ChartGap, ChartLane, ChartOverlay, ChartSession } from '../components/charts/TimeChart'
-import type { PopupBlock } from '../components/charts/cursorStore'
+import type { PopupBlock, PopupExtra } from '../components/charts/cursorStore'
 import type { GridDetail, MarketCommandSpan, MarketSettings, MarketWatchdogStatus, RunSummary } from '../api/types'
 import { formatClock, formatTime } from './format'
 import { gridAt } from './gridDetail'
@@ -536,33 +536,19 @@ export function marketBlock(o: {
   nowS?: number
   timeZone?: string
 }): PopupBlock | null {
-  const span = o.spans.find((s) => unix(s.start) <= o.time && o.time < spanEnd(s, o.nowS))
+  const span = spanAt(o.spans, o.time, o.nowS)
   if (!span) return null
   const sell = span.direction === 'sell'
-  const rows: PopupBlock['rows'] = [
-    {
-      name: 'Commanded',
-      value: formatPower(span.power_w),
-      note: `since ${formatClock(span.start, o.timeZone)}`,
-      color: '--q-market',
-      swatch: 'line',
-    },
-  ]
-  const share = (got: number) => (span.power_w > 0 ? `${Math.round((got / span.power_w) * 100)} % of it` : undefined)
-  const w = gridAt(o.detail, o.time)
-  if (w !== null) {
-    const got = sell ? -w : w
-    rows.push({ name: 'Grid', value: formatSignedPower(w), note: share(got), color: '--q-grid', swatch: 'thin' })
-    if (o.runs.some((r) => r.from <= o.time && o.time < r.to)) {
-      rows.push({ name: 'Shortfall', value: formatPower(span.power_w - got), color: '--q-shortfall', swatch: 'hatch', alert: true })
-    }
-  } else {
-    const got = deliveredW(span)
-    if (got !== null) {
-      const pct = span.power_w > 0 ? `${Math.round((got / span.power_w) * 100)} %` : null
-      const note = [pct, span.open ? 'so far' : 'mean over the command'].filter(Boolean).join(' · ')
-      rows.push({ name: 'Delivered', value: formatPower(got), note, color: '--q-grid', swatch: 'thin' })
-    }
+  const delivery = sessionDelivery(span, o.detail, o.time)
+  const rows: PopupBlock['rows'] = []
+  if (delivery?.moment && o.runs.some((r) => r.from <= o.time && o.time < r.to)) {
+    rows.push({
+      name: 'Shortfall',
+      value: formatPower(span.power_w - delivery.got),
+      color: '--q-shortfall',
+      swatch: 'hatch',
+      alert: true,
+    })
   }
   const session = o.sessions.find((s) => s.from <= o.time && o.time < s.to)
   const foot = session
@@ -571,5 +557,52 @@ export function marketBlock(o: {
         [powerRange(session), deliveredText(session)].filter(Boolean).join(' · '),
       ]
     : undefined
-  return { title: head(sell), sub: `${span.source} · ${span.mode}`, tone: sell ? 'sell' : 'buy', rows, foot }
+  const kw = (w: number) => (w / 1000).toFixed(2)
+  const text = delivery
+    ? `${kw(delivery.got)} of ${kw(span.power_w)} kW delivered (${Math.round(delivery.share * 100)} %${
+        delivery.moment ? '' : span.open ? ', so far' : ', mean over the command'
+      })`
+    : `${kw(span.power_w)} kW requested`
+  return {
+    title: head(sell),
+    sub: `${span.source} · ${span.mode}`,
+    tone: sell ? 'sell' : 'buy',
+    text,
+    meter: delivery ? Math.min(1, Math.max(0, delivery.share)) : undefined,
+    rows,
+    foot,
+  }
+}
+
+/** The command at `time`, or none. */
+function spanAt(spans: MarketCommandSpan[], time: number, nowS?: number): MarketCommandSpan | undefined {
+  return spans.find((s) => unix(s.start) <= time && time < spanEnd(s, nowS))
+}
+
+/** What the grid delivered of the command `span` in its own direction: at the pointer's moment where there is a
+ *  reading (`moment`), else the mean over the command; with its share of the power asked. Null when nothing was
+ *  measured. */
+export function sessionDelivery(
+  span: MarketCommandSpan,
+  detail: GridDetail | undefined,
+  time: number,
+): { got: number; share: number; moment: boolean } | null {
+  const w = gridAt(detail, time)
+  const got = w !== null ? (span.direction === 'sell' ? -w : w) : deliveredW(span)
+  if (got === null) return null
+  return { got, share: span.power_w > 0 ? got / span.power_w : 0, moment: w !== null }
+}
+
+/** The popup's rows right under the grid's reading during a command: what it commanded, since when. */
+export function marketLead(o: { spans: MarketCommandSpan[]; time: number; nowS?: number; timeZone?: string }): PopupExtra[] {
+  const span = spanAt(o.spans, o.time, o.nowS)
+  if (!span) return []
+  return [
+    {
+      name: `commanded, since ${formatClock(span.start, o.timeZone)}`,
+      value: formatSignedPower(commandPower(span)),
+      color: '--q-market',
+      swatch: 'dash',
+    },
+  ]
 }

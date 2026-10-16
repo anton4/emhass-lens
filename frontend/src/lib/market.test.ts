@@ -6,6 +6,7 @@ import {
   decisionRef,
   deliveredW,
   marketBlock,
+  marketLead,
   marketLane,
   marketMark,
   marketOverlay,
@@ -333,7 +334,7 @@ describe('the commands on the Power chart', () => {
     expect(sessionWindow(sessions[0]!)).toEqual([s('2026-10-14T05:30:00Z'), s('2026-10-14T06:00:00Z')])
   })
 
-  it('tells the popup the command at the pointer, the grid there and the session, no list', () => {
+  it('tells the popup what the grid delivered of the command at the pointer, and the session', () => {
     const runs = shortfalls([a, b, c], detail)
     const at = (iso: string, d: GridDetail | null = detail) =>
       marketBlock({ spans: [a, b, c, buy], sessions, runs, detail: d ?? undefined, time: s(iso), nowS: NOW, timeZone: tz })
@@ -341,24 +342,33 @@ describe('the commands on the Power chart', () => {
       title: '↑ SELL',
       sub: 'kratt · mfrrup',
       tone: 'sell',
-      rows: [
-        { name: 'Commanded', value: '9.00 kW', note: 'since 08:47:00', color: '--q-market', swatch: 'line' },
-        { name: 'Grid', value: '−7.00 kW', note: '78 % of it', color: '--q-grid', swatch: 'thin' },
-        { name: 'Shortfall', value: '2.00 kW', color: '--q-shortfall', swatch: 'hatch', alert: true },
-      ],
+      text: '7.00 of 9.00 kW delivered (78 %)',
+      meter: 7 / 9,
+      rows: [{ name: 'Shortfall', value: '2.00 kW', color: '--q-shortfall', swatch: 'hatch', alert: true }],
       foot: ['Session 08:45–08:50 · 3 commands', '5.2–9.0 kW · 88 % delivered'],
     })
     // past the shortfall: no shortfall row
-    expect(at('2026-10-14T05:46:10Z')?.rows.map((r) => r.name)).toEqual(['Commanded', 'Grid'])
+    expect(at('2026-10-14T05:46:10Z')?.rows).toEqual([])
     // without the grid detail: what the grid delivered over the command
-    expect(at('2026-10-14T05:48:00Z', null)?.rows[1]).toEqual({
-      name: 'Delivered',
-      value: '7.00 kW',
-      note: '78 % · mean over the command',
-      color: '--q-grid',
-      swatch: 'thin',
+    expect(at('2026-10-14T05:48:00Z', null)).toMatchObject({
+      text: '7.00 of 9.00 kW delivered (78 %, mean over the command)',
+      rows: [],
     })
-    expect(at('2026-10-14T07:00:00Z')).toMatchObject({ title: '↓ BUY', tone: 'buy', foot: ['Session 09:58–now · 1 command', '5.0 kW'] })
+    expect(at('2026-10-14T07:00:00Z')).toMatchObject({
+      title: '↓ BUY',
+      tone: 'buy',
+      text: '5.00 kW requested',
+      meter: undefined,
+      foot: ['Session 09:58–now · 1 command', '5.0 kW'],
+    })
     expect(at('2026-10-14T06:30:00Z')).toBeNull()
   })
+
+  it('puts the command right under the grid reading', () => {
+    expect(marketLead({ spans: [a, b, c, buy], time: s('2026-10-14T05:48:00Z'), nowS: NOW, timeZone: tz })).toEqual([
+      { name: 'commanded, since 08:47:00', value: '−9.00 kW', color: '--q-market', swatch: 'dash' },
+    ])
+    expect(marketLead({ spans: [a], time: s('2026-10-14T06:30:00Z'), nowS: NOW, timeZone: tz })).toEqual([])
+  })
+
 })

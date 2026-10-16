@@ -14,6 +14,12 @@ export const HORIZONS = [
   { slots: 96, label: '24 h ahead' },
 ] as const
 export type HorizonSlots = (typeof HORIZONS)[number]['slots']
+
+/** What the plan a past slot is compared with is called: "planned then" for the plan in force, else how far ahead it
+ *  was made ("planned 6 h ahead"). */
+export function thenLabel(horizon: HorizonSlots): string {
+  return horizon === 0 ? 'planned then' : `planned ${horizon / 4} h ahead`
+}
 export const HORIZON_SLOTS = HORIZONS.map((h) => h.slots) as readonly HorizonSlots[]
 
 /** The Timeline's windows around now: how far back and ahead each shows (hours; null ahead: to the plan's end), and how

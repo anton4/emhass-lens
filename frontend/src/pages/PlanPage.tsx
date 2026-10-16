@@ -232,6 +232,7 @@ export function PlanPage() {
               history={history.data}
               nowS={nowS}
               view={view}
+              horizon={horizon}
               zoom={zoom}
               onZoom={setZoom}
               loading={history.isPlaceholderData}
