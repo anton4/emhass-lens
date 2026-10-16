@@ -120,3 +120,42 @@ describe('readoutText', () => {
     expect(readoutText('Fri 13:25', [])).toBe('Fri 13:25')
   })
 })
+
+describe('popupRows: shares, order and the total', () => {
+  const part = (label: string, v: number, rank: number): PopupSeries => ({
+    label,
+    color: '--x',
+    values: [v],
+    share: true,
+    popupRank: rank,
+    format: (x) => x.toFixed(2),
+  })
+  const series: PopupSeries[] = [
+    part('spot', 0.06, 4),
+    part('network', 0.04, 3),
+    part('VAT', 0.024, 1),
+    { label: 'total', color: '--x', values: [0.124], total: true, popupRank: 5, format: (x) => x.toFixed(3) },
+  ]
+
+  it('orders the rows by rank and gives each part its share of the total', () => {
+    const { rows, total } = popupRows(series, 0)
+    expect(rows.map((r) => [r.name, r.share])).toEqual([
+      ['VAT', '19 %'],
+      ['network', '32 %'],
+      ['spot', '48 %'],
+      ['total', null],
+    ])
+    expect(total).toBeNull()
+  })
+
+  it('takes the total out of the rows for the header', () => {
+    const { rows, total } = popupRows(series, 0, undefined, { totalInHead: true })
+    expect(rows.map((r) => r.name)).toEqual(['VAT', 'network', 'spot'])
+    expect(total?.value).toBe('0.124')
+  })
+
+  it('gives no share without a positive total', () => {
+    const zero = series.map((s) => (s.total ? { ...s, values: [0] } : s))
+    expect(popupRows(zero, 0).rows.every((r) => r.share === null)).toBe(true)
+  })
+})

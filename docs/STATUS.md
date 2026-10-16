@@ -91,6 +91,10 @@ These come from docs/PLAN.md §10:
   set in the setScale and setSize hooks), `ChartNote.look` ('pill', or 'callout': a dark box with a stem down to the
   point) and `top` (pinned to the plot's top), and `toValue` on overlay spans (a straight line from one value to
   another; `overlayRuns`, `overlayExtent` and `overlayAt` follow it).
+- **G7, popup pieces:** series take `share` (the row's share of the `total` series), `popupRank` and `rule`; the popup
+  takes `lead` (rows right after the lead row), `totalInHead`, `note` (a muted line under the rows) and `style:
+  'chip'` with `chip` (a small chip at the top of the cursor line instead of the popup, also on a compact strip).
+  `PopupExtra.swatch` (square, line, dash, none) and `PopupBlock.text`/`meter`.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

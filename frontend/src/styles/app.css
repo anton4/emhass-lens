@@ -2100,6 +2100,64 @@ button.diff-locate {
   border-top-width: 2px;
 }
 
+/* each part's share of the total, after its name */
+.chart-pop-rows[data-shares] {
+  grid-template-columns: 12px auto auto auto;
+}
+
+.chart-pop-share {
+  min-width: 34px;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the total in the header, after the slot */
+.chart-pop-total {
+  margin-left: auto;
+  font-family: var(--font-code);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* a muted line under the rows ("Night tariff · export limit 0 W") */
+.chart-pop-note {
+  margin-top: 4px;
+  padding: 4px 4px 0;
+  border-top: 1px solid var(--divider);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  white-space: normal;
+  max-width: 280px;
+}
+
+/* a chart's chip at the top of its cursor line ("run #4554 · ok") */
+.chart-pop-chip {
+  position: absolute;
+  top: 2px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--frame);
+  border-radius: 5px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.chart-pop-chip[data-flip] {
+  margin-left: -8px;
+  transform: translateX(-100%);
+}
+
 /* under a value: the plan at the time, the quarter-hour's mean, the readings' range */
 .chart-pop-detail {
   min-height: 18px;
@@ -2148,6 +2206,28 @@ button.diff-locate {
   padding: 0 4px 2px;
   font-size: 11px;
   color: var(--ink-muted);
+}
+
+/* the session's delivery under the block's title, with a meter */
+.chart-pop-block-text {
+  margin-top: 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-pop-meter {
+  height: 6px;
+  margin: 4px 0 2px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+}
+
+.chart-pop-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: currentColor;
 }
 
 /* the market command at the pointer: a tinted block between the header and the rows */

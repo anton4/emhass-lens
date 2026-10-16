@@ -14,6 +14,15 @@ export interface PopupExtra {
   color: string
   /** A hatched swatch (a span that is off). */
   hatch?: boolean
+  /** The swatch: a square (default), a line, a dashed line, or none. */
+  swatch?: 'square' | 'line' | 'dash' | 'none'
+}
+
+/** A line of the chip a chart shows at its cursor instead of a popup ("run #4554 · ok"). */
+export interface PopupChip {
+  text: string
+  /** CSS custom property or colour of the text. */
+  color?: string
 }
 
 /** A tinted block above the lines' rows: what was going on at the pointer's moment (a market command), its rows, and
@@ -37,6 +46,10 @@ export interface PopupBlock {
     alert?: boolean
   }[]
   foot?: string[]
+  /** A line under the title ("10.62 of 11.00 kW delivered (97 %)"). */
+  text?: string
+  /** A bar filled to this share (0–1) under the text. */
+  meter?: number
 }
 
 /** Where the cursor is, in plot pixels; `pointerY` only on the chart under the pointer. */

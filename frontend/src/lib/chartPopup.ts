@@ -30,6 +30,12 @@ export interface PopupSeries {
   area?: boolean
   /** The popup's first row, wherever the line is drawn (the grid, drawn on top of the Power chart's areas). */
   lead?: boolean
+  /** The row also gives its share of the total ("41 %"). */
+  share?: boolean
+  /** Where the row goes among the others: lower first; rows without one keep their order, before ranked ones. */
+  popupRank?: number
+  /** The row sits under a rule. */
+  rule?: boolean
 }
 
 export interface PopupRow {
@@ -49,15 +55,27 @@ export interface PopupRow {
   range: string | null
   /** The plan at the time, formatted; null when there is none. */
   then: string | null
+  /** Its share of the total ("41 %"), or null. */
+  share: string | null
+  /** Under a rule. */
+  rule: boolean
 }
 
 const known = (v: number | null | undefined): v is number => v !== null && v !== undefined && Number.isFinite(v)
 
 /** One row per series at `idx` (its "planned at the time" partner folded into it); series with nothing there are left
  *  out. A series with a value at the pointer's moment `time` shows that, with the slot's value (and the readings'
- *  range) beside it for the popup to put on rows of their own. */
-export function popupRows(series: PopupSeries[], idx: number, time?: number): { rows: PopupRow[]; hasThen: boolean } {
+ *  range) beside it for the popup to put on rows of their own. Rows that ask for it give their share of the total.
+ *  With `totalInHead` the total comes back on its own instead of as the last row. */
+export function popupRows(
+  series: PopupSeries[],
+  idx: number,
+  time?: number,
+  opts: { totalInHead?: boolean } = {},
+): { rows: PopupRow[]; hasThen: boolean; total: PopupRow | null } {
   const rows: PopupRow[] = []
+  const totalSeries = series.find((s) => s.total)
+  const totalValue = totalSeries ? (totalSeries.readout ?? totalSeries.values)[idx] : null
   series.forEach((s, i) => {
     if (s.then || s.helper) return
     const partner = series[i + 1]?.then ? series[i + 1] : undefined
@@ -68,6 +86,10 @@ export function popupRows(series: PopupSeries[], idx: number, time?: number): { 
     const then = partner?.values[idx]
     if (!known(value) && !known(then)) return
     const format = (v: number, by: PopupSeries) => (by.format ? by.format(v) : String(v))
+    const share =
+      s.share && known(value) && known(totalValue) && totalValue > 0
+        ? `${Math.round((value / totalValue) * 100)} %`
+        : null
     rows.push({
       series: i,
       name: s.popupLabel ?? s.label,
@@ -81,10 +103,18 @@ export function popupRows(series: PopupSeries[], idx: number, time?: number): { 
       slot: known(moment) && known(slot) ? format(slot, s) : null,
       range: range ? `${format(range[0], s)} … ${format(range[1], s)}` : null,
       then: known(then) && partner ? format(then, partner) : null,
+      share,
+      rule: Boolean(s.rule),
     })
   })
-  rows.sort((a, b) => Number(Boolean(series[b.series]?.lead)) - Number(Boolean(series[a.series]?.lead)))
-  return { rows, hasThen: rows.some((r) => r.then !== null) }
+  const order = (r: PopupRow) => {
+    const s = series[r.series]
+    return s?.lead ? -Infinity : (s?.popupRank ?? 0)
+  }
+  rows.sort((a, b) => order(a) - order(b))
+  const total = opts.totalInHead ? (rows.find((r) => r.total) ?? null) : null
+  const shown = total ? rows.filter((r) => r !== total) : rows
+  return { rows: shown, hasThen: shown.some((r) => r.then !== null), total }
 }
 
 /** The series whose value is drawn nearest the pointer's height, or null when there is none. */

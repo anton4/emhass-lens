@@ -27,7 +27,14 @@ import {
   type FitOptions,
 } from '../../lib/chartRange'
 import { ChartPopup, CursorPill } from './ChartPopup'
-import { createCursorStore, type CursorAt, type PopupBlock, type PopupExtra, type PopupTag } from './cursorStore'
+import {
+  createCursorStore,
+  type CursorAt,
+  type PopupBlock,
+  type PopupChip,
+  type PopupExtra,
+  type PopupTag,
+} from './cursorStore'
 import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
 
 export interface ChartSeries {
@@ -64,8 +71,14 @@ export interface ChartSeries {
   helper?: boolean
   /** A part switched off: faded in the popup, no cursor dot. */
   muted?: boolean
-  /** The popup's last row, under a rule. */
+  /** The popup's last row, under a rule (or its header's value, with the popup's `totalInHead`). */
   total?: boolean
+  /** The popup row also gives its share of the total ("41 %"). */
+  share?: boolean
+  /** Where its popup row goes: lower first; rows without one keep their order, before ranked ones. */
+  popupRank?: number
+  /** Its popup row sits under a rule. */
+  rule?: boolean
   /** A column per slot instead of a line: 'stack' fills from the series `below` (or zero) to the value, a hairline
    *  apart from the part it sits on; 'cap' is a short bar at the value across the column (none at `width` 0). Columns
    *  in a shaded range (a forecast) are faded. */
@@ -241,6 +254,15 @@ interface TimeChartProps {
     extra?: (t: number, time: number) => PopupExtra[]
     head?: (t: number, time: number) => string | null
     block?: (t: number, time: number) => PopupBlock | null
+    /** Rows right after the lead row (the commanded target, under the grid's reading). */
+    lead?: (t: number, time: number) => PopupExtra[]
+    /** The total's value in the header instead of a row of its own. */
+    totalInHead?: boolean
+    /** A muted line under the rows. */
+    note?: (t: number, time: number) => string | null
+    /** 'chip': a small chip at the top of the cursor line instead of the popup, its lines from `chip`. */
+    style?: 'popup' | 'chip'
+    chip?: (t: number, time: number) => PopupChip[]
   }
   /** Leave out uPlot's legend (the page draws its own key). */
   legend?: boolean
@@ -887,12 +909,18 @@ export function TimeChart({
       extra: extras.current.popup?.extra,
       head: extras.current.popup?.head,
       block: extras.current.popup?.block,
+      lead: extras.current.popup?.lead,
+      totalInHead: extras.current.popup?.totalInHead,
+      note: extras.current.popup?.note,
+      style: extras.current.popup?.style,
+      chip: extras.current.popup?.chip,
     }),
     [timeZone],
   )
 
   const zoomable = Boolean(onZoom)
-  const withPopup = Boolean(popup) && !compact
+  // a chip at the cursor works on a compact strip too
+  const withPopup = Boolean(popup) && (!compact || popup?.style === 'chip')
   const withPill = Boolean(cursorLabel) && timeAxis === 'labels'
   const readPill = useCallback(() => {
     const xs = extras.current.x

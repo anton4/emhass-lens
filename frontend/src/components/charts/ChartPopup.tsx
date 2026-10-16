@@ -8,7 +8,7 @@
 import { Fragment, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from '../../lib/chartPopup'
-import type { CursorStore, PopupBlock, PopupExtra, PopupTag } from './cursorStore'
+import type { CursorStore, PopupBlock, PopupChip, PopupExtra, PopupTag } from './cursorStore'
 
 const DOCK_BELOW = 520
 
@@ -27,6 +27,11 @@ export function ChartPopup({
     extra?: (t: number, time: number) => PopupExtra[]
     head?: (t: number, time: number) => string | null
     block?: (t: number, time: number) => PopupBlock | null
+    lead?: (t: number, time: number) => PopupExtra[]
+    totalInHead?: boolean
+    note?: (t: number, time: number) => string | null
+    style?: 'popup' | 'chip'
+    chip?: (t: number, time: number) => PopupChip[]
   }
 }) {
   const { over, at } = useSyncExternalStore(store.subscribe, store.get)
@@ -44,11 +49,40 @@ export function ChartPopup({
   if (!over || !at) return null
   const docked = at.width < DOCK_BELOW
   if (docked && at.pointerY === null) return null
-  const { series, x, timeZone, tag: tagFor, extra: extraFor, head: headFor, block: blockFor } = read()
-  const { rows } = popupRows(series, at.idx, at.time)
+  const {
+    series,
+    x,
+    timeZone,
+    tag: tagFor,
+    extra: extraFor,
+    head: headFor,
+    block: blockFor,
+    lead: leadFor,
+    totalInHead,
+    note: noteFor,
+    style,
+    chip: chipFor,
+  } = read()
   const t = x[at.idx]
+  if (style === 'chip') {
+    const lines = t !== undefined ? (chipFor?.(t, at.time) ?? []) : []
+    if (lines.length === 0) return null
+    return createPortal(
+      <div className="chart-pop-chip" data-flip={at.left > at.width * 0.7 || undefined} style={{ left: at.left }} aria-hidden="true">
+        {lines.map((line, i) => (
+          <span key={i} style={line.color ? { color: cssColor(line.color) } : undefined}>
+            {line.text}
+          </span>
+        ))}
+      </div>,
+      over,
+    )
+  }
+  const { rows, total } = popupRows(series, at.idx, at.time, { totalInHead })
   const extra = t !== undefined ? (extraFor?.(t, at.time) ?? []) : []
   const block = t !== undefined ? (blockFor?.(t, at.time) ?? null) : null
+  const leadRows = t !== undefined && rows[0] && series[rows[0].series]?.lead ? (leadFor?.(t, at.time) ?? []) : []
+  const note = t !== undefined ? (noteFor?.(t, at.time) ?? null) : null
   if ((rows.length === 0 && extra.length === 0 && !block) || t === undefined) return null
   const end = x[at.idx + 1] ?? t + 900
   const head = headFor?.(t, at.time) ?? null
@@ -57,11 +91,14 @@ export function ChartPopup({
   const subRows = rows.reduce((n, r) => n + (r.then ? 1 : 0) + (r.slot ? 1 : 0) + (r.range ? 1 : 0), 0)
   const estimate =
     46 +
-    20 * (rows.length + extra.length) +
+    20 * (rows.length + extra.length + leadRows.length) +
     18 * subRows +
     (rows.length && extra.length ? 6 : 0) +
     (head && rows.length ? 18 : 0) +
-    (block ? 40 + 20 * block.rows.length + 17 * (block.foot?.length ?? 0) : 0)
+    (note ? 22 : 0) +
+    (block
+      ? 40 + 20 * block.rows.length + 17 * (block.foot?.length ?? 0) + (block.text ? 18 : 0) + (block.meter !== undefined ? 10 : 0)
+      : 0)
   const place = placePopup({ left: at.left, anchorY, width: at.width, height: at.height, popupHeight: estimate })
   const tag = tagFor?.(t) ?? null
   const ring = near !== null && !docked ? at.points.find((p) => p.series === near) : undefined
@@ -105,19 +142,21 @@ export function ChartPopup({
               {tag.text}
             </span>
           )}
+          {total && <b className="chart-pop-total">{total.value}</b>}
         </div>
         {block && <PopupBlockView block={block} />}
-        <div className="chart-pop-rows">
+        <div className="chart-pop-rows" data-shares={rows.some((r) => r.share) || undefined}>
           {head && rows.length > 0 && (
             <div className="chart-pop-sub">Quarter-hour {slotRange(t, end, timeZone, false)}</div>
           )}
-          {rows.map((r) => (
+          {rows.map((r, i) => (
             <Fragment key={r.series}>
               <div
                 className="chart-pop-row"
                 data-near={r.series === near || undefined}
                 data-muted={r.muted || undefined}
                 data-total={r.total || undefined}
+                data-rule={r.rule || undefined}
               >
                 <span className="chart-pop-key">
                   {r.area ? (
@@ -134,26 +173,19 @@ export function ChartPopup({
                   {r.name}
                   {r.describe && <i>, {r.describe}</i>}
                 </span>
+                {r.share && <span className="chart-pop-share">{r.share}</span>}
               </div>
+              {i === 0 && leadRows.map((x, k) => <ExtraRow key={`lead-${k}`} row={x} />)}
               {r.range && <SubRow value={r.range} name="lowest … highest reading" />}
               {r.slot && <SubRow value={r.slot} name="quarter-hour mean" />}
               {r.then && <SubRow value={r.then} name="planned then" dashed />}
             </Fragment>
           ))}
           {extra.map((r, i) => (
-            <div key={`extra-${i}`} className="chart-pop-row" data-rule={(i === 0 && rows.length > 0) || undefined}>
-              <span className="chart-pop-key">
-                <span
-                  className="chart-pop-square"
-                  data-hatch={r.hatch || undefined}
-                  style={r.hatch ? undefined : { background: cssColor(r.color) }}
-                />
-              </span>
-              <b className="chart-pop-value">{r.value}</b>
-              <span className="chart-pop-name">{r.name}</span>
-            </div>
+            <ExtraRow key={`extra-${i}`} row={r} rule={i === 0 && rows.length > 0} />
           ))}
         </div>
+        {note && <div className="chart-pop-note">{note}</div>}
       </div>
     </>,
     over,
@@ -183,6 +215,31 @@ export function CursorPill({
   )
 }
 
+/** A row that isn't a series: what a lane says at the cursor, the commanded target, a value not drawn as a line. */
+function ExtraRow({ row, rule = false }: { row: PopupExtra; rule?: boolean }) {
+  const swatch = row.hatch ? 'square' : (row.swatch ?? 'square')
+  return (
+    <div className="chart-pop-row" data-rule={rule || undefined}>
+      <span className="chart-pop-key">
+        {swatch === 'square' ? (
+          <span
+            className="chart-pop-square"
+            data-hatch={row.hatch || undefined}
+            style={row.hatch ? undefined : { background: cssColor(row.color) }}
+          />
+        ) : swatch === 'none' ? null : (
+          <span
+            className="chart-pop-swatch"
+            style={{ borderTopColor: cssColor(row.color), borderTopStyle: swatch === 'dash' ? 'dashed' : 'solid' }}
+          />
+        )}
+      </span>
+      <b className="chart-pop-value">{row.value}</b>
+      <span className="chart-pop-name">{row.name}</span>
+    </div>
+  )
+}
+
 /** A row under a value: the plan at the time (a dashed key), the quarter-hour's mean, the readings' range. */
 function SubRow({ value, name, dashed = false }: { value: string; name: string; dashed?: boolean }) {
   return (
@@ -202,6 +259,12 @@ function PopupBlockView({ block }: { block: PopupBlock }) {
         <b>{block.title}</b>
         {block.sub && <span>{block.sub}</span>}
       </div>
+      {block.text && <div className="chart-pop-block-text">{block.text}</div>}
+      {block.meter !== undefined && (
+        <div className="chart-pop-meter">
+          <i style={{ width: `${Math.round(Math.min(1, Math.max(0, block.meter)) * 100)}%` }} />
+        </div>
+      )}
       <div className="chart-pop-block-rows">
         {block.rows.map((r) => (
           <div key={r.name} className="chart-pop-block-row" data-alert={r.alert || undefined}>
