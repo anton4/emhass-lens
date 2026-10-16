@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { brushGrab, brushWindow, clampWindow } from '../../lib/chartRange'
+import { localMidnights } from '../../lib/chartTime'
 
 // in line with the charts' plot: uPlot's y-axis takes the first 64 px
 const LEFT = 64
@@ -18,16 +19,6 @@ function dayLabel(t: number, timeZone: string): string {
     dayFormats.set(timeZone, fmt)
   }
   return fmt.format(new Date(t * 1000))
-}
-
-/** Local midnights in (a, b], unix s. */
-function midnights(a: number, b: number, timeZone: string): number[] {
-  const hour = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
-  const out: number[] = []
-  for (let t = Math.ceil(a / 900) * 900; t <= b; t += 900) {
-    if (hour.format(new Date(t * 1000)) === '00:00') out.push(t)
-  }
-  return out
 }
 
 export function Overview({
@@ -144,7 +135,7 @@ export function Overview({
       >
         {width > 0 && (
           <>
-            {midnights(t0, t1, timeZone).map((t) => (
+            {localMidnights(t0, t1, timeZone).map((t) => (
               <span key={t} className="overview-day" style={{ left: toX(t) }}>
                 <span>{dayLabel(t, timeZone)}</span>
               </span>

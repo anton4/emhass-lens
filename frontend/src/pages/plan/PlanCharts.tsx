@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
@@ -18,6 +18,7 @@ import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
+import { cursorTimeLabel, localMidnights } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
@@ -186,6 +187,18 @@ export function PlanCharts({
     [first, last],
   )
   const shown = zoom ?? (bounds ? viewRange(view, nowS, bounds) : null)
+  const tz = data.timezone
+  // a hairline at every local midnight; the time axis's labels only under the last chart, with now and the cursor's
+  // moment on it
+  const midnights = useMemo(
+    () => (bounds ? localMidnights(bounds[0] - 86400, bounds[1] + 86400, tz) : []),
+    [bounds, tz],
+  )
+  const nowLabel = `now ${cursorTimeLabel(nowS, tz, false)}`
+  const cursorLabel = useCallback(
+    (time: number, windowS: number) => cursorTimeLabel(time, tz, time < nowS && windowS <= 12 * 3600),
+    [tz, nowS],
+  )
   const zoomTo = (range: [number, number] | null) => setZoom(range && bounds ? clampWindow(range, bounds) : null)
 
   const flows = useMemo<Flows>(() => {
@@ -332,6 +345,7 @@ export function PlanCharts({
         following={zoom === null}
         onZoom={zoomTo}
         split={ahead}
+        markers={midnights}
         nowS={nowS}
         pastEndS={pastEndS}
         timeZone={data.timezone}
@@ -352,9 +366,11 @@ export function PlanCharts({
             xRange={shown}
             onZoom={zoomTo}
             split={ahead}
+            markers={midnights}
+            timeAxis="ticks"
             now={nowS}
             timeZone={data.timezone}
-            height={190}
+            height={150}
             popup={slotTag}
           />
         </section>
@@ -374,9 +390,11 @@ export function PlanCharts({
             xRange={shown}
             onZoom={zoomTo}
             bands={prices.bands}
+            markers={midnights}
+            timeAxis="ticks"
             now={nowS}
             timeZone={data.timezone}
-            height={200}
+            height={160}
             popup={{ tag: prices.tag }}
             lanes={[prices.heat]}
           />
@@ -385,7 +403,16 @@ export function PlanCharts({
           )}
         </section>
       )}
-      <MpcRunStrip x={x} zoom={shown} onZoom={zoomTo} nowS={nowS} timeZone={data.timezone} />
+      <MpcRunStrip
+        x={x}
+        zoom={shown}
+        onZoom={zoomTo}
+        nowS={nowS}
+        timeZone={data.timezone}
+        markers={midnights}
+        nowLabel={nowLabel}
+        cursorLabel={cursorLabel}
+      />
       {bounds && shown && (
         <section className="chart-block">
           <h3>
@@ -413,12 +440,18 @@ function MpcRunStrip({
   onZoom,
   nowS,
   timeZone,
+  markers,
+  nowLabel,
+  cursorLabel,
 }: {
   x: number[]
   zoom: [number, number] | null
   onZoom: (range: [number, number] | null) => void
   nowS: number
   timeZone: string
+  markers: number[]
+  nowLabel: string
+  cursorLabel: (time: number, windowS: number) => string
 }) {
   const navigate = useNavigate()
   // Whole hours keep the query key steady while the chart's first slot moves on
@@ -451,8 +484,11 @@ function MpcRunStrip({
         xRange={zoom}
         onZoom={onZoom}
         now={nowS}
+        nowLabel={nowLabel}
+        cursorLabel={cursorLabel}
+        markers={markers}
         timeZone={timeZone}
-        height={78}
+        height={84}
         ticks={ticks}
         onTick={(tick) => tick.id && navigate(`/runs/${tick.id}`)}
       />
@@ -476,6 +512,7 @@ function PowerChart({
   following,
   onZoom,
   split,
+  markers,
   nowS,
   pastEndS,
   timeZone,
@@ -488,6 +525,7 @@ function PowerChart({
   following: boolean
   onZoom: (range: [number, number] | null) => void
   split: ChartSplit
+  markers: number[]
   nowS: number
   pastEndS: number
   timeZone: string
@@ -684,9 +722,11 @@ function PowerChart({
         xRange={zoom}
         onZoom={onZoom}
         split={split}
+        markers={markers}
+        timeAxis="ticks"
         now={nowS}
         timeZone={timeZone}
-        height={bands.length > 0 ? 356 : 330}
+        height={bands.length > 0 ? 312 : 286}
         popup={popup}
         legend={false}
         overlays={overlays}

@@ -56,6 +56,15 @@ These come from docs/PLAN.md §10:
     Legend swatches and cursor dots keep the series' own colour. `lib/chartFade.ts`.
   - Plan page: the stacked areas, the grid plan, its tail in the slot in progress and the planned SOC are fainter right
     of the now line, on `--chart-ahead`. The past is no longer shaded (`pastShade` is gone).
+- **G2, one time axis:**
+  - TimeChart takes `timeAxis: 'ticks'` (gridlines, no labels), `axisWidth`, `nowLabel` (a pill on the canvas at the
+    now line; the labels within 52 px of it are left out) and `cursorLabel` (a DOM pill at the cursor, from the cursor
+    store, so it follows the synced charts too).
+  - Plan page: Power, SOC and Price have tick-only axes and are shorter; the MPC runs strip carries the labels,
+    "now 14:34" and the cursor's moment ("12:59:58" in the past within 12 h, else "13:00"). Every chart has a hairline
+    at each local midnight (`--chart-midnight`).
+  - `lib/chartTime.ts`: `localMidnights` (moved from Overview, 900 s steps so 23- and 25-hour days work), `spanLabel`,
+    `rangeLabel`, `cursorTimeLabel`, `clearOf`.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

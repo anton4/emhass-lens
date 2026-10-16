@@ -20,7 +20,7 @@ import {
   type ChartOverlay,
   type FitOptions,
 } from '../../lib/chartRange'
-import { ChartPopup } from './ChartPopup'
+import { ChartPopup, CursorPill } from './ChartPopup'
 import { createCursorStore, type CursorAt, type PopupBlock, type PopupExtra, type PopupTag } from './cursorStore'
 import { cssColor, cssValue, useThemeVersion, withAlpha } from './useTheme'
 
@@ -241,6 +241,14 @@ interface TimeChartProps {
   onSession?: (ids: string[]) => void
   /** Draw the series, overlays and gaps that have a `fade` fainter on one side of a moment. */
   split?: ChartSplit
+  /** 'ticks': the time axis keeps its gridlines but no labels (a chart above another on the same axis). */
+  timeAxis?: 'labels' | 'ticks'
+  /** The y-axis's width, CSS px (default 64). */
+  axisWidth?: number
+  /** A pill on the time axis at `now` ("now 15:32"); the axis's labels near it are left out. */
+  nowLabel?: string
+  /** A pill on the time axis at the cursor, with this text for its moment and the window's length (s). */
+  cursorLabel?: (time: number, windowS: number) => string
 }
 
 const NONE: never[] = []
@@ -645,6 +653,28 @@ function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
   ctx.restore()
 }
 
+/** The now line's pill on the time axis, under the plot and its lanes: "now 15:32" in the now line's colour. */
+function drawNowPill(u: uPlot, now: number, text: string, lanesPx: number, dpr: number) {
+  const { ctx, bbox } = u
+  const px = u.valToPos(now, 'x', true)
+  if (px < bbox.left || px > bbox.left + bbox.width) return
+  ctx.save()
+  ctx.font = `600 ${12 * dpr}px ${cssValue('--font-body') || 'sans-serif'}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const h = 20 * dpr
+  const w = ctx.measureText(text).width + 20 * dpr
+  const top = bbox.top + bbox.height + (lanesPx + 4) * dpr
+  const left = Math.min(Math.max(px - w / 2, 0), ctx.canvas.width - w)
+  ctx.fillStyle = cssColor('--chart-now')
+  ctx.beginPath()
+  ctx.roundRect(left, top, w, h, h / 2)
+  ctx.fill()
+  ctx.fillStyle = cssColor('--panel')
+  ctx.fillText(text, left + w / 2, top + h / 2 + 0.5 * dpr)
+  ctx.restore()
+}
+
 const axisFormats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat }>()
 /** 24-hour axis labels in the chart's timezone; the date is added at midnight and on the first tick. */
 function axisLabels(splits: number[], timeZone?: string): string[] {
@@ -689,6 +719,7 @@ export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
   snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession, split,
+  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -696,12 +727,12 @@ export function TimeChart({
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
     bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-    sessions, onSession, split,
+    sessions, onSession, split, nowLabel, cursorLabel,
   })
   useEffect(() => {
     extras.current = {
       bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-      sessions, onSession, split,
+      sessions, onSession, split, nowLabel, cursorLabel,
     }
   })
   const [cursor] = useState(createCursorStore)
@@ -723,13 +754,21 @@ export function TimeChart({
 
   const zoomable = Boolean(onZoom)
   const withPopup = Boolean(popup) && !compact
+  const withPill = Boolean(cursorLabel) && timeAxis === 'labels'
+  const readPill = useCallback(() => {
+    const xs = extras.current.x
+    const shown = extras.current.xRange ?? [xs[0] ?? 0, xs[xs.length - 1] ?? 0]
+    return { label: extras.current.cursorLabel, windowS: shown[1] - shown[0] }
+  }, [])
+  // lanes sit between the plot and the time axis's labels, which move down to make room
+  const lanesPx = lanes.length ? LANE_GAP + lanes.length * LANE_H : 0
   const specKey = JSON.stringify([
     series.map((s) => [
       s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column, s.fade?.line,
       s.fade?.fill,
     ]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
-    lanes.length, sessions.length > 0,
+    lanes.length, sessions.length > 0, timeAxis, axisWidth, withPill,
   ])
   const columns = series.some((s) => s.column)
 
@@ -739,8 +778,7 @@ export function TimeChart({
     const ink = cssColor('--ink-muted')
     const grid = cssColor('--chart-grid')
     const axisFont = `12px ${cssValue('--font-body') || 'sans-serif'}`
-    // lanes sit between the plot and the time axis's labels, which move down to make room
-    const lanesPx = lanes.length ? LANE_GAP + lanes.length * LANE_H : 0
+    const labelled = timeAxis === 'labels'
     const flagged = sessions.length > 0
     // what was drawn outside the plot that a click opens, and the session the pointer is in
     let hits: Hit[] = []
@@ -856,6 +894,7 @@ export function TimeChart({
     // the popup follows the cursor once per frame; only the chart under the pointer marks the nearest line
     let hovered = false
     let frame: number | null = null
+    const following = withPopup || withPill
     const follow = (u: uPlot) => {
       frame = null
       const left = u.cursor.left ?? -1
@@ -947,8 +986,16 @@ export function TimeChart({
           font: axisFont,
           grid: { stroke: grid, width: 1 },
           ticks: { stroke: grid, width: 1, show: lanesPx === 0 },
-          values: (_u, splits) => axisLabels(splits, timeZone),
-          size: 44 + lanesPx,
+          values: (u, splits) => {
+            if (!labelled) return splits.map(() => '')
+            const labels = axisLabels(splits, timeZone)
+            // the now pill takes its place on the axis
+            const at = extras.current.nowLabel ? extras.current.now : undefined
+            if (at === undefined) return labels
+            const nowPx = u.valToPos(at, 'x')
+            return labels.map((label, i) => (Math.abs(u.valToPos(splits[i] ?? 0, 'x') - nowPx) < 52 ? '' : label))
+          },
+          size: (labelled ? 44 : 4) + lanesPx,
           gap: 5 + lanesPx,
         },
         {
@@ -956,7 +1003,7 @@ export function TimeChart({
           font: axisFont,
           grid: { stroke: grid, width: 1, show: !compact },
           ticks: { stroke: grid, width: 1, show: !compact },
-          size: 64,
+          size: axisWidth,
           values: compact
             ? () => []
             : yFormat
@@ -1008,7 +1055,7 @@ export function TimeChart({
       hooks: {
         ready: [
           (u) => {
-            if (withPopup) {
+            if (following) {
               cursor.setOver(u.over)
               u.over.addEventListener('mouseenter', () => {
                 hovered = true
@@ -1086,7 +1133,7 @@ export function TimeChart({
         ],
         setCursor: [
           (u) => {
-            if (withPopup && frame === null) frame = requestAnimationFrame(() => follow(u))
+            if (following && frame === null) frame = requestAnimationFrame(() => follow(u))
             if (flagged) enter(u)
           },
         ],
@@ -1141,9 +1188,12 @@ export function TimeChart({
               ctx.stroke()
               ctx.restore()
             }
-            for (const m of extras.current.markers) line(m, cssColor('--chart-axis'), [])
+            for (const m of extras.current.markers) line(m, cssColor('--chart-midnight'), [])
             if (extras.current.now !== undefined) line(extras.current.now, cssColor('--chart-now'), [])
             const dpr = window.devicePixelRatio
+            if (labelled && extras.current.nowLabel && extras.current.now !== undefined) {
+              drawNowPill(u, extras.current.now, extras.current.nowLabel, lanesPx, dpr)
+            }
             ctx.save()
             for (const tick of extras.current.ticks) {
               const px = u.valToPos(tick.t, 'x', true)
@@ -1196,6 +1246,11 @@ export function TimeChart({
     plot.current?.redraw(false)
   }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions, split])
 
+  // the axis leaves out its labels near the now pill: they move with it
+  useEffect(() => {
+    if (nowLabel) plot.current?.redraw(false, true)
+  }, [now, nowLabel])
+
   // new overlay values may move the y-axis: setting the time window again refits it
   useEffect(() => {
     if (plot.current) applyXRange(plot.current, extras.current.x, extras.current.xRange)
@@ -1212,6 +1267,7 @@ export function TimeChart({
         style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
       />
       {withPopup && <ChartPopup store={cursor} read={readPopup} />}
+      {withPill && <CursorPill store={cursor} read={readPill} offset={lanesPx + 4} />}
     </>
   )
 }

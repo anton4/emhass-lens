@@ -2285,6 +2285,24 @@ button.diff-locate {
   pointer-events: none;
 }
 
+/* the cursor's moment on the time axis, beside the now pill drawn on the canvas */
+.chart-cursor-pill {
+  position: absolute;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  border: 1px solid var(--frame-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .price-stack {
   width: 100%;
 }

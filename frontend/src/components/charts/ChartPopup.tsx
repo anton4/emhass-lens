@@ -152,6 +152,29 @@ export function ChartPopup({
   )
 }
 
+/** The cursor's moment as a pill on the time axis, `offset` px under the plot. */
+export function CursorPill({
+  store,
+  read,
+  offset,
+}: {
+  store: CursorStore
+  read: () => { label?: (time: number, windowS: number) => string; windowS: number }
+  offset: number
+}) {
+  const { over, at } = useSyncExternalStore(store.subscribe, store.get)
+  if (!over || !at) return null
+  const { label, windowS } = read()
+  const text = label?.(at.time, windowS)
+  if (!text) return null
+  return createPortal(
+    <span className="chart-cursor-pill" style={{ left: at.left, top: `calc(100% + ${offset}px)` }} aria-hidden="true">
+      {text}
+    </span>,
+    over,
+  )
+}
+
 /** A row under a value: the plan at the time (a dashed key), the quarter-hour's mean, the readings' range. */
 function SubRow({ value, name, dashed = false }: { value: string; name: string; dashed?: boolean }) {
   return (
