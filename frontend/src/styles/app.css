@@ -2297,6 +2297,43 @@ button.diff-locate {
   pointer-events: none;
 }
 
+/* a drag across a chart: the range it zooms into, blue with firm edges, its times in a chip over it */
+.time-chart .u-over {
+  touch-action: pan-y;
+}
+
+.time-chart .u-select {
+  background: var(--chart-select);
+  box-shadow:
+    inset 1.5px 0 var(--chart-select-edge),
+    inset -1.5px 0 var(--chart-select-edge);
+}
+
+.chart-drag-cancelled .time-chart .u-select {
+  display: none;
+}
+
+.uplot.is-panning .u-over {
+  cursor: grabbing;
+}
+
+.chart-select-chip {
+  position: absolute;
+  top: 6px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--chart-select-edge);
+  color: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 /* a chart the arrow keys move along */
 .time-chart[tabindex]:focus-visible {
   outline: 2px solid var(--focus);

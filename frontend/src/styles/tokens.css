@@ -124,6 +124,9 @@
   --chart-midnight: #d3d6dc;
   /* what the plan said at the time, under what was measured */
   --chart-then: #7d8089;
+  /* a range dragged across a chart */
+  --chart-select: rgba(2, 119, 189, 0.12);
+  --chart-select-edge: #0277bd;
   --chart-now: #1b1c1f;
   /* the chart popup's "planned then" column */
   --then-band: #eef4fb;
@@ -245,6 +248,8 @@
     --chart-ahead: rgba(79, 195, 247, 0.04);
     --chart-midnight: #3a3d43;
     --chart-then: #8f939b;
+    --chart-select: rgba(79, 195, 247, 0.16);
+    --chart-select-edge: #4fc3f7;
     --chart-now: #e3e4e8;
     --then-band: #172431;
     --then-ink: #9ec3e6;

@@ -187,6 +187,44 @@ export function panBy([a, b]: [number, number], dt: number, bounds: [number, num
   return clampWindow([a + dt, b + dt], bounds)
 }
 
+/** The window after dragging the plot sideways by `dxPx` (a plot `plotPx` wide): the time under the pointer stays
+ *  under it, so a drag to the right shows earlier times. */
+export function dragPan(
+  from: [number, number],
+  dxPx: number,
+  plotPx: number,
+  bounds: [number, number],
+): [number, number] {
+  return panBy(from, (-dxPx / Math.max(1, plotPx)) * (from[1] - from[0]), bounds)
+}
+
+/** The window after a two-finger gesture: the times under the fingers when it started (`start.a`, `start.b`, plot px
+ *  in the window `start.window`) stay under them at `now.a` and `now.b`, so spreading them zooms in and moving them
+ *  together pans. At least MIN_WINDOW_S wide and inside `bounds`. */
+export function pinchWindow(
+  start: { window: [number, number]; a: number; b: number },
+  now: { a: number; b: number },
+  plotPx: number,
+  bounds: [number, number],
+): [number, number] {
+  const [w0, w1] = start.window
+  const span0 = w1 - w0
+  const px = Math.max(1, plotPx)
+  const ta = w0 + (start.a / px) * span0
+  const tb = w0 + (start.b / px) * span0
+  const was = Math.abs(start.b - start.a)
+  const is = Math.abs(now.b - now.a)
+  const span = Math.min(
+    bounds[1] - bounds[0],
+    Math.max(MIN_WINDOW_S, was < 8 || is < 8 ? span0 : span0 * (was / is)),
+  )
+  // the midpoint of the fingers keeps the time it had
+  const mid = (ta + tb) / 2
+  const midPx = (now.a + now.b) / 2
+  const startT = mid - (midPx / px) * span
+  return clampWindow([startT, startT + span], bounds)
+}
+
 /** Where a wheel turn takes the window shown: an up/down turn zooms around the pointer's time `at` (at most by half
  *  per event); a sideways turn, or any turn with `pan` (Shift held), moves the window by the turn's share of the plot
  *  `width`. Kept inside `bounds` and at least MIN_WINDOW_S wide; null when it doesn't move. */

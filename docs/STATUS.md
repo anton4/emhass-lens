@@ -75,6 +75,17 @@ These come from docs/PLAN.md §10:
   the last key (`readoutText`). `lib/chartKeys.ts` (`keyCommand`, `applyKey`, `adaptiveStep`, `keyHint`);
   `zoomAround` and `panBy` came out of `wheelWindow`. On the Plan page only the Power chart is a tab stop.
   - Checked in Chrome: the arrow keys, Shift, +, Page Down and Home, the popups on all four charts, the readout.
+- **G5, dragging and touch:**
+  - Shift + drag moves the window (a capture-phase mousedown on uPlot's root, before its own select starts;
+    `dragPan`).
+  - A range drag shows its times in a chip over the plot ("12:00 – 13:23 · 1 h 23 min") on the chart under the
+    pointer, and the selection is blue with firm edges. Escape cancels it. uPlot hands a drag to every chart on the
+    sync key, and each zooms in its own setSelect hook, so the cancel is a module-level flag, cleared on the window's
+    mouseup after uPlot's document mouseup.
+  - Touch, through pointer events: one finger reads the values where it is; two fingers pinch to zoom and move
+    together to pan (`pinchWindow`). `touch-action: pan-y` on the plot, and Safari's `gesturestart` is prevented.
+  - Checked with synthetic events in Chrome (uPlot ignores mousemoves without `movementX`). A real phone through
+    Ingress is still to do. The test tab was hidden at times, and rAF then never runs, so popups wait.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

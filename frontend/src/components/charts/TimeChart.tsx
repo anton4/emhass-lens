@@ -11,13 +11,16 @@ import 'uplot/dist/uPlot.min.css'
 import { fadeStops, onFadedSide, scaleAlpha, splitOffset, type FadeSide } from '../../lib/chartFade'
 import { applyKey, keyCommand, keyHint, type KeyStep } from '../../lib/chartKeys'
 import { momentLabel, popupRows, readoutText, slotRange } from '../../lib/chartPopup'
+import { rangeLabel, spanLabel } from '../../lib/chartTime'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
 import { groupFlags, layoutFlags } from '../../lib/chartFlags'
 import {
+  dragPan,
   fitRange,
   overlayAt,
   overlayExtent,
   overlayRuns,
+  pinchWindow,
   wheelWindow,
   type ChartGap,
   type ChartOverlay,
@@ -260,6 +263,10 @@ interface TimeChartProps {
 }
 
 const NONE: never[] = []
+
+// A drag that Escape cancelled, until the mouse button comes up: uPlot hands a drag to the charts that share its sync
+// key, and each would zoom on its own when the button comes up.
+let dragCancelled = false
 
 /** The lanes under the plot: a sunk track each, its spans (hatched when off, with their marks hatched across them and
  *  their text where it fits), and its label right-aligned in the y-axis gutter. Spans with an id go into `hits`. */
@@ -928,6 +935,23 @@ export function TimeChart({
     }
     // the popup follows the cursor once per frame; only the chart under the pointer marks the nearest line
     let hovered = false
+    // a drag's range as a chip over the plot ("12:45 – 16:30 · 3 h 45 min"); Escape cancels the drag
+    let chip: HTMLDivElement | null = null
+    const zone = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+    const showChip = (u: uPlot) => {
+      if (!chip) return
+      const { left, width } = u.select
+      // only the chart the drag is on names its range
+      if (dragCancelled || width < 10 || !hovered) {
+        chip.hidden = true
+        return
+      }
+      const a = u.posToVal(left, 'x')
+      const b = u.posToVal(left + width, 'x')
+      chip.textContent = `${rangeLabel(a, b, zone)} · ${spanLabel(b - a)}`
+      chip.style.left = `${left + width / 2}px`
+      chip.hidden = false
+    }
     let frame: number | null = null
     const following = withPopup || withPill
     const follow = (u: uPlot) => {
@@ -1101,19 +1125,112 @@ export function TimeChart({
       hooks: {
         ready: [
           (u) => {
-            if (following) {
-              cursor.setOver(u.over)
-              u.over.addEventListener('mouseenter', () => {
-                hovered = true
-              })
-              u.over.addEventListener('mouseleave', () => {
-                hovered = false
-              })
-            }
+            if (following) cursor.setOver(u.over)
+            u.over.addEventListener('mouseenter', () => {
+              hovered = true
+            })
+            u.over.addEventListener('mouseleave', () => {
+              hovered = false
+            })
             u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
             u.over.addEventListener('mousemove', () => {
               keyAt.current = null
             })
+            const bounds = (): [number, number] | null => {
+              const xs = extras.current.x
+              const first = xs[0]
+              const last = xs[xs.length - 1]
+              return first !== undefined && last !== undefined && last > first ? [first, last] : null
+            }
+            if (zoomable) {
+              chip = document.createElement('div')
+              chip.className = 'chart-select-chip'
+              chip.hidden = true
+              u.over.appendChild(chip)
+              // Shift + drag moves the window instead of selecting a range: caught on the way down, before uPlot's own
+              // mousedown on the plot
+              u.root.addEventListener(
+                'mousedown',
+                (event) => {
+                  if (event.button !== 0 || !u.over.contains(event.target as Node)) return
+                  const b = bounds()
+                  if (!b) return
+                  if (!event.shiftKey) {
+                    // a range drag: Escape cancels it, on every chart it is synced to, until the button comes up
+                    dragCancelled = false
+                    const onKey = (e: globalThis.KeyboardEvent) => {
+                      if (e.key !== 'Escape') return
+                      dragCancelled = true
+                      document.documentElement.classList.add('chart-drag-cancelled')
+                      showChip(u)
+                    }
+                    // on the window, after uPlot's own mouseup on the document has fired every chart's setSelect
+                    const up = () => {
+                      window.removeEventListener('keydown', onKey)
+                      window.removeEventListener('mouseup', up)
+                      document.documentElement.classList.remove('chart-drag-cancelled')
+                      dragCancelled = false
+                    }
+                    window.addEventListener('keydown', onKey)
+                    window.addEventListener('mouseup', up)
+                    return
+                  }
+                  event.stopPropagation()
+                  event.preventDefault()
+                  const from = extras.current.xRange ?? b
+                  const x0 = event.clientX
+                  u.root.classList.add('is-panning')
+                  const move = (e: MouseEvent) =>
+                    extras.current.onZoom?.(dragPan(from, e.clientX - x0, u.over.clientWidth, b))
+                  const up = () => {
+                    window.removeEventListener('mousemove', move)
+                    window.removeEventListener('mouseup', up)
+                    u.root.classList.remove('is-panning')
+                  }
+                  window.addEventListener('mousemove', move)
+                  window.addEventListener('mouseup', up)
+                },
+                true,
+              )
+            }
+            // touch: one finger reads the values where it is, two pinch to zoom and move together to pan
+            const fingers = new Map<number, number>()
+            let pinch: { window: [number, number]; a: number; b: number; ids: [number, number] } | null = null
+            const localX = (e: PointerEvent) => e.clientX - u.over.getBoundingClientRect().left
+            const readAt = (e: PointerEvent) => {
+              hovered = true
+              keyAt.current = null
+              setCursorSynced(u, localX(e), e.clientY - u.over.getBoundingClientRect().top)
+            }
+            u.over.addEventListener('pointerdown', (e) => {
+              if (e.pointerType !== 'touch') return
+              fingers.set(e.pointerId, localX(e))
+              const b = bounds()
+              if (fingers.size === 2 && zoomable && b) {
+                const [[ia, a], [ib, bx]] = [...fingers.entries()] as [[number, number], [number, number]]
+                pinch = { window: extras.current.xRange ?? b, a, b: bx, ids: [ia, ib] }
+              } else if (fingers.size === 1) readAt(e)
+            })
+            u.over.addEventListener('pointermove', (e) => {
+              if (e.pointerType !== 'touch' || !fingers.has(e.pointerId)) return
+              fingers.set(e.pointerId, localX(e))
+              const b = bounds()
+              if (pinch && b) {
+                const a = fingers.get(pinch.ids[0])
+                const bx = fingers.get(pinch.ids[1])
+                if (a !== undefined && bx !== undefined) {
+                  extras.current.onZoom?.(pinchWindow(pinch, { a, b: bx }, u.over.clientWidth, b))
+                }
+              } else if (fingers.size === 1) readAt(e)
+            })
+            const lift = (e: PointerEvent) => {
+              fingers.delete(e.pointerId)
+              if (fingers.size < 2) pinch = null
+            }
+            u.over.addEventListener('pointerup', lift)
+            u.over.addEventListener('pointercancel', lift)
+            // Safari's own pinch would zoom the page
+            u.over.addEventListener('gesturestart', (e) => e.preventDefault())
             if (zoomable) {
               u.over.addEventListener(
                 'wheel',
@@ -1184,14 +1301,16 @@ export function TimeChart({
           (u) => {
             if (following && frame === null) frame = requestAnimationFrame(() => follow(u))
             if (flagged) enter(u)
+            if (chip) showChip(u)
           },
         ],
         setSelect: [
           (u) => {
             const { left, width } = u.select
             if (width < 10) return
-            extras.current.onZoom?.([u.posToVal(left, 'x'), u.posToVal(left + width, 'x')])
+            if (!dragCancelled) extras.current.onZoom?.([u.posToVal(left, 'x'), u.posToVal(left + width, 'x')])
             u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false)
+            showChip(u)
           },
         ],
         drawClear: [

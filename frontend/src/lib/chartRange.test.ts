@@ -3,11 +3,13 @@ import {
   brushGrab,
   brushWindow,
   clampWindow,
+  dragPan,
   fitRange,
   MIN_WINDOW_S,
   overlayAt,
   overlayExtent,
   overlayRuns,
+  pinchWindow,
   snapWindow,
   wheelWindow,
 } from './chartRange'
@@ -170,5 +172,35 @@ describe('overlayAt', () => {
     expect(overlayAt(overlay, 350)).toBeNull()
     expect(overlayAt(overlay, 50)).toBeNull()
     expect(overlayAt({ spans: [] }, 50)).toBeNull()
+  })
+})
+
+describe('dragPan', () => {
+  it('keeps the time under the pointer: a drag to the right shows earlier times', () => {
+    expect(dragPan([3600, 7200], 100, 1000, [0, 36000])).toEqual([3240, 6840])
+  })
+
+  it('stays inside the bounds', () => {
+    expect(dragPan([0, 3600], 500, 1000, [0, 36000])).toEqual([0, 3600])
+  })
+})
+
+describe('pinchWindow', () => {
+  const start = { window: [3600, 7200] as [number, number], a: 400, b: 600 }
+
+  it('zooms in when the fingers spread, around their midpoint', () => {
+    const out = pinchWindow(start, { a: 300, b: 700 }, 1000, [0, 36000])
+    expect(out[1] - out[0]).toBeCloseTo(1800)
+    expect((out[0] + out[1]) / 2).toBeCloseTo(5400)
+  })
+
+  it('pans when the fingers move together', () => {
+    expect(pinchWindow(start, { a: 500, b: 700 }, 1000, [0, 36000])).toEqual([3240, 6840])
+  })
+
+  it('never goes below the narrowest window or past the bounds', () => {
+    const out = pinchWindow(start, { a: 0, b: 1000 }, 1000, [0, 36000])
+    expect(out[1] - out[0]).toBeGreaterThanOrEqual(MIN_WINDOW_S)
+    expect(pinchWindow(start, { a: 495, b: 505 }, 1000, [0, 7200])).toEqual([0, 7200])
   })
 })
