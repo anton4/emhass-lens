@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PriceSlot, PricesResponse } from '../api/types'
-import { priceSummary, slotsIn, tariffNote, windowTitle } from './priceBreakdown'
+import { extremeNotes, priceSummary, slotsIn, tariffNote, windowTitle } from './priceBreakdown'
 
 const TZ = 'Europe/Tallinn'
 const at = (iso: string) => Date.parse(iso) / 1000
@@ -104,5 +104,31 @@ describe('tariffNote', () => {
       'Fees: margin 0.33 c, renewable 0.84 c, excise 0.21 c, balancing 0.37 c, supply security 0.76 c. Network: day 3.69 c, night 2.10 c (22:00–07:00). VAT 24 %.',
     )
     expect(tariffNote({ ...tariff, network_day_peak: 0.0819 }, false)).toContain('night 0.0210 € (22:00–07:00), day peak 0.0819 €.')
+  })
+})
+
+describe('extremeNotes', () => {
+  it('names each day’s cheapest and dearest quarter-hour over its column', () => {
+    const slots = [slot(12, { import_price: 0.071 }), slot(13), slot(14, { import_price: 0.3 })]
+    expect(extremeNotes(slots, TZ, false).map((n) => [n.t, n.value, n.text, n.look])).toEqual([
+      [DAY + 12 * 900 + 450, 0.071, 'cheapest 0.071 at 03:00', 'callout'],
+      [DAY + 14 * 900 + 450, 0.3, 'dearest 0.300 at 03:30', 'callout'],
+    ])
+    expect(extremeNotes(slots, TZ, true)[0]).toMatchObject({ value: 7.1, text: 'cheapest 7.1 c at 03:00' })
+  })
+
+  it('names only the window’s own over more than a day and a half', () => {
+    const slots = [slot(12, { import_price: 0.071 }), slot(14, { import_price: 0.3 }), slot(96 + 12, { import_price: 0.05 }), slot(96 + 14, { import_price: 0.4 })]
+    expect(extremeNotes(slots, TZ, false, [DAY + 86400, DAY + 2 * 86400]).map((n) => n.text)).toEqual([
+      'cheapest 0.071 at 03:00',
+      'dearest 0.300 at 03:30',
+      'cheapest 0.050 at 03:00',
+      'dearest 0.400 at 03:30',
+    ])
+    expect(extremeNotes(slots, TZ, false, [DAY, DAY + 2 * 86400]).map((n) => n.text)).toEqual([
+      'cheapest 0.050 at 03:00',
+      'dearest 0.400 at 03:30',
+    ])
+    expect(extremeNotes(slots, TZ, false)).toHaveLength(4)
   })
 })

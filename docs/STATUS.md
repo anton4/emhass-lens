@@ -285,6 +285,18 @@ These come from docs/PLAN.md §10:
     "Thu 15 Oct – Sat 17 Oct" or "Thu 01:00 → Sun 01:00", with the unit; the parts' toggles sit beside it.
   - **Footnote** from I2's `PricesResponse.tariff` (`tariffNote`): the fees, the network rates with the night
     window, and the VAT, in the unit chosen.
+- **I9, the export price, the tariff ribbon and shares on the price breakdown:**
+  - **Export price** as a green line over the columns, with its own toggle beside the parts' (remembered in this
+    browser, `emhass-lens.price-breakdown.export`); hidden, the y-axis doesn't fit it.
+  - **Popup:** the import price in its header (`totalInHead`), then VAT ("VAT 24 %" from the tariff), fees, network
+    and spot top down, each with its share, and the export price under a rule. The tag reads "Day tariff".
+  - **Tariff ribbon** under the chart from `periodLane(…, { long: true })`: "night network tariff" where it fits.
+  - **Callouts** (`extremeNotes`): "cheapest 0.103 at 00:45" over each day's cheapest and dearest column while the
+    window is a day or so; over a longer one only the window's own pair (six crowded a phone). They are kept out
+    of the series' memo, so zooming doesn't give the chart new data.
+  - Height 320, "Spot (Nord Pool)" in the key, and the arrow keys (a slot, ⇧ an hour, Home back to all days and
+    now); the footnote says so.
+  - Checked at 2560 and 390 px, light and dark (the dark tokens injected into a frame).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

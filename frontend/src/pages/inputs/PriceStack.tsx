@@ -1,32 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PriceSlot, PricesResponse } from '../../api/types'
 import { ChartHead } from '../../components/charts/ChartHead'
-import { TimeChart, type ChartNote, type ChartSeries } from '../../components/charts/TimeChart'
+import { TimeChart, type ChartSeries } from '../../components/charts/TimeChart'
+import { keyHint } from '../../lib/chartKeys'
 import { cursorTimeLabel, dayTimeLabel } from '../../lib/chartTime'
-import { priceSummary, slotsIn, tariffNote, windowTitle } from '../../lib/priceBreakdown'
+import { extremeNotes, priceSummary, slotsIn, tariffNote, windowTitle } from '../../lib/priceBreakdown'
 import {
   forecastRanges,
   importComponents,
   midnights,
   periodLabel,
+  periodLane,
   PRICE_PARTS,
-  priceExtremes,
   stackLayers,
   type PricePart,
 } from '../../lib/prices'
 import { eurTick, priceFactor, type PriceUnit } from '../../lib/units'
 import { Tile } from './Tile'
 
-// Bottom to top in four hues whose neighbours pass the colour-vision check in both themes (tokens.css --stack-*).
-const PARTS: readonly { key: PricePart; label: string; color: string; title?: string }[] = [
-  { key: 'spot', label: 'Spot', color: '--stack-spot' },
-  { key: 'network', label: 'Network', color: '--stack-network' },
-  { key: 'fees', label: 'Fees', color: '--stack-fees', title: 'Margin, renewable, excise, balancing and supply security' },
-  { key: 'vat', label: 'VAT', color: '--stack-vat' },
+// Bottom to top in four hues whose neighbours pass the colour-vision check in both themes (tokens.css --stack-*). The
+// popup lists them top down, each with its share of the price.
+const PARTS: readonly { key: PricePart; label: string; color: string; rank: number; title?: string }[] = [
+  { key: 'spot', label: 'Spot (Nord Pool)', color: '--stack-spot', rank: 3 },
+  { key: 'network', label: 'Network', color: '--stack-network', rank: 2 },
+  { key: 'fees', label: 'Fees', color: '--stack-fees', rank: 1, title: 'Margin, renewable, excise, balancing and supply security' },
+  { key: 'vat', label: 'VAT', color: '--stack-vat', rank: 0 },
 ]
 
-// The parts shown are remembered in this browser only; blocked storage just means all four.
+// the charts snap to slots: the arrow keys step one (Shift an hour)
+const KEY_STEP = { step: 900, big: 3600 }
+
+// The parts shown and the export line are remembered in this browser only; blocked storage just means all of them.
 const STORAGE_KEY = 'emhass-lens.price-breakdown.parts'
+const EXPORT_KEY = 'emhass-lens.price-breakdown.export'
 
 function loadShown(): Set<PricePart> {
   try {
@@ -38,9 +44,17 @@ function loadShown(): Set<PricePart> {
   return new Set(PRICE_PARTS)
 }
 
-function saveShown(shown: Set<PricePart>) {
+function loadExport(): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...shown]))
+    return localStorage.getItem(EXPORT_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
   } catch {
     // not remembered, still works for this visit
   }
@@ -55,8 +69,9 @@ function closed(values: number[], factor: number): (number | null)[] {
 
 /** What each quarter-hour's import price is made of: tiles over the slots in view (the average, how much of it is
  *  spot, the cheapest and the dearest), then a column per slot of spot, network, fees and VAT stacked, on the price
- *  chart's time axis, with the import price as a cap and each day's cheapest and dearest quarter-hour named, and the
- *  tariff's parts under it; the cursor, the zoom and the popup go along with the price chart. */
+ *  chart's time axis, with the import price as a cap, the export price as a line, each day's cheapest and dearest
+ *  quarter-hour called out and the network tariff's periods under it, and the tariff's parts in a footnote; the
+ *  cursor, the zoom and the popup go along with the price chart. */
 export function PriceStack({
   slots,
   tariff,
@@ -77,7 +92,9 @@ export function PriceStack({
   onZoom: (range: [number, number] | null) => void
 }) {
   const [shown, setShown] = useState<Set<PricePart>>(loadShown)
-  useEffect(() => saveShown(shown), [shown])
+  const [exportShown, setExportShown] = useState(loadExport)
+  useEffect(() => save(STORAGE_KEY, JSON.stringify([...shown])), [shown])
+  useEffect(() => save(EXPORT_KEY, exportShown ? 'on' : 'off'), [exportShown])
   const toggle = (key: PricePart) =>
     setShown((prev) => {
       const next = new Set(prev)
@@ -85,6 +102,7 @@ export function PriceStack({
       else next.add(key)
       return next
     })
+  const vatPct = tariff?.vat_pct
 
   const chart = useMemo(() => {
     const f = priceFactor(unit)
@@ -94,19 +112,25 @@ export function PriceStack({
     if (last) x.push(Date.parse(last.end) / 1000)
     const parts = slots.map(importComponents)
     const layers = stackLayers(parts, shown)
-    const part = (key: PricePart, below: number | undefined): ChartSeries => ({
-      label: PARTS.find((p) => p.key === key)!.label,
-      color: PARTS.find((p) => p.key === key)!.color,
-      values: closed(layers[key].hi, f),
-      readout: closed(
-        parts.map((p) => p[key]),
-        f,
-      ),
-      below,
-      column: 'stack',
-      muted: !shown.has(key),
-      format: fmt,
-    })
+    const part = (key: PricePart, below: number | undefined): ChartSeries => {
+      const p = PARTS.find((q) => q.key === key)!
+      return {
+        label: p.label,
+        popupLabel: key === 'spot' ? 'Spot' : key === 'vat' && typeof vatPct === 'number' ? `VAT ${Number(vatPct.toFixed(2))} %` : undefined,
+        color: p.color,
+        values: closed(layers[key].hi, f),
+        readout: closed(
+          parts.map((q) => q[key]),
+          f,
+        ),
+        below,
+        column: 'stack',
+        muted: !shown.has(key),
+        share: true,
+        popupRank: p.rank,
+        format: fmt,
+      }
+    }
     const all = PRICE_PARTS.every((p) => shown.has(p))
     const series: ChartSeries[] = [
       part('spot', undefined),
@@ -127,26 +151,46 @@ export function PriceStack({
         total: true,
         format: fmt,
       },
+      {
+        label: 'Export price',
+        color: '--q-export',
+        // hidden: no line, and the y-axis doesn't fit it
+        values: exportShown ? closed(slots.map((s) => s.export_price), f) : x.map(() => null),
+        width: 2,
+        helper: !exportShown,
+        rule: true,
+        popupRank: 10,
+        format: fmt,
+      },
     ]
     const periods = new Map(slots.map((s) => [Date.parse(s.start) / 1000, s.period]))
     const tag = (t: number) => {
       const period = periods.get(t)
-      return period ? { text: `${periodLabel(period)} rate` } : null
+      return period ? { text: `${periodLabel(period)} tariff` } : null
     }
-    // each day's cheapest and dearest quarter-hour, named over its column
-    const at = (v: number) => (unit === 'cents' ? `${(v * f).toFixed(1)} c` : (v * f).toFixed(3))
-    const notes: ChartNote[] = priceExtremes(slots, timeZone).flatMap((d) => [
-      { t: d.cheapest.t + 450, value: d.cheapest.value * f, text: `cheapest ${at(d.cheapest.value)}`, color: '--ink-2' },
-      { t: d.dearest.t + 450, value: d.dearest.value * f, text: `dearest ${at(d.dearest.value)}`, color: '--ink-2' },
-    ])
-    return { x, series, tag, notes, bands: forecastRanges(slots), markers: midnights(slots, timeZone), minSpan: 0.01 * f }
-  }, [slots, unit, shown, timeZone])
+    const lane = periodLane(
+      slots.map((s) => Date.parse(s.start) / 1000),
+      slots.map((s) => s.period),
+      { long: true },
+    )
+    return {
+      x,
+      series,
+      tag,
+      lanes: [lane],
+      bands: forecastRanges(slots),
+      markers: midnights(slots, timeZone),
+      minSpan: 0.01 * f,
+    }
+  }, [slots, unit, shown, exportShown, timeZone, vatPct])
+  // apart from the series, so a new window doesn't give the chart new data
+  const notes = useMemo(() => extremeNotes(slots, timeZone, unit === 'cents', xRange), [slots, timeZone, unit, xRange])
 
   const first = slots[0]
   const last = slots[slots.length - 1]
   const window: [number, number] | null =
     xRange ?? (first && last ? [Date.parse(first.start) / 1000, Date.parse(last.end) / 1000] : null)
-  const summary = useMemo(() => priceSummary(slotsIn(slots, xRange), tariff?.vat_pct), [slots, xRange, tariff])
+  const summary = useMemo(() => priceSummary(slotsIn(slots, xRange), vatPct), [slots, xRange, vatPct])
   const f = priceFactor(unit)
   const price = (v: number) => (unit === 'cents' ? `${(v * f).toFixed(1)} c/kWh` : `${v.toFixed(3)} €/kWh`)
   const slotName = (s: PriceSlot) =>
@@ -176,7 +220,7 @@ export function PriceStack({
         title={window ? windowTitle(window, nowS, timeZone) : 'What the import price is made of'}
         unit={`${unit === 'cents' ? 'c/kWh' : '€/kWh'}, VAT included`}
       >
-        <ul className="legend" role="group" aria-label="Parts shown in the chart">
+        <ul className="legend" role="group" aria-label="Shown in the chart">
           {PARTS.map((p) => (
             <li key={p.key}>
               <button
@@ -191,12 +235,24 @@ export function PriceStack({
               </button>
             </li>
           ))}
+          <li>
+            <button
+              type="button"
+              className="legend-toggle"
+              aria-pressed={exportShown}
+              title={`What exporting a kilowatt-hour earns. ${exportShown ? 'Hide from the chart' : 'Show in the chart'}`}
+              onClick={() => setExportShown((v) => !v)}
+            >
+              <span className="legend-swatch" data-line style={{ color: 'var(--q-export)' }} />
+              Export price
+            </button>
+          </li>
         </ul>
       </ChartHead>
       <TimeChart
         x={chart.x}
         series={chart.series}
-        ariaLabel="What each quarter-hour's import price is made of: a column of spot, network, fees and VAT, stacked, with each day's cheapest and dearest quarter-hour named. The table below has every value."
+        ariaLabel="What each quarter-hour's import price is made of: a column of spot, network, fees and VAT, stacked, with the export price as a line, each day's cheapest and dearest quarter-hour called out and the network tariff's periods under the chart. The table below has every value."
         syncKey={syncKey}
         timeZone={timeZone}
         yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
@@ -206,13 +262,18 @@ export function PriceStack({
         bands={chart.bands}
         markers={chart.markers}
         now={nowS}
-        height={240}
-        popup={{ tag: chart.tag }}
+        height={320}
+        popup={{ tag: chart.tag, totalInHead: true }}
         legend={false}
-        notes={chart.notes}
+        notes={notes}
+        lanes={chart.lanes}
+        keyboard={{ step: KEY_STEP, home: nowS }}
         snapToSlot
       />
-      {tariff && <p className="chart-note">{tariffNote(tariff, unit === 'cents')}</p>}
+      <p className="chart-note">
+        Point at a column, or focus the chart: {keyHint(KEY_STEP).replace(/^A/, 'a')}.{' '}
+        {tariff && tariffNote(tariff, unit === 'cents')}
+      </p>
     </div>
   )
 }

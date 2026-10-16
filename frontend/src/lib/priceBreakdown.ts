@@ -2,9 +2,10 @@
 // dearest of them, the chart's title for the window shown, and the tariff's parts as a footnote.
 
 import type { PriceSlot, PricesResponse } from '../api/types'
+import type { ChartNote } from '../components/charts/TimeChart'
 import { cursorTimeLabel, dayDateLabel, dayTimeLabel } from './chartTime'
 import { shiftDay } from './days'
-import { localDay } from './prices'
+import { localDay, priceExtremes } from './prices'
 
 type Tariff = NonNullable<PricesResponse['tariff']>
 
@@ -83,4 +84,34 @@ export function tariffNote(tariff: Tariff, cents: boolean): string {
   if (typeof tariff.network_day_peak === 'number') network.push(`day peak ${v(tariff.network_day_peak)}`)
   if (typeof tariff.network_holiday_peak === 'number') network.push(`weekend peak ${v(tariff.network_holiday_peak)}`)
   return `Fees: ${fees.map(([name, x]) => `${name} ${v(x)}`).join(', ')}. Network: ${network.join(', ')}. VAT ${Number(tariff.vat_pct.toFixed(2))} %.`
+}
+
+// up to this window the callouts name each day's cheapest and dearest; over a longer one only the window's own
+const PER_DAY_S = 36 * 3600
+
+/** The cheapest and dearest quarter-hour as callouts over their columns ("cheapest 0.071 at 03:15"), on the chart's
+ *  scale (€ or cents): each local day's while the window is a day or so, else the window's own. */
+export function extremeNotes(
+  slots: readonly PriceSlot[],
+  timeZone: string,
+  cents: boolean,
+  window: [number, number] | null = null,
+): ChartNote[] {
+  const f = cents ? 100 : 1
+  const text = (v: number) => (cents ? `${(v * f).toFixed(1)} c` : v.toFixed(3))
+  const note = (what: string, p: { t: number; value: number }): ChartNote => ({
+    t: p.t + 450,
+    value: p.value * f,
+    text: `${what} ${text(p.value)} at ${cursorTimeLabel(p.t, timeZone, false)}`,
+    color: '--ink',
+    look: 'callout',
+  })
+  const point = (s: PriceSlot) => ({ t: startOf(s), value: s.import_price })
+  let pairs = priceExtremes([...slots], timeZone)
+  const span = window ? window[1] - window[0] : slots.length > 0 ? endOf(slots[slots.length - 1]!) - startOf(slots[0]!) : 0
+  if (span > PER_DAY_S) {
+    const summary = priceSummary(slotsIn(slots, window), null)
+    pairs = summary ? [{ cheapest: point(summary.cheapest), dearest: point(summary.dearest) }] : []
+  }
+  return pairs.flatMap((d) => [note('cheapest', d.cheapest), note('dearest', d.dearest)])
 }
