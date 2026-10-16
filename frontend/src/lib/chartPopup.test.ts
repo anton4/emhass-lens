@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { momentLabel, nearestRow, placePopup, popupRows, slotRange, type PopupSeries } from './chartPopup'
+import { momentLabel, nearestRow, placePopup, popupRows, readoutText, slotRange, type PopupSeries } from './chartPopup'
 import { formatPower, formatSignedPower } from './units'
 
 const charging = (w: number) => (w > 0 ? 'charging' : w < 0 ? 'discharging' : 'idle')
@@ -103,5 +103,20 @@ describe('signed power', () => {
     expect(formatSignedPower(-850)).toBe('−850 W')
     expect(formatSignedPower(0.4)).toBe('0 W')
     expect(formatSignedPower(null)).toBe('—')
+  })
+})
+
+describe('readoutText', () => {
+  it('reads the rows after the moment, with their direction and the plan at the time', () => {
+    expect(
+      readoutText('Fri 13:25', [
+        { name: 'Grid', value: '−2.55 kW', describe: 'exporting', then: '−1.04 kW' },
+        { name: 'PV', value: '4.75 kW', describe: '', then: null },
+      ]),
+    ).toBe('Fri 13:25: Grid −2.55 kW, exporting, planned then −1.04 kW; PV 4.75 kW')
+  })
+
+  it('is just the moment without rows', () => {
+    expect(readoutText('Fri 13:25', [])).toBe('Fri 13:25')
   })
 })

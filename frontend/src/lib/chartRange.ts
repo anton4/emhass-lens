@@ -163,6 +163,30 @@ export function clampWindow([a, b]: [number, number], [lo, hi]: [number, number]
   return [start, start + span]
 }
 
+/** `window` zoomed by `factor` (below 1 zooms in) around the time `at` (kept inside the window), at least MIN_WINDOW_S
+ *  wide and inside `bounds`. */
+export function zoomAround(
+  [a, b]: [number, number],
+  at: number,
+  factor: number,
+  bounds: [number, number],
+): [number, number] {
+  const pivot = Math.min(Math.max(at, a), b)
+  let start = pivot - (pivot - a) * factor
+  let end = pivot + (b - pivot) * factor
+  if (end - start < MIN_WINDOW_S) {
+    const mid = (start + end) / 2
+    start = mid - MIN_WINDOW_S / 2
+    end = mid + MIN_WINDOW_S / 2
+  }
+  return clampWindow([start, end], bounds)
+}
+
+/** `window` moved by `dt` seconds, kept inside `bounds`. */
+export function panBy([a, b]: [number, number], dt: number, bounds: [number, number]): [number, number] {
+  return clampWindow([a + dt, b + dt], bounds)
+}
+
 /** Where a wheel turn takes the window shown: an up/down turn zooms around the pointer's time `at` (at most by half
  *  per event); a sideways turn, or any turn with `pan` (Shift held), moves the window by the turn's share of the plot
  *  `width`. Kept inside `bounds` and at least MIN_WINDOW_S wide; null when it doesn't move. */
@@ -178,24 +202,12 @@ export function wheelWindow(
     dx = dy
     dy = 0
   }
-  let next: [number, number]
-  if (Math.abs(dx) > Math.abs(dy)) {
-    const dt = (dx / Math.max(1, o.width)) * span
-    next = [a + dt, b + dt]
-  } else {
+  let out: [number, number]
+  if (Math.abs(dx) > Math.abs(dy)) out = panBy(shown, (dx / Math.max(1, o.width)) * span, bounds)
+  else {
     if (dy === 0) return null
-    const factor = Math.exp(Math.max(-0.5, Math.min(0.5, dy * 0.0025)))
-    const at = Math.min(Math.max(o.at, a), b)
-    let start = at - (at - a) * factor
-    let end = at + (b - at) * factor
-    if (end - start < MIN_WINDOW_S) {
-      const mid = (start + end) / 2
-      start = mid - MIN_WINDOW_S / 2
-      end = mid + MIN_WINDOW_S / 2
-    }
-    next = [start, end]
+    out = zoomAround(shown, o.at, Math.exp(Math.max(-0.5, Math.min(0.5, dy * 0.0025))), bounds)
   }
-  const out = clampWindow(next, bounds)
   return Math.abs(out[0] - a) < 0.5 && Math.abs(out[1] - b) < 0.5 ? null : out
 }
 

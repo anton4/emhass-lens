@@ -5,10 +5,12 @@
 // data (fit) and a drag selects a time range to zoom into (onZoom / xRange). Sessions (market sessions) are bands
 // across the plot with a flag above it; while the pointer is in one, the series fade so its overlays stand out.
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { fadeStops, onFadedSide, scaleAlpha, splitOffset, type FadeSide } from '../../lib/chartFade'
+import { applyKey, keyCommand, keyHint, type KeyStep } from '../../lib/chartKeys'
+import { momentLabel, popupRows, readoutText, slotRange } from '../../lib/chartPopup'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
 import { groupFlags, layoutFlags } from '../../lib/chartFlags'
 import {
@@ -250,6 +252,11 @@ interface TimeChartProps {
   nowLabel?: string
   /** A pill on the time axis at the cursor, with this text for its moment and the window's length (s). */
   cursorLabel?: (time: number, windowS: number) => string
+  /** Focusable, with the arrow keys moving the cursor (charts sharing the syncKey follow), + and − zooming around
+   *  it, Page Up/Down moving the window, Home going back to the chart's own window (onZoom(null), the cursor at
+   *  `home` or now) and Escape putting the cursor away. `step` may follow the window shown (s) and the plot's width
+   *  (px). A screen reader hears the values at the cursor. */
+  keyboard?: { step: KeyStep | ((windowS: number, plotPx: number) => KeyStep); home?: number }
 }
 
 const NONE: never[] = []
@@ -708,6 +715,29 @@ function readoutTime(ts: number, timeZone?: string): string {
   return fmt.format(new Date(ts * 1000))
 }
 
+/** uPlot's setCursor with its third argument, which the types leave out: publish to the charts sharing the sync key. */
+function setCursorSynced(u: uPlot, left: number, top: number) {
+  ;(u.setCursor as (opts: { left: number; top: number }, fire?: boolean, pub?: boolean) => void)({ left, top }, true, true)
+}
+
+/** The cursor at `time`, half-way down the plot; charts sharing the sync key follow. */
+function placeCursor(u: uPlot, time: number) {
+  const left = u.valToPos(time, 'x')
+  if (left < 0 || left > u.over.clientWidth) return
+  setCursorSynced(u, left, u.over.clientHeight / 2)
+}
+
+/** The keyboard's step for the window shown (the plot's width isn't known before the chart is drawn: 1000 px). */
+function keyStepFor(
+  keyboard: NonNullable<TimeChartProps['keyboard']>,
+  x: number[],
+  xRange: [number, number] | null,
+): KeyStep {
+  if (typeof keyboard.step !== 'function') return keyboard.step
+  const shown = xRange ?? [x[0] ?? 0, x[x.length - 1] ?? 0]
+  return keyboard.step(shown[1] - shown[0], 1000)
+}
+
 /** Show `range` (or all of `x` when null) on the chart's time axis; the y-axis refits to it. */
 function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) {
   const first = x[0]
@@ -720,7 +750,7 @@ export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
   snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession, split,
-  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel,
+  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel, keyboard,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -728,14 +758,18 @@ export function TimeChart({
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
     bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-    sessions, onSession, split, nowLabel, cursorLabel,
+    sessions, onSession, split, nowLabel, cursorLabel, keyboard,
   })
   useEffect(() => {
     extras.current = {
       bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-      sessions, onSession, split, nowLabel, cursorLabel,
+      sessions, onSession, split, nowLabel, cursorLabel, keyboard,
     }
   })
+  // the cursor the keyboard placed (unix s), until the mouse takes over
+  const keyAt = useRef<number | null>(null)
+  const [readout, setReadout] = useState('')
+  const readoutTimer = useRef<number | null>(null)
   const [cursor] = useState(createCursorStore)
   const readPopup = useCallback(
     () => ({
@@ -1077,6 +1111,9 @@ export function TimeChart({
               })
             }
             u.over.addEventListener('dblclick', () => extras.current.onZoom?.(null))
+            u.over.addEventListener('mousemove', () => {
+              keyAt.current = null
+            })
             if (zoomable) {
               u.over.addEventListener(
                 'wheel',
@@ -1252,7 +1289,75 @@ export function TimeChart({
 
   useEffect(() => {
     if (plot.current) applyXRange(plot.current, extras.current.x, xRange)
+    // the keyboard's cursor stays on its moment as the window moves under it
+    if (plot.current && keyAt.current !== null) placeCursor(plot.current, keyAt.current)
   }, [xRange])
+
+  useEffect(
+    () => () => {
+      if (readoutTimer.current !== null) window.clearTimeout(readoutTimer.current)
+    },
+    [],
+  )
+
+  // the values at the keyboard's cursor, read out a moment after the last key
+  const announce = (time: number) => {
+    if (readoutTimer.current !== null) window.clearTimeout(readoutTimer.current)
+    readoutTimer.current = window.setTimeout(() => {
+      const xs = extras.current.x
+      const idx = slotIndex(xs, time)
+      const t = xs[idx]
+      if (t === undefined) return
+      const p = extras.current.popup
+      const head = p?.head?.(t, time) ?? (snapToSlot ? slotRange(t, xs[idx + 1] ?? t + 900, timeZone) : momentLabel(time, timeZone))
+      const { rows } = popupRows(extras.current.series, idx, time)
+      const extra = p?.extra?.(t, time) ?? []
+      setReadout(readoutText(head, [...rows, ...extra.map((r) => ({ name: r.name, value: r.value, describe: '', then: null }))]))
+    }, 300)
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const u = plot.current
+    const kb = extras.current.keyboard
+    if (!u || !kb) return
+    const cmd = keyCommand(event)
+    if (!cmd) return
+    const xs = extras.current.x
+    const first = xs[0]
+    const last = xs[xs.length - 1]
+    if (first === undefined || last === undefined) return
+    event.preventDefault()
+    const bounds: [number, number] = [first, last]
+    const shown = extras.current.xRange ?? bounds
+    const step = typeof kb.step === 'function' ? kb.step(shown[1] - shown[0], u.over.clientWidth) : kb.step
+    const now = extras.current.now
+    const inside = (t: number) => Math.min(Math.max(t, shown[0]), shown[1])
+    const start = keyAt.current ?? inside(kb.home ?? now ?? (shown[0] + shown[1]) / 2)
+    const out = applyKey(cmd, { cursor: start, window: shown, bounds, step })
+    if (cmd.kind === 'cancel') {
+      u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false)
+      hideCursor(u)
+      return
+    }
+    if (out.home) {
+      keyAt.current = kb.home ?? now ?? null
+      extras.current.onZoom?.(null)
+    } else {
+      keyAt.current = out.cursor
+      if (out.window) extras.current.onZoom?.(out.window)
+    }
+    if (keyAt.current !== null) {
+      placeCursor(u, keyAt.current)
+      announce(keyAt.current)
+    }
+  }
+  const onBlur = () => {
+    if (plot.current && keyAt.current !== null) hideCursor(plot.current)
+  }
+  const hideCursor = (u: uPlot) => {
+    keyAt.current = null
+    setCursorSynced(u, -10, -10)
+  }
 
   useEffect(() => {
     plot.current?.redraw(false)
@@ -1274,10 +1379,19 @@ export function TimeChart({
         ref={wrap}
         className="time-chart"
         data-columns={columns || undefined}
-        role="img"
-        aria-label={ariaLabel}
+        role={keyboard ? 'group' : 'img'}
+        aria-roledescription={keyboard ? 'chart' : undefined}
+        aria-label={keyboard ? `${ariaLabel}. ${keyHint(keyStepFor(keyboard, x, xRange))}; plus and minus zoom; Home goes back` : ariaLabel}
+        tabIndex={keyboard ? 0 : undefined}
+        onKeyDown={keyboard ? onKeyDown : undefined}
+        onBlur={keyboard ? onBlur : undefined}
         style={legendValueWidth ? ({ '--legend-value-width': legendValueWidth } as CSSProperties) : undefined}
       />
+      {keyboard && (
+        <div className="visually-hidden" aria-live="polite">
+          {readout}
+        </div>
+      )}
       {withPopup && <ChartPopup store={cursor} read={readPopup} />}
       {withPill && <CursorPill store={cursor} read={readPill} offset={lanesPx + 4} />}
     </>

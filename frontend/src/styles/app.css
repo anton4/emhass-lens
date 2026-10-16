@@ -2297,6 +2297,13 @@ button.diff-locate {
   pointer-events: none;
 }
 
+/* a chart the arrow keys move along */
+.time-chart[tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 /* the cursor's moment on the time axis, beside the now pill drawn on the canvas */
 .chart-cursor-pill {
   position: absolute;

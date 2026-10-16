@@ -152,3 +152,14 @@ export function slotRange(start: number, end: number, timeZone?: string, weekday
 export function momentLabel(t: number, timeZone?: string): string {
   return formats(timeZone).moment.format(new Date(Math.floor(t) * 1000))
 }
+
+/** The popup's rows as one line for a screen reader: "Fri 13:25:20: Grid −2.55 kW, exporting; PV 4.75 kW". */
+export function readoutText(head: string, rows: Pick<PopupRow, 'name' | 'value' | 'describe' | 'then'>[]): string {
+  const parts = rows.map((r) => {
+    let text = `${r.name} ${r.value}`
+    if (r.describe) text += `, ${r.describe}`
+    if (r.then) text += `, planned then ${r.then}`
+    return text
+  })
+  return parts.length > 0 ? `${head}: ${parts.join('; ')}` : head
+}

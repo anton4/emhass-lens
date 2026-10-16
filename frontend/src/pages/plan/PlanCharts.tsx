@@ -18,6 +18,7 @@ import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
+import { adaptiveStep } from '../../lib/chartKeys'
 import { cursorTimeLabel, localMidnights } from '../../lib/chartTime'
 import {
   detailCover,
@@ -733,6 +734,7 @@ function PowerChart({
         lanes={lanes}
         sessions={bands}
         onSession={zoomToSession}
+        keyboard={{ step: adaptiveStep, home: nowS }}
       />
       <ul className="legend" role="group" aria-label="Parts shown in the Power chart">
         {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}

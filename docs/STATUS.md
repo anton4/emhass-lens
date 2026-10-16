@@ -68,6 +68,13 @@ These come from docs/PLAN.md §10:
 - **G3, dots and quieter lines:** `ChartOverlay.dot` puts a dot at the cursor on an overlay (`overlayAt`, a binary
   search over spans sorted once per array); the grid's readings and the commanded line have one. "Planned then" is a
   thin grey dashed line (`--chart-then`) for the grid and the SOC, and the commanded line is dashed black, no halo.
+- **G4, the keyboard:** TimeChart's `keyboard` makes the chart a focusable `role="group"`: ← → step the cursor
+  (Shift a big step), + − zoom around it, Page Up/Down move the window by half, Home goes back (onZoom(null)), Escape
+  puts the cursor away. The cursor is placed with uPlot's `setCursor(…, true, true)`, so the synced charts and their
+  popups follow; a step past the edge moves the window. A visually hidden live region reads the values 300 ms after
+  the last key (`readoutText`). `lib/chartKeys.ts` (`keyCommand`, `applyKey`, `adaptiveStep`, `keyHint`);
+  `zoomAround` and `panBy` came out of `wheelWindow`. On the Plan page only the Power chart is a tab stop.
+  - Checked in Chrome: the arrow keys, Shift, +, Page Down and Home, the popups on all four charts, the readout.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
