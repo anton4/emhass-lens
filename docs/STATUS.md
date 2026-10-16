@@ -249,6 +249,10 @@ These come from docs/PLAN.md §10:
   - A footnote under the charts carries the export cap (moved out of Details).
   - The mock API got a generated `/api/inputs/sent` (24 h measured, about 30 h sent, an EV window starting at slot
     8, two days after the horizon); `/api/prices` comes from the local backend's real Nord Pool fetch.
+- **I4, the tariff and the export cap in colour:** `lib/prices.ts` `PERIOD_STYLES` and `periodLane` (runs of one
+  period, night in `--tariff-night` violet, the day neutral, peaks amber, "night network tariff" with `long`);
+  `tariffLane` uses it. The export lane is green where EMHASS may export and red, hatched in `--q-export-cap`, where
+  it is capped at 0 W; the popup's row follows.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

@@ -129,6 +129,12 @@
   --chart-select-edge: #0277bd;
   /* a stretch hatched across a chart, and a slot the cursor is in */
   --chart-hatch: rgba(27, 28, 31, 0.14);
+  /* the network tariff's periods in a lane, and the export cap where export is blocked */
+  --tariff-day: #eef0f3;
+  --tariff-day-ink: #44474e;
+  --tariff-night: #e4e0f7;
+  --tariff-night-ink: #3c2896;
+  --q-export-cap: rgba(198, 40, 40, 0.45);
   --chart-cursor-band: rgba(2, 119, 189, 0.09);
   --chart-cursor-edge: rgba(2, 119, 189, 0.5);
   --chart-now: #1b1c1f;
@@ -255,6 +261,11 @@
     --chart-select: rgba(79, 195, 247, 0.16);
     --chart-select-edge: #4fc3f7;
     --chart-hatch: rgba(227, 228, 232, 0.16);
+    --tariff-day: #26272b;
+    --tariff-day-ink: #c4c6cc;
+    --tariff-night: #30275e;
+    --tariff-night-ink: #c4bcf6;
+    --q-export-cap: rgba(239, 83, 80, 0.5);
     --chart-cursor-band: rgba(79, 195, 247, 0.12);
     --chart-cursor-edge: rgba(79, 195, 247, 0.55);
     --chart-now: #e3e4e8;

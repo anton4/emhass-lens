@@ -10,6 +10,7 @@ import {
   midnights,
   originLabel,
   periodLabel,
+  periodLane,
   stackLayers,
   windowExtremes,
   type PricePart,
@@ -148,5 +149,17 @@ describe('the price ribbon and the extremes in a window', () => {
     const pts = starts.map((t, i) => ({ t, value: prices[i]! }))
     expect(windowExtremes(pts, [900, 2700])).toEqual({ cheapest: { t: 900, value: 0.2 }, dearest: { t: 1800, value: 0.3 } })
     expect(windowExtremes(pts, [9000, 9900])).toBeNull()
+  })
+})
+
+describe('periodLane', () => {
+  it('runs the slots of one period together, night violet, with the longer text when asked', () => {
+    const lane = periodLane([0, 900, 1800, 3600], ['night', 'night', 'day', 'day'], { long: true })
+    expect(lane.spans).toEqual([
+      { from: 0, to: 1800, color: '--tariff-night', ink: '--tariff-night-ink', text: 'night', long: 'night network tariff' },
+      { from: 1800, to: 2700, color: '--tariff-day', ink: '--tariff-day-ink', text: 'day', long: 'day network tariff' },
+      { from: 3600, to: 4500, color: '--tariff-day', ink: '--tariff-day-ink', text: 'day', long: 'day network tariff' },
+    ])
+    expect(lane.label).toBe('Tariff')
   })
 })

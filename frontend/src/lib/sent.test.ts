@@ -82,12 +82,19 @@ describe('the sent payload on a time axis', () => {
     const data = sent([slot(0), slot(1), slot(2, { period: 'day', export_max_w: 0 }), slot(3, { period: 'day', export_max_w: 0 })])
     const axis = sentAxis(data)
     expect(tariffLane(axis, data).spans).toEqual([
-      { from: ANCHOR, to: ANCHOR + 1800, color: '--frame-strong', text: 'night' },
-      { from: ANCHOR + 1800, to: ANCHOR + 3600, color: '--chart-grid', text: 'day' },
+      { from: ANCHOR, to: ANCHOR + 1800, color: '--tariff-night', ink: '--tariff-night-ink', text: 'night' },
+      { from: ANCHOR + 1800, to: ANCHOR + 3600, color: '--tariff-day', ink: '--tariff-day-ink', text: 'day' },
     ])
     expect(exportLane(axis, data)?.spans).toEqual([
-      { from: ANCHOR, to: ANCHOR + 1800, color: '--line-green', hatch: false, text: '15.50 kW' },
-      { from: ANCHOR + 1800, to: ANCHOR + 3600, color: '--line-green', hatch: true, text: '0 W' },
+      { from: ANCHOR, to: ANCHOR + 1800, color: '--tint-green', ink: '--on-green', text: '15.50 kW' },
+      {
+        from: ANCHOR + 1800,
+        to: ANCHOR + 3600,
+        color: '--tint-red',
+        ink: '--on-red',
+        marks: [{ from: ANCHOR + 1800, to: ANCHOR + 3600, color: '--q-export-cap' }],
+        text: '0 W',
+      },
     ])
     expect(exportLane(axis, sent([slot(0, { export_max_w: null })]))).toBeNull()
   })
@@ -99,9 +106,9 @@ describe('the sent payload on a time axis', () => {
     )
     const axis = sentAxis(data)
     expect(tariffLane(axis, data).spans).toEqual([
-      { from: ANCHOR - 3 * 900, to: ANCHOR - 2 * 900, color: '--chart-grid', text: 'day' },
-      { from: ANCHOR - 2 * 900, to: ANCHOR + 900, color: '--frame-strong', text: 'night' },
-      { from: ANCHOR + 900, to: ANCHOR + 1800, color: '--chart-grid', text: 'day' },
+      { from: ANCHOR - 3 * 900, to: ANCHOR - 2 * 900, color: '--tariff-day', ink: '--tariff-day-ink', text: 'day' },
+      { from: ANCHOR - 2 * 900, to: ANCHOR + 900, color: '--tariff-night', ink: '--tariff-night-ink', text: 'night' },
+      { from: ANCHOR + 900, to: ANCHOR + 1800, color: '--tariff-day', ink: '--tariff-day-ink', text: 'day' },
     ])
     expect(onAxis(axis, data.measured.map((m) => m.load_cost), [0.25, 0.26])).toEqual([null, null, 0.2, 0.2, 0.2, 0.25, 0.26, null])
   })
@@ -110,10 +117,10 @@ describe('the sent payload on a time axis', () => {
     const data = sent([slot(0), slot(1, { period: 'day', export_max_w: 0 })], 4, (k) => (k === 3 ? { period: 'day' } : {}))
     const axis = sentAxis(data)
     expect(priceExtras(axis, data, ANCHOR + 900)).toEqual([
-      { name: 'Tariff', value: 'day', color: '--chart-grid' },
-      { name: 'Export limit', value: '0 W', color: '--line-green', hatch: true },
+      { name: 'Tariff', value: 'day', color: '--tariff-day' },
+      { name: 'Export limit', value: '0 W', color: '--q-export-cap', hatch: true },
     ])
-    expect(priceExtras(axis, data, ANCHOR - 900)).toEqual([{ name: 'Tariff', value: 'day', color: '--chart-grid' }])
+    expect(priceExtras(axis, data, ANCHOR - 900)).toEqual([{ name: 'Tariff', value: 'day', color: '--tariff-day' }])
     expect(priceExtras(axis, data, ANCHOR - 1800)).toEqual([])
   })
 
@@ -207,7 +214,7 @@ describe('after the horizon', () => {
       [ANCHOR + 2700, ANCHOR + 3600, 'day'],
     ])
     expect(forecastRangesOn(axis, data)).toEqual([[ANCHOR + 1800, ANCHOR + 3600]])
-    expect(priceExtras(axis, data, ANCHOR + 2700)).toEqual([{ name: 'Tariff', value: 'day', color: '--chart-grid' }])
+    expect(priceExtras(axis, data, ANCHOR + 2700)).toEqual([{ name: 'Tariff', value: 'day', color: '--tariff-day' }])
   })
 
   it('draws the horizon: sent, then not sent; a previewed length moves the end', () => {

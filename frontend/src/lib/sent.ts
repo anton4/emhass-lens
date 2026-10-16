@@ -6,7 +6,7 @@
 import type { ChartLane, ChartNote } from '../components/charts/TimeChart'
 import type { PopupExtra } from '../components/charts/cursorStore'
 import type { HorizonOption, SentDeferrable, SentInputs } from '../api/types'
-import { isForecast, periodLabel } from './prices'
+import { isForecast, periodLabel, periodLane, PERIOD_STYLES } from './prices'
 import { formatPower, isNumber } from './units'
 
 export const SLOT_S = 900
@@ -74,35 +74,20 @@ export function runsOf<T>(axis: SentAxis, values: readonly T[], start = axis.anc
   return out
 }
 
-const PERIOD_COLORS: Record<string, string> = {
-  night: '--frame-strong',
-  day: '--chart-grid',
-  day_peak: '--tint-amber',
-  holiday_peak: '--tint-amber',
-}
+const periodColor = (period: string) => (PERIOD_STYLES[period] ?? PERIOD_STYLES.day!).color
 
 /** The tariff period over the whole axis: the measured slots' (the prices that applied), the payload's, then those
  *  after the horizon. */
 export function tariffLane(axis: SentAxis, data: SentData): ChartLane {
-  return {
-    label: 'Tariff',
-    spans: runsOf(
-      axis,
-      [
-        ...data.measured.map((m) => m.period ?? null),
-        ...data.slots.map((s) => s.period),
-        ...(data.beyond ?? []).map((b) => b.period),
-      ],
-      0,
-    ).flatMap((r) =>
-      r.value === null
-        ? []
-        : [{ from: r.from, to: r.to, color: PERIOD_COLORS[r.value] ?? '--chart-grid', text: periodLabel(r.value).toLowerCase() }],
-    ),
-  }
+  return periodLane(axis.x.slice(0, -1), [
+    ...data.measured.map((m) => m.period ?? null),
+    ...data.slots.map((s) => s.period),
+    ...(data.beyond ?? []).map((b) => b.period),
+  ])
 }
 
-/** The export limit EMHASS got, or null when the payload had none (no "no export at or below" set). */
+/** The export limit EMHASS got, or null when the payload had none (no "no export at or below" set): green where it
+ *  may export, red and hatched where it is capped at 0 W. */
 export function exportLane(axis: SentAxis, data: Pick<SentInputs, 'slots'>): ChartLane | null {
   if (!data.slots.some((s) => isNumber(s.export_max_w))) return null
   return {
@@ -113,7 +98,18 @@ export function exportLane(axis: SentAxis, data: Pick<SentInputs, 'slots'>): Cha
     ).flatMap((r) =>
       r.value === null
         ? []
-        : [{ from: r.from, to: r.to, color: '--line-green', hatch: r.value <= 0, text: formatPower(r.value) }],
+        : r.value <= 0
+          ? [
+              {
+                from: r.from,
+                to: r.to,
+                color: '--tint-red',
+                ink: '--on-red',
+                marks: [{ from: r.from, to: r.to, color: '--q-export-cap' }],
+                text: formatPower(r.value),
+              },
+            ]
+          : [{ from: r.from, to: r.to, color: '--tint-green', ink: '--on-green', text: formatPower(r.value) }],
     ),
   }
 }
@@ -144,16 +140,21 @@ export function loadAsk(load: SentDeferrable): string {
 export function priceExtras(axis: SentAxis, data: SentData, t: number): PopupExtra[] {
   const i = slotAt(axis, t)
   const tariffOnly = (period: string | null | undefined): PopupExtra[] =>
-    period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: PERIOD_COLORS[period] ?? '--chart-grid' }] : []
+    period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: periodColor(period) }] : []
   if (i < 0) return tariffOnly(data.measured[axis.anchorIdx + i]?.period)
   if (i >= data.slots.length) return tariffOnly(data.beyond?.[i - data.slots.length]?.period)
   const slot = data.slots[i]
   if (!slot) return []
   const out: PopupExtra[] = [
-    { name: 'Tariff', value: periodLabel(slot.period).toLowerCase(), color: PERIOD_COLORS[slot.period] ?? '--chart-grid' },
+    { name: 'Tariff', value: periodLabel(slot.period).toLowerCase(), color: periodColor(slot.period) },
   ]
   if (isNumber(slot.export_max_w)) {
-    out.push({ name: 'Export limit', value: formatPower(slot.export_max_w), color: '--line-green', hatch: slot.export_max_w <= 0 })
+    out.push({
+      name: 'Export limit',
+      value: formatPower(slot.export_max_w),
+      color: slot.export_max_w <= 0 ? '--q-export-cap' : '--tint-green',
+      hatch: slot.export_max_w <= 0,
+    })
   }
   return out
 }

@@ -15,6 +15,40 @@ export function periodLabel(period: string): string {
   return PERIOD_LABELS[period] ?? period
 }
 
+/** Each network period's colour in a lane and its text's: night violet, the day neutral, peaks amber. */
+export const PERIOD_STYLES: Record<string, { color: string; ink: string }> = {
+  night: { color: '--tariff-night', ink: '--tariff-night-ink' },
+  day: { color: '--tariff-day', ink: '--tariff-day-ink' },
+  day_peak: { color: '--tint-amber', ink: '--on-amber' },
+  holiday_peak: { color: '--tint-amber', ink: '--on-amber' },
+}
+
+/** A lane of the network periods: one span per run of slots in the same period (`starts` slot starts in unix s, each
+ *  a slot long), named in it ("night", or "night network tariff" with `long`). A slot without a period is left out. */
+export function periodLane(
+  starts: readonly number[],
+  periods: readonly (string | null | undefined)[],
+  opts: { label?: string; long?: boolean; slotS?: number } = {},
+): ChartLane {
+  const slotS = opts.slotS ?? 900
+  const runs: { from: number; to: number; period: string }[] = []
+  starts.forEach((t, i) => {
+    const period = periods[i]
+    if (!period) return
+    const last = runs[runs.length - 1]
+    if (last && last.to === t && last.period === period) last.to = t + slotS
+    else runs.push({ from: t, to: t + slotS, period })
+  })
+  return {
+    label: opts.label ?? 'Tariff',
+    spans: runs.map(({ from, to, period }) => {
+      const style = PERIOD_STYLES[period] ?? PERIOD_STYLES.day!
+      const name = periodLabel(period).toLowerCase()
+      return { from, to, color: style.color, ink: style.ink, text: name, ...(opts.long ? { long: `${name} network tariff` } : {}) }
+    }),
+  }
+}
+
 export function isForecast(origin: string): boolean {
   return origin.startsWith('forecast:')
 }
