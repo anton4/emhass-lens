@@ -1,14 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
-import type { PlanHistoryResponse, PlanPrice, PlanResponse, PlanRow, RunSummary } from '../../api/types'
+import type { PlanHistoryResponse, PlanResponse, PlanRow, RunSummary } from '../../api/types'
 import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
   type ChartGap,
   type ChartLane,
   type ChartOverlay,
-  type ChartSeries,
   type ChartSession,
   type ChartSplit,
   type ChartTick,
@@ -20,16 +19,7 @@ import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
 import { cursorTimeLabel, localMidnights } from '../../lib/chartTime'
-import {
-  detailCover,
-  detailRequest,
-  gridAt,
-  gridDetailNote,
-  gridOverlay,
-  gridRangeAt,
-  planTail,
-  withoutCovered,
-} from '../../lib/gridDetail'
+import { detailCover, detailRequest, gridDetailNote, gridOverlay, planTail } from '../../lib/gridDetail'
 import {
   commandSessions,
   marketBlock,
@@ -41,23 +31,9 @@ import {
   shortfalls,
 } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
-import { alignTo, deferrableColumns, hasColumn, socColumns } from '../../lib/plan'
-import { IDLE_W } from '../../lib/planSummary'
-import { powerStack, type FlowKey } from '../../lib/powerStack'
-import { isForecast, originLabel, priceHeatLane } from '../../lib/prices'
-import {
-  deferrableFuture,
-  hasMeasured,
-  hasPlanned,
-  mergePrices,
-  pastAndFuture,
-  pastEnd,
-  plannedAtTheTime,
-  timeGrid,
-  viewRange,
-  type ViewHours,
-} from '../../lib/planHistory'
-import { eurTick, formatPower, formatSignedPower } from '../../lib/units'
+import { pastEnd, timeGrid, viewRange, type ViewHours } from '../../lib/planHistory'
+import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
+import { eurTick } from '../../lib/units'
 
 const SYNC = 'plan'
 
@@ -85,43 +61,6 @@ function windowLabel([a, b]: [number, number], timeZone?: string): string {
 
 function kwTick(v: number): string {
   return `${(v / 1000).toFixed(Math.abs(v) < 10_000 ? 1 : 0)} kW`
-}
-
-/** Contiguous forecast ranges of plan prices (unix seconds). */
-function forecastBands(prices: PlanPrice[]): [number, number][] {
-  const out: [number, number][] = []
-  for (const p of prices) {
-    if (p.origin === 'actual') continue
-    const start = Date.parse(p.start) / 1000
-    const last = out[out.length - 1]
-    if (last && last[1] === start) last[1] = start + 900
-    else out.push([start, start + 900])
-  }
-  return out
-}
-
-const charging = (w: number) => (w >= IDLE_W ? 'charging' : w <= -IDLE_W ? 'discharging' : 'idle')
-const importing = (w: number) => (w >= IDLE_W ? 'importing' : w <= -IDLE_W ? 'exporting' : 'no flow')
-
-// what the plan said at the time: thin, grey and dashed under the measured line
-const THEN = { color: '--chart-then', width: 1.25, dash: [3, 3] as number[] }
-
-// right of now the plan is drawn fainter than what was measured: its areas, its lines, its grid
-const PLAN_AREA = { fill: 0.2 / 0.45 }
-const PLAN_LINE = { line: 0.6 }
-const PLAN_SOC = { line: 0.5 }
-
-/** Measured left of now and planned right of it, per quarter-hour, for the Power chart (W; the battery in EMHASS's
- *  sign, + discharge). */
-interface Flows {
-  pv: (number | null)[] | null
-  battery: (number | null)[] | null
-  load: (number | null)[] | null
-  grid: (number | null)[] | null
-  /** What the plan said at the time for the grid, left of now. */
-  gridThen: (number | null)[] | null
-  deferrable: (number | null)[] | null
-  deferrableLabel: string
 }
 
 /** What the Power chart's chips switch: the grid line, each stacked flow, and Qilowatt's commands: the commanded power
@@ -165,14 +104,17 @@ export function PlanCharts({
   history,
   nowS,
   view,
+  zoom,
+  onZoom: setZoom,
 }: {
   data: PlanResponse
   history?: PlanHistoryResponse
   nowS: number
   view: ViewHours
+  /** A window picked by zooming, scrolling or the overview (unix seconds); null follows now. */
+  zoom: [number, number] | null
+  onZoom: (range: [number, number] | null) => void
 }) {
-  // a window picked by zooming, scrolling or the overview (unix seconds); null follows now
-  const [zoom, setZoom] = useState<[number, number] | null>(null)
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
@@ -203,98 +145,12 @@ export function PlanCharts({
   )
   const zoomTo = (range: [number, number] | null) => setZoom(range && bounds ? clampWindow(range, bounds) : null)
 
-  const flows = useMemo<Flows>(() => {
-    const has = (key: 'pv' | 'batt' | 'load' | 'grid', column: string) => hasColumn(rows, column) || hasMeasured(past, key)
-    const values = (key: 'pv' | 'batt' | 'load' | 'grid', column: string) =>
-      has(key, column) ? pastAndFuture(x, past, key, rows, column, pastEndS) : null
-    const deferrables = deferrableColumns(data.columns)
-    return {
-      pv: values('pv', 'P_PV'),
-      battery: values('batt', 'P_batt'),
-      load: values('load', 'P_Load'),
-      grid: values('grid', 'P_grid'),
-      gridThen: hasPlanned(past, 'P_grid') ? plannedAtTheTime(x, past, 'P_grid') : null,
-      deferrable: deferrables.length > 0 ? deferrableFuture(x, rows, deferrables, pastEndS) : null,
-      deferrableLabel: deferrables.length === 1 ? 'Deferrable load' : 'Deferrable loads',
-    }
-  }, [x, rows, past, pastEndS, data.columns])
-
-  const soc = useMemo(() => {
-    const columns = socColumns(data.columns).filter((c) => hasColumn(rows, c))
-    const plannedSoc = hasPlanned(past, 'SOC')
-    if (columns.length === 0 && !plannedSoc && !hasMeasured(past, 'soc')) return null
-    const fmt = (v: number) => `${v.toFixed(1)} %`
-    const series: ChartSeries[] = []
-    const firstSoc = columns[0] ?? 'SOC_opt'
-    series.push({
-      label: columns.length > 1 ? 'Battery 1 SOC' : 'Battery SOC',
-      popupLabel: columns.length > 1 ? 'Battery 1' : 'State of charge',
-      color: '--q-soc',
-      step: false,
-      values: pastAndFuture(x, past, 'soc', rows, firstSoc, pastEndS, 100, false),
-      format: fmt,
-      fade: PLAN_SOC,
-    })
-    if (plannedSoc) {
-      series.push({
-        label: columns.length > 1 ? 'Battery 1, planned at the time' : 'Planned at the time',
-        ...THEN,
-        step: false,
-        values: plannedAtTheTime(x, past, 'SOC', 100, false),
-        format: fmt,
-        then: true,
-      })
-    }
-    columns.slice(1).forEach((column, i) => {
-      series.push({
-        label: `Battery ${i + 2} SOC`,
-        color: `--series-${i + 2}`,
-        step: false,
-        values: pastAndFuture(x, past, null, rows, column, pastEndS, 100, false),
-        format: fmt,
-        fade: PLAN_SOC,
-      })
-    })
-    if (previous.length > 0) {
-      const pct = (v: number | null) => (v === null ? null : v * 100)
-      series.push({
-        label: columns.length > 1 ? 'Battery 1, previous plan' : 'Previous plan',
-        color: '--ink-faint',
-        width: 1.5,
-        dash: [2, 3],
-        step: false,
-        values: alignTo(x, previous, firstSoc).map(pct),
-        format: fmt,
-      })
-    }
-    return series
-  }, [x, rows, previous, past, pastEndS, data.columns])
-
-  const prices = useMemo(() => {
-    const slots = mergePrices(history?.prices ?? [], data.prices)
-    if (slots.length === 0) return null
-    const px = slots.map((p) => Date.parse(p.start) / 1000)
-    const imp: (number | null)[] = slots.map((p) => p.import_price)
-    const exp: (number | null)[] = slots.map((p) => p.export_price)
-    const heat: ChartLane = priceHeatLane(px, imp)
-    const lastPx = px[px.length - 1]
-    if (lastPx !== undefined) {
-      px.push(lastPx + 900)
-      imp.push(imp[imp.length - 1] ?? null)
-      exp.push(exp[exp.length - 1] ?? null)
-    }
-    const fmt = (v: number) => `${v.toFixed(3)} €/kWh`
-    const series: ChartSeries[] = [
-      { label: 'Import', color: '--q-import', values: imp, format: fmt },
-      { label: 'Export', color: '--q-export', values: exp, format: fmt },
-    ]
-    const origins = new Map(slots.map((p) => [Date.parse(p.start) / 1000, p.origin]))
-    const tag = (t: number) => {
-      const origin = origins.get(t)
-      return origin ? { text: originLabel(origin), tone: isForecast(origin) ? ('blue' as const) : ('neutral' as const) } : null
-    }
-    return { x: px, series, bands: forecastBands(slots), tag, heat }
-  }, [history, data.prices])
+  const flows = useMemo<Flows>(() => planFlows(x, past, rows, pastEndS, data.columns), [x, rows, past, pastEndS, data.columns])
+  const soc = useMemo(
+    () => socSeries(x, past, rows, previous, pastEndS, data.columns),
+    [x, rows, previous, past, pastEndS, data.columns],
+  )
+  const prices = useMemo(() => priceSeries(history?.prices ?? [], data.prices), [history, data.prices])
 
   // the overview's sessions: the same commands the Power chart reads (one query)
   const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
@@ -553,70 +409,19 @@ function PowerChart({
   const gridData = showGrid ? detail.data : undefined
   const cover = useMemo(() => detailCover(gridData), [gridData])
 
-  const series = useMemo(() => {
-    const layers = powerStack({
-      pv: hidden.has('pv') ? null : flows.pv,
-      battery: hidden.has('batt') ? null : flows.battery,
-      load: hidden.has('load') ? null : flows.load,
-      deferrable: hidden.has('deferrable') ? null : flows.deferrable,
-    })
-    const LAYERS: Record<FlowKey, { label: string; color: string }> = {
-      pv: { label: 'PV', color: '--q-pv' },
-      discharge: { label: 'Battery', color: '--q-batt' },
-      load: { label: 'House load', color: '--q-load' },
-      charge: { label: 'Battery charging', color: '--q-batt' },
-      deferrable: { label: flows.deferrableLabel, color: '--q-ev' },
-    }
-    const out: ChartSeries[] = []
-    const index = new Map<FlowKey, number>()
-    for (const layer of layers) {
-      const meta = LAYERS[layer.key]
-      const battery = layer.key === 'discharge'
-      index.set(layer.key, out.length)
-      out.push({
-        label: meta.label,
-        color: meta.color,
-        values: layer.edge,
-        width: 0,
-        fill: 0.45,
-        below: layer.on ? index.get(layer.on) : undefined,
-        // the battery's one popup row, on its discharging layer: + charge, like the grid's import
-        readout: battery ? (flows.battery?.map((v) => (v === null ? null : -v)) ?? layer.own) : layer.own,
-        format: battery ? formatSignedPower : formatPower,
-        describe: battery ? charging : undefined,
-        helper: layer.key === 'charge',
-        fade: PLAN_AREA,
-      })
-    }
-    if (flows.grid && !hidden.has('grid')) {
-      const grid = flows.grid
-      out.push({
-        label: 'Grid',
-        color: '--q-grid',
-        width: 2,
-        // the measured quarter-hours the readings cover are drawn by their line; the popup reads that line at the
-        // pointer, with the quarter-hour's mean and the bucket's lowest and highest reading under it
-        values: cover ? withoutCovered(x, grid, cover, pastEndS) : grid,
-        readout: grid,
-        moment: (time: number) => (time < nowS ? gridAt(gridData, time) : null),
-        momentRange: (time: number) => (time < nowS ? gridRangeAt(gridData, time) : null),
-        format: formatSignedPower,
-        describe: importing,
-        lead: true,
-        fade: PLAN_LINE,
-      })
-      if (flows.gridThen) {
-        out.push({
-          label: 'Grid, planned at the time',
-          ...THEN,
-          values: flows.gridThen,
-          format: formatSignedPower,
-          then: true,
-        })
-      }
-    }
-    return out
-  }, [flows, hidden, cover, x, pastEndS, nowS, gridData])
+  const series = useMemo(
+    () =>
+      powerSeries({
+        x,
+        flows,
+        hidden: (part) => hidden.has(part),
+        cover,
+        pastEndS,
+        nowS,
+        gridData,
+      }),
+    [flows, hidden, cover, x, pastEndS, nowS, gridData],
+  )
 
   // the plan's grid in the slot in progress, from where the measured line ends: one grid line there too
   const tail = useMemo(

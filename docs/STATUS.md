@@ -95,6 +95,9 @@ These come from docs/PLAN.md §10:
   takes `lead` (rows right after the lead row), `totalInHead`, `note` (a muted line under the rows) and `style:
   'chip'` with `chip` (a small chip at the top of the cursor line instead of the popup, also on a compact strip).
   `PopupExtra.swatch` (square, line, dash, none) and `PopupBlock.text`/`meter`.
+- **G8, refactor:** the Plan page's series builders are pure functions in `lib/planSeries.ts` (`planFlows`,
+  `socSeries`, `priceSeries`, `powerSeries`), so the phone layout can share them. The zoom lives in PlanPage and
+  `key={view}` is gone: changing the window no longer rebuilds the charts (checked: the same canvas after 24 h → 8 h).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

@@ -58,8 +58,11 @@ export function PlanPage() {
   const [view, setView] = useState<ViewHours>(() => loadPref(VIEW_KEY, VIEW_HOURS, 8))
   const [horizon, setHorizon] = useState<HorizonSlots>(() => loadPref(HORIZON_KEY, HORIZON_SLOTS, 0))
   const history = usePlanHistory(viewHistory(view), horizon)
+  // a window picked by zooming, scrolling or the overview (unix seconds); null follows now in `view`
+  const [zoom, setZoom] = useState<[number, number] | null>(null)
   const chooseView = (v: ViewHours) => {
     setView(v)
+    setZoom(null)
     savePref(VIEW_KEY, v)
   }
   const chooseHorizon = (h: HorizonSlots) => {
@@ -212,7 +215,7 @@ export function PlanPage() {
           {table ? (
             <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
           ) : (
-            <PlanCharts key={view} data={data} history={history.data} nowS={nowS} view={view} />
+            <PlanCharts data={data} history={history.data} nowS={nowS} view={view} zoom={zoom} onZoom={setZoom} />
           )}
         </div>
       </section>
