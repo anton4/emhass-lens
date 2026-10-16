@@ -140,6 +140,10 @@ These come from docs/PLAN.md §10:
     room (`layoutFlags` returns `row`). Before, two sells right after a buy pair could lose both flags. The Power
     chart is 23 px taller with sessions.
   - "No market sessions between … and …" in the key when commands are loaded but none falls in the window.
+- **P5, MPC runs as blocks:** each run is a block from its start until the next one starts (at most a quarter-hour),
+  in its outcome's colour, and the next scheduled run is an outlined box (`lib/runBlocks.ts`; `ChartTick.until` and
+  `outline`). A chip at the cursor names the run ("run #4522 · OK", `popup.style: 'chip'`) instead of the browser's
+  tooltip, and a click anywhere in a block opens it. The counts and "Next MPC" moved into the strip's head.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

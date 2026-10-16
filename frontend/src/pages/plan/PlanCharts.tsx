@@ -42,6 +42,7 @@ import {
   shortfalls,
 } from '../../lib/market'
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
+import { blockAt, runBlocks } from '../../lib/runBlocks'
 import { pastEnd, thenLabel, timeGrid, viewRange, type HorizonSlots, type ViewHours } from '../../lib/planHistory'
 import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
 import { energyIn, formatKwh, socSummary } from '../../lib/planTotals'
@@ -421,21 +422,38 @@ function MpcRunStrip({
   const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : undefined
   const runs = useRuns({ job: 'emhass.mpc', since, limit: 1000 })
   const list = useMemo(() => runs.data ?? [], [runs.data])
+  const jobs = useJobs()
+  const mpc = jobs.data?.find((j) => j.id === 'emhass.mpc')
+  const nextRun = mpc?.next_run && !mpc.paused ? Date.parse(mpc.next_run) / 1000 : null
+  // each run a block until the next starts, the next one outlined; a chip names the one at the cursor
+  const blocks = useMemo(() => runBlocks(list, nextRun), [list, nextRun])
   const ticks = useMemo<ChartTick[]>(
     () =>
-      list.map((r) => ({
-        t: Date.parse(r.started_at) / 1000,
-        color: `--lamp-${OUTCOMES[r.outcome]?.color ?? 'neutral'}`,
-        label: `Run ${r.id} · ${formatClock(r.started_at, timeZone)} · ${outcomeLabel(r.outcome)}${r.summary ? `\n${r.summary}` : ''}`,
-        id: r.id,
+      blocks.map((b) => ({
+        t: b.from,
+        until: b.to,
+        color: b.color,
+        label: b.label,
+        id: b.id ?? undefined,
+        outline: b.outline,
       })),
-    [list, timeZone],
+    [blocks],
+  )
+  const popup = useMemo(
+    () => ({
+      style: 'chip' as const,
+      chip: (_t: number, time: number) => {
+        const b = blockAt(blocks, time)
+        return b ? [{ text: b.label, color: b.color.replace('--lamp-', '--on-') }] : []
+      },
+    }),
+    [blocks],
   )
   const empty = useMemo(() => [{ label: 'MPC runs', color: 'transparent', values: x.map(() => null) }], [x])
   if (x.length === 0) return null
   return (
     <section className="chart-block run-strip">
-      <h3>MPC runs</h3>
+      <ChartHead title="MPC runs" summary={<RunCounts runs={list} timeZone={timeZone} />} />
       <TimeChart
         x={x}
         series={empty}
@@ -453,8 +471,8 @@ function MpcRunStrip({
         height={84}
         ticks={ticks}
         onTick={(tick) => tick.id && navigate(`/runs/${tick.id}`)}
+        popup={popup}
       />
-      <RunCounts runs={list} timeZone={timeZone} />
     </section>
   )
 }
@@ -724,7 +742,7 @@ function RunCounts({ runs, timeZone }: { runs: RunSummary[]; timeZone: string })
   const order = Object.keys(OUTCOMES)
   const outcomes = [...groups.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b))
   return (
-    <p className="run-counts">
+    <span className="run-counts">
       {outcomes.map((outcome) => {
         const these = groups.get(outcome) ?? []
         const color = OUTCOMES[outcome]?.color ?? 'neutral'
@@ -754,6 +772,6 @@ function RunCounts({ runs, timeZone }: { runs: RunSummary[]; timeZone: string })
           Next MPC {formatSlot(mpc.next_run, now, timeZone)} · {formatCountdown(mpc.next_run, now)}
         </span>
       )}
-    </p>
+    </span>
   )
 }

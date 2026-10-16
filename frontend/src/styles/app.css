@@ -4262,6 +4262,16 @@ th[aria-sort='descending'] .sort-mark {
   margin-left: auto;
 }
 
+/* in the MPC strip's head */
+.chart-summary .run-counts {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.chart-summary .run-counts-next {
+  margin-left: 0;
+}
+
 details.more > summary {
   cursor: pointer;
   color: var(--link);

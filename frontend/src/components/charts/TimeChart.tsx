@@ -108,6 +108,10 @@ export interface ChartTick {
   label: string
   /** What the tick stands for (a run id), for onTick. */
   id?: number
+  /** A block from `t` to here instead of a bar (a run until the next one). */
+  until?: number
+  /** Only its outline (the next run, not run yet). */
+  outline?: boolean
 }
 
 /** A row of spans between the plot and the time axis (tariff periods, export limits, a load's window), labelled in
@@ -1389,12 +1393,18 @@ export function TimeChart({
                 { passive: false },
               )
             }
-            // The tick nearest the pointer, within 6 px: its label as the tooltip, a click opens it
+            // The block under the pointer, or the tick nearest it within 6 px: a click opens it; a bare tick's label is the
+            // tooltip (a block's is the chart's chip)
             const nearest = (event: MouseEvent): ChartTick | undefined => {
               const px = event.offsetX
+              const time = u.posToVal(px, 'x')
               let best: ChartTick | undefined
               let bestD = 6
               for (const tick of extras.current.ticks) {
+                if (tick.until !== undefined) {
+                  if (tick.t <= time && time < tick.until && tick.id !== undefined) best = tick
+                  continue
+                }
                 const d = Math.abs(u.valToPos(tick.t, 'x') - px)
                 if (d <= bestD) {
                   best = tick
@@ -1405,7 +1415,7 @@ export function TimeChart({
             }
             u.over.addEventListener('mousemove', (event) => {
               const tick = nearest(event)
-              u.over.title = tick?.label ?? ''
+              u.over.title = tick && tick.until === undefined ? tick.label : ''
               u.over.style.cursor = tick && extras.current.onTick ? 'pointer' : ''
             })
             u.over.addEventListener('click', (event) => {
@@ -1508,9 +1518,26 @@ export function TimeChart({
             ctx.save()
             for (const tick of extras.current.ticks) {
               const px = u.valToPos(tick.t, 'x', true)
+              const top = bbox.top + bbox.height * 0.2
+              const h = bbox.height * 0.6
+              if (tick.until !== undefined) {
+                // a block, a hairline short of the next one
+                const a = Math.max(bbox.left, Math.round(px))
+                const b = Math.min(bbox.left + bbox.width, Math.round(u.valToPos(tick.until, 'x', true)) - Math.max(1, Math.round(dpr)))
+                if (b <= a) continue
+                if (tick.outline) {
+                  ctx.strokeStyle = cssColor(tick.color)
+                  ctx.lineWidth = 1.5 * dpr
+                  ctx.strokeRect(a + 0.75 * dpr, top + 0.75 * dpr, Math.max(1, b - a - 1.5 * dpr), h - 1.5 * dpr)
+                } else {
+                  ctx.fillStyle = cssColor(tick.color)
+                  ctx.fillRect(a, top, Math.max(Math.round(dpr), b - a), h)
+                }
+                continue
+              }
               if (px < bbox.left || px > bbox.left + bbox.width) continue
               ctx.fillStyle = cssColor(tick.color)
-              ctx.fillRect(Math.round(px - 1.5 * dpr), bbox.top + bbox.height * 0.2, Math.round(3 * dpr), bbox.height * 0.6)
+              ctx.fillRect(Math.round(px - 1.5 * dpr), top, Math.round(3 * dpr), h)
             }
             ctx.restore()
             hits = []
