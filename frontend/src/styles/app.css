@@ -1963,6 +1963,16 @@ button.diff-locate {
   border-right: 1px solid var(--ink-faint);
 }
 
+/* a chart that snaps to slots: the cursor is the slot, as wide as one */
+.time-chart[data-slot-band] .u-cursor-x {
+  width: var(--slot-px, 1px);
+  border-right: 0;
+  background: var(--chart-cursor-band);
+  box-shadow:
+    inset 1px 0 var(--chart-cursor-edge),
+    inset -1px 0 var(--chart-cursor-edge);
+}
+
 .time-chart .u-cursor-y {
   display: none;
 }

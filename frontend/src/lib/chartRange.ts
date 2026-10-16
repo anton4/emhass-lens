@@ -30,8 +30,9 @@ export interface ChartOverlay {
   fit?: false
   /** The text for a span beyond the axis ("↓ 15.5 kW"). */
   offScale?: (value: number) => string
-  /** `lo` and `hi`: the lowest and highest reading behind a span's mean; the line is drawn through them. */
-  spans: { from: number; to: number; value: number; lo?: number; hi?: number }[]
+  /** `lo` and `hi`: the lowest and highest reading behind a span's mean; the line is drawn through them. `toValue`:
+   *  the span runs straight from `value` at its start to this at its end. */
+  spans: { from: number; to: number; value: number; lo?: number; hi?: number; toValue?: number }[]
   /** Drawn at this share of its opacity on the chart's split side (the plan right of now). */
   fade?: number
   /** A dot on the line at the cursor, as the chart's series have. */
@@ -62,7 +63,7 @@ export function overlayRuns(spans: ChartOverlay['spans'], base: 'zero' | 'none' 
       run = []
     }
     if (run.length === 0 && base === 'zero') run.push([span.from, 0])
-    run.push([span.from, span.value], [span.to, span.value])
+    run.push([span.from, span.value], [span.to, span.toValue ?? span.value])
     end = span.to
   }
   if (run.length > 0) {
@@ -93,7 +94,9 @@ export function overlayAt(overlay: Pick<ChartOverlay, 'spans'>, t: number): numb
     } else hi = mid - 1
   }
   const span = spans[found]
-  return span && t < span.to ? span.value : null
+  if (!span || t >= span.to) return null
+  if (span.toValue === undefined || span.to <= span.from) return span.value
+  return span.value + ((span.toValue - span.value) * (t - span.from)) / (span.to - span.from)
 }
 
 /** The lowest and highest overlay value with a span in [from, to] (unix seconds; open ends when null), or null.
@@ -111,8 +114,8 @@ export function overlayExtent(
       if ((to !== null && to !== undefined && span.from > to) || (from !== null && from !== undefined && span.to < from)) {
         continue
       }
-      lo = Math.min(lo, span.lo ?? span.value)
-      hi = Math.max(hi, span.hi ?? span.value)
+      lo = Math.min(lo, span.lo ?? span.value, span.toValue ?? span.value)
+      hi = Math.max(hi, span.hi ?? span.value, span.toValue ?? span.value)
     }
   }
   return lo <= hi ? [lo, hi] : null

@@ -204,3 +204,24 @@ describe('pinchWindow', () => {
     expect(pinchWindow(start, { a: 495, b: 505 }, 1000, [0, 7200])).toEqual([0, 7200])
   })
 })
+
+describe('spans that run from one value to another', () => {
+  const sloped = { spans: [{ from: 0, to: 100, value: 10, toValue: 50 }] }
+
+  it('draws straight from the start value to the end value', () => {
+    expect(overlayRuns(sloped.spans, 'none')).toEqual([
+      [
+        [0, 10],
+        [100, 50],
+      ],
+    ])
+  })
+
+  it('counts both ends for the axis', () => {
+    expect(overlayExtent([{ label: '', color: '', ...sloped }], null, null)).toEqual([10, 50])
+  })
+
+  it('reads the value along the way', () => {
+    expect(overlayAt(sloped, 25)).toBe(20)
+  })
+})

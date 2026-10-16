@@ -86,6 +86,11 @@ These come from docs/PLAN.md §10:
     together to pan (`pinchWindow`). `touch-action: pan-y` on the plot, and Safari's `gesturestart` is prevented.
   - Checked with synthetic events in Chrome (uPlot ignores mousemoves without `movementX`). A real phone through
     Ingress is still to do. The test tab was hidden at times, and rAF then never runs, so popups wait.
+- **G6, chart pieces for later steps:** `hatches` (stretches hatched across the plot under the series, each with an
+  optional label at its top-left; `--chart-hatch`), `cursorBand` (the cursor as wide as a slot, through `--slot-px`
+  set in the setScale and setSize hooks), `ChartNote.look` ('pill', or 'callout': a dark box with a stem down to the
+  point) and `top` (pinned to the plot's top), and `toValue` on overlay spans (a straight line from one value to
+  another; `overlayRuns`, `overlayExtent` and `overlayAt` follow it).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

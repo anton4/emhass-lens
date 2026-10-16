@@ -150,6 +150,20 @@ export interface ChartNote {
   dot?: 'filled' | 'ring'
   /** Where the text sits: centred over t (default), or to its right or left. */
   align?: 'center' | 'right' | 'left'
+  /** 'pill': on a rounded panel-coloured box; 'callout': light text on a dark box with a stem down to the point. */
+  look?: 'plain' | 'pill' | 'callout'
+  /** Pinned to the top of the plot, whatever `value` is (a note about a stretch of time). */
+  top?: boolean
+}
+
+/** A stretch hatched across the whole plot (a forecast, a plan too old to trust, readings that are missing), with an
+ *  optional label at its top-left. */
+export interface ChartHatch {
+  from: number
+  to: number
+  /** CSS custom property or colour of the lines (default --chart-hatch). */
+  color?: string
+  label?: string
 }
 
 // a lane's height and the space between the plot and the first lane, CSS px
@@ -255,6 +269,10 @@ interface TimeChartProps {
   nowLabel?: string
   /** A pill on the time axis at the cursor, with this text for its moment and the window's length (s). */
   cursorLabel?: (time: number, windowS: number) => string
+  /** Stretches hatched across the plot, under the series. */
+  hatches?: ChartHatch[]
+  /** The cursor is a band as wide as a slot rather than a line (a chart that snaps to slots). */
+  cursorBand?: boolean
   /** Focusable, with the arrow keys moving the cursor (charts sharing the syncKey follow), + and − zooming around
    *  it, Page Up/Down moving the window, Home going back to the chart's own window (onZoom(null), the cursor at
    *  `home` or now) and Escape putting the cursor away. `step` may follow the window shown (s) and the plot's width
@@ -531,6 +549,58 @@ function drawGaps(u: uPlot, gaps: ChartGap[], dpr: number, split?: ChartSplit) {
   ctx.restore()
 }
 
+/** The hatches across the plot, under the series: diagonal lines in their colour. */
+function drawHatches(u: uPlot, hatches: ChartHatch[], dpr: number) {
+  if (hatches.length === 0) return
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  ctx.save()
+  for (const h of hatches) {
+    const a = Math.max(bbox.left, u.valToPos(h.from, 'x', true))
+    const b = Math.min(right, u.valToPos(h.to, 'x', true))
+    if (b <= a) continue
+    ctx.fillStyle = linePattern(ctx, cssColor(h.color ?? '--chart-hatch'), dpr)
+    ctx.fillRect(a, bbox.top, b - a, bbox.height)
+  }
+  ctx.restore()
+}
+
+/** Each hatch's label at its top-left, on the panel colour so the lines don't run through it; none where it doesn't
+ *  fit. */
+function drawHatchLabels(u: uPlot, hatches: ChartHatch[], dpr: number) {
+  const { ctx, bbox } = u
+  const right = bbox.left + bbox.width
+  ctx.save()
+  ctx.font = `${12 * dpr}px ${cssValue('--font-body') || 'sans-serif'}`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  for (const h of hatches) {
+    if (!h.label) continue
+    const a = Math.max(bbox.left, u.valToPos(h.from, 'x', true))
+    const b = Math.min(right, u.valToPos(h.to, 'x', true))
+    const w = ctx.measureText(h.label).width + 8 * dpr
+    if (b - a < w + 12 * dpr) continue
+    const top = bbox.top + 4 * dpr
+    ctx.fillStyle = cssColor('--panel')
+    ctx.beginPath()
+    ctx.roundRect(a + 6 * dpr, top, w, 18 * dpr, 4 * dpr)
+    ctx.fill()
+    ctx.fillStyle = cssColor('--ink-2')
+    ctx.fillText(h.label, a + 10 * dpr, top + 9 * dpr)
+  }
+  ctx.restore()
+}
+
+/** The width of a slot (the first two x values apart) as --slot-px on the chart, for a cursor drawn as a band. */
+function slotWidth(u: uPlot) {
+  const xs = u.data[0]
+  const a = xs[0]
+  const b = xs[1]
+  if (a === undefined || b === undefined) return
+  const px = Math.max(1, u.valToPos(b, 'x') - u.valToPos(a, 'x'))
+  u.root.style.setProperty('--slot-px', `${px}px`)
+}
+
 /** The sessions' bands, under the series: a light tint of their colour with a fainter edge at each end. */
 function drawSessionBands(u: uPlot, sessions: ChartSession[]) {
   if (sessions.length === 0) return
@@ -609,8 +679,10 @@ function drawFlags(u: uPlot, sessions: ChartSession[], hovered: string | null, d
   ctx.restore()
 }
 
-/** Labels on the plot: the text (and its muted sub) above the point or beside its dot, kept inside the plot. Where a
- *  label would run into one drawn before it (many days on a narrow chart), its sub goes, and then the label. */
+/** Labels on the plot: the text (and its muted sub) above the point or beside its dot, kept inside the plot, plain,
+ *  on a pill, or as a dark callout with a stem down to the point; a note pinned to the top sits there whatever its
+ *  value. Where a label would run into one drawn before it (many days on a narrow chart), its sub goes, and then the
+ *  label. */
 function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
   if (notes.length === 0) return
   const { ctx, bbox } = u
@@ -624,10 +696,13 @@ function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
   ctx.textBaseline = 'alphabetic'
   for (const note of notes) {
     const px = u.valToPos(note.t, 'x', true)
-    const py = u.valToPos(note.value, 'y', true)
+    const py = note.top ? bbox.top : u.valToPos(note.value, 'y', true)
     if (px < bbox.left - 1 || px > bbox.left + bbox.width + 1) continue
+    const look = note.look ?? 'plain'
+    const boxed = look !== 'plain'
+    const pad = boxed ? 6 * dpr : 0
     const color = cssColor(note.color)
-    if (note.dot) {
+    if (note.dot && !note.top) {
       ctx.beginPath()
       ctx.arc(px, py, 5 * dpr, 0, Math.PI * 2)
       ctx.fillStyle = note.dot === 'filled' ? color : cssColor('--panel')
@@ -644,24 +719,46 @@ function drawNotes(u: uPlot, notes: ChartNote[], dpr: number) {
     const sub = note.sub ? 6 * dpr + ctx.measureText(note.sub).width : 0
     const align = note.align ?? 'center'
     const leftFor = (width: number) => {
-      const left = align === 'center' ? px - width / 2 : align === 'right' ? px + 10 * dpr : px - 10 * dpr - width
-      return Math.min(Math.max(left, bbox.left + 2 * dpr), bbox.left + bbox.width - width - 2 * dpr)
+      const w = width + 2 * pad
+      const left = align === 'center' ? px - w / 2 : align === 'right' ? px + 10 * dpr : px - 10 * dpr - w
+      return Math.min(Math.max(left, bbox.left + 2 * dpr), bbox.left + bbox.width - w - 2 * dpr) + pad
     }
-    const base = Math.max(bbox.top + 13 * dpr, note.dot ? py - 9 * dpr : py - 8 * dpr)
+    // the text's baseline: above the point (or its dot, or the callout's stem), or just under the top for a pinned note
+    const lift = look === 'callout' ? 16 * dpr : boxed ? 11 * dpr : note.dot ? 9 * dpr : 8 * dpr
+    const base = note.top
+      ? bbox.top + (boxed ? 17 * dpr : 13 * dpr)
+      : Math.max(bbox.top + (boxed ? 17 * dpr : 13 * dpr), py - lift)
     let withSub = sub > 0
     let left = leftFor(main + sub)
-    if (!free(left, left + main + sub, base)) {
+    if (!free(left - pad, left + main + sub + pad, base)) {
       withSub = false
       left = leftFor(main)
-      if (!free(left, left + main, base)) continue
+      if (!free(left - pad, left + main + pad, base)) continue
     }
-    drawn.push({ left, right: left + main + (withSub ? sub : 0), base })
+    const width = main + (withSub ? sub : 0)
+    drawn.push({ left: left - pad, right: left + width + pad, base })
+    if (boxed) {
+      const h = 18 * dpr
+      const top = base - 13 * dpr
+      ctx.fillStyle = look === 'callout' ? cssColor('--ink') : cssColor('--panel')
+      ctx.beginPath()
+      ctx.roundRect(left - pad, top, width + 2 * pad, h, 6 * dpr)
+      ctx.fill()
+      if (look === 'pill') {
+        ctx.strokeStyle = cssColor('--frame')
+        ctx.lineWidth = Math.max(1, dpr)
+        ctx.stroke()
+      } else if (!note.top && py > top + h) {
+        // the stem from the box down to the point
+        ctx.fillRect(Math.round(px - 0.75 * dpr), top + h, Math.max(1, 1.5 * dpr), py - top - h)
+      }
+    }
     ctx.font = bold
-    ctx.fillStyle = color
+    ctx.fillStyle = look === 'callout' ? cssColor('--panel') : color
     ctx.fillText(note.text, left, base)
     if (withSub && note.sub) {
       ctx.font = light
-      ctx.fillStyle = cssColor('--ink-muted')
+      ctx.fillStyle = look === 'callout' ? cssColor('--panel') : cssColor('--ink-muted')
       ctx.fillText(note.sub, left + main + 6 * dpr, base)
     }
   }
@@ -757,7 +854,7 @@ export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
   snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession, split,
-  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel, keyboard,
+  timeAxis = 'labels', axisWidth = 64, nowLabel, cursorLabel, keyboard, hatches = NONE, cursorBand = false,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -765,12 +862,12 @@ export function TimeChart({
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
     bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-    sessions, onSession, split, nowLabel, cursorLabel, keyboard,
+    sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches,
   })
   useEffect(() => {
     extras.current = {
       bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-      sessions, onSession, split, nowLabel, cursorLabel, keyboard,
+      sessions, onSession, split, nowLabel, cursorLabel, keyboard, hatches,
     }
   })
   // the cursor the keyboard placed (unix s), until the mouse takes over
@@ -810,7 +907,7 @@ export function TimeChart({
       s.fade?.fill,
     ]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
-    lanes.length, sessions.length > 0, timeAxis, axisWidth, withPill,
+    lanes.length, sessions.length > 0, timeAxis, axisWidth, withPill, cursorBand,
   ])
   const columns = series.some((s) => s.column)
 
@@ -1304,6 +1401,12 @@ export function TimeChart({
             if (chip) showChip(u)
           },
         ],
+        ...(cursorBand
+          ? {
+              setScale: [(u: uPlot) => slotWidth(u)],
+              setSize: [(u: uPlot) => slotWidth(u)],
+            }
+          : {}),
         setSelect: [
           (u) => {
             const { left, width } = u.select
@@ -1337,6 +1440,7 @@ export function TimeChart({
               }
             }
             ctx.restore()
+            drawHatches(u, extras.current.hatches, window.devicePixelRatio)
             drawSessionBands(u, extras.current.sessions)
           },
         ],
@@ -1376,6 +1480,7 @@ export function TimeChart({
             drawFlags(u, extras.current.sessions, inSession, dpr, hits)
             drawLanes(u, extras.current.lanes, dpr, hits)
             drawNotes(u, extras.current.notes, dpr)
+            drawHatchLabels(u, extras.current.hatches, dpr)
           },
         ],
       },
@@ -1480,7 +1585,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions, split])
+  }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions, split, hatches])
 
   // the axis leaves out its labels near the now pill: they move with it
   useEffect(() => {
@@ -1498,6 +1603,7 @@ export function TimeChart({
         ref={wrap}
         className="time-chart"
         data-columns={columns || undefined}
+        data-slot-band={cursorBand || undefined}
         role={keyboard ? 'group' : 'img'}
         aria-roledescription={keyboard ? 'chart' : undefined}
         aria-label={keyboard ? `${ariaLabel}. ${keyHint(keyStepFor(keyboard, x, xRange))}; plus and minus zoom; Home goes back` : ariaLabel}
