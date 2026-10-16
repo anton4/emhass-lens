@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
-import type { PlanHistoryResponse, PlanResponse, PlanRow, RunSummary } from '../../api/types'
+import type { GridDetail, PlanHistoryResponse, PlanResponse, PlanRow, RunSummary } from '../../api/types'
 import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
@@ -19,7 +19,16 @@ import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
 import { cursorTimeLabel, localMidnights } from '../../lib/chartTime'
-import { detailCover, detailRequest, gridDetailNote, gridOverlay, planTail } from '../../lib/gridDetail'
+import {
+  detailCover,
+  detailRequest,
+  gridCadence,
+  gridDetailNote,
+  gridOverlay,
+  lastReading,
+  planTail,
+  readingsPhrase,
+} from '../../lib/gridDetail'
 import {
   commandSessions,
   marketBlock,
@@ -34,6 +43,7 @@ import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { pastEnd, timeGrid, viewRange, type ViewHours } from '../../lib/planHistory'
 import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
 import { eurTick } from '../../lib/units'
+import { ChartHints } from './ChartHints'
 
 const SYNC = 'plan'
 
@@ -106,6 +116,7 @@ export function PlanCharts({
   view,
   zoom,
   onZoom: setZoom,
+  loading = false,
 }: {
   data: PlanResponse
   history?: PlanHistoryResponse
@@ -114,6 +125,8 @@ export function PlanCharts({
   /** A window picked by zooming, scrolling or the overview (unix seconds); null follows now. */
   zoom: [number, number] | null
   onZoom: (range: [number, number] | null) => void
+  /** A wider window's history is on its way: the charts stay, faded. */
+  loading?: boolean
 }) {
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
@@ -152,6 +165,20 @@ export function PlanCharts({
   )
   const prices = useMemo(() => priceSeries(history?.prices ?? [], data.prices), [history, data.prices])
 
+  // the parts the Power chart's chips switch off, and the grid's readings in the window shown
+  const [hidden, setHidden] = useState(loadHidden)
+  const toggle = (part: PowerPart) => {
+    const next = new Set(hidden)
+    if (next.has(part)) next.delete(part)
+    else next.add(part)
+    setHidden(next)
+    saveHidden(next)
+  }
+  const showGrid = flows.grid !== null && !hidden.has('grid')
+  const detail = useGridDetail(shown ? detailRequest(shown, nowS, zoom !== null) : null, showGrid)
+  const gridData = showGrid ? detail.data : undefined
+  const measuredUntil = lastReading(gridData) ?? (history?.measurements.last_sample_at ? Date.parse(history.measurements.last_sample_at) / 1000 : null)
+
   // the overview's sessions: the same commands the Power chart reads (one query)
   const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
   const commands = useMarketCommands(since)
@@ -171,35 +198,34 @@ export function PlanCharts({
     tag: (t: number) =>
       t < pastEndS ? { text: 'measured', tone: 'neutral' as const } : { text: 'plan', tone: 'blue' as const },
   }
+  const runId = data.current?.run_id
+  const plannedAt = data.current?.generated_at
   return (
-    <div className="chart-stack">
-      <div className="chart-window" role="status">
-        {shown && (
-          <span>
-            Showing <b>{windowLabel(shown, data.timezone)}</b>
-          </span>
+    <div className="chart-stack" data-loading={loading || undefined} aria-busy={loading || undefined}>
+      <p className="timeline-intro">
+        {measuredUntil !== null && (
+          <>
+            Measured until <b>{cursorTimeLabel(measuredUntil, tz, false)}</b>,{' '}
+            {readingsPhrase(gridData?.step_s, gridCadence(gridData))}; then the plan
+          </>
         )}
-        {zoom ? (
-          <button type="button" className="quiet" onClick={() => setZoom(null)}>
-            Back to now
-          </button>
-        ) : (
-          <span className="chart-live">
-            <span className="chart-live-dot" aria-hidden="true" />
-            following now
-          </span>
-        )}
-        <span className="chart-hint">
-          Point at a chart for its values · scroll to zoom · drag to zoom in · Shift+scroll to move · double-click: back
-          to now
-        </span>
-      </div>
+        {measuredUntil === null && 'The plan'}
+        {runId ? (
+          <>
+            {' '}
+            from <Link to={`/runs/${runId}`}>run #{runId}</Link>
+          </>
+        ) : null}
+        {plannedAt && ` (${cursorTimeLabel(Date.parse(plannedAt) / 1000, tz, false)})`}. Times in {tz}.
+      </p>
       <PowerChart
         x={x}
         flows={flows}
         hasPast={hasPast}
         zoom={shown}
-        following={zoom === null}
+        hidden={hidden}
+        onToggle={toggle}
+        gridData={gridData}
         onZoom={zoomTo}
         split={ahead}
         markers={midnights}
@@ -273,7 +299,10 @@ export function PlanCharts({
       {bounds && shown && (
         <section className="chart-block">
           <h3>
-            Overview <span className="chart-unit">everything loaded · drag the box to move the window</span>
+            Overview{' '}
+            <span className="chart-unit">
+              everything loaded · showing <b>{windowLabel(shown, data.timezone)}</b>
+            </span>
           </h3>
           <Overview
             bounds={bounds}
@@ -286,6 +315,7 @@ export function PlanCharts({
           />
         </section>
       )}
+      <ChartHints windowS={shown ? shown[1] - shown[0] : 8 * 3600} />
     </div>
   )
 }
@@ -366,7 +396,9 @@ function PowerChart({
   flows,
   hasPast,
   zoom,
-  following,
+  hidden,
+  onToggle: toggle,
+  gridData,
   onZoom,
   split,
   markers,
@@ -379,7 +411,10 @@ function PowerChart({
   flows: Flows
   hasPast: boolean
   zoom: [number, number] | null
-  following: boolean
+  hidden: Set<PowerPart>
+  onToggle: (part: PowerPart) => void
+  /** The grid's readings in the window shown. */
+  gridData: GridDetail | undefined
   onZoom: (range: [number, number] | null) => void
   split: ChartSplit
   markers: number[]
@@ -388,14 +423,6 @@ function PowerChart({
   timeZone: string
   slotTag: { tag: (t: number) => { text: string; tone: 'neutral' | 'blue' } }
 }) {
-  const [hidden, setHidden] = useState(loadHidden)
-  const toggle = (part: PowerPart) => {
-    const next = new Set(hidden)
-    if (next.has(part)) next.delete(part)
-    else next.add(part)
-    setHidden(next)
-    saveHidden(next)
-  }
   // Whole hours keep the query key steady while the chart's first slot moves on
   const first = x[0]
   const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
@@ -403,10 +430,6 @@ function PowerChart({
   const spans = useMemo(() => commands.data?.spans ?? [], [commands.data])
   const showPower = spans.length > 0 && !hidden.has('market-power')
   const showSessions = spans.length > 0 && !hidden.has('market-commands')
-  // the measured part of the window shown, every reading the grid sensor gave: the grid's line there
-  const showGrid = flows.grid !== null && !hidden.has('grid')
-  const detail = useGridDetail(zoom ? detailRequest(zoom, nowS, !following) : null, showGrid)
-  const gridData = showGrid ? detail.data : undefined
   const cover = useMemo(() => detailCover(gridData), [gridData])
 
   const series = useMemo(

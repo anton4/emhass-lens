@@ -208,14 +208,34 @@ export function PlanPage() {
         <div className="panel-head">
           <h2>{table ? 'The plan as a table' : 'Timeline'}</h2>
           {!table && (
-            <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
+            <div className="timeline-controls">
+              <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
+              <button
+                type="button"
+                className="follow-now"
+                aria-pressed={zoom === null}
+                title={zoom === null ? 'The charts follow the clock' : 'Show the window around now again'}
+                onClick={() => setZoom(null)}
+              >
+                <span className="follow-dot" data-live={zoom === null || undefined} aria-hidden="true" />
+                {zoom === null ? 'Following now' : 'Back to now'}
+              </button>
+            </div>
           )}
         </div>
         <div className="panel-body">
           {table ? (
             <PlanTable rows={rows} columns={data.columns} nowS={nowS} timeZone={tz} />
           ) : (
-            <PlanCharts data={data} history={history.data} nowS={nowS} view={view} zoom={zoom} onZoom={setZoom} />
+            <PlanCharts
+              data={data}
+              history={history.data}
+              nowS={nowS}
+              view={view}
+              zoom={zoom}
+              onZoom={setZoom}
+              loading={history.isPlaceholderData}
+            />
           )}
         </div>
       </section>

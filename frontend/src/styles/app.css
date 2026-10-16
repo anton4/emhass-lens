@@ -1735,41 +1735,78 @@ button.diff-locate {
   color: var(--ink-muted);
 }
 
-/* over the Plan's charts: the window shown, whether it follows now, how to move it */
-.chart-window {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
+/* over the Plan's charts: what they show, measured and planned */
+.timeline-intro {
   margin: 0;
   font-size: var(--step--1);
-  color: var(--ink-muted);
+  color: var(--ink-2);
 }
 
-.chart-window b {
+.timeline-intro b {
   color: var(--ink);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.chart-live {
-  display: inline-flex;
+/* the window, the comparison and whether the charts follow now */
+.timeline-controls {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  color: var(--on-green);
-  font-weight: 500;
+  gap: 8px 16px;
 }
 
-.chart-live-dot {
+.follow-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.follow-now[aria-pressed='true'] {
+  border-color: var(--line-green);
+  background: var(--tint-green);
+  color: var(--on-green);
+}
+
+.follow-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background: var(--ink-decor);
+}
+
+.follow-dot[data-live] {
   background: var(--lamp-green);
   box-shadow: 0 0 0 3px var(--tint-green);
 }
 
-.chart-hint {
-  margin-left: auto;
+/* under the charts: what they answer to */
+.chart-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-muted);
+}
+
+.chart-hints kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--frame-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+}
+
+/* a wider window on its way: the charts stay, faded */
+.chart-stack[data-loading] > :not(.timeline-intro) {
+  opacity: 0.45;
+  transition: opacity 0.15s;
 }
 
 /* a chart's unit beside its title */

@@ -139,3 +139,41 @@ export function gridRangeAt(detail: GridDetail | undefined, time: number): [numb
   const point = pointAt(detail, time)
   return point && point.w !== null && point.lo != null && point.hi != null ? [point.lo, point.hi] : null
 }
+
+/** How often the grid sensor reported (s): the median gap between its readings when the detail has every reading,
+ *  or null when it has means per step or too few readings to say. */
+export function gridCadence(detail: GridDetail | undefined): number | null {
+  if (!detail || detail.step_s !== null) return null
+  const times = detail.points.filter((p) => p.w !== null).map((p) => unix(p.t))
+  if (times.length < 3) return null
+  const gaps = times
+    .slice(1)
+    .map((t, i) => t - times[i]!)
+    .filter((g) => g > 0)
+    .sort((a, b) => a - b)
+  const median = gaps[Math.floor(gaps.length / 2)]
+  return median === undefined ? null : Math.round(median)
+}
+
+/** The time of the detail's last reading (unix s), or null. */
+export function lastReading(detail: GridDetail | undefined): number | null {
+  if (!detail) return null
+  for (let i = detail.points.length - 1; i >= 0; i--) {
+    const p = detail.points[i]!
+    if (p.w !== null) return unix(p.t)
+  }
+  return null
+}
+
+/** What the grid line left of now is made of, for the Timeline's intro: "every 10-second grid reading from Home
+ *  Assistant", or its means and their range on a long window, or the quarter-hour means without readings. */
+export function readingsPhrase(stepS: number | null | undefined, cadenceS: number | null): string {
+  if (stepS === undefined) return 'quarter-hour means'
+  if (stepS !== null) {
+    const step = stepS < 60 ? `${stepS}-second` : `${Math.round(stepS / 60)}-minute`
+    return `the grid's readings from Home Assistant as ${step} means, drawn through each one's lowest and highest`
+  }
+  if (cadenceS === null) return 'every grid reading from Home Assistant'
+  if (cadenceS < 60) return `every ${cadenceS}-second grid reading from Home Assistant`
+  return `every grid reading from Home Assistant (about one every ${Math.round(cadenceS / 60)} min)`
+}

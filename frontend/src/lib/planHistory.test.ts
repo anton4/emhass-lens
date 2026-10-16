@@ -117,6 +117,7 @@ describe('the Timeline windows', () => {
   it('shows 8 hours around now by default, more on wider windows, and the 7 days up to the plan\'s end', () => {
     expect(viewRange(8, NOW, bounds)).toEqual([NOW - 4 * 3600, NOW + 4 * 3600])
     expect(viewRange(24, NOW, bounds)).toEqual([NOW - 12 * 3600, NOW + 12 * 3600])
+    expect(viewRange(48, NOW, bounds)).toEqual([NOW - 24 * 3600, bounds[1]])
     expect(viewRange(168, NOW, bounds)).toEqual(bounds)
   })
 

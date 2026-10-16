@@ -18,11 +18,11 @@ export const HORIZON_SLOTS = HORIZONS.map((h) => h.slots) as readonly HorizonSlo
 
 /** The Timeline's windows around now: how far back and ahead each shows (hours; null ahead: to the plan's end), and how
  *  much history it loads, so the window can be moved back a little without a new request. 8 h is the default: every
- *  10-second grid reading gets about two pixels. */
+ *  10-second grid reading gets about two pixels. 2 d is the last day and the whole plan. */
 export const VIEW_WINDOWS = [
   { hours: 8, label: '8 h', back: 4, ahead: 4, history: 24 },
   { hours: 24, label: '24 h', back: 12, ahead: 12, history: 24 },
-  { hours: 48, label: '2 d', back: 24, ahead: 24, history: 48 },
+  { hours: 48, label: '2 d', back: 24, ahead: null, history: 48 },
   { hours: 168, label: '7 d', back: 168, ahead: null, history: 168 },
 ] as const
 export type ViewHours = (typeof VIEW_WINDOWS)[number]['hours']

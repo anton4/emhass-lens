@@ -98,6 +98,18 @@ These come from docs/PLAN.md §10:
 - **G8, refactor:** the Plan page's series builders are pure functions in `lib/planSeries.ts` (`planFlows`,
   `socSeries`, `priceSeries`, `powerSeries`), so the phone layout can share them. The zoom lives in PlanPage and
   `key={view}` is gone: changing the window no longer rebuilds the charts (checked: the same canvas after 24 h → 8 h).
+- **P1, the Timeline's header:**
+  - An intro over the charts: "Measured until 14:54, every 10-second grid reading from Home Assistant; then the plan
+    from run #4554 (14:41). Times in Europe/Tallinn." The cadence is the median gap between the readings
+    (`gridCadence`); on a long window it names the means instead (`readingsPhrase`). The time is the last reading
+    (`lastReading`), else the history's last sample.
+  - Beside Window and Compare, a pressed "Following now" button with a green dot, or "Back to now"; the status bar
+    over the charts is gone, and "showing <window>" moved into the Overview's heading.
+  - Key hints with `<kbd>` under the charts (`pages/plan/ChartHints.tsx`); their arrow-key step follows the window,
+    and on a coarse pointer they are the touch gestures instead.
+  - 2 d now runs from 24 h back to the plan's end.
+  - While a wider window's history loads, the charts stay at 45 % opacity with `aria-busy`.
+  - To feed the intro, the hidden parts and the grid-detail query moved from PowerChart up into PlanCharts.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

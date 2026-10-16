@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { GridDetail } from '../api/types'
-import { DETAIL_MAX_S, detailCover, detailRequest, gridAt, gridDetailNote, gridOverlay, gridRangeAt, planTail, withoutCovered } from './gridDetail'
+import {
+  DETAIL_MAX_S,
+  detailCover,
+  detailRequest,
+  gridAt,
+  gridCadence,
+  gridDetailNote,
+  gridOverlay,
+  gridRangeAt,
+  lastReading,
+  planTail,
+  readingsPhrase,
+  withoutCovered,
+} from './gridDetail'
 
 const s = (iso: string) => Date.parse(iso) / 1000
 const NOW = s('2026-10-14T09:13:20Z')
@@ -116,5 +129,43 @@ describe('the measured grid line', () => {
       { from: s('2026-10-14T06:15:00Z'), to: s('2026-10-14T06:15:00Z'), value: 4 }, // the step up to the next slot
     ])
     expect(planTail(x, values, null, s('2026-10-14T06:00:00Z'))).toBeNull()
+  })
+})
+
+describe('gridCadence and lastReading', () => {
+  const raw = (gaps: number[], nulls: number[] = []): GridDetail => {
+    let t = Date.parse('2026-10-16T10:00:00Z') / 1000
+    const points = [t, ...gaps.map((g) => (t += g))].map((s, i) => ({
+      t: new Date(s * 1000).toISOString(),
+      w: nulls.includes(i) ? null : 100,
+    }))
+    return { entity: 'sensor.grid', start: points[0]!.t, end: points[points.length - 1]!.t, step_s: null, points, error: null }
+  }
+
+  it('is the median gap between readings', () => {
+    expect(gridCadence(raw([10, 10, 30, 10, 11]))).toBe(10)
+  })
+
+  it('is null for means per step, or too few readings', () => {
+    expect(gridCadence({ ...raw([10, 10, 10]), step_s: 60 })).toBeNull()
+    expect(gridCadence(raw([10]))).toBeNull()
+    expect(gridCadence(undefined)).toBeNull()
+  })
+
+  it('finds the last reading, past any missing ones', () => {
+    const d = raw([10, 10, 10], [3])
+    expect(lastReading(d)).toBe(Date.parse('2026-10-16T10:00:20Z') / 1000)
+    expect(lastReading(undefined)).toBeNull()
+  })
+})
+
+describe('readingsPhrase', () => {
+  it('says what the grid line is made of', () => {
+    expect(readingsPhrase(null, 10)).toBe('every 10-second grid reading from Home Assistant')
+    expect(readingsPhrase(null, 120)).toBe('every grid reading from Home Assistant (about one every 2 min)')
+    expect(readingsPhrase(60, null)).toBe(
+      "the grid's readings from Home Assistant as 1-minute means, drawn through each one's lowest and highest",
+    )
+    expect(readingsPhrase(undefined, null)).toBe('quarter-hour means')
   })
 })
