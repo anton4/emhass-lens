@@ -3933,6 +3933,40 @@ export interface components {
             /** Vat */
             vat: number;
         };
+        /**
+         * PriceTariff
+         * @description What the tariff adds to the spot price (€/kWh, without VAT), as the price breakdown names it.
+         */
+        PriceTariff: {
+            /** Balancing */
+            balancing: number;
+            /** Excise */
+            excise: number;
+            /** Export Balancing */
+            export_balancing: number;
+            /** Export Margin */
+            export_margin: number;
+            /** Margin */
+            margin: number;
+            /** Network Day */
+            network_day: number;
+            /** Network Day Peak */
+            network_day_peak?: number | null;
+            /** Network Holiday Peak */
+            network_holiday_peak?: number | null;
+            /** Network Night */
+            network_night: number;
+            /** Night Window */
+            night_window: string;
+            /** Package */
+            package: string;
+            /** Renewable */
+            renewable: number;
+            /** Supply Security */
+            supply_security: number;
+            /** Vat Pct */
+            vat_pct: number;
+        };
         /** Prices */
         Prices: {
             /**
@@ -3996,6 +4030,7 @@ export interface components {
             package: string;
             /** Slots */
             slots: components["schemas"]["PriceSlotOut"][];
+            tariff?: components["schemas"]["PriceTariff"] | null;
             /** Timezone */
             timezone: string;
         };

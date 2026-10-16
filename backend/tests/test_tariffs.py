@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from emhass_lens.domain import nordpool
-from emhass_lens.domain.tariffs.engine import network_rates, price_slot
+from emhass_lens.domain.tariffs.engine import network_rates, price_slot, tariff_summary
 from emhass_lens.domain.tariffs.holidays import holiday_name
 from emhass_lens.settings.model import Tariff
 from tests.fixtures.loader import nordpool as np_fixture
@@ -114,3 +114,15 @@ def test_holidays_match_mffr_list(year: int) -> None:
     mffr = {date(year, m, d) for m, d in fixed} | {easter - timedelta(days=2), easter, easter + timedelta(days=49)}
     ours = {d for d in (date(year, 1, 1) + timedelta(days=i) for i in range(366)) if d.year == year and holiday_name(d)}
     assert ours == mffr
+
+
+def test_the_tariff_summary_names_the_fees_and_the_rates_the_package_resolves_to() -> None:
+    vork5 = tariff_summary(Tariff(package="vork5"))
+    assert vork5.package == "Võrk 5"
+    assert vork5.network_day_peak is not None and vork5.network_holiday_peak is not None
+    custom = tariff_summary(
+        Tariff(package="custom", network={"day": 0.05, "night": 0.02}, night_window={"clock_basis": "standard_time"})  # type: ignore[arg-type]
+    )
+    assert (custom.package, custom.network_day, custom.network_night) == ("Custom", 0.05, 0.02)
+    assert custom.night_window == "22:00–07:00 (winter time)"
+    assert custom.vat_pct == 24.0 and custom.margin == Tariff().margin

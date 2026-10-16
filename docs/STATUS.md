@@ -236,6 +236,10 @@ These come from docs/PLAN.md §10:
   - Tests: `test_where_a_load_may_start_comes_from_the_payload_else_emhass_config`,
     `test_the_soc_limits_come_from_the_payload_else_emhass_config`, and the live run's 0.05–1.0 with start 0 from
     EMHASS's config.
+- **I2, the tariff's parts beside the prices** (backend): `domain/tariffs/engine.tariff_summary` (the package's name,
+  the fees, the network rates it resolves to through `network_rates`, the night window, VAT, the export fees) as
+  `PricesResponse.tariff` (`PriceTariff`). Tests: `test_the_tariff_summary_names_the_fees_and_the_rates_the_package_resolves_to`
+  and `/api/prices` carries VAT 24 % and 22:00–07:00.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

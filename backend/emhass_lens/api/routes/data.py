@@ -32,12 +32,14 @@ from emhass_lens.api.schemas import (
     PlanSnapshotOut,
     PriceSlotOut,
     PricesResponse,
+    PriceTariff,
     PvStatus,
     SentInputs,
 )
 from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.domain.mpc.anchor import published_row
 from emhass_lens.domain.mpc.validate import validate
+from emhass_lens.domain.tariffs.engine import tariff_summary
 from emhass_lens.services.inputs import describe
 from emhass_lens.services.plan_now import plan_now as plan_now_service
 from emhass_lens.services.prices import area_tz, utc_day_start
@@ -72,6 +74,7 @@ async def prices(c: ContainerDep, days_back: Annotated[int, Query(ge=0, le=60)] 
         gaps=[[iso(a) or "", iso(b) or ""] for a, b in stitched.gaps],
         nordpool=NordpoolStatus(**svc.status()),
         forecast=ForecastStatus(**c.extras["forecasts"].status()),
+        tariff=PriceTariff(**asdict(tariff_summary(settings.prices.tariff))),
     )
 
 

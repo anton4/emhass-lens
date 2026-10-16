@@ -7262,6 +7262,97 @@
         "title": "PriceSlotOut",
         "type": "object"
       },
+      "PriceTariff": {
+        "description": "What the tariff adds to the spot price (€/kWh, without VAT), as the price breakdown names it.",
+        "properties": {
+          "balancing": {
+            "title": "Balancing",
+            "type": "number"
+          },
+          "excise": {
+            "title": "Excise",
+            "type": "number"
+          },
+          "export_balancing": {
+            "title": "Export Balancing",
+            "type": "number"
+          },
+          "export_margin": {
+            "title": "Export Margin",
+            "type": "number"
+          },
+          "margin": {
+            "title": "Margin",
+            "type": "number"
+          },
+          "network_day": {
+            "title": "Network Day",
+            "type": "number"
+          },
+          "network_day_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Day Peak"
+          },
+          "network_holiday_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Holiday Peak"
+          },
+          "network_night": {
+            "title": "Network Night",
+            "type": "number"
+          },
+          "night_window": {
+            "title": "Night Window",
+            "type": "string"
+          },
+          "package": {
+            "title": "Package",
+            "type": "string"
+          },
+          "renewable": {
+            "title": "Renewable",
+            "type": "number"
+          },
+          "supply_security": {
+            "title": "Supply Security",
+            "type": "number"
+          },
+          "vat_pct": {
+            "title": "Vat Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "package",
+          "margin",
+          "renewable",
+          "excise",
+          "balancing",
+          "supply_security",
+          "network_day",
+          "network_night",
+          "night_window",
+          "vat_pct",
+          "export_margin",
+          "export_balancing"
+        ],
+        "title": "PriceTariff",
+        "type": "object"
+      },
       "Prices": {
         "additionalProperties": false,
         "properties": {
@@ -7367,6 +7458,16 @@
             },
             "title": "Slots",
             "type": "array"
+          },
+          "tariff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceTariff"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "timezone": {
             "title": "Timezone",

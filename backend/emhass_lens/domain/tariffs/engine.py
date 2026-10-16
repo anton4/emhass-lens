@@ -58,6 +58,53 @@ class SlotPrice:
         return self.origin != "actual"
 
 
+PACKAGE_LABELS = {"vork1": "Võrk 1", "vork2": "Võrk 2", "vork4": "Võrk 4", "vork5": "Võrk 5", "custom": "Custom"}
+
+
+@dataclass(frozen=True, slots=True)
+class TariffSummary:
+    """What a tariff adds to the spot price, €/kWh without VAT: the fees, the network rates the package resolves to,
+    when the night rate applies, the VAT and what an export is charged."""
+
+    package: str  # its name ("Võrk 4", "Custom")
+    margin: float
+    renewable: float
+    excise: float
+    balancing: float
+    supply_security: float
+    network_day: float
+    network_night: float
+    network_day_peak: float | None
+    network_holiday_peak: float | None
+    night_window: str  # "22:00–07:00", with " (winter time)" when it is kept in standard time
+    vat_pct: float
+    export_margin: float
+    export_balancing: float
+
+
+def tariff_summary(tariff: Tariff) -> TariffSummary:
+    rates = network_rates(tariff)
+    window = f"{tariff.night_window.start}–{tariff.night_window.end}"
+    if tariff.night_window.clock_basis == "standard_time":
+        window += " (winter time)"
+    return TariffSummary(
+        package=PACKAGE_LABELS.get(tariff.package, tariff.package),
+        margin=tariff.margin,
+        renewable=tariff.renewable,
+        excise=tariff.excise,
+        balancing=tariff.balancing,
+        supply_security=tariff.supply_security,
+        network_day=rates.day,
+        network_night=rates.night,
+        network_day_peak=rates.day_peak,
+        network_holiday_peak=rates.holiday_peak,
+        night_window=window,
+        vat_pct=tariff.vat_pct,
+        export_margin=tariff.export_margin,
+        export_balancing=tariff.export_balancing,
+    )
+
+
 def network_rates(tariff: Tariff) -> NetworkRates:
     package = PACKAGES.get(tariff.package)
     if package is not None:

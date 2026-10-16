@@ -223,6 +223,25 @@ class PriceSlotOut(BaseModel):
     export_price: float
 
 
+class PriceTariff(BaseModel):
+    """What the tariff adds to the spot price (€/kWh, without VAT), as the price breakdown names it."""
+
+    package: str
+    margin: float
+    renewable: float
+    excise: float
+    balancing: float
+    supply_security: float
+    network_day: float
+    network_night: float
+    network_day_peak: float | None = None
+    network_holiday_peak: float | None = None
+    night_window: str
+    vat_pct: float
+    export_margin: float
+    export_balancing: float
+
+
 class PricesResponse(BaseModel):
     timezone: str
     now: str
@@ -233,6 +252,7 @@ class PricesResponse(BaseModel):
     gaps: list[list[str]]
     nordpool: NordpoolStatus
     forecast: ForecastStatus
+    tariff: PriceTariff | None = None
 
 
 class Reading(BaseModel):

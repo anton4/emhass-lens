@@ -100,6 +100,7 @@ def test_prices_fetch_per_delivery_day_and_price_breakdown(tmp_path: Path, world
         assert sorted(world.nordpool_calls) == ["2026-10-08", "2026-10-09", "2026-10-10"]
         prices = client.get("/api/prices", params={"days_back": 0}).json()
         assert prices["timezone"] == "Europe/Tallinn"
+        assert prices["tariff"]["vat_pct"] == 24.0 and prices["tariff"]["night_window"] == "22:00–07:00"
         first = prices["slots"][0]
         assert first["start"] == "2026-10-08T21:00:00.000+00:00"  # local midnight
         assert first["period"] == "night"
