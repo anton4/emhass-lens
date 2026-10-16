@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BeyondSlot, HorizonOption, SentDeferrable, SentInputs } from '../api/types'
 import {
-  deferrableLanes,
   exportLane,
   forecastRangesOn,
   horizonLane,
@@ -16,6 +15,10 @@ import {
   sentAxis,
   sentHeads,
   tariffLane,
+  priceNote,
+  forecastNote,
+  windowNotes,
+  windowBands,
 } from './sent'
 
 const TZ = 'Europe/Tallinn'
@@ -138,10 +141,13 @@ describe('the sent payload on a time axis', () => {
     expect(loadWindow(axis, load({ end_timesteps: 0 }))).toEqual([ANCHOR, ANCHOR + 16 * 900])
     const off = load({ on: false, nominal_power_w: 0, operating_hours: 0, end_timesteps: 0 })
     expect(loadWindow(axis, off)).toEqual([ANCHOR, ANCHOR + 6 * 900])
-    expect(deferrableLanes(axis, [load(), off]).map((l) => l.spans[0])).toEqual([
-      { from: ANCHOR, to: ANCHOR + 5400, color: '--q-ev', hatch: false, text: '11.00 kW for 0.45 h' },
-      { from: ANCHOR, to: ANCHOR + 5400, color: '--q-ev', hatch: true, text: 'off' },
-    ])
+    // the window is hatched on the chart for a load that is on, and named at its start
+    expect(windowBands(axis, [load(), off])).toEqual([{ from: ANCHOR, to: ANCHOR + 5400, color: '--q-ev' }])
+    expect(windowNotes(axis, [load(), off], TZ).map((n) => n.text)).toEqual(['EV · 11.00 kW for 0.45 h, by Sun 22:30'])
+    // a first allowed timestep moves the window's start
+    const later = load({ start_timesteps: 2 })
+    expect(loadWindow(axis, later)).toEqual([ANCHOR + 1800, ANCHOR + 5400])
+    expect(windowNotes(axis, [later], TZ).map((n) => n.text)).toEqual(['EV · 11.00 kW for 0.45 h, Sun 21:30–22:30'])
     expect(loadExtras(axis, [off], ANCHOR + 900)).toEqual([{ name: 'EV', value: 'off: 0 W', color: '--q-ev', hatch: true }])
     expect(loadExtras(axis, [off], ANCHOR + 6 * 900)).toEqual([])
   })
@@ -165,9 +171,9 @@ describe('PV day totals', () => {
       [16, 'all'],
       [16, 'none'],
     ])
-    expect(pvNotes(days).map((n) => [n.text, n.sub])).toEqual([
-      ['16.0 kWh', undefined],
-      ['16.0 kWh', undefined],
+    expect(pvNotes(days).map((n) => [n.text, n.sub, n.look])).toEqual([
+      ['Sun · 16.0 kWh', undefined, 'pill'],
+      ['Mon · 16.0 kWh', undefined, 'pill'],
     ])
     // over the middle of the day's production, at its peak
     expect(days[1]?.peak).toBe(2000)
@@ -294,5 +300,24 @@ describe('sentHeads', () => {
     expect(heads.load.params[0]).toBe('load_power_forecast')
     expect(heads.prices.unit).toBe('c/kWh, fees and VAT included')
     expect(heads.pv.keys.map((k) => k.label)).toEqual(['forecast sent'])
+  })
+})
+
+describe('the forecast note and the price note', () => {
+  const slots = [
+    slot(0, { period: 'night', export_max_w: 0 }),
+    slot(1, { period: 'night', origin: 'forecast:ee_eupowerprices', export_max_w: 15500 }),
+  ]
+  const data = { ...sent(slots), no_export_at_or_below: 0.04 }
+  const axis = sentAxis(data)
+
+  it('pins where the forecast starts to the top of the chart', () => {
+    expect(forecastNote(axis, data, TZ)).toMatchObject({ t: ANCHOR + 900, top: true, look: 'pill', text: 'forecast from Sun 21:15' })
+    expect(forecastNote(axis, sent([slot(0)]), TZ)).toBeNull()
+  })
+
+  it('says the period, the export limit and why, and whether the price is a forecast', () => {
+    expect(priceNote(axis, data, ANCHOR)).toBe('Night tariff · export limit 0 W (export price at or below 0.04 €/kWh)')
+    expect(priceNote(axis, data, ANCHOR + 900)).toBe('Night tariff · export limit 15.50 kW · forecast price')
   })
 })

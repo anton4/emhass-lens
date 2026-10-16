@@ -15,8 +15,8 @@ import { outcomeLabel } from '../../lib/outcomes'
 import { closeSteps, loadPref, savePref } from '../../lib/planHistory'
 import { isForecast, originLabel } from '../../lib/prices'
 import {
-  deferrableLanes,
   exportLane,
+  forecastNote,
   forecastRangesOn,
   horizonLane,
   kwhOf,
@@ -24,8 +24,8 @@ import {
   loadExtras,
   midnightsOn,
   onAxis,
-  priceExtras,
   pvDays,
+  priceNote,
   pvNotes,
   sentAxis,
   sentHeads,
@@ -33,6 +33,8 @@ import {
   SLOT_S,
   slotAt,
   tariffLane,
+  windowBands,
+  windowNotes,
 } from '../../lib/sent'
 import { eurTick, formatAge, formatPower, isNumber, priceFactor, type PriceUnit } from '../../lib/units'
 import { Breakable, Tile } from './Tile'
@@ -255,7 +257,8 @@ function SentView({
             ariaLabel="Import and export price per quarter-hour: those that applied before the anchor, those sent to EMHASS, and the forecast after the plan's horizon, with the tariff period, the export limit and the horizon under the chart"
             yFormat={(v) => (unit === 'cents' ? `${v.toFixed(0)} c` : eurTick(v))}
             fit={PRICE_FIT}
-            bands={charts.forecast}
+            hatches={charts.forecastHatches}
+            notes={charts.priceNotes}
             height={230}
             lanes={priceLanes}
             popup={charts.pricePopup}
@@ -264,7 +267,7 @@ function SentView({
           <details className="chart-note more">
             <summary>Details</summary>
             <code>load_cost_forecast</code> and <code>prod_price_forecast</code>, fees included and the import price with
-            VAT.{charts.forecast.length > 0 && ' Shaded: forecast prices.'}
+            VAT.{charts.forecastHatches.length > 0 && ' Hatched: forecast prices.'}
             {charts.hasPastPrices &&
               hoursBack > 0 &&
               ' Before the anchor: the Nord Pool prices that applied, with today’s tariff (nothing is sent for past slots).'}
@@ -307,7 +310,8 @@ function SentView({
             yFormat={kwTick}
             fit={POWER_FIT}
             height={200}
-            lanes={charts.loadLanes}
+            hatches={charts.loadWindows}
+            notes={charts.loadNotes}
             popup={charts.loadPopup}
             legend={false}
           />
@@ -619,7 +623,7 @@ function SentCards({ data }: { data: SentInputs }) {
             ? 'None set up'
             : one
               ? one.on
-                ? `${loadAsk(one)}${one.end_timesteps > 0 ? ` by ${dayTime(anchorS + one.end_timesteps * SLOT_S, tz)}` : ''}`
+                ? `${loadAsk(one)}${windowText(one, anchorS, endS, tz)}`
                 : isNumber(one.configured_power_w)
                   ? `${formatPower(one.configured_power_w)} for ${one.configured_hours ?? 0} h when on`
                   : 'Sent as 0 W'
@@ -629,6 +633,14 @@ function SentCards({ data }: { data: SentInputs }) {
       />
     </div>
   )
+}
+
+/** ", window Sat 01:00–07:00" from the load's first allowed timestep, ", by Sat 07:00" from the anchor, or nothing. */
+function windowText(load: SentInputs['deferrables'][number], anchorS: number, endS: number, tz: string): string {
+  const start = Math.max(0, load.start_timesteps ?? 0)
+  const end = load.end_timesteps > 0 ? Math.min(endS, anchorS + load.end_timesteps * SLOT_S) : null
+  if (start > 0) return `, window ${dayTime(anchorS + start * SLOT_S, tz)}–${end ? dayTime(end, tz).slice(-5) : 'the end'}`
+  return end ? ` by ${dayTime(end, tz)}` : ''
 }
 
 function buildCharts(data: SentInputs, unit: PriceUnit) {
@@ -670,7 +682,7 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
       const slot = slots[i]
       return slot ? { text: originLabel(slot.origin), tone: isForecast(slot.origin) ? 'blue' : 'neutral' } : null
     },
-    extra: (t: number) => priceExtras(axis, data, t),
+    note: (t: number) => priceNote(axis, data, t),
   }
 
   const pvValues = onAxis(
@@ -702,7 +714,14 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     data.load_w,
   )
   const load: ChartSeries[] = [
-    { label: 'House load', color: '--q-load', values: closeSteps(loadValues), readout: loadValues, format: formatPower },
+    {
+      label: 'House load',
+      color: '--q-load',
+      fill: 0.16,
+      values: closeSteps(loadValues),
+      readout: loadValues,
+      format: formatPower,
+    },
   ]
   const loadTag = data.load_source === 'plan' ? 'EMHASS forecast' : 'sent'
 
@@ -725,7 +744,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
   return {
     axis,
     midnights: midnightsOn(axis, tz),
-    forecast: forecastRangesOn(axis, data),
+    forecastHatches: forecastRangesOn(axis, data).map(([from, to]) => ({ from, to })),
+    priceNotes: [forecastNote(axis, data, tz)].filter((n): n is ChartNote => n !== null),
     prices,
     hasPastPrices: data.measured.some((m) => isNumber(m.load_cost)),
     priceLanes: exportRow ? [tariffLane(axis, data), exportRow] : [tariffLane(axis, data)],
@@ -735,7 +755,8 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     pvNotes: pvNotes(pvDays(axis, pvValues, tz)),
     sentPopup: { tag: sentTag('sent') },
     load,
-    loadLanes: deferrableLanes(axis, data.deferrables),
+    loadWindows: windowBands(axis, data.deferrables),
+    loadNotes: windowNotes(axis, data.deferrables, tz),
     loadPopup: { tag: sentTag(loadTag), extra: (t: number) => loadExtras(axis, data.deferrables, t) },
     soc,
     socNotes,

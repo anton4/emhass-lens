@@ -253,6 +253,16 @@ These come from docs/PLAN.md §10:
   period, night in `--tariff-night` violet, the day neutral, peaks amber, "night network tariff" with `long`);
   `tariffLane` uses it. The export lane is green where EMHASS may export and red, hatched in `--q-export-cap`, where
   it is capped at 0 W; the popup's row follows.
+- **I5, forecasts, the EV's window, PV day totals:**
+  - **Prices:** forecast prices are hatched, with "forecast from Sat 00:30" on a pill at the top (`forecastNote`).
+    The popup's tariff and export rows became one note line: "Night tariff · export limit 0 W (export price at or
+    below 0.04 €/kWh) · forecast price" (`priceNote`, `popup.note`).
+  - **The EV's window** is hatched across the house load chart from its first allowed timestep (I1) to its
+    deadline, named on a pill: "EV · 11.00 kW for 2.5 h, Fri 17:30–00:00", or "…, by …" when it may start at once
+    (`windowBands`, `windowNotes`; `loadWindow` honours `start_timesteps`). The lane under the chart is gone, and
+    the tile reads "…, window Fri 17:30–00:00".
+  - The house load is an area.
+  - **PV:** each day's total is on a pill with its weekday ("Sat · 24.8 kWh", `PvDay.day`).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

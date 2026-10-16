@@ -3,7 +3,7 @@
 // Lanes under the charts show the tariff period, the export limit, the horizon and each deferrable load's window; the
 // PV chart labels each day's total.
 
-import type { ChartLane, ChartNote } from '../components/charts/TimeChart'
+import type { ChartHatch, ChartLane, ChartNote } from '../components/charts/TimeChart'
 import type { PopupExtra } from '../components/charts/cursorStore'
 import type { HorizonOption, SentDeferrable, SentInputs } from '../api/types'
 import { isForecast, periodLabel, periodLane, PERIOD_STYLES } from './prices'
@@ -114,20 +114,107 @@ export function exportLane(axis: SentAxis, data: Pick<SentInputs, 'slots'>): Cha
   }
 }
 
-/** Where a deferrable load may run: from the anchor to its deadline (no deadline: the whole horizon). */
+/** Where a deferrable load may run: from its first allowed timestep (the anchor when it has none) to its deadline
+ *  (no deadline: the whole horizon). */
 export function loadWindow(axis: SentAxis, load: SentDeferrable): [number, number] {
   const steps = load.on ? load.end_timesteps : (load.configured_end_timesteps ?? 0)
-  return [axis.anchorS, steps > 0 ? Math.min(axis.endS, axis.anchorS + steps * SLOT_S) : axis.endS]
+  const start = Math.min(axis.endS, axis.anchorS + Math.max(0, load.start_timesteps ?? 0) * SLOT_S)
+  return [start, steps > 0 ? Math.min(axis.endS, axis.anchorS + steps * SLOT_S) : axis.endS]
 }
 
-export function deferrableLanes(axis: SentAxis, loads: readonly SentDeferrable[]): ChartLane[] {
-  return loads.map((load) => {
+/** The windows of the deferrable loads that are on, hatched across the house load chart in the EV's colour. */
+export function windowBands(axis: SentAxis, loads: readonly SentDeferrable[]): ChartHatch[] {
+  return loads.flatMap((load) => {
+    if (!load.on) return []
     const [from, to] = loadWindow(axis, load)
-    return {
-      label: load.name,
-      spans: [{ from, to, color: '--q-ev', hatch: !load.on, text: load.on ? loadAsk(load) : 'off' }],
-    }
+    return to > from ? [{ from, to, color: '--q-ev' }] : []
   })
+}
+
+/** Each load that is on, named at its window's start on a pill: "EV · 11.00 kW for 2.5 h, Sat 01:00–07:00", or "…, by
+ *  Sat 07:00" when it may start at once. */
+export function windowNotes(axis: SentAxis, loads: readonly SentDeferrable[], timeZone: string): ChartNote[] {
+  return loads.flatMap((load) => {
+    if (!load.on) return []
+    const [from, to] = loadWindow(axis, load)
+    if (to <= from) return []
+    const when = from > axis.anchorS ? `${dayTime(from, timeZone)}–${clock(to, timeZone)}` : `by ${dayTime(to, timeZone)}`
+    return [
+      {
+        t: from,
+        value: 0,
+        top: true,
+        look: 'pill' as const,
+        align: 'right' as const,
+        text: `${load.name} · ${loadAsk(load)}, ${when}`,
+        color: '--ink-2',
+      },
+    ]
+  })
+}
+
+/** Where the payload's prices turn into a forecast, on a pill at the top: "forecast from Sat 00:30". */
+export function forecastNote(axis: SentAxis, data: Pick<SentInputs, 'slots'>, timeZone: string): ChartNote | null {
+  const first = data.slots.find((s) => isForecast(s.origin))
+  if (!first) return null
+  const t = Date.parse(first.start) / 1000
+  if (t >= axis.axisEndS) return null
+  return { t, value: 0, top: true, look: 'pill', align: 'right', text: `forecast from ${dayTime(t, timeZone)}`, color: '--ink-2' }
+}
+
+/** The price popup's note line at t: the network period, the export limit with why, and whether the price is a
+ *  forecast ("Night tariff · export limit 0 W (export price at or below 0.04 €/kWh) · forecast price"). */
+export function priceNote(
+  axis: SentAxis,
+  data: SentData & Partial<Pick<SentInputs, 'no_export_at_or_below'>>,
+  t: number,
+): string | null {
+  const i = slotAt(axis, t)
+  const parts: string[] = []
+  const tariff = (period: string | null | undefined) => period && parts.push(`${periodLabel(period)} tariff`)
+  if (i < 0) {
+    tariff(data.measured[axis.anchorIdx + i]?.period)
+    return parts[0] ? `${parts[0]} · the price that applied` : null
+  }
+  if (i >= data.slots.length) {
+    const after = data.beyond?.[i - data.slots.length]
+    tariff(after?.period)
+    if (after) parts.push('forecast after the horizon, not sent')
+    return parts.length ? parts.join(' · ') : null
+  }
+  const slot = data.slots[i]
+  if (!slot) return null
+  tariff(slot.period)
+  if (isNumber(slot.export_max_w)) {
+    const why =
+      slot.export_max_w <= 0 && isNumber(data.no_export_at_or_below)
+        ? ` (export price at or below ${data.no_export_at_or_below} €/kWh)`
+        : ''
+    parts.push(`export limit ${formatPower(slot.export_max_w)}${why}`)
+  }
+  if (isForecast(slot.origin)) parts.push('forecast price')
+  return parts.join(' · ')
+}
+
+const dayTimes = new Map<string, Intl.DateTimeFormat>()
+const clocks = new Map<string, Intl.DateTimeFormat>()
+/** "Sat 01:00" in the tariff time zone. */
+function dayTime(t: number, timeZone: string): string {
+  let f = dayTimes.get(timeZone)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+    dayTimes.set(timeZone, f)
+  }
+  return f.format(new Date(t * 1000))
+}
+/** "07:00". */
+function clock(t: number, timeZone: string): string {
+  let f = clocks.get(timeZone)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
+    clocks.set(timeZone, f)
+  }
+  return f.format(new Date(t * 1000))
 }
 
 /** "11.00 kW for 0.45 h" */
@@ -219,6 +306,8 @@ function dayKey(t: number, timeZone: string): string {
 }
 
 export interface PvDay {
+  /** Its weekday ("Sat"). */
+  day: string
   /** The middle of the day's production (unix s) and its highest value: where the label goes. */
   t: number
   peak: number
@@ -266,6 +355,7 @@ export function pvDays(
     const ahead = d.sent + d.beyond
     const measured = ahead === 0 ? 'all' : d.measured > 0 ? 'some' : 'none'
     out.push({
+      day: weekday(axis.x[d.first]!, timeZone),
       t: (d.from + d.to) / 2,
       peak: d.peak,
       kwh: d.wh / 1000,
@@ -276,12 +366,23 @@ export function pvDays(
   return out
 }
 
-/** The PV chart's labels: each day's total above its hump. */
+const weekdays = new Map<string, Intl.DateTimeFormat>()
+function weekday(t: number, timeZone: string): string {
+  let f = weekdays.get(timeZone)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short' })
+    weekdays.set(timeZone, f)
+  }
+  return f.format(new Date(t * 1000))
+}
+
+/** The PV chart's labels: each day's name and total on a pill above its hump ("Sat · 23.4 kWh"). */
 export function pvNotes(days: readonly PvDay[]): ChartNote[] {
   return days.map((d) => ({
     t: d.t,
     value: d.peak,
-    text: `${d.kwh.toFixed(1)} kWh`,
+    look: 'pill' as const,
+    text: `${d.day} · ${d.kwh.toFixed(1)} kWh`,
     sub:
       [
         d.measured === 'some' ? 'measured + forecast' : null,
