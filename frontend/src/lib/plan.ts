@@ -209,3 +209,20 @@ export const EXTERNAL_PLAN_NOTE =
   "EMHASS Lens didn't send the request that made this plan: EMHASS's own web UI, a Home Assistant automation or " +
   'script, or the HACS integration with its Auto MPC switch off made it. Before 0.3.9 it could also be a ' +
   'cost-function comparison plan left in EMHASS after a failed live run.'
+
+/** How old the plan is (s) and whether that is past `staleAfterS` (Settings → Health → Plan is stale after). */
+export function planAge(generatedAt: string | null | undefined, staleAfterS: number, nowS: number): { ageS: number; stale: boolean } | null {
+  if (!generatedAt) return null
+  const t = Date.parse(generatedAt) / 1000
+  if (!Number.isFinite(t)) return null
+  const ageS = Math.max(0, nowS - t)
+  return { ageS, stale: staleAfterS > 0 && ageS > staleAfterS }
+}
+
+/** "Plan is 47 min old: the last MPC success was 14:45. The plan ahead is hatched until a run succeeds." (EMHASS keeps
+ *  serving its last good plan, so the plan's time is the last success.) */
+export function staleNote(generatedAt: string, ageS: number, now: Date, tz?: string): string {
+  const minutes = Math.round(ageS / 60)
+  const age = minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`
+  return `Plan is ${age} old: the last MPC success was ${formatTime(generatedAt, now, tz)}. The plan ahead is hatched until a run succeeds.`
+}

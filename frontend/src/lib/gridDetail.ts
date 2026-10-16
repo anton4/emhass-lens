@@ -177,3 +177,21 @@ export function readingsPhrase(stepS: number | null | undefined, cadenceS: numbe
   if (cadenceS < 60) return `every ${cadenceS}-second grid reading from Home Assistant`
   return `every grid reading from Home Assistant (about one every ${Math.round(cadenceS / 60)} min)`
 }
+
+/** The stretches of at least `minS` the grid's readings are missing from (the sensor unavailable, or nothing in the
+ *  recorder): each point without a value until the next point, back-to-back ones joined. */
+export function missingStretches(detail: GridDetail | undefined, minS = 60): { from: number; to: number }[] {
+  if (!detail) return []
+  const end = unix(detail.end)
+  const out: { from: number; to: number }[] = []
+  detail.points.forEach((p, i) => {
+    if (p.w !== null) return
+    const from = unix(p.t)
+    const next = detail.points[i + 1]
+    const to = next ? unix(next.t) : end
+    const last = out[out.length - 1]
+    if (last && Math.abs(last.to - from) < 1) last.to = to
+    else out.push({ from, to })
+  })
+  return out.filter((s) => s.to - s.from >= minS)
+}

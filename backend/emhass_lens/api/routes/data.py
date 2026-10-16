@@ -244,4 +244,5 @@ async def plan(c: ContainerDep) -> PlanResponse:
         prices=price_rows,
         driver=c.extras["mpc"].driver(),
         emhass_url=emhass.url,
+        stale_after_s=900 * c.settings.current.health.plan_max_age_slots,
     )

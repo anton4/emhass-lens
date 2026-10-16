@@ -12,10 +12,12 @@ import {
   EXTERNAL_PLAN_NOTE,
   formatPlanCell,
   lastRunNote,
+  planAge,
   planChanges,
   planColumnLabel,
   planColumnUnit,
   rowAt,
+  staleNote,
 } from '../lib/plan'
 import { controlFact } from '../lib/planNow'
 import { planSummary } from '../lib/planSummary'
@@ -91,6 +93,8 @@ export function PlanPage() {
   const lastRun = (current.last_run ?? {}) as Record<string, unknown>
   const status = typeof lastRun.status === 'string' ? lastRun.status : null
   const runNote = lastRunNote(lastRun, current.generated_at, now, tz)
+  const age = planAge(current.generated_at, data.stale_after_s, nowS)
+  const stale = age?.stale ? staleNote(current.generated_at, age.ageS, now, tz) : null
   const leftover = appStatus.data?.problems.find((p) => p.key === 'costfun.leftover')
   const duration = typeof lastRun.duration_total_seconds === 'number' ? lastRun.duration_total_seconds * 1000 : null
   const first = rows[0]?.timestamp
@@ -119,6 +123,11 @@ export function PlanPage() {
       {leftover && (
         <div className="notice" data-color="amber" role="note">
           <strong>{leftover.title}.</strong> {leftover.detail} {leftover.hint}
+        </div>
+      )}
+      {stale && (
+        <div className="notice" data-color="amber" role="note">
+          {stale} <Link to="/runs?job=emhass.mpc">MPC runs</Link> show why.
         </div>
       )}
       {runNote && (
@@ -236,6 +245,7 @@ export function PlanPage() {
               zoom={zoom}
               onZoom={setZoom}
               loading={history.isPlaceholderData}
+              stale={age?.stale ?? false}
             />
           )}
         </div>

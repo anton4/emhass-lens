@@ -5,12 +5,14 @@ import {
   deferrableColumns,
   formatPlanCell,
   lastRunNote,
+  planAge,
   planChanges,
   planColumnLabel,
   planColumnUnit,
   rowAt,
   socColumns,
   socOf,
+  staleNote,
   stepSeries,
 } from './plan'
 
@@ -126,5 +128,21 @@ describe('costFunTotal', () => {
 
   it('is null without a cost_fun column', () => {
     expect(costFunTotal([{ timestamp: '2026-10-11T10:00:00+03:00', P_grid: 100 }])).toBeNull()
+  })
+})
+
+describe('planAge and staleNote', () => {
+  const nowS = Date.parse('2026-10-16T12:32:00Z') / 1000
+
+  it('says how old the plan is and whether that is too old', () => {
+    expect(planAge('2026-10-16T11:45:00Z', 1800, nowS)).toEqual({ ageS: 2820, stale: true })
+    expect(planAge('2026-10-16T12:26:00Z', 1800, nowS)).toEqual({ ageS: 360, stale: false })
+    expect(planAge(null, 1800, nowS)).toBeNull()
+  })
+
+  it('names the age and the last success', () => {
+    expect(staleNote('2026-10-16T11:45:00Z', 2820, new Date(nowS * 1000), 'Europe/Tallinn')).toBe(
+      'Plan is 47 min old: the last MPC success was 14:45:00. The plan ahead is hatched until a run succeeds.',
+    )
   })
 })

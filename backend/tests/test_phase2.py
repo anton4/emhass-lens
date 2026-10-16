@@ -61,6 +61,7 @@ def test_live_mpc_sends_payload_and_verifies_the_plan(tmp_path: Path, world: Wor
         assert plan["current"]["driver"] == "app"
         assert plan["current"]["run_id"] == run["id"]
         assert plan["driver"] == "app"
+        assert plan["stale_after_s"] == 1800  # two slots, the default
 
         # the next slot starts: publish-data, then the event with the current row. The scheduler is live in
         # this test, so pause the scheduled publish to keep exactly one (manual) publish.

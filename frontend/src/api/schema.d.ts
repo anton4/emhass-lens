@@ -3801,6 +3801,8 @@ export interface components {
             previous: components["schemas"]["PlanSnapshotOut"] | null;
             /** Prices */
             prices: components["schemas"]["PlanPrice"][];
+            /** Stale After S */
+            stale_after_s: number;
             /** Timezone */
             timezone: string;
         };

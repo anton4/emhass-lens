@@ -6868,6 +6868,10 @@
             "title": "Prices",
             "type": "array"
           },
+          "stale_after_s": {
+            "title": "Stale After S",
+            "type": "integer"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -6882,7 +6886,8 @@
           "columns",
           "prices",
           "driver",
-          "emhass_url"
+          "emhass_url",
+          "stale_after_s"
         ],
         "title": "PlanResponse",
         "type": "object"

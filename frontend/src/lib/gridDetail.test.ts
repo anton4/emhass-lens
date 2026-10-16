@@ -10,6 +10,7 @@ import {
   gridOverlay,
   gridRangeAt,
   lastReading,
+  missingStretches,
   planTail,
   readingsPhrase,
   withoutCovered,
@@ -167,5 +168,26 @@ describe('readingsPhrase', () => {
       "the grid's readings from Home Assistant as 1-minute means, drawn through each one's lowest and highest",
     )
     expect(readingsPhrase(undefined, null)).toBe('quarter-hour means')
+  })
+})
+
+describe('missingStretches', () => {
+  const t = (m: number) => new Date(Date.parse('2026-10-16T10:00:00Z') + m * 60_000).toISOString()
+  const detail = (ws: (number | null)[]): GridDetail => ({
+    entity: 'sensor.grid',
+    start: t(0),
+    end: t(ws.length),
+    step_s: 60,
+    points: ws.map((w, i) => ({ t: t(i), w })),
+    error: null,
+  })
+
+  it('joins back-to-back missing points into stretches of at least a minute', () => {
+    expect(missingStretches(detail([1, null, null, 2, null, 3]))).toEqual([
+      { from: Date.parse(t(1)) / 1000, to: Date.parse(t(3)) / 1000 },
+      { from: Date.parse(t(4)) / 1000, to: Date.parse(t(5)) / 1000 },
+    ])
+    expect(missingStretches(detail([1, null, 2]), 120)).toEqual([])
+    expect(missingStretches(undefined)).toEqual([])
   })
 })

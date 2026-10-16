@@ -7,6 +7,7 @@ import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
   type ChartGap,
+  type ChartHatch,
   type ChartLane,
   type ChartOverlay,
   type ChartSession,
@@ -27,6 +28,7 @@ import {
   gridDetailNote,
   gridOverlay,
   lastReading,
+  missingStretches,
   planTail,
   readingsPhrase,
 } from '../../lib/gridDetail'
@@ -106,6 +108,7 @@ export function PlanCharts({
   zoom,
   onZoom: setZoom,
   loading = false,
+  stale = false,
 }: {
   data: PlanResponse
   history?: PlanHistoryResponse
@@ -118,6 +121,8 @@ export function PlanCharts({
   onZoom: (range: [number, number] | null) => void
   /** A wider window's history is on its way: the charts stay, faded. */
   loading?: boolean
+  /** The plan is too old to trust: the plan ahead is hatched. */
+  stale?: boolean
 }) {
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
@@ -224,6 +229,11 @@ export function PlanCharts({
       ? [{ label: 'forecast, not yet from Nord Pool', color: '--chart-hatch', look: 'hatch' as const }]
       : []),
   ]
+  // a plan too old to trust, hatched from now to its end
+  const staleHatches = useMemo(
+    () => (stale && last !== undefined && last > nowS ? [{ from: nowS, to: last, label: 'plan too old' }] : []),
+    [stale, last, nowS],
+  )
   const forecastHatches = useMemo(
     () => (prices?.bands ?? []).map(([from, to]) => ({ from, to, label: 'forecast' })),
     [prices],
@@ -257,6 +267,7 @@ export function PlanCharts({
         onToggle={toggle}
         gridData={gridData}
         thenName={thenLabel(horizon)}
+        staleHatches={staleHatches}
         onZoom={zoomTo}
         split={ahead}
         markers={midnights}
@@ -300,6 +311,7 @@ export function PlanCharts({
             onZoom={zoomTo}
             split={ahead}
             markers={midnights}
+            hatches={staleHatches}
             timeAxis="ticks"
             now={nowS}
             timeZone={data.timezone}
@@ -479,6 +491,7 @@ function PowerChart({
   onToggle: toggle,
   gridData,
   thenName,
+  staleHatches,
   onZoom,
   split,
   markers,
@@ -497,6 +510,8 @@ function PowerChart({
   gridData: GridDetail | undefined
   /** What the plan the past is compared with is called ("planned then"). */
   thenName: string
+  /** The plan ahead hatched when it is too old to trust. */
+  staleHatches: ChartHatch[]
   onZoom: (range: [number, number] | null) => void
   split: ChartSplit
   markers: number[]
@@ -513,6 +528,12 @@ function PowerChart({
   const showPower = spans.length > 0 && !hidden.has('market-power')
   const showSessions = spans.length > 0 && !hidden.has('market-commands')
   const cover = useMemo(() => detailCover(gridData), [gridData])
+  // where the grid's readings are missing: hatched, and named under the chart
+  const missing = useMemo(() => missingStretches(gridData), [gridData])
+  const hatches = useMemo<ChartHatch[]>(
+    () => [...missing.map((m) => ({ ...m, label: 'no readings' })), ...staleHatches],
+    [missing, staleHatches],
+  )
 
   const series = useMemo(
     () =>
@@ -667,8 +688,15 @@ function PowerChart({
         lanes={lanes}
         sessions={bands}
         onSession={zoomToSession}
+        hatches={hatches}
         keyboard={{ step: adaptiveStep, home: nowS }}
       />
+      {missing.length > 0 && (
+        <p className="chart-note">
+          {missing.map((m) => rangeLabel(m.from, m.to, timeZone)).join(', ')}: no grid readings in Home Assistant's
+          history.
+        </p>
+      )}
       <ul className="legend" role="group" aria-label="Parts shown in the Power chart">
         {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}
         {marketChips.length > 0 && (

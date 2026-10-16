@@ -436,6 +436,8 @@ class PlanResponse(BaseModel):
     prices: list[PlanPrice]
     driver: str
     emhass_url: str | None
+    # a plan older than this (Settings → Health → Plan is stale after) is too old to trust
+    stale_after_s: int
 
 
 class NowQuantity(BaseModel):

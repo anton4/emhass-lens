@@ -155,6 +155,16 @@ These come from docs/PLAN.md §10:
   - `aria-valuetext` carries the same text.
   - The heading reads "Overview · grid power and market sessions, Fri 9 Oct to Sat 17 Oct … showing … (8.2 days)".
   - Overview takes `left` (the charts' y-axis width) for the phone.
+- **P7, a stale plan and missing readings:**
+  - Backend: `PlanResponse.stale_after_s` = 900 × Settings → Health → Plan is stale after (default 2 slots), asserted
+    in `test_live_mpc_sends_payload_and_verifies_the_plan`.
+  - The Plan page says "Plan is 67 min old: the last MPC success was 14:07:37. The plan ahead is hatched until a run
+    succeeds." (`planAge`, `staleNote`; EMHASS keeps serving its last good plan, so the plan's time is the last
+    success). The plan ahead is hatched with "plan too old" on Power and SOC.
+  - The grid's missing readings (null points of a minute or more, back-to-back ones joined; `missingStretches`) are
+    hatched with "no readings", and named under the Power chart ("11:34 – 12:09: no grid readings in Home
+    Assistant's history"). An unavailable sensor and an empty recorder can't be told apart, so the text says
+    neither.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
