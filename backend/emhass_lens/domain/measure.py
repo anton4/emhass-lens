@@ -6,7 +6,8 @@ had a numeric state at all (unavailable/unknown and gaps count as nothing).
 
 `detail` serves a finer line than the quarter-hour means: every change when they fit the point
 budget, else means over a step that suits the window, broken at given moments (the market's
-commands) so each of them gets a mean of its own.
+commands) so each of them gets a mean of its own. Each mean comes with the lowest and highest
+value in its bucket, so a chart can still draw every spike when it shows a long window.
 """
 
 import bisect
@@ -72,6 +73,7 @@ def slot_means(
 # --- a finer line: every change, or means over a step that suits the window --------------------------------------
 
 Point = tuple[float, float | None]  # (unix seconds, value or None); holds until the next point
+Bounds = tuple[float | None, float | None]  # the lowest and highest value in a bucket; (None, None) for none
 
 STEPS = (10, 30, 60, 120, 300, 600, 900)
 BREAK_MERGE_S = 1.0  # moments closer than this are one
@@ -103,6 +105,29 @@ def bucket_means(
         coverage = covered / (b - a) if b > a else 0.0
         mean = weighted / covered if covered > 0 and coverage >= min_coverage else None
         out.append((mean, round(coverage, 4)))
+    return out
+
+
+def bucket_extremes(points: list[Point], edges: list[float]) -> list[Bounds]:
+    """(lowest, highest) value the step function given as sorted points takes in each bucket [edges[i], edges[i+1]),
+    however briefly; (None, None) where it has no value there. The last point holds to the end."""
+    out: list[Bounds] = []
+    i = 0
+    n = len(points)
+    for a, b in itertools.pairwise(edges):
+        while i + 1 < n and points[i + 1][0] <= a:
+            i += 1
+        lo: float | None = None
+        hi: float | None = None
+        j = i
+        while j < n and points[j][0] < b:
+            seg_b = points[j + 1][0] if j + 1 < n else b
+            value = points[j][1]
+            if value is not None and seg_b > a:
+                lo = value if lo is None else min(lo, value)
+                hi = value if hi is None else max(hi, value)
+            j += 1
+        out.append((lo, hi))
     return out
 
 
@@ -162,14 +187,23 @@ def _merge_repeats(points: list[Point]) -> list[Point]:
 
 def detail(
     points: list[Point], start: float, end: float, max_points: int, breaks: Iterable[float] = ()
-) -> tuple[int | None, list[Point]]:
-    """The step function on [start, end) in at most about `max_points` points: (None, every change) when they fit,
-    else (step, the means of the buckets from `detail_edges`); each point holds until the next one, the last until
-    `end`."""
+) -> tuple[int | None, list[Point], list[Bounds] | None]:
+    """The step function on [start, end) in at most about `max_points` points: (None, every change, None) when they
+    fit, else (step, the means of the buckets from `detail_edges`, each bucket's lowest and highest value); each point
+    holds until the next one, the last until `end`. A bucket without a mean has no bounds either."""
     clipped = _merge_repeats(clip_points(points, start, end))
     if len(clipped) <= max_points:
-        return None, clipped
+        return None, clipped, None
     step = pick_step(end - start, max_points)
     edges = detail_edges(start, end, step, breaks)
     means = bucket_means(clipped, edges)
-    return step, _merge_repeats([(a, mean) for a, (mean, _) in zip(edges[:-1], means, strict=True)])
+    extremes = bucket_extremes(clipped, edges)
+    shown: list[Point] = []
+    bounds: list[Bounds] = []
+    for a, (mean, _), ext in zip(edges[:-1], means, extremes, strict=True):
+        ext = ext if mean is not None else (None, None)
+        if shown and shown[-1][1] == mean and bounds[-1] == ext:
+            continue
+        shown.append((a, mean))
+        bounds.append(ext)
+    return step, shown, bounds

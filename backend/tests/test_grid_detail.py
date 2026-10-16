@@ -64,6 +64,8 @@ def test_the_line_breaks_where_the_commands_do_and_each_hour_is_read_once(tmp_pa
         assert len(body["points"]) <= 500
         by_t = {p["t"]: p["w"] for p in body["points"]}
         assert by_t["2026-10-09T08:00:00.000+00:00"] == 503  # 510, 490 and 510 W import over the first 30 s
+        first = body["points"][0]
+        assert (first["lo"], first["hi"]) == (490, 510)  # and the readings it is the mean of
         assert by_t["2026-10-09T08:45:12.000+00:00"] == -9300  # the command's start is a point of its own
         assert "2026-10-09T08:45:30.000+00:00" not in by_t  # merged: still the same export
         assert 490 <= by_t["2026-10-09T09:04:00.000+00:00"] <= 510  # import again from the end
@@ -97,6 +99,7 @@ def test_a_short_window_gets_every_change_and_the_live_hour_is_read_again(tmp_pa
         ).json()
         assert short["step_s"] is None and len(short["points"]) == 60
         assert [p["w"] for p in short["points"][:2]] == [510, 490]
+        assert short["points"][0]["lo"] is None and short["points"][0]["hi"] is None  # raw changes need no bounds
 
         def live_read() -> list[tuple[datetime, datetime]]:
             """The meter reads ending at now that the request made (the measurement jobs read it too)."""

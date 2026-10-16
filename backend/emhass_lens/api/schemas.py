@@ -1062,11 +1062,16 @@ class MarketCommands(BaseModel):
 class GridPoint(BaseModel):
     t: str
     w: int | None  # W, EMHASS's sign (+ import, − export); None: the sensor had no value. Holds until the next point
+    # When `w` is a bucket's mean (GridDetail.step_s set): the lowest and highest reading in the bucket, so a chart
+    # can draw every spike; absent for a raw change
+    lo: int | None = None
+    hi: int | None = None
 
 
 class GridDetail(BaseModel):
     """The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else
-    means per step_s, broken where a market command starts, ends or changes."""
+    means per step_s with each bucket's lowest and highest reading, broken where a market command starts, ends or
+    changes."""
 
     entity: str | None
     start: str

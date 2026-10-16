@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso
-from emhass_lens.domain.measure import Point, bucket_means, clip_points, detail, step_points
+from emhass_lens.domain.measure import Bounds, Point, bucket_means, clip_points, detail, step_points
 from emhass_lens.settings.model import MeasuredPower
 
 if TYPE_CHECKING:
@@ -63,6 +63,17 @@ def _hours(start: float, end: float) -> list[float]:
 
 def _utc(t: float) -> datetime:
     return datetime.fromtimestamp(t, UTC)
+
+
+def _range(cfg: MeasuredPower, bounds: list[Bounds] | None, i: int) -> dict[str, int]:
+    """A mean's lowest and highest reading in EMHASS's sign (a flipped sign swaps them); nothing for a raw change."""
+    if bounds is None:
+        return {}
+    lo, hi = bounds[i]
+    if lo is None or hi is None:
+        return {}
+    a, b = sorted((round(cfg.to_emhass(lo)), round(cfg.to_emhass(hi))))
+    return {"lo": a, "hi": b}
 
 
 class GridDetailService:
@@ -160,9 +171,12 @@ class GridDetailService:
             log.debug("Reading the grid power history failed: %s", exc)
             out["error"] = str(exc)
             return out
-        step, shown = detail(points, a, b, max_points, breaks)
+        step, shown, bounds = detail(points, a, b, max_points, breaks)
         out["step_s"] = step
-        out["points"] = [{"t": iso(_utc(t)), "w": round(cfg.to_emhass(v)) if v is not None else None} for t, v in shown]
+        out["points"] = [
+            {"t": iso(_utc(t)), "w": round(cfg.to_emhass(v)) if v is not None else None, **_range(cfg, bounds, i)}
+            for i, (t, v) in enumerate(shown)
+        ]
         return out
 
     async def delivered(self, spans: list[CommandSpan]) -> tuple[list[tuple[int | None, float | None]], str | None]:

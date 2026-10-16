@@ -3127,7 +3127,7 @@
         "type": "object"
       },
       "GridDetail": {
-        "description": "The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else\nmeans per step_s, broken where a market command starts, ends or changes.",
+        "description": "The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else\nmeans per step_s with each bucket's lowest and highest reading, broken where a market command starts, ends or\nchanges.",
         "properties": {
           "end": {
             "title": "End",
@@ -3190,6 +3190,28 @@
       },
       "GridPoint": {
         "properties": {
+          "hi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hi"
+          },
+          "lo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lo"
+          },
           "t": {
             "title": "T",
             "type": "string"
@@ -11407,7 +11429,7 @@
     },
     "/api/measurements/grid": {
       "get": {
-        "description": "The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer\nthan the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits\nthe window, broken where a market command starts, ends or changes.",
+        "description": "The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer\nthan the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits\nthe window with each bucket's lowest and highest reading, broken where a market command starts, ends or\nchanges.",
         "operationId": "grid_detail_api_measurements_grid_get",
         "parameters": [
           {
@@ -11441,7 +11463,7 @@
             "required": false,
             "schema": {
               "default": 1500,
-              "maximum": 2000,
+              "maximum": 6000,
               "minimum": 50,
               "title": "Max Points",
               "type": "integer"

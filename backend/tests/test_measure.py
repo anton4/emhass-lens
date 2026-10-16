@@ -2,8 +2,11 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from emhass_lens.domain.measure import (
     Point,
+    bucket_extremes,
     bucket_means,
     clip_points,
     detail,
@@ -102,15 +105,28 @@ def test_detail_edges_break_at_the_commands_without_slivers() -> None:
 
 def test_detail_gives_every_change_when_they_fit_and_means_when_not() -> None:
     points: list[Point] = [(A + i, float(i % 7)) for i in range(0, 600, 5)]  # a change every 5 s for 10 minutes
-    step, raw = detail(points, A, A + 600, 500)
-    assert step is None and len(raw) == 120 and raw[:2] == [(A, 0.0), (A + 5, 5.0)]
+    step, raw, bounds = detail(points, A, A + 600, 500)
+    assert step is None and bounds is None and len(raw) == 120 and raw[:2] == [(A, 0.0), (A + 5, 5.0)]
 
-    step, means = detail(points, A, A + 600, 50, breaks=[A + 123])
+    step, means, bounds = detail(points, A, A + 600, 50, breaks=[A + 123])
     assert step == 30
     starts = [t for t, _ in means]
     assert A + 123 in starts and A + 120 not in starts  # the command's start is a point; 120 s gives way
     assert len(means) <= 50
-    assert detail([(A, 1.0), (A + 5, 1.0), (A + 9, 2.0)], A, A + 20, 10) == (None, [(A, 1.0), (A + 9, 2.0)])
+    assert bounds is not None and len(bounds) == len(means)
+    assert detail([(A, 1.0), (A + 5, 1.0), (A + 9, 2.0)], A, A + 20, 10) == (None, [(A, 1.0), (A + 9, 2.0)], None)
+
+
+def test_detail_keeps_each_buckets_lowest_and_highest_reading() -> None:
+    # 10 s readings flickering between 100 and 110 W, with one 2 kW spike lasting 10 s a minute in
+    points: list[Point] = [(A + i, 2000.0 if i == 60 else 100.0 + 10 * (i // 10 % 2)) for i in range(0, 300, 10)]
+    step, means, bounds = detail(points, A, A + 300, 5)
+    assert step == 60
+    # the spike's minute: its mean hides it, its bounds keep it; the alike minutes after it are one point
+    assert means == [(A, 105.0), (A + 60, pytest.approx(421.667, abs=0.01)), (A + 120, 105.0)]
+    assert bounds == [(100.0, 110.0), (100.0, 2000.0), (100.0, 110.0)]
+    # a bucket with no value has no bounds, however briefly something held in it
+    assert bucket_extremes([(A, None), (A + 50, 7.0)], [A, A + 50, A + 60]) == [(None, None), (7.0, 7.0)]
 
 
 def test_reading_in_hours_gives_the_same_line_as_one_read() -> None:

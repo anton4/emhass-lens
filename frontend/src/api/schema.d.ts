@@ -504,7 +504,8 @@ export interface paths {
          * Grid Detail
          * @description The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer
          *     than the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits
-         *     the window, broken where a market command starts, ends or changes.
+         *     the window with each bucket's lowest and highest reading, broken where a market command starts, ends or
+         *     changes.
          */
         get: operations["grid_detail_api_measurements_grid_get"];
         put?: never;
@@ -2374,7 +2375,8 @@ export interface components {
         /**
          * GridDetail
          * @description The measured grid power on [start, end): every change (step_s None) when they fit the point budget, else
-         *     means per step_s, broken where a market command starts, ends or changes.
+         *     means per step_s with each bucket's lowest and highest reading, broken where a market command starts, ends or
+         *     changes.
          */
         GridDetail: {
             /** End */
@@ -2392,6 +2394,10 @@ export interface components {
         };
         /** GridPoint */
         GridPoint: {
+            /** Hi */
+            hi?: number | null;
+            /** Lo */
+            lo?: number | null;
             /** T */
             t: string;
             /** W */

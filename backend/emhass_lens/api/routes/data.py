@@ -159,11 +159,12 @@ async def grid_detail(
     c: ContainerDep,
     since: str,
     until: str | None = None,
-    max_points: Annotated[int, Query(ge=50, le=2000)] = 1500,
+    max_points: Annotated[int, Query(ge=50, le=6000)] = 1500,
 ) -> GridDetail:
     """The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer
     than the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits
-    the window, broken where a market command starts, ends or changes."""
+    the window with each bucket's lowest and highest reading, broken where a market command starts, ends or
+    changes."""
     now = c.clock.now()
     start = parse_iso(utc_bound(since, "since"))
     end = min(parse_iso(utc_bound(until, "until")) or now, now)
