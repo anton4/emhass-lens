@@ -3,10 +3,10 @@
 // Lanes under the charts show the tariff period, the export limit, the horizon and each deferrable load's window; the
 // PV chart labels each day's total.
 
-import type { ChartHatch, ChartLane, ChartNote } from '../components/charts/TimeChart'
+import type { ChartHatch, ChartLane, ChartNote, ChartOverlay } from '../components/charts/TimeChart'
 import type { PopupExtra } from '../components/charts/cursorStore'
 import type { HorizonOption, SentDeferrable, SentInputs } from '../api/types'
-import { isForecast, periodLabel, periodLane, PERIOD_STYLES } from './prices'
+import { isForecast, periodLabel, periodLane } from './prices'
 import { formatPower, isNumber } from './units'
 
 export const SLOT_S = 900
@@ -73,8 +73,6 @@ export function runsOf<T>(axis: SentAxis, values: readonly T[], start = axis.anc
   })
   return out
 }
-
-const periodColor = (period: string) => (PERIOD_STYLES[period] ?? PERIOD_STYLES.day!).color
 
 /** The tariff period over the whole axis: the measured slots' (the prices that applied), the payload's, then those
  *  after the horizon. */
@@ -222,30 +220,6 @@ export function loadAsk(load: SentDeferrable): string {
   return `${formatPower(load.nominal_power_w)} for ${hours(load.operating_hours)}`
 }
 
-/** What the payload says about each lane at t: the tariff period and the export limit; before the anchor and after
- *  the horizon only the period. */
-export function priceExtras(axis: SentAxis, data: SentData, t: number): PopupExtra[] {
-  const i = slotAt(axis, t)
-  const tariffOnly = (period: string | null | undefined): PopupExtra[] =>
-    period ? [{ name: 'Tariff', value: periodLabel(period).toLowerCase(), color: periodColor(period) }] : []
-  if (i < 0) return tariffOnly(data.measured[axis.anchorIdx + i]?.period)
-  if (i >= data.slots.length) return tariffOnly(data.beyond?.[i - data.slots.length]?.period)
-  const slot = data.slots[i]
-  if (!slot) return []
-  const out: PopupExtra[] = [
-    { name: 'Tariff', value: periodLabel(slot.period).toLowerCase(), color: periodColor(slot.period) },
-  ]
-  if (isNumber(slot.export_max_w)) {
-    out.push({
-      name: 'Export limit',
-      value: formatPower(slot.export_max_w),
-      color: slot.export_max_w <= 0 ? '--q-export-cap' : '--tint-green',
-      hatch: slot.export_max_w <= 0,
-    })
-  }
-  return out
-}
-
 /** The deferrable loads whose window holds t. */
 export function loadExtras(axis: SentAxis, loads: readonly SentDeferrable[], t: number): PopupExtra[] {
   return loads.flatMap((load) => {
@@ -253,6 +227,61 @@ export function loadExtras(axis: SentAxis, loads: readonly SentDeferrable[], t: 
     if (t < from || t >= to) return []
     return [{ name: load.name, value: load.on ? loadAsk(load) : 'off: 0 W', color: '--q-ev', hatch: !load.on }]
   })
+}
+
+type SocData = Pick<SentInputs, 'soc_init' | 'soc_final'> & Partial<Pick<SentInputs, 'soc_min' | 'soc_max'>>
+
+const pct = (v: number) => `${Math.round(v * 100)} %`
+
+/** The battery chart's lines, in %: soc_min and soc_max dashed across the axis, and soc_init at the anchor straight
+ *  to soc_final at the end of the horizon (EMHASS plans the path between them). */
+export function socOverlays(axis: SentAxis, data: SocData): ChartOverlay[] {
+  const out: ChartOverlay[] = []
+  const from = axis.x[0] ?? axis.anchorS
+  for (const [label, v] of [
+    ['soc_min', data.soc_min],
+    ['soc_max', data.soc_max],
+  ] as const) {
+    if (isNumber(v)) {
+      out.push({ label, color: '--ink-faint', width: 1.25, dash: [2, 4], base: 'none', spans: [{ from, to: axis.axisEndS, value: v * 100 }] })
+    }
+  }
+  if (isNumber(data.soc_init) && isNumber(data.soc_final)) {
+    out.push({
+      label: 'soc_init → soc_final',
+      color: '--ink-faint',
+      width: 1.5,
+      base: 'none',
+      spans: [{ from: axis.anchorS, to: axis.endS, value: data.soc_init * 100, toValue: data.soc_final * 100 }],
+    })
+  }
+  return out
+}
+
+/** soc_init at the anchor and soc_final at the end of the horizon, on pills ("soc_init 47 %"). */
+export function socNotes(axis: SentAxis, data: SocData): ChartNote[] {
+  const out: ChartNote[] = []
+  const note = { color: '--q-soc-ink', look: 'pill' as const }
+  if (isNumber(data.soc_init)) {
+    out.push({ ...note, t: axis.anchorS, value: data.soc_init * 100, text: `soc_init ${pct(data.soc_init)}`, dot: 'filled', align: 'right' })
+  }
+  if (isNumber(data.soc_final)) {
+    out.push({ ...note, t: axis.endS, value: data.soc_final * 100, text: `soc_final ${pct(data.soc_final)}`, dot: 'ring', align: 'left' })
+  }
+  return out
+}
+
+/** The battery popup from the anchor on: what was sent ("47 → 100 %"). */
+export function socExtras(axis: SentAxis, data: SocData, t: number): PopupExtra[] {
+  if (t < axis.anchorS || t >= axis.endS) return []
+  const value = `${isNumber(data.soc_init) ? Math.round(data.soc_init * 100) : '—'} → ${isNumber(data.soc_final) ? pct(data.soc_final) : '— %'}`
+  return [{ name: 'soc_init → soc_final', value, color: '--ink-faint' }]
+}
+
+/** The battery popup's note: the limits EMHASS keeps the plan within. */
+export function socNote(data: SocData): string | null {
+  if (!isNumber(data.soc_min) && !isNumber(data.soc_max)) return null
+  return `Limits ${isNumber(data.soc_min) ? pct(data.soc_min) : '0 %'} (soc_min) to ${isNumber(data.soc_max) ? pct(data.soc_max) : '100 %'} (soc_max)`
 }
 
 /** The payload slot index at t (negative before the anchor). */
@@ -460,12 +489,12 @@ export function sentHeads(
       params: ['soc_init', 'soc_final'],
       keys: [
         ...past('--q-soc'),
-        { label: 'soc_init → soc_final', color: '--ink-faint', look: 'dash' },
+        { label: 'soc_init → soc_final', color: '--ink-faint', look: 'line' },
         ...(isNumber(data.soc_min) || isNumber(data.soc_max)
           ? [
               {
                 label: `limits ${isNumber(data.soc_min) ? Math.round(data.soc_min * 100) : 0}–${isNumber(data.soc_max) ? Math.round(data.soc_max * 100) : 100} %`,
-                color: '--chart-axis',
+                color: '--ink-faint',
                 look: 'dash' as const,
               },
             ]

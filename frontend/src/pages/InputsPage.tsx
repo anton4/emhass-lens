@@ -77,7 +77,7 @@ export function InputsPage() {
       </PageHead>
       <ErrorNotice error={prices.error ?? inputs.error} />
 
-      <SentPanel unit={unit} nowS={nowS} />
+      <SentPanel unit={unit} />
 
       <section className="panel">
         <div className="panel-head">

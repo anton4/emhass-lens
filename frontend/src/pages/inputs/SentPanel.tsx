@@ -11,6 +11,7 @@ import type { PopupTag } from '../../components/charts/cursorStore'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Empty, ErrorNotice } from '../../components/PageHead'
 import { snapWindow } from '../../lib/chartRange'
+import { cursorTimeLabel } from '../../lib/chartTime'
 import { outcomeLabel } from '../../lib/outcomes'
 import { closeSteps, loadPref, savePref } from '../../lib/planHistory'
 import { isForecast, originLabel } from '../../lib/prices'
@@ -32,6 +33,10 @@ import {
   type SentHead,
   SLOT_S,
   slotAt,
+  socExtras,
+  socNote,
+  socNotes,
+  socOverlays,
   tariffLane,
   windowBands,
   windowNotes,
@@ -70,7 +75,7 @@ const provider = (origin: string) => originLabel(origin).replace(/^Forecast \((.
 
 /** The Inputs page's "What EMHASS gets": the newest MPC payload (or one built now) slot by slot, on one time axis
  *  after what was measured before its anchor, every chart with the Plan page's value popup. */
-export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
+export function SentPanel({ unit }: { unit: PriceUnit }) {
   const [hoursBack, setHoursBackState] = useState<number>(() => loadPref(HOURS_BACK_KEY, HOURS_BACK, 24))
   const [after, setAfterState] = useState<number>(() => loadPref(AFTER_KEY, AFTER, 1))
   const beyond = after === 1
@@ -129,7 +134,6 @@ export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
           <SentView
             data={data}
             unit={unit}
-            nowS={nowS}
             zoom={zoom}
             zoomTo={zoomTo}
             hoursBack={hoursBack}
@@ -147,7 +151,6 @@ export function SentPanel({ unit, nowS }: { unit: PriceUnit; nowS: number }) {
 function SentView({
   data,
   unit,
-  nowS,
   zoom,
   zoomTo,
   hoursBack,
@@ -158,7 +161,6 @@ function SentView({
 }: {
   data: SentInputs
   unit: PriceUnit
-  nowS: number
   zoom: [number, number] | null
   zoomTo: (range: [number, number] | null) => void
   hoursBack: number
@@ -180,7 +182,7 @@ function SentView({
     ...(axis.anchorIdx > 0 ? [[axis.x[0] ?? axis.anchorS, axis.anchorS] as [number, number]] : []),
     ...(axis.axisEndS > axis.endS ? [[axis.endS, axis.axisEndS] as [number, number]] : []),
   ]
-  const now = nowS >= (axis.x[0] ?? 0) && nowS <= axis.axisEndS ? nowS : undefined
+  // the anchor stands for now: the payload starts there
   const common = {
     x: axis.x,
     syncKey: SYNC,
@@ -189,8 +191,10 @@ function SentView({
     onZoom: zoomTo,
     shade,
     markers: charts.midnights,
-    now,
+    now: axis.anchorS,
     snapToSlot: true,
+    cursorBand: true,
+    timeAxis: 'ticks' as const,
   }
   const measuredBy = (q: string) => data.measured_entities[q]
   const heads = useMemo(() => sentHeads(data, { cents: unit === 'cents', hoursBack }), [data, unit, hoursBack])
@@ -339,12 +343,15 @@ function SentView({
           <TimeChart
             {...common}
             series={charts.soc}
-            ariaLabel="Battery state of charge measured before the anchor, the state of charge sent at the anchor and the target at the end of the horizon"
+            ariaLabel="Battery state of charge measured before the anchor, then a line from the state of charge sent at the anchor to the target at the end of the horizon, between the battery's limits"
             yFormat={(v) => `${v.toFixed(0)} %`}
             yRange={[0, 100]}
             height={160}
+            overlays={charts.socOverlays}
             notes={charts.socNotes}
             popup={charts.socPopup}
+            timeAxis="labels"
+            nowLabel={`anchor ${cursorTimeLabel(axis.anchorS, tz, false)}`}
             legend={false}
           />
           <details className="chart-note more">
@@ -733,14 +740,6 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
   const soc: ChartSeries[] = [
     { label: 'State of charge', color: '--q-soc', values: closeSteps(socValues), readout: socValues, format: (v) => `${v.toFixed(0)} %` },
   ]
-  const socNotes: ChartNote[] = []
-  if (isNumber(data.soc_init)) {
-    socNotes.push({ t: axis.anchorS, value: data.soc_init * 100, text: percent(data.soc_init), color: '--q-soc', dot: 'filled', align: 'right' })
-  }
-  if (isNumber(data.soc_final)) {
-    socNotes.push({ t: axis.endS, value: data.soc_final * 100, text: `${percent(data.soc_final)} target`, color: '--q-soc', dot: 'ring', align: 'left' })
-  }
-
   return {
     axis,
     midnights: midnightsOn(axis, tz),
@@ -759,16 +758,12 @@ function buildCharts(data: SentInputs, unit: PriceUnit) {
     loadNotes: windowNotes(axis, data.deferrables, tz),
     loadPopup: { tag: sentTag(loadTag), extra: (t: number) => loadExtras(axis, data.deferrables, t) },
     soc,
-    socNotes,
+    socOverlays: socOverlays(axis, data),
+    socNotes: socNotes(axis, data),
     socPopup: {
       tag: sentTag('sent'),
-      extra: (t: number) =>
-        t < axis.anchorS
-          ? []
-          : [
-              { name: 'Now (soc_init)', value: percent(data.soc_init), color: '--q-soc' },
-              { name: 'Target (soc_final)', value: percent(data.soc_final), color: '--q-soc' },
-            ],
+      extra: (t: number) => socExtras(axis, data, t),
+      note: (t: number) => (t >= axis.anchorS ? socNote(data) : null),
     },
   }
 }

@@ -263,6 +263,14 @@ These come from docs/PLAN.md §10:
     the tile reads "…, window Fri 17:30–00:00".
   - The house load is an area.
   - **PV:** each day's total is on a pill with its weekday ("Sat · 24.8 kWh", `PvDay.day`).
+- **I6, the battery's limits and path, the anchor on every chart:**
+  - **Battery:** `soc_min` and `soc_max` (I1) are dotted across the chart, and a line runs from `soc_init` at the
+    anchor to `soc_final` at the end of the horizon, both named on pills ("soc_init 47 %"); `socOverlays`,
+    `socNotes`, token `--q-soc-ink`. The popup has one row "soc_init → soc_final · 47 → 100 %" and the limits as
+    its note (`socExtras`, `socNote`).
+  - **The anchor** replaces the now line on all four charts. Only the battery chart has time labels, with an
+    "anchor 15:30" pill; the cursor is a slot-wide band.
+  - The unused `priceExtras` is gone (its rows became `priceNote` in I5).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

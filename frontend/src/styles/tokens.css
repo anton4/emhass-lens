@@ -66,6 +66,8 @@
   --q-grid: #eb6834;
   --q-ev: #1baf7a;
   --q-soc: #0f8f86;
+  /* text in the SOC's colour, dark enough to read (soc_init and soc_final on the Inputs page) */
+  --q-soc-ink: #0a6b64;
   --q-import: #6250d6;
   --q-export: #008300;
   --q-spot: #8a8984;
@@ -217,6 +219,7 @@
     --q-grid: #d95926;
     --q-ev: #199e70;
     --q-soc: #2bb3a8;
+    --q-soc-ink: #6fd3ca;
     --q-import: #9085e9;
     --q-export: #008300;
     --q-spot: #8f8e88;

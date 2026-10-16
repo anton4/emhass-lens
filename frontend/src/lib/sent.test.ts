@@ -9,11 +9,14 @@ import {
   loadWindow,
   midnightsOn,
   onAxis,
-  priceExtras,
   pvDays,
   pvNotes,
   sentAxis,
   sentHeads,
+  socExtras,
+  socNote,
+  socNotes,
+  socOverlays,
   tariffLane,
   priceNote,
   forecastNote,
@@ -116,17 +119,6 @@ describe('the sent payload on a time axis', () => {
     expect(onAxis(axis, data.measured.map((m) => m.load_cost), [0.25, 0.26])).toEqual([null, null, 0.2, 0.2, 0.2, 0.25, 0.26, null])
   })
 
-  it('reads the lanes at the cursor for the popup; before the anchor only the tariff that applied', () => {
-    const data = sent([slot(0), slot(1, { period: 'day', export_max_w: 0 })], 4, (k) => (k === 3 ? { period: 'day' } : {}))
-    const axis = sentAxis(data)
-    expect(priceExtras(axis, data, ANCHOR + 900)).toEqual([
-      { name: 'Tariff', value: 'day', color: '--tariff-day' },
-      { name: 'Export limit', value: '0 W', color: '--q-export-cap', hatch: true },
-    ])
-    expect(priceExtras(axis, data, ANCHOR - 900)).toEqual([{ name: 'Tariff', value: 'day', color: '--tariff-day' }])
-    expect(priceExtras(axis, data, ANCHOR - 1800)).toEqual([])
-  })
-
   it('shades the forecast prices and marks local midnights', () => {
     const slots = Array.from({ length: 16 }, (_, i) => slot(i, { origin: i >= 12 ? 'forecast:ee_eupowerprices' : 'actual' }))
     const axis = sentAxis(sent(slots))
@@ -214,13 +206,12 @@ describe('after the horizon', () => {
     expect(onAxis(axis, [1], [2, 3])).toEqual([1, 2, 3, null, null, null])
   })
 
-  it('carries the tariff and the forecast shading over it, and the popup gives its tariff only', () => {
+  it('carries the tariff and the forecast shading over it', () => {
     expect(tariffLane(axis, data).spans.map((s) => [s.from, s.to, s.text])).toEqual([
       [ANCHOR, ANCHOR + 2700, 'night'],
       [ANCHOR + 2700, ANCHOR + 3600, 'day'],
     ])
     expect(forecastRangesOn(axis, data)).toEqual([[ANCHOR + 1800, ANCHOR + 3600]])
-    expect(priceExtras(axis, data, ANCHOR + 2700)).toEqual([{ name: 'Tariff', value: 'day', color: '--tariff-day' }])
   })
 
   it('draws the horizon: sent, then not sent; a previewed length moves the end', () => {
@@ -319,5 +310,35 @@ describe('the forecast note and the price note', () => {
   it('says the period, the export limit and why, and whether the price is a forecast', () => {
     expect(priceNote(axis, data, ANCHOR)).toBe('Night tariff · export limit 0 W (export price at or below 0.04 €/kWh)')
     expect(priceNote(axis, data, ANCHOR + 900)).toBe('Night tariff · export limit 15.50 kW · forecast price')
+  })
+})
+
+describe('the battery', () => {
+  const data = { ...sent([slot(0), slot(1)], 2), soc_init: 0.47, soc_final: 1, soc_min: 0.1, soc_max: 1 }
+  const axis = sentAxis(data)
+
+  it('draws the limits across the axis and soc_init straight to soc_final over the horizon', () => {
+    const lines = socOverlays(axis, data)
+    expect(lines.map((l) => [l.label, l.spans])).toEqual([
+      ['soc_min', [{ from: ANCHOR - 1800, to: ANCHOR + 1800, value: 10 }]],
+      ['soc_max', [{ from: ANCHOR - 1800, to: ANCHOR + 1800, value: 100 }]],
+      ['soc_init → soc_final', [{ from: ANCHOR, to: ANCHOR + 1800, value: 47, toValue: 100 }]],
+    ])
+    expect(lines[0]).toMatchObject({ dash: [2, 4], base: 'none' })
+    expect(socOverlays(axis, { soc_init: 0.47, soc_final: null })).toEqual([])
+  })
+
+  it('names both ends on pills', () => {
+    expect(socNotes(axis, data).map((n) => [n.t, n.value, n.text, n.look])).toEqual([
+      [ANCHOR, 47, 'soc_init 47 %', 'pill'],
+      [ANCHOR + 1800, 100, 'soc_final 100 %', 'pill'],
+    ])
+  })
+
+  it('gives what was sent in the popup over the horizon, with the limits as its note', () => {
+    expect(socExtras(axis, data, ANCHOR + 900)).toEqual([{ name: 'soc_init → soc_final', value: '47 → 100 %', color: '--ink-faint' }])
+    expect(socExtras(axis, data, ANCHOR - 900)).toEqual([])
+    expect(socNote(data)).toBe('Limits 10 % (soc_min) to 100 % (soc_max)')
+    expect(socNote({ soc_init: 0.5, soc_final: 1 })).toBeNull()
   })
 })
