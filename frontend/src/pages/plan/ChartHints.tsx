@@ -6,8 +6,9 @@ const stepText = (s: number) => (s === 900 ? 'a quarter-hour' : s === 3600 ? 'an
 
 /** What the Timeline's charts answer to: the pointer, the wheel, a drag and the keys on a desktop; a finger and two on
  *  a phone. The arrow keys' step follows the window shown. */
-export function ChartHints({ windowS, step }: { windowS: number; step?: KeyStep }) {
-  const touch = useMediaQuery('(pointer: coarse)')
+export function ChartHints({ windowS, step, touch: phone = false }: { windowS: number; step?: KeyStep; touch?: boolean }) {
+  const coarse = useMediaQuery('(pointer: coarse)')
+  const touch = phone || coarse
   const keys = step ?? adaptiveStep(windowS)
   if (touch) {
     return (

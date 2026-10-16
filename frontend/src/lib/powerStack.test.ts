@@ -40,3 +40,14 @@ describe('the Power chart stack', () => {
     expect(stackExtent([])).toBeNull()
   })
 })
+
+describe('powerStack with the grid as a layer', () => {
+  it('stacks the import on top and the export at the bottom, so both sides add up', () => {
+    const layers = powerStack({ pv: [3000, 0], load: [1000, 1500], grid: [-2000, 1500] })
+    expect(layers.map((l) => l.key)).toEqual(['pv', 'import', 'load', 'export'])
+    const edge = (key: string) => layers.find((l) => l.key === key)?.edge
+    // exporting 2 kW: 3 kW in, 1 kW to the house and 2 kW out; importing 1.5 kW: it all goes to the house
+    expect(edge('import')).toEqual([3000, 1500])
+    expect(edge('export')).toEqual([-3000, -1500])
+  })
+})

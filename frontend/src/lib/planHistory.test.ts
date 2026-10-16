@@ -9,6 +9,7 @@ import {
   plannedAtTheTime,
   savePref,
   thenLabel,
+  viewFor,
   timeGrid,
   viewHistory,
   viewRange,
@@ -108,6 +109,16 @@ describe('plan history series', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('viewFor', () => {
+  it('maps a window to what the other layout offers', () => {
+    expect(viewFor(8, true)).toBe(4)
+    expect(viewFor(168, true)).toBe(48)
+    expect(viewFor(24, true)).toBe(24)
+    expect(viewFor(4, false)).toBe(8)
+    expect(viewFor(48, false)).toBe(48)
   })
 })
 

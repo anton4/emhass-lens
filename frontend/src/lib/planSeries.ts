@@ -190,7 +190,50 @@ export const POWER_LAYERS = (deferrableLabel: string): Record<FlowKey, { label: 
   load: { label: 'House load', color: '--q-load' },
   charge: { label: 'Battery charging', color: '--q-batt' },
   deferrable: { label: deferrableLabel, color: '--q-ev' },
+  import: { label: 'Grid import', color: '--q-grid' },
+  export: { label: 'Grid export', color: '--q-grid' },
 })
+
+/** The phone's Power balance: the flows stacked as on the desktop's Power chart, with the grid as a layer of its own
+ *  (import on top, export at the bottom) instead of a line, so both sides of zero add up to the same. */
+export function balanceSeries(flows: Flows): ChartSeries[] {
+  const layers = powerStack({
+    pv: flows.pv,
+    battery: flows.battery,
+    load: flows.load,
+    deferrable: flows.deferrable,
+    grid: flows.grid,
+  })
+  const LAYERS = POWER_LAYERS(flows.deferrableLabel)
+  const out: ChartSeries[] = []
+  const index = new Map<FlowKey, number>()
+  for (const layer of layers) {
+    const meta = LAYERS[layer.key]
+    const battery = layer.key === 'discharge'
+    const grid = layer.key === 'import'
+    index.set(layer.key, out.length)
+    out.push({
+      label: meta.label,
+      popupLabel: grid ? 'Grid' : undefined,
+      color: meta.color,
+      values: layer.edge,
+      width: 0,
+      fill: 0.45,
+      below: layer.on ? index.get(layer.on) : undefined,
+      // one popup row each for the battery and the grid, in their own signs: + charge, + import
+      readout: battery
+        ? (flows.battery?.map((v) => (v === null ? null : -v)) ?? layer.own)
+        : grid
+          ? (flows.grid ?? layer.own)
+          : layer.own,
+      format: battery || grid ? formatSignedPower : formatPower,
+      describe: battery ? charging : grid ? importing : undefined,
+      helper: layer.key === 'charge' || layer.key === 'export',
+      fade: PLAN_AREA,
+    })
+  }
+  return out
+}
 
 /** The Power chart's series: PV and the battery discharging stacked above zero, the house load, the battery charging
  *  and the deferrable loads below, then the grid as a line on top: where the grid's readings cover a measured

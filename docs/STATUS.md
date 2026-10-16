@@ -208,6 +208,24 @@ These come from docs/PLAN.md §10:
   - **Not done:** the README screenshots. They show live data and have to be taken from the App
     (`uv run scripts/readme_screenshots.py --base <the App's direct port>`); the SSH tunnel on 8099 is an old dev
     instance.
+- **M1, the Plan timeline on a phone** (A5), below 640 px (`useMediaQuery`):
+  - Windows: a 4 h window (3 h back, 1 ahead) as the phone's own, and three full-width buttons (4 h, 24 h, 2 days).
+    A window chosen on the other layout maps across (`viewFor`: 8 h ↔ 4 h, 7 d → 2 days). Compare with is hidden
+    and the phone compares with the plan in force.
+  - The head reads "Timeline Fri 16 Oct · now 15:37" with Following now.
+  - Charts: **Grid** (`PowerChart phone`: the grid line, readings, sessions, shortfalls; "↓ 0.0 · ↑ 7.2 kWh"),
+    **Power balance** (`balanceSeries`: the grid stacked as a layer, import on top and export at the bottom;
+    `powerStack({ grid })`), **State of charge** ("now 56 %") and **Import price** (with its ribbon and the time
+    axis, "now" on it). No MPC strip; the intro line and the chips' toggle row are left out.
+  - Every chart has a 30 px axis with short ticks ("5", ".10") and a chip at the cursor in place of the popup
+    (`PopupChip.swatch`, lines stacked). Chips show on every synced chart: the docked-popup rule now applies to
+    popups only. Lane names leave the gutter when it has no room.
+  - The overview reads "Overview, 2 days" and the hints are the touch ones.
+  - `.chart-stack` gets `minmax(0, 1fr)`, so the charts follow the width down instead of holding the column at a
+    canvas's old width.
+  - Checked in Chrome in a 390 and a 360 px frame (no side scroll at either), hovering the Grid chart for the chips
+    on all four.
+  - **Not checked:** dark mode, a real phone through Ingress (touch, pinch).
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

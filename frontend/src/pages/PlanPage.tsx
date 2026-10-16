@@ -4,6 +4,8 @@ import { usePlan, usePlanHistory, usePlanNow, useStatus } from '../api/queries'
 import type { PlanRow } from '../api/types'
 import { Lamp } from '../components/Lamp'
 import { Empty, ErrorNotice, PageHead } from '../components/PageHead'
+import { useMediaQuery } from '../components/useMediaQuery'
+import { cursorTimeLabel, dayDateLabel } from '../lib/chartTime'
 import { useNow } from '../components/useNow'
 import { formatEur } from '../lib/costfun'
 import { formatDuration, formatSlot, formatSlotDate, formatTime } from '../lib/format'
@@ -24,10 +26,13 @@ import { planSummary } from '../lib/planSummary'
 import {
   HORIZON_KEY,
   HORIZON_SLOTS,
+  NARROW_VIEWS,
   VIEW_HOURS,
   VIEW_KEY,
+  WIDE_VIEWS,
   loadPref,
   savePref,
+  viewFor,
   viewHistory,
   type HorizonSlots,
   type ViewHours,
@@ -56,9 +61,12 @@ export function PlanPage() {
   const previousRows = data?.previous?.rows
   const rows = useMemo(() => (currentRows ?? []) as PlanRow[], [currentRows])
   const changes = useMemo(() => planChanges(rows, (previousRows ?? []) as PlanRow[]), [rows, previousRows])
-  const [view, setView] = useState<ViewHours>(() => loadPref(VIEW_KEY, VIEW_HOURS, 8))
+  // a phone gets its own windows (4 h, 24 h, 2 days) and charts
+  const narrow = useMediaQuery('(max-width: 640px)')
+  const [chosenView, setView] = useState<ViewHours>(() => loadPref(VIEW_KEY, VIEW_HOURS, 8))
+  const view = viewFor(chosenView, narrow)
   const [horizon, setHorizon] = useState<HorizonSlots>(() => loadPref(HORIZON_KEY, HORIZON_SLOTS, 0))
-  const history = usePlanHistory(viewHistory(view), horizon)
+  const history = usePlanHistory(viewHistory(view), narrow ? 0 : horizon)
   // a window picked by zooming, scrolling or the overview (unix seconds); null follows now in `view`
   const [zoom, setZoom] = useState<[number, number] | null>(null)
   const chooseView = (v: ViewHours) => {
@@ -201,9 +209,23 @@ export function PlanPage() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Timeline</h2>
-          <div className="timeline-controls">
-            <HistoryControls view={view} horizon={horizon} onView={chooseView} onHorizon={chooseHorizon} />
+          <h2>
+            Timeline
+            {narrow && (
+              <span className="timeline-now">
+                {dayDateLabel(nowS, tz)} · now {cursorTimeLabel(nowS, tz, false)}
+              </span>
+            )}
+          </h2>
+          <div className="timeline-controls" data-narrow={narrow || undefined}>
+            <HistoryControls
+              view={view}
+              horizon={horizon}
+              onView={chooseView}
+              onHorizon={chooseHorizon}
+              windows={narrow ? NARROW_VIEWS : WIDE_VIEWS}
+              narrow={narrow}
+            />
             <button
               type="button"
               className="follow-now"
@@ -222,7 +244,8 @@ export function PlanPage() {
             history={history.data}
             nowS={nowS}
             view={view}
-            horizon={horizon}
+            horizon={narrow ? 0 : horizon}
+            narrow={narrow}
             zoom={zoom}
             onZoom={setZoom}
             loading={history.isPlaceholderData}

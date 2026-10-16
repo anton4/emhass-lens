@@ -375,10 +375,13 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
         ctx.fillText(text, a + gap + 5 * dpr, top + h / 2)
       }
     }
+    // the lane's name in the y-axis gutter, where it has room (not on a phone's narrow axis)
     ctx.font = `${12 * dpr}px ${body}`
-    ctx.fillStyle = cssColor('--ink-muted')
-    ctx.textAlign = 'right'
-    ctx.fillText(lane.label, bbox.left - 8 * dpr, top + h / 2)
+    if (ctx.measureText(lane.label).width + 10 * dpr <= bbox.left) {
+      ctx.fillStyle = cssColor('--ink-muted')
+      ctx.textAlign = 'right'
+      ctx.fillText(lane.label, bbox.left - 8 * dpr, top + h / 2)
+    }
     ctx.textAlign = 'left'
   })
   ctx.restore()

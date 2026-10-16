@@ -23,6 +23,8 @@ export interface PopupChip {
   text: string
   /** CSS custom property or colour of the text. */
   color?: string
+  /** A square of this colour before the text (a quantity's colour). */
+  swatch?: string
 }
 
 /** A tinted block above the lines' rows: what was going on at the pointer's moment (a market command), its rows, and

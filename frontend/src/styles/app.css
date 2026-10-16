@@ -1720,6 +1720,8 @@ button.diff-locate {
 
 .chart-stack {
   display: grid;
+  /* the charts follow the width down: a canvas mustn't hold the column at its old width */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -1828,6 +1830,30 @@ button.diff-locate {
   color: var(--ink);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* the phone's Timeline head: the date and now beside the title, then the windows across the width */
+.timeline-now {
+  margin-left: 8px;
+  font-size: var(--step--1);
+  font-weight: 400;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-controls[data-narrow] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.history-windows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.history-windows button {
+  min-height: 40px;
 }
 
 /* the window, the comparison and whether the charts follow now */
@@ -2343,6 +2369,26 @@ button.diff-locate {
 .chart-pop-chip[data-flip] {
   margin-left: -8px;
   transform: translateX(-100%);
+}
+
+/* the phone's chips: a line per value, each with its quantity's colour */
+.chart-pop-chip[data-lines] {
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 7px;
+}
+
+.chart-pop-chip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chart-pop-chip-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
 }
 
 /* under a value: the plan at the time, the quarter-hour's mean, the readings' range */

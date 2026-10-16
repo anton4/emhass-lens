@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useGridDetail, useJobs, useMarketCommands, useRuns } from '../../api/queries'
 import type { GridDetail, PlanHistoryResponse, PlanResponse, PlanRow, RunSummary } from '../../api/types'
 import { ChartHead, type ChartKeyItem } from '../../components/charts/ChartHead'
+import type { PopupChip } from '../../components/charts/cursorStore'
 import { Overview } from '../../components/charts/Overview'
 import {
   TimeChart,
@@ -19,11 +20,13 @@ import { useNow } from '../../components/useNow'
 import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
+import { slotIndex } from '../../lib/chartColumns'
 import { adaptiveStep } from '../../lib/chartKeys'
 import { cursorTimeLabel, dayDateLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
+  gridAt,
   gridCadence,
   gridDetailNote,
   gridOverlay,
@@ -34,6 +37,7 @@ import {
 } from '../../lib/gridDetail'
 import {
   commandSessions,
+  sessionDelivery,
   marketBlock,
   marketLane,
   marketLead,
@@ -46,10 +50,18 @@ import {
 import { OUTCOMES, outcomeLabel } from '../../lib/outcomes'
 import { blockAt, runBlocks } from '../../lib/runBlocks'
 import { pastEnd, thenLabel, timeGrid, viewRange, type HorizonSlots, type ViewHours } from '../../lib/planHistory'
-import { PLAN_LINE, planFlows, powerSeries, priceSeries, socSeries, type Flows } from '../../lib/planSeries'
+import {
+  PLAN_LINE,
+  balanceSeries,
+  planFlows,
+  powerSeries,
+  priceSeries,
+  socSeries,
+  type Flows,
+} from '../../lib/planSeries'
 import { energyIn, formatKwh, socSummary } from '../../lib/planTotals'
 import { HEAT_STEPS, priceHeatLane, windowExtremes } from '../../lib/prices'
-import { eurTick } from '../../lib/units'
+import { eurTick, formatPower, formatSignedPower } from '../../lib/units'
 import { ChartHints } from './ChartHints'
 import { CursorTable } from './CursorTable'
 import { createValueStore } from '../../components/charts/cursorStore'
@@ -60,6 +72,11 @@ const SYNC = 'plan'
 const POWER_FIT = { minSpan: 500 }
 const SOC_FIT = { minSpan: 5, clamp: [0, 100] as [number, number] }
 const PRICE_FIT = { minSpan: 0.01 } // €/kWh
+
+/** The phone's narrow axis: kW without the unit (the chart's head names it). */
+function kwShort(v: number): string {
+  return (v / 1000).toFixed(Math.abs(v) < 10_000 && v % 1000 !== 0 ? 1 : 0)
+}
 
 function kwTick(v: number): string {
   return `${(v / 1000).toFixed(Math.abs(v) < 10_000 ? 1 : 0)} kW`
@@ -111,6 +128,7 @@ export function PlanCharts({
   onZoom: setZoom,
   loading = false,
   stale = false,
+  narrow = false,
 }: {
   data: PlanResponse
   history?: PlanHistoryResponse
@@ -125,6 +143,9 @@ export function PlanCharts({
   loading?: boolean
   /** The plan is too old to trust: the plan ahead is hatched. */
   stale?: boolean
+  /** A phone: its own charts (Grid, Power balance, State of charge, the import price), a narrow axis, a chip at the
+   *  cursor on each. */
+  narrow?: boolean
 }) {
   const currentRows = data.current?.rows
   const previousRows = data.previous?.rows
@@ -254,11 +275,55 @@ export function PlanCharts({
     })
     return m
   }, [prices])
+  // the phone's charts: a narrow axis, the grid stacked as a layer in the power balance, a chip on each
+  const axisWidth = narrow ? 30 : 64
+  const balance = useMemo(() => (narrow ? balanceSeries(flows) : null), [narrow, flows])
+  const phoneChips = useMemo(() => {
+    const at = (values: (number | null)[] | null | undefined, time: number) => values?.[slotIndex(x, time)] ?? null
+    const line = (v: number | null, text: string, swatch: string): PopupChip[] =>
+      v === null ? [] : [{ text: `${text}`, swatch }]
+    return {
+      balance: {
+        style: 'chip' as const,
+        chip: (_t: number, time: number): PopupChip[] => {
+          const batt = at(flows.battery, time)
+          return [
+            ...line(at(flows.pv, time), `${formatPower(at(flows.pv, time) ?? 0)} PV`, '--q-pv'),
+            ...line(batt, `${formatSignedPower(-(batt ?? 0))} battery`, '--q-batt'),
+            ...line(at(flows.load, time), `${formatPower(at(flows.load, time) ?? 0)} house`, '--q-load'),
+            ...(at(flows.deferrable, time)
+              ? line(at(flows.deferrable, time), `${formatPower(at(flows.deferrable, time) ?? 0)} EV`, '--q-ev')
+              : []),
+          ]
+        },
+      },
+      soc: {
+        style: 'chip' as const,
+        chip: (_t: number, time: number): PopupChip[] => {
+          const v = at(soc?.[0]?.values, time)
+          return line(v, `${(v ?? 0).toFixed(1)} % ${time < pastEndS ? 'measured' : 'plan'}`, '--q-soc')
+        },
+      },
+      price: {
+        style: 'chip' as const,
+        chip: (_t: number, time: number): PopupChip[] => {
+          const p = priceBySlot.get(Math.floor(time / 900) * 900)?.import ?? null
+          return line(p, `${(p ?? 0).toFixed(3)} € import`, '--q-import')
+        },
+      },
+    }
+  }, [x, flows, soc, pastEndS, priceBySlot])
+  const importOnly = useMemo(() => (prices ? prices.series.slice(0, 1) : []), [prices])
   const runId = data.current?.run_id
   const plannedAt = data.current?.generated_at
   return (
-    <div className="chart-stack" data-loading={loading || undefined} aria-busy={loading || undefined}>
-      <p className="timeline-intro">
+    <div
+      className="chart-stack"
+      data-narrow={narrow || undefined}
+      data-loading={loading || undefined}
+      aria-busy={loading || undefined}
+    >
+      <p className="timeline-intro" hidden={narrow}>
         {measuredUntil !== null && (
           <>
             Measured until <b>{cursorTimeLabel(measuredUntil, tz, false)}</b>,{' '}
@@ -292,15 +357,54 @@ export function PlanCharts({
         pastEndS={pastEndS}
         timeZone={data.timezone}
         slotTag={slotTag}
+        phone={narrow}
       />
+      {balance && (
+        <section className="chart-block">
+          <ChartHead
+            title="Power balance"
+            unit="kW · from above, to below"
+            summary={
+              shown && flows.pv ? (
+                <>
+                  PV <b>{formatKwh(energyIn(x, flows.pv, shown, 0))}</b>
+                </>
+              ) : undefined
+            }
+          />
+          <TimeChart
+            x={x}
+            series={balance}
+            ariaLabel="Power balance: PV, the battery discharging and the grid's import stacked above zero; the house load, the battery charging, the deferrable loads and the grid's export below"
+            syncKey={SYNC}
+            yFormat={kwShort}
+            fit={POWER_FIT}
+            xRange={shown}
+            onZoom={zoomTo}
+            split={ahead}
+            markers={midnights}
+            timeAxis="ticks"
+            axisWidth={axisWidth}
+            now={nowS}
+            timeZone={data.timezone}
+            height={150}
+            popup={phoneChips.balance}
+            legend={false}
+          />
+        </section>
+      )}
       {soc && (
         <section className="chart-block">
           <ChartHead
-            title="Battery state of charge"
+            title={narrow ? 'State of charge' : 'Battery state of charge'}
             unit="%"
-            keys={socKeys}
+            keys={narrow ? [] : socKeys}
             summary={
-              socNow.now !== null || socNow.end !== null ? (
+              narrow && socNow.now !== null ? (
+                <>
+                  now <b>{Math.round(socNow.now)} %</b>
+                </>
+              ) : socNow.now !== null || socNow.end !== null ? (
                 <>
                   {socNow.now !== null && (
                     <>
@@ -322,7 +426,7 @@ export function PlanCharts({
             series={soc}
             ariaLabel="Battery state of charge: measured history, what the plan said at the time, the current plan and the previous plan"
             syncKey={SYNC}
-            yFormat={(v) => `${v.toFixed(0)} %`}
+            yFormat={narrow ? (v) => v.toFixed(0) : (v) => `${v.toFixed(0)} %`}
             fit={SOC_FIT}
             xRange={shown}
             onZoom={zoomTo}
@@ -330,10 +434,11 @@ export function PlanCharts({
             markers={midnights}
             hatches={staleHatches}
             timeAxis="ticks"
+            axisWidth={axisWidth}
             now={nowS}
             timeZone={data.timezone}
-            height={150}
-            popup={slotTag}
+            height={narrow ? 90 : 150}
+            popup={narrow ? phoneChips.soc : slotTag}
             legend={false}
           />
         </section>
@@ -341,11 +446,15 @@ export function PlanCharts({
       {prices && (
         <section className="chart-block">
           <ChartHead
-            title="Price"
-            unit="€/kWh, fees and VAT included"
-            keys={priceKeys}
+            title={narrow ? 'Import price' : 'Price'}
+            unit={narrow ? '€/kWh' : '€/kWh, fees and VAT included'}
+            keys={narrow ? [] : priceKeys}
             summary={
-              extremes ? (
+              narrow && extremes ? (
+                <>
+                  {extremes.cheapest.value.toFixed(3)}–{extremes.dearest.value.toFixed(3)}
+                </>
+              ) : extremes ? (
                 <>
                   cheapest <b>{extremes.cheapest.value.toFixed(3)}</b> at {dayTimeLabel(extremes.cheapest.t, tz)} ·
                   dearest <b>{extremes.dearest.value.toFixed(3)}</b> at {dayTimeLabel(extremes.dearest.t, tz)}
@@ -355,40 +464,49 @@ export function PlanCharts({
           />
           <TimeChart
             x={prices.x}
-            series={prices.series}
+            series={narrow ? importOnly : prices.series}
             ariaLabel="Import and export price per quarter-hour, with a ribbon of the import price from cheap (light) to dear (deep); shaded where the price is a forecast"
             syncKey={SYNC}
-            yFormat={eurTick}
+            yFormat={narrow ? (v) => v.toFixed(2).replace(/^(-?)0\./, '$1.') : eurTick}
             fit={PRICE_FIT}
             xRange={shown}
             onZoom={zoomTo}
             hatches={forecastHatches}
             markers={midnights}
-            timeAxis="ticks"
+            timeAxis={narrow ? 'labels' : 'ticks'}
+            axisWidth={axisWidth}
+            nowLabel={narrow ? 'now' : undefined}
+            cursorLabel={narrow ? cursorLabel : undefined}
             now={nowS}
             timeZone={data.timezone}
-            height={160}
-            popup={{ tag: prices.tag }}
+            height={narrow ? 130 : 160}
+            popup={narrow ? phoneChips.price : { tag: prices.tag }}
             lanes={heat}
             legend={false}
           />
         </section>
       )}
-      <MpcRunStrip
-        x={x}
-        zoom={shown}
-        onZoom={zoomTo}
-        nowS={nowS}
-        timeZone={data.timezone}
-        markers={midnights}
-        nowLabel={nowLabel}
-        cursorLabel={cursorLabel}
-      />
+      {!narrow && (
+        <MpcRunStrip
+          x={x}
+          zoom={shown}
+          onZoom={zoomTo}
+          nowS={nowS}
+          timeZone={data.timezone}
+          markers={midnights}
+          nowLabel={nowLabel}
+          cursorLabel={cursorLabel}
+        />
+      )}
       {bounds && shown && (
         <section className="chart-block">
           <ChartHead
-            title="Overview"
-            unit={`grid power and market sessions, ${dayDateLabel(bounds[0], tz)} to ${dayDateLabel(bounds[1] - 1, tz)}`}
+            title={narrow ? `Overview, ${Math.round((bounds[1] - bounds[0]) / 86400)} days` : 'Overview'}
+            unit={
+              narrow
+                ? undefined
+                : `grid power and market sessions, ${dayDateLabel(bounds[0], tz)} to ${dayDateLabel(bounds[1] - 1, tz)}`
+            }
             summary={
               <>
                 showing <b>{rangeLabel(shown[0], shown[1], tz)}</b> ({spanLabel(shown[1] - shown[0])})
@@ -403,10 +521,11 @@ export function PlanCharts({
             sessions={overviewSessions}
             nowS={nowS}
             timeZone={data.timezone}
+            left={axisWidth}
           />
         </section>
       )}
-      <ChartHints windowS={shown ? shown[1] - shown[0] : 8 * 3600} />
+      <ChartHints windowS={shown ? shown[1] - shown[0] : 8 * 3600} touch={narrow} />
       <CursorTable
         cursor={cursorAt}
         x={x}
@@ -526,6 +645,7 @@ function PowerChart({
   pastEndS,
   timeZone,
   slotTag,
+  phone = false,
 }: {
   x: number[]
   flows: Flows
@@ -548,6 +668,8 @@ function PowerChart({
   pastEndS: number
   timeZone: string
   slotTag: { tag: (t: number) => { text: string; tone: 'neutral' | 'blue' } }
+  /** The phone's Grid chart: only the grid's line and the market, a narrow axis, a chip at the cursor. */
+  phone?: boolean
 }) {
   // Whole hours keep the query key steady while the chart's first slot moves on
   const first = x[0]
@@ -569,14 +691,14 @@ function PowerChart({
       powerSeries({
         x,
         flows,
-        hidden: (part) => hidden.has(part),
+        hidden: (part) => (phone ? part !== 'grid' : hidden.has(part)),
         cover,
         pastEndS,
         nowS,
         gridData,
         thenName,
       }),
-    [flows, hidden, cover, x, pastEndS, nowS, gridData, thenName],
+    [flows, hidden, cover, x, pastEndS, nowS, gridData, thenName, phone],
   )
 
   // the plan's grid in the slot in progress, from where the measured line ends: one grid line there too
@@ -624,6 +746,33 @@ function PowerChart({
       lead: showPower ? (_t: number, time: number) => marketLead({ spans, time, nowS, timeZone }) : undefined,
     }
   }, [slotTag, gridData, showPower, showSessions, spans, sessions, runs, nowS, timeZone])
+  // the phone: a chip at the cursor with the grid there, and what a session there delivered
+  const phoneChip = useMemo(
+    () => ({
+      style: 'chip' as const,
+      chip: (_t: number, time: number): PopupChip[] => {
+        const idx = slotIndex(x, time)
+        const reading = time < nowS ? gridAt(gridData, time) : null
+        const w = reading ?? flows.grid?.[idx] ?? null
+        const lines: PopupChip[] = []
+        if (w !== null) {
+          const when = time < nowS ? cursorTimeLabel(time, timeZone, reading !== null) : `plan ${cursorTimeLabel(x[idx] ?? time, timeZone, false)}`
+          lines.push({ text: `${formatSignedPower(w)} ${when}`, swatch: '--q-grid' })
+        }
+        const span = spans.find((s) => Date.parse(s.start) / 1000 <= time && time < Date.parse(s.end) / 1000)
+        const delivery = span ? sessionDelivery(span, gridData, time) : null
+        if (span) {
+          const kw = (v: number) => (v / 1000).toFixed(1)
+          lines.push({
+            text: `${delivery ? `${kw(delivery.got)} / ` : ''}${kw(span.power_w)} kW ${span.direction === 'sell' ? '↑ SELL' : '↓ BUY'}`,
+            swatch: span.direction === 'sell' ? '--q-sell' : '--q-buy',
+          })
+        }
+        return lines
+      },
+    }),
+    [x, nowS, gridData, flows.grid, spans, timeZone],
+  )
   // a flag can stand for several sessions of one direction: zoom to all of them
   const zoomToSession = (ids: string[]) => {
     const chosen = sessions.filter((s) => ids.includes(s.id))
@@ -678,10 +827,14 @@ function PowerChart({
   return (
     <section className="chart-block">
       <ChartHead
-        title="Power"
-        unit="kW · above zero: into the house · below: out of it"
+        title={phone ? 'Grid' : 'Power'}
+        unit={phone ? 'kW · 10 s readings' : 'kW · above zero: into the house · below: out of it'}
         summary={
-          zoom && flows.grid ? (
+          phone && zoom && flows.grid ? (
+            <>
+              ↓ <b>{energyIn(x, flows.grid, zoom, 1).toFixed(1)}</b> · ↑ <b>{energyIn(x, flows.grid, zoom, -1).toFixed(1)}</b> kWh
+            </>
+          ) : zoom && flows.grid ? (
             <>
               imported <b>{formatKwh(energyIn(x, flows.grid, zoom, 1))}</b> · exported{' '}
               <b>{formatKwh(energyIn(x, flows.grid, zoom, -1))}</b>
@@ -700,7 +853,7 @@ function PowerChart({
         series={series}
         ariaLabel="Power: PV and the battery discharging stacked above zero, the house load, the battery charging and the deferrable loads below, per quarter-hour; the grid as a line on top, every reading left of now and the plan right of it; the market's sessions and commanded power"
         syncKey={SYNC}
-        yFormat={kwTick}
+        yFormat={phone ? kwShort : kwTick}
         fit={POWER_FIT}
         xRange={zoom}
         onZoom={onZoom}
@@ -709,16 +862,17 @@ function PowerChart({
         timeAxis="ticks"
         now={nowS}
         timeZone={timeZone}
-        height={bands.length > 0 ? 335 : 286}
-        popup={popup}
+        height={phone ? (bands.length > 0 ? 200 : 150) : bands.length > 0 ? 335 : 286}
+        popup={phone ? phoneChip : popup}
         legend={false}
+        axisWidth={phone ? 30 : 64}
         overlays={overlays}
         gaps={gaps}
         lanes={lanes}
         sessions={bands}
         onSession={zoomToSession}
         hatches={hatches}
-        keyboard={{ step: adaptiveStep, home: nowS }}
+        keyboard={phone ? undefined : { step: adaptiveStep, home: nowS }}
         onCursor={onCursor}
       />
       {missing.length > 0 && (
@@ -727,51 +881,53 @@ function PowerChart({
           history.
         </p>
       )}
-      <ul className="legend" role="group" aria-label="Parts shown in the Power chart">
-        {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}
-        {marketChips.length > 0 && (
-          <li className="legend-group" aria-hidden="true">
-            Market
-          </li>
-        )}
-        {marketChips.map((c) => chip(c))}
-        {runs.length > 0 && (
-          <li
-            className="legend-key"
-            title="Where the grid delivered less than commanded by more than 500 W or 10 % for a minute or more"
-          >
-            <span className="legend-hatch" aria-hidden="true" />
-            Shortfall
-          </li>
-        )}
-        {hasPast && flows.gridThen && (
-          <li className="legend-key" title="Left of the now line: what the plan said at the time for the grid">
-            <span className="legend-dash" aria-hidden="true" />
-            grid, {thenName}
-          </li>
-        )}
-        {flows.grid && (
-          <li className="legend-key" title="Right of the now line: the grid as the plan has it">
-            <span className="legend-line" data-faded aria-hidden="true" />
-            grid plan
-          </li>
-        )}
-        {spans.length > 0 && zoom && !sessions.some((s) => s.to > zoom[0] && s.from < zoom[1]) && (
-          <li className="legend-key legend-empty">No market sessions between {rangeLabel(zoom[0], zoom[1], timeZone)}</li>
-        )}
-        {showSessions && (
-          <>
-            <li className="legend-key">
-              <span className="legend-square" style={{ background: 'var(--q-sell)' }} aria-hidden="true" />
-              sell
+      {!phone && (
+        <ul className="legend" role="group" aria-label="Parts shown in the Power chart">
+          {chips.map((c) => chip(c, c.part === 'grid' ? gridTitle : undefined))}
+          {marketChips.length > 0 && (
+            <li className="legend-group" aria-hidden="true">
+              Market
             </li>
-            <li className="legend-key">
-              <span className="legend-square" style={{ background: 'var(--q-buy)' }} aria-hidden="true" />
-              buy
+          )}
+          {marketChips.map((c) => chip(c))}
+          {runs.length > 0 && (
+            <li
+              className="legend-key"
+              title="Where the grid delivered less than commanded by more than 500 W or 10 % for a minute or more"
+            >
+              <span className="legend-hatch" aria-hidden="true" />
+              Shortfall
             </li>
-          </>
-        )}
-      </ul>
+          )}
+          {hasPast && flows.gridThen && (
+            <li className="legend-key" title="Left of the now line: what the plan said at the time for the grid">
+              <span className="legend-dash" aria-hidden="true" />
+              grid, {thenName}
+            </li>
+          )}
+          {flows.grid && (
+            <li className="legend-key" title="Right of the now line: the grid as the plan has it">
+              <span className="legend-line" data-faded aria-hidden="true" />
+              grid plan
+            </li>
+          )}
+          {spans.length > 0 && zoom && !sessions.some((s) => s.to > zoom[0] && s.from < zoom[1]) && (
+            <li className="legend-key legend-empty">No market sessions between {rangeLabel(zoom[0], zoom[1], timeZone)}</li>
+          )}
+          {showSessions && (
+            <>
+              <li className="legend-key">
+                <span className="legend-square" style={{ background: 'var(--q-sell)' }} aria-hidden="true" />
+                sell
+              </li>
+              <li className="legend-key">
+                <span className="legend-square" style={{ background: 'var(--q-buy)' }} aria-hidden="true" />
+                buy
+              </li>
+            </>
+          )}
+        </ul>
+      )}
     </section>
   )
 }

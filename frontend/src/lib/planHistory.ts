@@ -26,6 +26,7 @@ export const HORIZON_SLOTS = HORIZONS.map((h) => h.slots) as readonly HorizonSlo
  *  much history it loads, so the window can be moved back a little without a new request. 8 h is the default: every
  *  10-second grid reading gets about two pixels. 2 d is the last day and the whole plan. */
 export const VIEW_WINDOWS = [
+  { hours: 4, label: '4 h', back: 3, ahead: 1, history: 24 },
   { hours: 8, label: '8 h', back: 4, ahead: 4, history: 24 },
   { hours: 24, label: '24 h', back: 12, ahead: 12, history: 24 },
   { hours: 48, label: '2 d', back: 24, ahead: null, history: 48 },
@@ -34,6 +35,16 @@ export const VIEW_WINDOWS = [
 export type ViewHours = (typeof VIEW_WINDOWS)[number]['hours']
 export const VIEW_HOURS = VIEW_WINDOWS.map((w) => w.hours) as readonly ViewHours[]
 export const VIEW_KEY = 'emhass-lens.plan.view-window'
+
+/** The windows each layout offers: a phone has 4 h, 24 h and 2 days; a wider screen 8 h, 24 h, 2 d and 7 d. */
+export const WIDE_VIEWS: readonly ViewHours[] = [8, 24, 48, 168]
+export const NARROW_VIEWS: readonly ViewHours[] = [4, 24, 48]
+
+/** A window chosen on the other layout, as this one offers it (8 h ↔ 4 h, 7 d → 2 days). */
+export function viewFor(view: ViewHours, narrow: boolean): ViewHours {
+  if (narrow) return view === 8 ? 4 : view === 168 ? 48 : view
+  return view === 4 ? 8 : view
+}
 
 /** The history a window loads. */
 export function viewHistory(view: ViewHours): HistoryHours {

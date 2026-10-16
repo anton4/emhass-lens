@@ -1,11 +1,12 @@
 // The Plan page's Power chart: where the house's power comes from and where it goes, stacked from zero. Into the house
 // (above zero): PV, then the battery discharging. Out of it (below zero): the house load, then the battery charging,
-// then the deferrable loads (the EV). The grid is not a layer: it is drawn as its own line on top, and it is exactly
-// what these layers leave uncovered (import above zero, export below).
+// then the deferrable loads (the EV). On the desktop the grid is not a layer: it is drawn as its own line on top, and
+// it is exactly what these layers leave uncovered (import above zero, export below). The phone's Power balance stacks
+// it too, the import on top and the export at the bottom, so both sides add up to the same.
 
 export type Values = (number | null)[]
 
-export type FlowKey = 'pv' | 'discharge' | 'load' | 'charge' | 'deferrable'
+export type FlowKey = 'pv' | 'discharge' | 'import' | 'load' | 'charge' | 'deferrable' | 'export'
 
 export interface StackLayer {
   key: FlowKey
@@ -27,16 +28,23 @@ export function powerStack(flows: {
   battery?: Values | null
   load?: Values | null
   deferrable?: Values | null
+  /** + import: stacked as a layer of its own on each side (the phone's Power balance). */
+  grid?: Values | null
 }): StackLayer[] {
   const length = Math.max(
     flows.pv?.length ?? 0,
     flows.battery?.length ?? 0,
     flows.load?.length ?? 0,
     flows.deferrable?.length ?? 0,
+    flows.grid?.length ?? 0,
   )
   const at = (values: Values | null | undefined, i: number) => values?.[i]
   const any = (i: number) =>
-    known(at(flows.pv, i)) || known(at(flows.battery, i)) || known(at(flows.load, i)) || known(at(flows.deferrable, i))
+    known(at(flows.pv, i)) ||
+    known(at(flows.battery, i)) ||
+    known(at(flows.load, i)) ||
+    known(at(flows.deferrable, i)) ||
+    known(at(flows.grid, i))
   const own = (pick: (i: number) => number | null | undefined): Values =>
     Array.from({ length }, (_, i) => {
       const v = pick(i)
@@ -47,6 +55,7 @@ export function powerStack(flows: {
   if (flows.battery) {
     sides.push({ key: 'discharge', sign: 1, own: own((i) => at(flows.battery, i)) })
   }
+  if (flows.grid) sides.push({ key: 'import', sign: 1, own: own((i) => at(flows.grid, i)) })
   if (flows.load) sides.push({ key: 'load', sign: -1, own: own((i) => at(flows.load, i)) })
   if (flows.battery) {
     sides.push({
@@ -59,6 +68,16 @@ export function powerStack(flows: {
     })
   }
   if (flows.deferrable) sides.push({ key: 'deferrable', sign: -1, own: own((i) => at(flows.deferrable, i)) })
+  if (flows.grid) {
+    sides.push({
+      key: 'export',
+      sign: -1,
+      own: own((i) => {
+        const v = at(flows.grid, i)
+        return known(v) ? -v : v
+      }),
+    })
+  }
 
   const layers: StackLayer[] = []
   for (const sign of [1, -1] as const) {

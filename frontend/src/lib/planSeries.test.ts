@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HistorySlot, PlanPrice } from '../api/types'
-import { forecastBands, planFlows, powerSeries, priceSeries, socSeries } from './planSeries'
+import { balanceSeries, forecastBands, planFlows, powerSeries, priceSeries, socSeries } from './planSeries'
 import { timeGrid } from './planHistory'
 
 const t0 = Date.parse('2026-10-16T10:00:00Z') / 1000
@@ -97,5 +97,15 @@ describe('priceSeries', () => {
       [t0, t0 + 1800],
       [t0 + 2700, t0 + 3600],
     ])
+  })
+})
+
+describe('balanceSeries', () => {
+  it('stacks the grid as a layer, one popup row for it in its own sign', () => {
+    const flows = planFlows(x, past, rows, pastEndS, columns)
+    const series = balanceSeries(flows)
+    const grid = series.find((s) => s.label === 'Grid import')
+    expect(grid).toMatchObject({ popupLabel: 'Grid', readout: flows.grid })
+    expect(series.find((s) => s.label === 'Grid export')?.helper).toBe(true)
   })
 })

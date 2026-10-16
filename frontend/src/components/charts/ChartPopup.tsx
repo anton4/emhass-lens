@@ -48,7 +48,6 @@ export function ChartPopup({
   })
   if (!over || !at) return null
   const docked = at.width < DOCK_BELOW
-  if (docked && at.pointerY === null) return null
   const {
     series,
     x,
@@ -68,9 +67,16 @@ export function ChartPopup({
     const lines = t !== undefined ? (chipFor?.(t, at.time) ?? []) : []
     if (lines.length === 0) return null
     return createPortal(
-      <div className="chart-pop-chip" data-flip={at.left > at.width * 0.7 || undefined} style={{ left: at.left }} aria-hidden="true">
+      <div
+        className="chart-pop-chip"
+        data-flip={at.left > at.width * 0.6 || undefined}
+        data-lines={lines.length > 1 || undefined}
+        style={{ left: at.left }}
+        aria-hidden="true"
+      >
         {lines.map((line, i) => (
           <span key={i} style={line.color ? { color: cssColor(line.color) } : undefined}>
+            {line.swatch && <i className="chart-pop-chip-swatch" style={{ background: cssColor(line.swatch) }} />}
             {line.text}
           </span>
         ))}
@@ -78,6 +84,8 @@ export function ChartPopup({
       over,
     )
   }
+  // on a narrow plot only the chart under the pointer shows its popup (chips show on every chart)
+  if (docked && at.pointerY === null) return null
   const { rows, total } = popupRows(series, at.idx, at.time, { totalInHead })
   const extra = t !== undefined ? (extraFor?.(t, at.time) ?? []) : []
   const block = t !== undefined ? (blockFor?.(t, at.time) ?? null) : null
