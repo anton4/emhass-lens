@@ -413,6 +413,18 @@ def register_jobs(c: Container) -> None:
     )
     s.add(
         Job(
+            id="measure.grid_warm",
+            title="Grid readings",
+            description="After a start or a new grid sensor: reads the grid sensor's last eight days from the recorder "
+            "into memory, newest first, so the Plan page's week shows every reading.",
+            trigger=Dynamic(x["grid_detail"].next_warm, "Shortly after a start or a new grid sensor, until done"),
+            func=x["grid_detail"].warm,
+            record=x["grid_detail"].enabled,
+            grace=timedelta(minutes=10),
+        )
+    )
+    s.add(
+        Job(
             id="health.evaluate",
             title="Health",
             description="Evaluates the health rules and updates the problem list.",
@@ -501,6 +513,7 @@ def subscribe(c: Container) -> None:
     )
     c.settings.subscribe(("external_control", "market.mode", "market.entities"), x["external"].on_settings)
     c.settings.subscribe("measurements", x["measurements"].on_settings)
+    c.settings.subscribe("measurements.grid", x["grid_detail"].on_settings)
 
     def on_market_time(old: Settings, new: Settings, paths: list[str]) -> None:
         c.scheduler.retime("market.reconcile", Periodic(60, new.market.reconcile_offset_s))

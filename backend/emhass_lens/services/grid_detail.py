@@ -2,8 +2,11 @@
 went through the grid connection beside the market's commands, and to say how much of each command was delivered.
 
 The grid sensor's recorder history is read in whole hours and kept in memory (an hour is read once it has settled;
-the current hour again after TAIL_TTL_S), so the chart's refresh reads only the tail from Home Assistant. Values are
-kept as the sensor reported them; the scale and sign from Settings → Measurements are applied when they are served.
+the current hour again after TAIL_TTL_S), so the chart's refresh reads only the tail from Home Assistant. Eight days
+are kept, so the Plan page's week shows every reading too: a chart request reads at most REQUEST_HOURS of what isn't
+in memory yet (newest first) and says the rest is pending, and the measure.grid_warm job reads the week after a start
+or a change of the grid sensor. Values are kept as the sensor reported them; the scale and sign from Settings →
+Measurements are applied when they are served.
 """
 
 import asyncio
@@ -18,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from emhass_lens.core.clock import iso
 from emhass_lens.domain.measure import Bounds, Point, bucket_means, clip_points, detail, step_points
+from emhass_lens.scheduler.core import JobContext
 from emhass_lens.settings.model import MeasuredPower
 
 if TYPE_CHECKING:
@@ -29,9 +33,11 @@ log = logging.getLogger("emhass_lens.grid_detail")
 HOUR_S = 3600
 SETTLED_S = 120  # an hour that ended this long ago is complete in the recorder
 TAIL_TTL_S = 30  # the hour still going is read again after this
-MAX_HOURS = 72  # hours kept in memory
+MAX_HOURS = 8 * 24 + 2  # hours kept in memory: the Plan page's week and a little
 READ_HOURS = 6  # hours per recorder request; chatty power sensors make bigger answers heavy
-WINDOW_MAX = timedelta(hours=48)
+REQUEST_HOURS = 12  # settled hours a chart request reads at most; the rest is pending for the warm-up job
+WARM_HOURS = 4 * READ_HOURS  # settled hours one warm-up run reads
+WINDOW_MAX = timedelta(days=8)
 DELIVERED_TIMEOUT_S = 10.0
 MIN_SPAN_S = 5.0  # shorter spans are the moment between two sensors changing, not a command
 NO_SENSOR = "No grid power sensor (Settings → Measurements → Grid power)"
@@ -81,6 +87,8 @@ class GridDetailService:
         self.c = c
         self._cache: OrderedDict[tuple[str, float], _Hour] = OrderedDict()
         self._lock = asyncio.Lock()
+        # the week isn't in memory yet (a start, a new grid sensor): measure.grid_warm reads it
+        self.warm_wanted = True
 
     def _cfg(self) -> MeasuredPower | None:
         cfg = self.c.settings.current.measurements.grid
@@ -94,46 +102,68 @@ class GridDetailService:
         self._cache.move_to_end((entity, h))
         return hour
 
-    async def _ensure(self, entity: str, hours: Iterable[float], now: float) -> None:
-        """Reads the hours not in memory (or the current one, when stale), a few hours per request."""
-        async with self._lock:
-            missing = sorted(h for h in set(hours) if h < now and self._fresh(entity, h, now) is None)
-            runs: list[list[float]] = []
-            for h in missing:
-                if runs and h - runs[-1][-1] == HOUR_S and len(runs[-1]) < READ_HOURS:
-                    runs[-1].append(h)
-                else:
-                    runs.append([h])
-            ha = self.c.extras["ha"]
-            for run in runs:
-                start, end = run[0], min(run[-1] + HOUR_S, now)
-                lists = await ha.history(_utc(start), _utc(end), [entity], timeout=30)
-                states = next(
-                    (lst for lst in lists if lst and isinstance(lst[0], dict) and lst[0].get("entity_id") == entity),
-                    [],
-                )
-                for h in run:
-                    points = step_points(states, h, min(h + HOUR_S, now))
-                    self._cache[(entity, h)] = _Hour(
-                        times=array("d", (t for t, _ in points)),
-                        values=array("d", (math.nan if v is None else v for _, v in points)),
-                        read_at=now,
-                        complete=h + HOUR_S <= now - SETTLED_S,
-                    )
-                    self._cache.move_to_end((entity, h))
-            while len(self._cache) > MAX_HOURS:
-                self._cache.popitem(last=False)
+    def _missing(self, entity: str, hours: Iterable[float], now: float) -> list[float]:
+        """The hours (before now) not in memory, or stale, newest first."""
+        return sorted((h for h in set(hours) if h < now and self._fresh(entity, h, now) is None), reverse=True)
 
-    async def _points(self, entity: str, start: float, end: float, now: float) -> list[Point]:
-        """The sensor's step function on [start, end), as reported (no scale or sign)."""
+    async def _ensure(self, entity: str, hours: Iterable[float], now: float, budget: int | None = None) -> bool:
+        """Reads the hours not in memory (or the current one, when stale), newest first, a few hours per recorder
+        request; the lock is taken per request, so a chart's refresh isn't held up behind a long read. With `budget`,
+        at most that many settled hours are read (the current one doesn't count). True when every hour is in memory."""
+        wanted = list(hours)
+        settled = 0
+        while True:
+            async with self._lock:
+                missing = self._missing(entity, wanted, now)
+                if not missing:
+                    return True
+                # the newest run of back-to-back hours, at most READ_HOURS of them
+                run = [missing[0]]
+                for h in missing[1:]:
+                    if run[-1] - h != HOUR_S or len(run) >= READ_HOURS:
+                        break
+                    run.append(h)
+                run.reverse()
+                done = sum(1 for h in run if h + HOUR_S <= now)
+                if budget is not None and settled > 0 and settled + done > budget:
+                    return False
+                settled += done
+                await self._read(entity, run, now)
+
+    async def _read(self, entity: str, run: list[float], now: float) -> None:
+        """One recorder request for the back-to-back hours `run` (oldest first), kept in memory."""
+        ha = self.c.extras["ha"]
+        start, end = run[0], min(run[-1] + HOUR_S, now)
+        lists = await ha.history(_utc(start), _utc(end), [entity], timeout=30)
+        states = next(
+            (lst for lst in lists if lst and isinstance(lst[0], dict) and lst[0].get("entity_id") == entity),
+            [],
+        )
+        for h in run:
+            points = step_points(states, h, min(h + HOUR_S, now))
+            self._cache[(entity, h)] = _Hour(
+                times=array("d", (t for t, _ in points)),
+                values=array("d", (math.nan if v is None else v for _, v in points)),
+                read_at=now,
+                complete=h + HOUR_S <= now - SETTLED_S,
+            )
+            self._cache.move_to_end((entity, h))
+        while len(self._cache) > MAX_HOURS:
+            self._cache.popitem(last=False)
+
+    async def _points(
+        self, entity: str, start: float, end: float, now: float, budget: int | None = None
+    ) -> tuple[list[Point], bool]:
+        """The sensor's step function on [start, end), as reported (no scale or sign), from the hours in memory after
+        reading what's missing (at most `budget` settled hours); and whether every hour was there."""
         hours = _hours(start, end)
-        await self._ensure(entity, hours, now)
+        complete = await self._ensure(entity, hours, now, budget)
         points: list[Point] = []
         for h in hours:
             hour = self._cache.get((entity, h))
             if hour is not None:
                 points.extend(hour.points())
-        return clip_points(points, start, end)
+        return clip_points(points, start, end), complete
 
     # --- what the chart and the commands get ----------------------------------------------------------------------
     async def _breaks(self, start: datetime, end: datetime) -> list[float]:
@@ -159,6 +189,7 @@ class GridDetailService:
             "step_s": None,
             "points": [],
             "error": None,
+            "pending": False,
         }
         if cfg is None:
             out["error"] = NO_SENSOR
@@ -166,12 +197,17 @@ class GridDetailService:
         a, b = start.timestamp(), end.timestamp()
         try:
             breaks = await self._breaks(start, end)
-            points = await self._points(cfg.entity, a, b, self.c.clock.now().timestamp())
+            points, complete = await self._points(cfg.entity, a, b, self.c.clock.now().timestamp(), REQUEST_HOURS)
         except Exception as exc:  # the chart leaves the line out and says why
             log.debug("Reading the grid power history failed: %s", exc)
             out["error"] = str(exc)
             return out
         step, shown, bounds = detail(points, a, b, max_points, breaks)
+        # older hours still to read: the chart asks again shortly (and measure.grid_warm reads them meanwhile)
+        out["pending"] = not complete
+        if not complete:
+            self.warm_wanted = True
+            self.c.scheduler.retime("measure.grid_warm")
         out["step_s"] = step
         out["points"] = [
             {"t": iso(_utc(t)), "w": round(cfg.to_emhass(v)) if v is not None else None, **_range(cfg, bounds, i)}
@@ -197,7 +233,8 @@ class GridDetailService:
                 means: dict[tuple[float, float], int | None] = {}
                 for i, (a, b) in bounds.items():
                     if (a, b) not in means:
-                        mean, _ = bucket_means(await self._points(cfg.entity, a, b, now), [a, b])[0]
+                        points, _ = await self._points(cfg.entity, a, b, now)
+                        mean, _ = bucket_means(points, [a, b])[0]
                         means[(a, b)] = round(cfg.to_emhass(mean)) if mean is not None else None
                     out[i] = means[(a, b)]
         except Exception as exc:  # the commands are still shown, judged against zero
@@ -228,7 +265,7 @@ class GridDetailService:
                 for i, (a, b) in bounds.items():
                     if b <= a:
                         continue
-                    points = await self._points(cfg.entity, a, b, now)
+                    points, _ = await self._points(cfg.entity, a, b, now)
                     mean, coverage = bucket_means(points, [a, b])[0]
                     out[i] = (round(cfg.to_emhass(mean)) if mean is not None else None, coverage)
         except TimeoutError:
@@ -238,3 +275,45 @@ class GridDetailService:
             log.debug("Reading the grid power for the market commands failed: %s", exc)
             return [(None, None)] * len(spans), str(exc)
         return out, None
+
+    # --- the warm-up job ------------------------------------------------------------------------------------------
+    def on_settings(self, *_: Any) -> None:
+        """A new grid sensor: read its week."""
+        self.warm_wanted = True
+        self.c.scheduler.retime("measure.grid_warm")
+
+    def enabled(self) -> bool:
+        return self._cfg() is not None
+
+    def next_warm(self, after: datetime) -> datetime | None:
+        return after + timedelta(seconds=5) if self.warm_wanted and self._cfg() is not None else None
+
+    async def warm(self, ctx: JobContext) -> None:
+        """Reads up to WARM_HOURS of the grid sensor's last eight days that aren't in memory, newest first; re-arms
+        itself until the week is there."""
+        cfg = self._cfg()
+        if cfg is None:
+            self.warm_wanted = False
+            if ctx.run:
+                ctx.run.outcome, ctx.run.summary = "noop", NO_SENSOR
+            return
+        now = self.c.clock.now().timestamp()
+        hours = _hours(now - WINDOW_MAX.total_seconds(), now)
+        try:
+            complete = await self._ensure(cfg.entity, hours, now, WARM_HOURS)
+        except Exception as exc:
+            if ctx.run:
+                ctx.run.outcome, ctx.run.error = "error", str(exc)
+            self.warm_wanted = False  # the next chart request with hours missing asks again
+            self.c.scheduler.retime("measure.grid_warm")
+            return
+        held = len(hours) - len(self._missing(cfg.entity, hours, now))
+        if complete:
+            self.warm_wanted = False
+        self.c.scheduler.retime("measure.grid_warm")
+        if ctx.run:
+            ctx.run.summary = (
+                f"The grid's readings for the last {len(hours) // 24} days are in memory"
+                if complete
+                else f"{held} of {len(hours)} hours of the grid's readings in memory"
+            )

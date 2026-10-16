@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from emhass_lens.core.clock import FakeClock, iso
 from tests.test_market_service import MODE, POWER, SOURCE, START
 from tests.test_market_service import world as market_world  # noqa: F401  (fixture)
+from tests.test_phase1 import run_job
 from tests.test_phase2 import live_client
 from tests.world import World
 
@@ -132,13 +133,13 @@ def test_without_a_sensor_or_the_recorder_the_line_says_why(tmp_path: Path, mark
         client.patch("/api/settings", json={"base_revision": rev, "changes": {"measurements": GRID}})
         assert client.get("/api/measurements/grid", params={"since": "2026-10-09T09:00:00Z"}).json()["points"]
 
-        # the window: never past now, at most 48 h, and it has to start before it ends
+        # the window: never past now, at most 8 days, and it has to start before it ends
         ahead = client.get(
             "/api/measurements/grid", params={"since": "2026-10-09T11:00:00Z", "until": "2026-10-09T13:00:00Z"}
         ).json()
         assert ahead["end"] == "2026-10-09T11:13:00.000+00:00"
         long = client.get("/api/measurements/grid", params={"since": "2026-10-01T00:00:00Z"}).json()
-        assert long["start"] == "2026-10-07T11:13:00.000+00:00"
+        assert long["start"] == "2026-10-01T11:13:00.000+00:00"
         assert client.get("/api/measurements/grid", params={"since": "2026-10-09T12:00:00Z"}).status_code == 400
 
         world.ha_history_status = 404
@@ -149,15 +150,52 @@ def test_without_a_sensor_or_the_recorder_the_line_says_why(tmp_path: Path, mark
         client.__exit__(None, None, None)
 
 
-def test_the_delivered_power_skips_commands_older_than_48_h(tmp_path: Path, market_world: World) -> None:  # noqa: F811
+def test_the_delivered_power_covers_the_week_and_skips_older_commands(tmp_path: Path, market_world: World) -> None:  # noqa: F811
     world = market_world
     clock = FakeClock(START + timedelta(hours=49))
     client = client_for(tmp_path, world, clock, measurements=GRID)
     history(world)
     try:
         commands = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
-        assert commands["spans"][0]["measured_w"] is None
-        assert (at(8, 0), at(9, 0)) not in meter_reads(world)  # the command's hour isn't read
+        assert commands["spans"][0]["measured_w"] == -9300  # two days back: still measured
+        clock.set(START + timedelta(days=8, hours=1))
+        commands = client.get(
+            "/api/market/commands", params={"since": "2026-10-09T08:00:00Z", "until": "2026-10-09T10:00:00Z"}
+        ).json()
+        assert commands["spans"][0]["measured_w"] is None  # over 8 days ago
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_long_window_reads_the_newest_hours_first_and_the_warm_up_job_the_rest(
+    tmp_path: Path,
+    market_world: World,  # noqa: F811
+) -> None:
+    world = market_world
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, measurements=GRID)
+    history(world)
+    try:
+        params = {"since": "2026-10-07T11:00:00Z", "max_points": 2000}
+
+        def reads_of(window_start: datetime) -> list[tuple[datetime, datetime]]:
+            return [r for r in meter_reads(world) if r[0] >= window_start]
+
+        before = len(meter_reads(world))
+        body = client.get("/api/measurements/grid", params=params).json()
+        assert body["pending"] is True  # the older hours are still to read
+        # newest first, at most 12 settled hours per request: 06:00 to now, then the six hours before
+        assert meter_reads(world)[before:] == [(at(6, 0), START), (at(0, 0), at(6, 0))]
+        assert body["points"]  # what is there is drawn
+
+        run: dict = {}
+        for _ in range(12):
+            run = run_job(client, "measure.grid_warm")
+            if "are in memory" in (run["summary"] or ""):
+                break
+        assert run["summary"] == "The grid's readings for the last 8 days are in memory"
+        again = client.get("/api/measurements/grid", params=params).json()
+        assert again["pending"] is False
     finally:
         client.__exit__(None, None, None)
 

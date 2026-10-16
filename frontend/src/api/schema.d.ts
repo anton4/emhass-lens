@@ -502,7 +502,7 @@ export interface paths {
         };
         /**
          * Grid Detail
-         * @description The measured grid power in [since, until) (until: now; never past now; at most the last 48 h of it), finer
+         * @description The measured grid power in [since, until) (until: now; never past now; at most the last 8 days of it), finer
          *     than the quarter-hour means: every sensor change when they fit `max_points`, else means over a step that suits
          *     the window with each bucket's lowest and highest reading, broken where a market command starts, ends or
          *     changes.
@@ -2385,6 +2385,8 @@ export interface components {
             entity: string | null;
             /** Error */
             error?: string | null;
+            /** Pending */
+            pending?: boolean | null;
             /** Points */
             points: components["schemas"]["GridPoint"][];
             /** Start */

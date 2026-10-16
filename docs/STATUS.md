@@ -187,6 +187,22 @@ These come from docs/PLAN.md §10:
     - Display only: the controller keeps writing the command's absolute target.
   - With the mock's baseline of 2.44 kW exported, the same −6.85 kW reads 4.41 of 10.40 kW delivered (42 %), where
     from zero it read 66 %.
+- **P10, a week of 10-second readings** (the owner's choice):
+  - `services/grid_detail.py` keeps 8 days (`MAX_HOURS` 194, about 1 MB for a 10 s sensor) and serves them
+    (`WINDOW_MAX`, the route's `GRID_DETAIL_MAX`).
+  - Missing hours are read newest first in 6 h requests, the lock taken per request so the live refresh isn't held
+    up behind a long read.
+  - A chart request reads at most 12 settled hours (`REQUEST_HOURS`) and returns `pending: true` for the rest.
+  - The new `measure.grid_warm` job (Dynamic, recorded) reads 24 h per run until the week is in memory, after a
+    start, a new grid sensor (`measurements.grid` subscription), or a request that found hours missing.
+  - `delivered()` and the baselines now reach 8 days back.
+  - Frontend: `DETAIL_MAX_S` is 8 days, and the detail query refetches every 3 s while `pending`. The point budget
+    stays at 3000, already more than the pixels; each bucket's lowest and highest reading keeps every spike.
+  - Tests:
+    - `test_a_long_window_reads_the_newest_hours_first_and_the_warm_up_job_the_rest`: 06:00–now then 00:00–06:00,
+      pending, then the job until "The grid's readings for the last 8 days are in memory", no longer pending.
+    - `test_the_delivered_power_covers_the_week_and_skips_older_commands`.
+  - **Not checked:** the warm-up against the real recorder, and how long its reads take there.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

@@ -27,10 +27,13 @@ describe('detailRequest', () => {
     expect(detailRequest([s('2026-10-13T09:30:00Z'), s('2026-10-15T00:15:00Z')], NOW + 900, false)).toEqual(req)
   })
 
-  it('keeps to the last 48 h, from a whole hour so the request stays put', () => {
+  it('keeps to the last 8 days, from a whole hour so the request stays put', () => {
+    const long = detailRequest([s('2026-10-01T09:15:00Z'), s('2026-10-15T00:00:00Z')], NOW, false)
+    expect(long?.since).toBe('2026-10-06T10:00:00.000Z')
+    expect(long?.until).toBeNull()
+    // a week is all there
     const week = detailRequest([s('2026-10-07T09:15:00Z'), s('2026-10-15T00:00:00Z')], NOW, false)
-    expect(week?.since).toBe('2026-10-12T10:00:00.000Z')
-    expect(week?.until).toBeNull()
+    expect(week?.since).toBe('2026-10-07T09:00:00.000Z')
   })
 
   it('takes a zoom as it is, closed when it ends before now', () => {
@@ -40,8 +43,8 @@ describe('detailRequest', () => {
       until: '2026-10-14T06:30:00.000Z',
       maxPoints: 3000,
     })
-    const longAgo: [number, number] = [NOW - 4 * 86400, NOW - 3 * 86400]
-    expect(detailRequest(longAgo, NOW, true)?.since).toBe(new Date((NOW - 3 * 86400 - DETAIL_MAX_S + 86400) * 1000).toISOString())
+    const longAgo: [number, number] = [NOW - 12 * 86400, NOW - 3 * 86400]
+    expect(detailRequest(longAgo, NOW, true)?.since).toBe(new Date((NOW - 3 * 86400 - DETAIL_MAX_S) * 1000).toISOString())
   })
 
   it('asks nothing for a window that is all ahead', () => {

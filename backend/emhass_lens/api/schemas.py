@@ -1084,6 +1084,8 @@ class GridDetail(BaseModel):
     step_s: int | None
     points: list[GridPoint]
     error: str | None = None
+    # older hours aren't in memory yet: the points cover what is, and the chart asks again shortly
+    pending: bool | None = None
 
 
 class WatchdogFinding(BaseModel):

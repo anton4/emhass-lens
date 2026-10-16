@@ -286,7 +286,8 @@ export function useGridDetail(req: DetailRequest | null, enabled: boolean) {
       ),
     enabled: enabled && req !== null,
     placeholderData: keepPreviousData,
-    refetchInterval: live ? 60_000 : false,
+    // older hours still being read from the recorder: ask again shortly
+    refetchInterval: (q) => (q.state.data?.pending ? 3_000 : live ? 60_000 : false),
     staleTime: live ? 0 : Infinity,
   })
 }

@@ -9,9 +9,10 @@ import type { ChartOverlay } from './chartRange'
 
 const HOUR_S = 3600
 const SLOT_S = 900
-/** The backend serves at most the last 48 h. */
-export const DETAIL_MAX_S = 48 * HOUR_S
-// Enough for every 10-second reading of an 8-hour window, and buckets of a pixel or so for a longer one
+/** The backend keeps and serves the last 8 days. */
+export const DETAIL_MAX_S = 8 * 24 * HOUR_S
+// Enough for every 10-second reading of an 8-hour window, and buckets of a pixel or so for a longer one (each with
+// its lowest and highest reading, so a week still shows every spike)
 const POINTS = [750, 1500, 3000] as const
 const MOST_POINTS = 3000
 
@@ -24,7 +25,7 @@ export interface DetailRequest {
 
 const isoAt = (t: number) => new Date(t * 1000).toISOString()
 
-/** What to ask for: the measured part of the window shown (`[from, to]`, unix s), at most its last 48 h, or null when
+/** What to ask for: the measured part of the window shown (`[from, to]`, unix s), at most its last 8 days, or null when
  *  none of it is past. Unzoomed, the start is rounded to the hour, so the query stays put while the axis moves on; the
  *  point budget follows the share of the chart the measured part takes. */
 export function detailRequest(window: [number, number], nowS: number, zoomed: boolean): DetailRequest | null {
