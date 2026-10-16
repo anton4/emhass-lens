@@ -7,6 +7,8 @@ import {
   deliveredW,
   marketBlock,
   marketLead,
+  marketProduct,
+  sessionProduct,
   marketLane,
   marketMark,
   marketOverlay,
@@ -297,9 +299,10 @@ describe('the commands on the Power chart', () => {
         group: 'sell',
         color: '--q-sell',
         ink: '--q-sell-ink',
-        label: '↑ SELL 5.2–9.0 kW', // a sell regulates up, a buy down
+        label: '↑ SELL · mFRR · 5.2–9.0 kW', // a sell regulates up, a buy down
         detail: '↑ SELL · kratt · mfrrup · 08:45–08:50 · 88 % delivered',
         short: '↑',
+        hatch: false,
       },
       {
         id: buy.start,
@@ -308,9 +311,10 @@ describe('the commands on the Power chart', () => {
         group: 'buy',
         color: '--q-buy',
         ink: '--q-buy-ink',
-        label: '↓ BUY 5.0 kW',
+        label: '↓ BUY · mFRR · 5.0 kW',
         detail: '↓ BUY · kratt · mfrrdown · 09:58–now',
         short: '↓',
+        hatch: false,
       },
     ])
   })
@@ -323,11 +327,11 @@ describe('the commands on the Power chart', () => {
       color: '--q-sell',
       ink: '--q-sell-ink',
       text: '88 %',
-      long: 'sell · 3 commands · 88 % delivered · shortfall 2 min',
+      long: 'sell · mFRR · 3 commands · 88 % delivered · shortfall 2 min',
       marks: [{ from: s('2026-10-14T05:47:30Z'), to: s('2026-10-14T05:49:00Z'), color: '--q-shortfall' }],
       id: a.start,
     })
-    expect(lane.spans[1]).toMatchObject({ text: undefined, long: 'buy · 1 command', marks: [] })
+    expect(lane.spans[1]).toMatchObject({ text: undefined, long: 'buy · mFRR · 1 command', marks: [] })
   })
 
   it('zooms to a session with a little time either side, in whole quarter-hours', () => {
@@ -339,7 +343,7 @@ describe('the commands on the Power chart', () => {
     const at = (iso: string, d: GridDetail | null = detail) =>
       marketBlock({ spans: [a, b, c, buy], sessions, runs, detail: d ?? undefined, time: s(iso), nowS: NOW, timeZone: tz })
     expect(at('2026-10-14T05:48:00Z')).toEqual({
-      title: '↑ SELL',
+      title: '↑ SELL · mFRR',
       sub: 'kratt · mfrrup',
       tone: 'sell',
       text: '7.00 of 9.00 kW delivered (78 %)',
@@ -355,7 +359,7 @@ describe('the commands on the Power chart', () => {
       rows: [],
     })
     expect(at('2026-10-14T07:00:00Z')).toMatchObject({
-      title: '↓ BUY',
+      title: '↓ BUY · mFRR',
       tone: 'buy',
       text: '5.00 kW requested',
       meter: undefined,
@@ -371,4 +375,20 @@ describe('the commands on the Power chart', () => {
     expect(marketLead({ spans: [a], time: s('2026-10-14T06:30:00Z'), nowS: NOW, timeZone: tz })).toEqual([])
   })
 
+})
+
+describe('marketProduct', () => {
+  it('reads mFRR and aFRR from the mode, nothing from a plain buy or sell', () => {
+    expect(marketProduct('mfrrup')).toBe('mFRR')
+    expect(marketProduct('MFRRDOWN')).toBe('mFRR')
+    expect(marketProduct('frrup')).toBe('aFRR')
+    expect(marketProduct('afrrdown')).toBe('aFRR')
+    expect(marketProduct('sell')).toBeNull()
+  })
+
+  it('names the product of a session only when all its commands share it', () => {
+    const span = (mode: string) => ({ mode }) as MarketCommandSpan
+    expect(sessionProduct({ spans: [span('frrup'), span('frrup')] })).toBe('aFRR')
+    expect(sessionProduct({ spans: [span('frrup'), span('mfrrup')] })).toBeNull()
+  })
 })

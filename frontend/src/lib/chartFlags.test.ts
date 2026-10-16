@@ -13,12 +13,12 @@ describe('layoutFlags', () => {
         1000,
       ),
     ).toEqual([
-      { id: 'a', left: 100, width: 80, text: 0 },
-      { id: 'b', left: 920, width: 80, text: 0 }, // pushed back inside the right edge
+      { id: 'a', left: 100, width: 80, text: 0, row: 0 },
+      { id: 'b', left: 920, width: 80, text: 0, row: 0 }, // pushed back inside the right edge
     ])
   })
 
-  it('shortens the left of two flags that would touch, and leaves out one that has no room even short', () => {
+  it('shortens the left of two flags that would touch, and moves one that has no room even short to the second row', () => {
     const flags = layoutFlags(
       [
         { id: 'a', at: 100, widths: [80, 20] },
@@ -29,29 +29,31 @@ describe('layoutFlags', () => {
       1000,
     )
     expect(flags).toEqual([
-      { id: 'a', left: 100, width: 20, text: 1 },
-      { id: 'b', left: 150, width: 20, text: 1 },
+      { id: 'a', left: 100, width: 20, text: 1, row: 0 },
+      { id: 'b', left: 150, width: 20, text: 1, row: 0 },
+      // no room in the first row even short: the second row, at its longest text
+      { id: 'c', left: 160, width: 80, text: 0, row: 1 },
     ])
     expect(layoutFlags([{ id: 'a', at: 100, widths: [80, 20] }, { id: 'b', at: 190, widths: [80, 20] }], 0, 1000)).toEqual([
-      { id: 'a', left: 100, width: 80, text: 0 },
-      { id: 'b', left: 190, width: 80, text: 0 },
+      { id: 'a', left: 100, width: 80, text: 0, row: 0 },
+      { id: 'b', left: 190, width: 80, text: 0, row: 0 },
     ])
     expect(layoutFlags([{ id: 'a', at: 100, widths: [80, 20] }, { id: 'b', at: 150, widths: [30, 20] }], 0, 1000)).toEqual([
-      { id: 'a', left: 100, width: 20, text: 1 },
-      { id: 'b', left: 150, width: 30, text: 0 },
+      { id: 'a', left: 100, width: 20, text: 1, row: 0 },
+      { id: 'b', left: 150, width: 30, text: 0, row: 0 },
     ])
   })
 
   it('never shortens a right flag that stays where it is: that makes no room', () => {
     // a wider SELL right after a BUY: the BUY steps back, the SELL keeps its text (it used to lose it for nothing)
     expect(layoutFlags([{ id: 'a', at: 100, widths: [60, 20] }, { id: 'b', at: 150, widths: [120, 20] }], 0, 1000)).toEqual([
-      { id: 'a', left: 100, width: 20, text: 1 },
-      { id: 'b', left: 150, width: 120, text: 0 },
+      { id: 'a', left: 100, width: 20, text: 1, row: 0 },
+      { id: 'b', left: 150, width: 120, text: 0, row: 0 },
     ])
     // pushed in from the plot's right edge, a shorter right flag moves right and does make room
     expect(layoutFlags([{ id: 'a', at: 800, widths: [80, 20] }, { id: 'b', at: 990, widths: [120, 20] }], 0, 1000)).toEqual([
-      { id: 'a', left: 800, width: 80, text: 0 },
-      { id: 'b', left: 980, width: 20, text: 1 },
+      { id: 'a', left: 800, width: 80, text: 0, row: 0 },
+      { id: 'b', left: 980, width: 20, text: 1, row: 0 },
     ])
   })
 
@@ -65,8 +67,8 @@ describe('layoutFlags', () => {
       1000,
     )
     expect(flags).toEqual([
-      { id: 'a', left: 100, width: 80, text: 0 },
-      { id: 'b', left: 200, width: 300, text: 0 },
+      { id: 'a', left: 100, width: 80, text: 0, row: 0 },
+      { id: 'b', left: 200, width: 300, text: 0, row: 0 },
     ])
     expect(
       layoutFlags(
@@ -78,8 +80,8 @@ describe('layoutFlags', () => {
         1000,
       ),
     ).toEqual([
-      { id: 'a', left: 100, width: 20, text: 1 }, // the one before steps back to its short text
-      { id: 'b', left: 150, width: 300, text: 0 },
+      { id: 'a', left: 100, width: 20, text: 1, row: 0 }, // the one before steps back to its short text
+      { id: 'b', left: 150, width: 300, text: 0, row: 0 },
     ])
   })
 })
@@ -103,5 +105,23 @@ describe('groupFlags', () => {
   it('never joins sessions of the other direction', () => {
     const runs = groupFlags([item('b', 100, 'buy'), item('s', 105, 'sell')], width)
     expect(runs.map((r) => r.map((i) => i.id))).toEqual([['b'], ['s']])
+  })
+})
+
+describe('layoutFlags: two rows', () => {
+  it('leaves a flag out only when neither row has room for it', () => {
+    const flags = layoutFlags(
+      [
+        { id: 'a', at: 100, widths: [80, 20] },
+        { id: 'b', at: 105, widths: [80, 20] },
+        { id: 'c', at: 110, widths: [80, 20] },
+      ],
+      0,
+      1000,
+    )
+    expect(flags.map((f) => [f.id, f.row])).toEqual([
+      ['a', 0],
+      ['b', 1],
+    ])
   })
 })

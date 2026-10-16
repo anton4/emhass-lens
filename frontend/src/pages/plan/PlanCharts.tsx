@@ -19,7 +19,7 @@ import { formatClock, formatCountdown, formatSlot } from '../../lib/format'
 import { momentLabel } from '../../lib/chartPopup'
 import { clampWindow } from '../../lib/chartRange'
 import { adaptiveStep } from '../../lib/chartKeys'
-import { cursorTimeLabel, dayTimeLabel, localMidnights, spanLabel } from '../../lib/chartTime'
+import { cursorTimeLabel, dayTimeLabel, localMidnights, rangeLabel, spanLabel } from '../../lib/chartTime'
 import {
   detailCover,
   detailRequest,
@@ -655,7 +655,7 @@ function PowerChart({
         timeAxis="ticks"
         now={nowS}
         timeZone={timeZone}
-        height={bands.length > 0 ? 312 : 286}
+        height={bands.length > 0 ? 335 : 286}
         popup={popup}
         legend={false}
         overlays={overlays}
@@ -693,6 +693,9 @@ function PowerChart({
             <span className="legend-line" data-faded aria-hidden="true" />
             grid plan
           </li>
+        )}
+        {spans.length > 0 && zoom && !sessions.some((s) => s.to > zoom[0] && s.from < zoom[1]) && (
+          <li className="legend-key legend-empty">No market sessions between {rangeLabel(zoom[0], zoom[1], timeZone)}</li>
         )}
         {showSessions && (
           <>

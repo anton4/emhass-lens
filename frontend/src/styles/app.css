@@ -2671,6 +2671,11 @@ button.diff-locate {
   padding: 2px 4px;
 }
 
+.legend-empty {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
 .legend-line {
   width: 16px;
   border-top: 2px solid var(--q-grid);

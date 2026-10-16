@@ -129,6 +129,17 @@ These come from docs/PLAN.md §10:
     dearest …" (`windowExtremes`, `dayTimeLabel`). The ribbon now spans the cheapest to the dearest quarter-hour in
     the window shown (`priceHeatLane(…, window)`). The forecast is hatched with a "forecast" label, and the note
     under the chart is gone.
+- **P4, market sessions as drawn:**
+  - Bands are a 0.15 tint with a 3 px edge along the top (the side edges are gone); an aFRR session is hatched in its
+    colour on a lighter tint (`ChartSession.hatch`).
+  - `marketProduct(mode)`: `mfrr*` is mFRR, `frr*`/`afrr*` aFRR (the owner's reading), plain buy/sell none;
+    `sessionProduct` when all of a session's commands share one. Flags read "↑ SELL · mFRR · 9.4–11.0 kW", the
+    popup block "↑ SELL · mFRR", the lane "sell · mFRR · 9 commands · …".
+  - Flags take two rows above the plot, each with a stem down to its session's start: a flag that has no room in the
+    first row even at its shortest goes to the second at its longest, and is left out only when neither row has
+    room (`layoutFlags` returns `row`). Before, two sells right after a buy pair could lose both flags. The Power
+    chart is 23 px taller with sessions.
+  - "No market sessions between … and …" in the key when commands are loaded but none falls in the window.
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),

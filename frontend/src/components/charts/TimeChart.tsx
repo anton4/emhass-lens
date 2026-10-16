@@ -147,6 +147,8 @@ export interface ChartSession {
   label: string
   detail: string
   short: string
+  /** Hatched in its colour instead of a flat tint (an aFRR session). */
+  hatch?: boolean
 }
 
 export type { ChartGap, ChartOverlay }
@@ -182,9 +184,10 @@ export interface ChartHatch {
 // a lane's height and the space between the plot and the first lane, CSS px
 const LANE_H = 18
 const LANE_GAP = 6
-// the room above the plot for the sessions' flags, and a flag's height, CSS px
-const FLAG_ROOM = 26
+// the room above the plot for the sessions' flags (two rows), a flag's height and a row's, CSS px
+const FLAG_ROOM = 49
 const FLAG_H = 19
+const FLAG_ROW = 23
 // how strongly the series are drawn while the pointer is in a session
 const DIMMED = 0.3
 
@@ -623,8 +626,9 @@ function slotWidth(u: uPlot) {
   u.root.style.setProperty('--slot-px', `${px}px`)
 }
 
-/** The sessions' bands, under the series: a light tint of their colour with a fainter edge at each end. */
-function drawSessionBands(u: uPlot, sessions: ChartSession[]) {
+/** The sessions' bands, under the series: a light tint of their colour (hatched in it for an aFRR session) with a
+ *  3 px edge along the top. */
+function drawSessionBands(u: uPlot, sessions: ChartSession[], dpr: number) {
   if (sessions.length === 0) return
   const { ctx, bbox } = u
   const right = bbox.left + bbox.width
@@ -636,11 +640,14 @@ function drawSessionBands(u: uPlot, sessions: ChartSession[]) {
     const color = cssColor(s.color)
     const left = Math.max(a, bbox.left)
     const width = Math.max(Math.min(b, right) - left, 1)
-    ctx.fillStyle = withAlpha(color, 0.1)
+    ctx.fillStyle = withAlpha(color, s.hatch ? 0.07 : 0.15)
     ctx.fillRect(left, bbox.top, width, bbox.height)
-    ctx.fillStyle = withAlpha(color, 0.45)
-    if (a >= bbox.left) ctx.fillRect(Math.round(a), bbox.top, 1, bbox.height)
-    if (b <= right) ctx.fillRect(Math.round(b) - 1, bbox.top, 1, bbox.height)
+    if (s.hatch) {
+      ctx.fillStyle = linePattern(ctx, withAlpha(color, 0.3), dpr)
+      ctx.fillRect(left, bbox.top, width, bbox.height)
+    }
+    ctx.fillStyle = color
+    ctx.fillRect(left, bbox.top, width, Math.round(3 * dpr))
   }
   ctx.restore()
 }
@@ -675,15 +682,19 @@ function drawFlags(u: uPlot, sessions: ChartSession[], hovered: string | null, d
     return { id: first.s.id, at: first.at, widths: options.map(measure), hovered: over !== undefined }
   })
   const h = FLAG_H * dpr
-  const top = bbox.top - (FLAG_ROOM - 3) * dpr
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
+  const at = new Map(items.map((i) => [i.id, i.at]))
   for (const flag of layoutFlags(items, bbox.left, right, gap)) {
     const group = members.get(flag.id) ?? []
     const s = group[0]
     const text = texts.get(flag.id)?.[flag.text]
     if (!s || text === undefined) continue
+    const top = bbox.top - (FLAG_ROOM - 3 - flag.row * FLAG_ROW) * dpr
     ctx.fillStyle = cssColor(s.color)
+    // a stem from the flag down to the plot, at its session's start
+    const stem = Math.min(Math.max(at.get(flag.id) ?? flag.left, flag.left + h / 2), flag.left + flag.width - h / 2)
+    ctx.fillRect(Math.round(stem - dpr), top + h - dpr, Math.max(1, Math.round(2 * dpr)), bbox.top - top - h + dpr)
     ctx.beginPath()
     ctx.roundRect(flag.left, top, flag.width, h, h / 2)
     ctx.fill()
@@ -1469,7 +1480,7 @@ export function TimeChart({
             }
             ctx.restore()
             drawHatches(u, extras.current.hatches, window.devicePixelRatio)
-            drawSessionBands(u, extras.current.sessions)
+            drawSessionBands(u, extras.current.sessions, window.devicePixelRatio)
           },
         ],
         draw: [

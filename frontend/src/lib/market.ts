@@ -468,6 +468,24 @@ function sessionSources(s: CommandSession): string {
 
 const deliveredText = (s: CommandSession) => (s.delivered === null ? null : `${Math.round(s.delivered * 100)} % delivered`)
 
+/** The balancing product a Qilowatt mode names: "mfrrup" mFRR, "frrup" (or "afrr…") aFRR, or null for a plain
+ *  "buy"/"sell". (The owner's reading of the modes, 2026-10-16.) */
+export function marketProduct(mode: string): 'mFRR' | 'aFRR' | null {
+  const m = mode.toLowerCase()
+  if (m.startsWith('mfrr')) return 'mFRR'
+  if (m.startsWith('afrr') || m.startsWith('frr')) return 'aFRR'
+  return null
+}
+
+/** The product all of a session's commands share, or null. */
+export function sessionProduct(s: Pick<CommandSession, 'spans'>): 'mFRR' | 'aFRR' | null {
+  const products = new Set(s.spans.map((x) => marketProduct(x.mode)))
+  return products.size === 1 ? ([...products][0] ?? null) : null
+}
+
+/** "↑ SELL · mFRR", or "↑ SELL" without a product. */
+const sessionHead = (sell: boolean, product: string | null) => (product ? `${head(sell)} · ${product}` : head(sell))
+
 /** The sessions as bands across the Power chart, each with a flag: "↑ SELL 5.2–9.4 kW", and while the pointer is in
  *  it "↑ SELL · kratt · mfrrup · 08:45–09:32 · 95 % delivered". Sessions of one direction share a flag where theirs
  *  would touch. */
@@ -475,6 +493,7 @@ export function sessionBands(sessions: CommandSession[], timeZone?: string): Cha
   return sessions.map((s) => {
     const sell = s.direction === 'sell'
     const delivered = deliveredText(s)
+    const product = sessionProduct(s)
     return {
       id: s.id,
       from: s.from,
@@ -482,9 +501,10 @@ export function sessionBands(sessions: CommandSession[], timeZone?: string): Cha
       group: s.direction,
       color: sell ? '--q-sell' : '--q-buy',
       ink: sell ? '--q-sell-ink' : '--q-buy-ink',
-      label: `${head(sell)} ${powerRange(s)}`,
+      label: product ? `${sessionHead(sell, product)} · ${powerRange(s)}` : `${head(sell)} ${powerRange(s)}`,
       detail: [head(sell), sessionSources(s), sessionTimes(s, timeZone), delivered].filter(Boolean).join(' · '),
       short: sell ? SELL_ARROW : BUY_ARROW,
+      hatch: product === 'aFRR',
     }
   })
 }
@@ -511,7 +531,7 @@ export function marketLane(sessions: CommandSession[], runs: Shortfall[] = []): 
         color: sell ? '--q-sell' : '--q-buy',
         ink: sell ? '--q-sell-ink' : '--q-buy-ink',
         text: s.delivered === null ? undefined : `${Math.round(s.delivered * 100)} %`,
-        long: [s.direction, commands, delivered, shortfallText(short)].filter(Boolean).join(' · '),
+        long: [s.direction, sessionProduct(s), commands, delivered, shortfallText(short)].filter(Boolean).join(' · '),
         marks: short.map((r) => ({ from: r.from, to: r.to, color: '--q-shortfall' })),
         id: s.id,
       }
@@ -564,7 +584,7 @@ export function marketBlock(o: {
       })`
     : `${kw(span.power_w)} kW requested`
   return {
-    title: head(sell),
+    title: sessionHead(sell, marketProduct(span.mode)),
     sub: `${span.source} · ${span.mode}`,
     tone: sell ? 'sell' : 'buy',
     text,

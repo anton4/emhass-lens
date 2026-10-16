@@ -1,7 +1,8 @@
 // Where the flags above a chart go (one per market session): at their session's start, kept inside the plot, never
-// on top of each other. Sessions of one direction whose flags would touch share one flag ("↓ BUY 15.5 kW +1"). Where
-// two flags still would, the left one steps down to a shorter text (the one under the pointer keeps its longest); with
-// no shorter text left, the right one is left out.
+// on top of each other, in two rows. Sessions of one direction whose flags would touch share one flag ("↓ BUY 15.5 kW
+// +1"). Where two flags still would, the left one steps down to a shorter text (the one under the pointer keeps its
+// longest); with no shorter text left, the right one goes to the second row, and is left out only where that row has
+// no room either.
 
 export interface FlagItem {
   id: string
@@ -19,6 +20,8 @@ export interface PlacedFlag {
   width: number
   /** Which of its texts. */
   text: number
+  /** The first row (0) or the second (1). */
+  row: 0 | 1
 }
 
 /** Back-to-back sessions of one group (direction) as runs under one flag: a session joins the run before it while it
@@ -39,6 +42,15 @@ export function groupFlags<T extends { at: number; group: string }>(
 }
 
 export function layoutFlags(items: FlagItem[], min: number, max: number, gap = 4): PlacedFlag[] {
+  const first = layoutRow(items, min, max, gap)
+  const placed = new Set(first.map((f) => f.id))
+  const rest = items.filter((i) => !placed.has(i.id))
+  const second = rest.length > 0 ? layoutRow(rest, min, max, gap) : []
+  return [...first.map((f) => ({ ...f, row: 0 as const })), ...second.map((f) => ({ ...f, row: 1 as const }))]
+}
+
+/** One row of flags; the ones that don't fit are left out. */
+function layoutRow(items: FlagItem[], min: number, max: number, gap: number): Omit<PlacedFlag, 'row'>[] {
   const sorted = [...items].sort((a, b) => a.at - b.at)
   // each item's text, the longest that fits the plot to begin with; past its last text it is left out
   const choice = new Map(sorted.map((i) => [i.id, i.widths.findIndex((w) => w <= max - min)]))
