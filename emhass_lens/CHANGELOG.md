@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2
+
+The Inputs page's charts, redrawn after the same design.
+- Inputs: the cards on **What EMHASS gets** have a colour each and the payload keys they stand for; each chart's head has its unit, a key and its payload keys, and the export cap is explained under the charts.
+- Inputs: night tariff in violet, and the export limit red and hatched where it is 0 W; forecast prices are hatched, and the price popup sums up the tariff, the export limit and a forecast in one line.
+- Inputs: each deferrable load's window is hatched across the house load from the first timestep it may start (the payload's `start_timesteps_of_each_deferrable_load`, else EMHASS's config) to its deadline, and named; the house load is an area. Each PV day's name and total sit on a pill.
+- Inputs: the battery chart has the battery's limits (`soc_min`, `soc_max`, from the payload or EMHASS's config) and a line from `soc_init` to `soc_final`.
+- Inputs: the anchor is the line across every chart, named on the one time axis; what was measured before it is fainter; the arrow keys step a quarter-hour.
+- Inputs: the price breakdown has tiles (average import price, spot share with its VAT, cheapest, dearest) over the quarter-hours shown, a title for the day shown, the export price as a line, the network tariff under it, each part's share in the popup, the cheapest and dearest called out, and the tariff's fees, rates and VAT in a footnote.
+- Charts: after zooming in, Home put the keyboard's cursor at another moment, and the charts following it read the quarter-hour before (Plan and Inputs).
+
 ## 0.5.1
 
 - Plan on a phone: below 640 px the Timeline has its own charts: **Grid**, **Power balance** (the grid stacked as a layer, so both sides add up), **State of charge** and **Import price**, each with a narrow axis and its values in a chip at the cursor.

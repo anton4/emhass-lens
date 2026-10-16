@@ -10,6 +10,55 @@ cd ../frontend && npm ci && npm test               # needs Node ≥ 22.12
 ```
 Then open Claude Code in the repo and say something like "continue EMHASS Lens from docs/STATUS.md". CLAUDE.md has the commands and conventions, and docs/PLAN.md has the approved plan.
 
+## Hand-off (2026-10-16): finishing design variant A, Phase 4 left
+Variant A ("Flight deck") of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
+boards A1–A5 and X). The approved plan is `~/.claude/plans/is-there-any-design-snoopy-horizon.md` on the owner's Mac;
+what it still needs is copied below.
+- **Done and committed locally:** Phase 0 (G1–G8), the Plan timeline (P1–P11, release 0.5.0), the phone (M1–M2,
+  0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
+- **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
+  Pushing builds and publishes the image, so ask the owner first.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** First open the
+  Inverter, EV charger and Market pages on `main` in a browser: their strips were never checked after 44d8fe1.
+  The mock needs inverter, charger and market endpoints added.
+  - **D1** `feat: draw the day strips as labelled rows with names inside`: `stripSegments`, `segmentText`,
+    `labelFits`, `dayHours` (23 or 25 h on DST days); `ink` tokens per fill (4.5:1); a 104 px gutter (Mode /
+    Charger / Session), a 52 px row and subtitles. The label row above the strip goes.
+  - **D2** `feat: an Automation row of agreed and differed stretches`: `agreeRuns`/`agreeText`, `formatSpan`,
+    `AgreePopup` (a second tab stop); `StripFooterKey` replaces `StripLine` and the old band.
+  - **D3** `feat: a "Lens wrote" row on the Inverter page`: `WriteTick`, `writeCounts`, `inverterTicks`,
+    "· N writes, M held" in the head. Lens's own press dots go; outside presses stay red.
+  - **D4** (backend) the market's summaries say why nothing was written (deadband or cooldown = held).
+  - **D5** (backend) the charger's decisions name the charge mode and the charging state (`state_text`).
+  - **D6** (backend) inverter slot names carry the plan's battery power (`describe` appends " · P_batt {p} W";
+    the frontend parses it into `amount`).
+  - **D7** `feat: step the day strips through past days`: backend `SofarWriter.writes_between`/`presses_between`
+    and `GET /api/inverter/activity?since&until` (at most 8 d); frontend `DayChips`, `?day=`, `stripDays`,
+    `clampDay`; up to 7 days back; every page queries the chosen day.
+  - **D8** `feat: the rest of the day as plan, not yet done`: `aheadItems`, an `ahead` prop, `--plan-hatch`.
+  - **D9** `feat: the inverter's planned modes for the rest of the day`: backend `domain/plan_now.row_decision`,
+    `InverterService.ahead`, `GET /api/inverter/ahead`; frontend `inverterAhead` and a planned slot popup.
+  - **D10** `feat: the EV charger strip by charging state, with the next plan`: `chargerFacts`, marks for
+    unplugged, charging and plugged in, `chargerTicks`, `chargerAhead` ("next plan: Sat 03:00–05:30").
+  - **D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`: `sessionInputs`,
+    `sessionRows` (P9's baseline, P10's 8 days), `marketTicks`, "no session announced yet".
+  - **D12** `chore: release 0.5.3` (DOCS.md, STATUS.md, CHANGELOG.md, version).
+- **Phase 4 defaults (the owner accepted them with the plan):** tomorrow's chip only on Inverter and EV, and only
+  when the plan reaches it. "Held" means not in control (inverter, EV), or the deadband or cooldown (market).
+  Nothing-to-do ticks are hidden on the inverter, and Dry run/Shadow show hollow "would write" ticks. The 0.4.42
+  colours stay, with plug states added. "Earned" and the EV's energy and price are dropped (no data). No per-strip
+  "exp" chip, and the inverter popups stay one per slot.
+- **Rules:** commit each step locally with a STATUS entry (Conventional Commits, bullet body, no Co-Authored-By;
+  identity anton4 noreply). Run the e2e stack after D7 and D9 (`cd e2e && ./up.sh && ./check.sh && ./down.sh`;
+  stop any Lens on 18101 first).
+- **UI checks:** a mock at `frontend/node_modules/.cache/mock/vite.mock.config.mjs` (not committed): `npx vite
+  --config node_modules/.cache/mock/vite.mock.config.mjs` from `frontend/` serves http://localhost:5174. It proxies
+  everything it doesn't mock to a Lens on 127.0.0.1:18101 (`EMHASS_LENS_DATA_DIR=<dir> EMHASS_LENS_PORT=18101
+  TZ=Europe/Tallinn uv run python -m emhass_lens`). Check 1440, 900 and 390 px, light and dark.
+- **Still needs the owner:** new README screenshots from the real App (`uv run scripts/readme_screenshots.py --base
+  <the App's direct port>`); real touch, pinch and two-finger pan through Ingress; one real market session for the
+  baseline numbers; the 8-day grid warm-up against the real recorder.
+
 ## Phase overview
 | Phase | State |
 |---|---|
@@ -297,6 +346,8 @@ These come from docs/PLAN.md §10:
   - Height 320, "Spot (Nord Pool)" in the key, and the arrow keys (a slot, ⇧ an hour, Home back to all days and
     now); the footnote says so.
   - Checked at 2560 and 390 px, light and dark (the dark tokens injected into a frame).
+- **I10, release 0.5.2:** CHANGELOG, DOCS.md (What EMHASS gets, the price breakdown), version. Backend 474 tests,
+  frontend 393, e2e 25/25. Not pushed. **Next: Phase 4, the controller day strips (D1).**
 
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (0.5.0)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
