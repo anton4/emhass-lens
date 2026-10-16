@@ -37,6 +37,26 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-16 (afternoon): the rest of variant A, step by step (unreleased)
+- **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
+  variant A) wasn't built yet, and asked for all of it: the rest of the Plan timeline (A1, the interaction board X),
+  the phone (A5), What EMHASS gets (A2), the price breakdown (A4) and the controller day strips (A3).
+- **The owner's choices:**
+  - a market session's baseline is the grid's mean in the 60 s before its first command, and delivery is judged
+    against it (display only);
+  - the arrow keys follow the zoom: 10 s (Shift 5 min) at 2 h or less, else a quarter-hour (Shift an hour);
+  - the 10-second grid readings are kept for 8 days;
+  - `frr*` modes are aFRR and `mfrr*` mFRR.
+- **UI checks** run against a mock API that is not committed (`frontend/node_modules/.cache/mock/vite.mock.config.mjs`
+  on :5174), which proxies what it doesn't generate to a local backend on :18101. Port 8099 is an SSH tunnel to an
+  old dev instance.
+- **G1, the plan faded right of now:**
+  - TimeChart takes `split` (a moment, the faded side and a wash) and `fade` on series, overlays and gaps. Lines and
+    areas get a gradient with a hard edge at the split, drawn on every draw, so the moving now line needs no rebuild.
+    Legend swatches and cursor dots keep the series' own colour. `lib/chartFade.ts`.
+  - Plan page: the stacked areas, the grid plan, its tail in the slot in progress and the planned SOC are fainter right
+    of the now line, on `--chart-ahead`. The past is no longer shaded (`pastShade` is gone).
+
 ### 2026-10-16: the charts' variant A: power in one chart, every 10-second grid reading, a popup per chart (unreleased)
 - **Why:** the owner found the charts hard to read, reviewed two mockup directions and picked A ("Flight deck", light),
   with every value in a popup per chart and the grid's 10-second readings shown by default.

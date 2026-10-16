@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
+import { fadeStops, onFadedSide, scaleAlpha, splitOffset, type FadeSide } from '../../lib/chartFade'
 import { columnGap, columnSegment, inRanges, slotIndex } from '../../lib/chartColumns'
 import { groupFlags, layoutFlags } from '../../lib/chartFlags'
 import {
@@ -63,6 +64,17 @@ export interface ChartSeries {
    *  apart from the part it sits on; 'cap' is a short bar at the value across the column (none at `width` 0). Columns
    *  in a shaded range (a forecast) are faded. */
   column?: 'stack' | 'cap'
+  /** Drawn fainter on the chart's `split` side: the line at `line` and the fill at `fill` of their own opacity (a fill
+   *  of 0 isn't drawn there). */
+  fade?: { line?: number; fill?: number }
+}
+
+/** A moment the chart is drawn faded on one side of (the plan right of now): the series, overlays and gaps that say
+ *  how much, and the side washed in `wash` (a CSS custom property or colour). */
+export interface ChartSplit {
+  at: number
+  side: FadeSide
+  wash?: string
 }
 
 // how strongly columns in a shaded range (a forecast) are drawn
@@ -227,6 +239,8 @@ interface TimeChartProps {
   sessions?: ChartSession[]
   /** Called with the ids of a clicked flag's sessions, or of a clicked lane span. */
   onSession?: (ids: string[]) => void
+  /** Draw the series, overlays and gaps that have a `fade` fainter on one side of a moment. */
+  split?: ChartSplit
 }
 
 const NONE: never[] = []
@@ -297,10 +311,28 @@ function drawLanes(u: uPlot, lanes: ChartLane[], dpr: number, hits: Hit[]) {
   ctx.restore()
 }
 
+/** The plot's two sides of `split` as clip rectangles, each with the opacity it is drawn at: the whole plot at 1 when
+ *  there is no split or no `fade`. */
+function fadeParts(
+  u: uPlot,
+  split: ChartSplit | undefined,
+  fade: number | undefined,
+): { left: number; width: number; alpha: number }[] {
+  const { bbox } = u
+  if (!split || fade === undefined || fade === 1) return [{ left: bbox.left, width: bbox.width, alpha: 1 }]
+  const right = bbox.left + bbox.width
+  const px = Math.min(Math.max(u.valToPos(split.at, 'x', true), bbox.left), right)
+  return [
+    { left: bbox.left, width: px - bbox.left, alpha: split.side === 'before' ? fade : 1 },
+    { left: px, width: right - px, alpha: split.side === 'after' ? fade : 1 },
+  ].filter((part) => part.width > 0 && part.alpha > 0)
+}
+
 /** Overlays in the order given (the last on top): each run of back-to-back spans follows their values, from and back
  *  to zero unless its base is 'none', with an optional light fill between the line and zero. One the axis doesn't fit
- *  runs along the edge where it is past the axis, with its `offScale` text there. */
-function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
+ *  runs along the edge where it is past the axis, with its `offScale` text there. One with a `fade` is drawn fainter
+ *  on the split's side. */
+function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number, split?: ChartSplit) {
   if (overlays.length === 0) return
   const { ctx, bbox } = u
   const zero = u.valToPos(0, 'y', true)
@@ -316,17 +348,6 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
       const y = u.valToPos(v, 'y', true)
       return overlay.fit === false ? Math.min(Math.max(y, bbox.top + inset), bbox.top + bbox.height - inset) : y
     }
-    ctx.strokeStyle = color
-    ctx.lineWidth = (overlay.width ?? 2) * dpr
-    ctx.setLineDash((overlay.dash ?? []).map((d) => d * dpr))
-    if (overlay.fill) {
-      ctx.fillStyle = withAlpha(color, overlay.fill)
-      for (const span of overlay.spans) {
-        const a = u.valToPos(span.from, 'x', true)
-        const y = u.valToPos(span.value, 'y', true)
-        ctx.fillRect(a, Math.min(y, zero), u.valToPos(span.to, 'x', true) - a, Math.abs(zero - y))
-      }
-    }
     const path = new Path2D()
     if (overlay.spans.some((span) => span.lo !== undefined && span.hi !== undefined)) envelopePath(u, overlay, yOf, path)
     else
@@ -338,16 +359,35 @@ function drawOverlays(u: uPlot, overlays: ChartOverlay[], dpr: number) {
           else path.lineTo(x, y)
         })
       }
-    if (overlay.halo) {
+    for (const part of fadeParts(u, split, overlay.fade)) {
       ctx.save()
-      ctx.strokeStyle = cssColor('--panel')
-      ctx.lineWidth = ((overlay.width ?? 2) + 3) * dpr
-      ctx.lineJoin = 'round'
-      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.rect(part.left, bbox.top, part.width, bbox.height)
+      ctx.clip()
+      ctx.globalAlpha *= part.alpha
+      ctx.strokeStyle = color
+      ctx.lineWidth = (overlay.width ?? 2) * dpr
+      ctx.setLineDash((overlay.dash ?? []).map((d) => d * dpr))
+      if (overlay.fill) {
+        ctx.fillStyle = withAlpha(color, overlay.fill)
+        for (const span of overlay.spans) {
+          const a = u.valToPos(span.from, 'x', true)
+          const y = u.valToPos(span.value, 'y', true)
+          ctx.fillRect(a, Math.min(y, zero), u.valToPos(span.to, 'x', true) - a, Math.abs(zero - y))
+        }
+      }
+      if (overlay.halo) {
+        ctx.save()
+        ctx.strokeStyle = cssColor('--panel')
+        ctx.lineWidth = ((overlay.width ?? 2) + 3) * dpr
+        ctx.lineJoin = 'round'
+        ctx.setLineDash([])
+        ctx.stroke(path)
+        ctx.restore()
+      }
       ctx.stroke(path)
       ctx.restore()
     }
-    ctx.stroke(path)
     if (overlay.offScale) drawOffScale(u, overlay, color, dpr)
   }
   ctx.restore()
@@ -433,8 +473,9 @@ function linePattern(ctx: CanvasRenderingContext2D, color: string, dpr: number):
   return ctx.createPattern(tile, 'repeat') ?? color
 }
 
-/** The gaps: a light tint of their colour, hatched, between their two values. */
-function drawGaps(u: uPlot, gaps: ChartGap[], dpr: number) {
+/** The gaps: a light tint of their colour, hatched, between their two values; one with a `fade` fainter on the
+ *  split's side. */
+function drawGaps(u: uPlot, gaps: ChartGap[], dpr: number, split?: ChartSplit) {
   if (gaps.length === 0) return
   const { ctx, bbox } = u
   ctx.save()
@@ -451,10 +492,18 @@ function drawGaps(u: uPlot, gaps: ChartGap[], dpr: number) {
       const yb = u.valToPos(span.b, 'y', true)
       area.rect(a, Math.min(ya, yb), b - a, Math.abs(yb - ya))
     }
-    ctx.fillStyle = withAlpha(color, 0.12)
-    ctx.fill(area)
-    ctx.fillStyle = linePattern(ctx, color, dpr)
-    ctx.fill(area)
+    for (const part of fadeParts(u, split, gap.fade)) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(part.left, bbox.top, part.width, bbox.height)
+      ctx.clip()
+      ctx.globalAlpha *= part.alpha
+      ctx.fillStyle = withAlpha(color, 0.12)
+      ctx.fill(area)
+      ctx.fillStyle = linePattern(ctx, color, dpr)
+      ctx.fill(area)
+      ctx.restore()
+    }
   }
   ctx.restore()
 }
@@ -639,7 +688,7 @@ function applyXRange(chart: uPlot, x: number[], range: [number, number] | null) 
 export function TimeChart({
   x, series, ariaLabel, height = 220, yFormat, yRange, fit, xRange = null, onZoom, syncKey, timeZone, bands = [],
   shade = [], markers = [], now, legendValueWidth, ticks = [], onTick, compact = false, popup, legend = true,
-  snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession,
+  snapToSlot = false, lanes = NONE, notes = NONE, overlays = NONE, gaps = NONE, sessions = NONE, onSession, split,
 }: TimeChartProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
@@ -647,12 +696,12 @@ export function TimeChart({
   // Everything the hooks and formatters read comes from this ref, so data, zoom and unit changes don't need a rebuild.
   const extras = useRef({
     bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-    sessions, onSession,
+    sessions, onSession, split,
   })
   useEffect(() => {
     extras.current = {
       bands, shade, markers, now, x, xRange, onZoom, ticks, onTick, yFormat, series, popup, lanes, notes, overlays, gaps,
-      sessions, onSession,
+      sessions, onSession, split,
     }
   })
   const [cursor] = useState(createCursorStore)
@@ -675,7 +724,10 @@ export function TimeChart({
   const zoomable = Boolean(onZoom)
   const withPopup = Boolean(popup) && !compact
   const specKey = JSON.stringify([
-    series.map((s) => [s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column]),
+    series.map((s) => [
+      s.label, s.color, s.width, s.dash, s.step, s.fill, s.then, s.below, s.helper, s.muted, s.column, s.fade?.line,
+      s.fade?.fill,
+    ]),
     height, yRange, fit, zoomable, syncKey, timeZone, theme, compact, Boolean(yFormat), withPopup, legend, snapToSlot,
     lanes.length, sessions.length > 0,
   ])
@@ -706,6 +758,20 @@ export function TimeChart({
       u.redraw(false)
     }
     const stepped = uPlot.paths.stepped?.({ align: 1 })
+    // a colour drawn at `share` of its opacity on the split's side: a gradient with a hard edge at the split, read on
+    // every draw so a moving split needs no rebuild
+    const faded = (u: uPlot, color: string, share: number | undefined): string | CanvasGradient => {
+      const split = extras.current.split
+      if (!split || share === undefined || share === 1) return color
+      const width = u.ctx.canvas.width
+      const offset = splitOffset(u.valToPos(split.at, 'x', true), 0, width)
+      const gradient = u.ctx.createLinearGradient(0, 0, width, 0)
+      for (const [at, k] of fadeStops(offset, split.side, share)) gradient.addColorStop(at, scaleAlpha(color, k))
+      return gradient
+    }
+    const strokeOf = (s: ChartSeries) => (s.helper || s.column ? 'transparent' : cssColor(s.color))
+    const fillOf = (s: ChartSeries) =>
+      s.fill && s.below === undefined && !s.column ? withAlpha(cssColor(s.color), s.fill) : undefined
     const hasColumns = series.some((s) => s.column)
     // One column per slot for a 'stack' or 'cap' series, read from extras so new data needs no rebuild: a gap between
     // neighbours, a hairline between stacked parts, faded in a shaded range (a forecast).
@@ -721,7 +787,8 @@ export function TimeChart({
       const hair = Math.max(1, Math.round(dpr))
       const cap = Math.max(2, Math.round(2 * dpr))
       const color = cssColor(meta.color)
-      const faded = withAlpha(color, FADED)
+      const split = extras.current.split
+      const fadeFill = meta.fade?.fill
       const pathFor = (style: string) => {
         let path = fill.get(style)
         if (!path) {
@@ -743,7 +810,11 @@ export function TimeChart({
         const left = Math.round(a + gap / 2)
         const width = Math.round(b - gap / 2) - left
         if (width <= 0) continue
-        const path = pathFor(inRanges(start, end, extras.current.bands) ? faded : color)
+        const share =
+          (inRanges(start, end, extras.current.bands) ? FADED : 1) *
+          (split && fadeFill !== undefined && onFadedSide(start, end, split.at, split.side) ? fadeFill : 1)
+        if (share <= 0) continue
+        const path = pathFor(share === 1 ? color : scaleAlpha(color, share))
         if (meta.column === 'cap') {
           path.rect(left, Math.round(u.valToPos(v, 'y', true) - cap / 2), width, cap)
           continue
@@ -840,7 +911,15 @@ export function TimeChart({
             }
           : {}),
       },
-      legend: { show: !compact && legend, live: !withPopup },
+      legend: {
+        show: !compact && legend,
+        live: !withPopup,
+        // the series' own colours, not their faded gradients
+        markers: {
+          stroke: (_u, i) => (i > 0 && series[i - 1] ? strokeOf(series[i - 1]!) : 'transparent'),
+          fill: (_u, i) => (i > 0 && series[i - 1] ? (fillOf(series[i - 1]!) ?? 'transparent') : 'transparent'),
+        },
+      },
       padding: flagged ? [FLAG_ROOM, null, null, null] : undefined,
       scales: {
         x: { time: true },
@@ -889,13 +968,17 @@ export function TimeChart({
         { label: 'Time', value: (_u, v) => (v === null ? '—' : readoutTime(v, timeZone)) },
         ...series.map((s, i) => ({
           label: s.label,
-          stroke: s.helper || s.column ? 'transparent' : cssColor(s.color),
+          stroke: s.fade?.line === undefined ? strokeOf(s) : (u: uPlot) => faded(u, strokeOf(s), s.fade?.line),
           width: s.helper || s.column ? 0 : (s.width ?? 2),
           dash: s.dash,
-          fill: s.fill && s.below === undefined && !s.column ? withAlpha(cssColor(s.color), s.fill) : undefined,
+          fill: (() => {
+            const fill = fillOf(s)
+            return fill === undefined || s.fade?.fill === undefined ? fill : (u: uPlot) => faded(u, fill, s.fade?.fill)
+          })(),
           fillTo: s.fill && s.below === undefined && !s.column ? 0 : undefined,
           paths: s.column ? columnPaths : s.step === false ? undefined : stepped,
-          points: { show: false },
+          // the cursor's dot takes the series' own colour, not its faded gradient
+          points: { show: false, stroke: strokeOf(s), fill: strokeOf(s) },
           spanGaps: false,
           class: s.then
             ? 'is-then'
@@ -912,11 +995,16 @@ export function TimeChart({
         })),
       ],
       // stacked areas: each fills down to the series below it (columns draw their own)
-      bands: series.flatMap((s, i) =>
-        s.below === undefined || s.column
-          ? []
-          : [{ series: [i + 1, s.below + 1] as [number, number], fill: withAlpha(cssColor(s.color), s.fill ?? 1) }],
-      ),
+      bands: series.flatMap((s, i) => {
+        if (s.below === undefined || s.column) return []
+        const fill = withAlpha(cssColor(s.color), s.fill ?? 1)
+        return [
+          {
+            series: [i + 1, s.below + 1] as [number, number],
+            fill: s.fade?.fill === undefined ? fill : (u: uPlot) => faded(u, fill, s.fade?.fill),
+          },
+        ]
+      }),
       hooks: {
         ready: [
           (u) => {
@@ -1024,6 +1112,15 @@ export function TimeChart({
             }
             fill(extras.current.shade, cssColor('--chart-past'))
             fill(extras.current.bands, cssColor('--chart-wash'))
+            const split = extras.current.split
+            if (split?.wash) {
+              const xs = extras.current.x
+              const first = xs[0]
+              const last = xs[xs.length - 1]
+              if (first !== undefined && last !== undefined) {
+                fill([split.side === 'after' ? [split.at, Math.max(last, split.at)] : [Math.min(first, split.at), split.at]], cssColor(split.wash))
+              }
+            }
             ctx.restore()
             drawSessionBands(u, extras.current.sessions)
           },
@@ -1056,8 +1153,8 @@ export function TimeChart({
             }
             ctx.restore()
             hits = []
-            drawGaps(u, extras.current.gaps, dpr)
-            drawOverlays(u, extras.current.overlays, dpr)
+            drawGaps(u, extras.current.gaps, dpr, extras.current.split)
+            drawOverlays(u, extras.current.overlays, dpr, extras.current.split)
             drawFlags(u, extras.current.sessions, inSession, dpr, hits)
             drawLanes(u, extras.current.lanes, dpr, hits)
             drawNotes(u, extras.current.notes, dpr)
@@ -1097,7 +1194,7 @@ export function TimeChart({
 
   useEffect(() => {
     plot.current?.redraw(false)
-  }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions])
+  }, [bands, shade, markers, now, ticks, lanes, notes, gaps, sessions, split])
 
   // new overlay values may move the y-axis: setting the time window again refits it
   useEffect(() => {

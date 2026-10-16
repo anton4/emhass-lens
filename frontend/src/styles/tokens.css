@@ -119,6 +119,8 @@
   --chart-axis: #c4c7cf;
   --chart-wash: rgba(27, 28, 31, 0.045);
   --chart-past: rgba(27, 28, 31, 0.025);
+  /* the plan's side of the now line */
+  --chart-ahead: rgba(2, 119, 189, 0.03);
   --chart-now: #1b1c1f;
   /* the chart popup's "planned then" column */
   --then-band: #eef4fb;
@@ -237,6 +239,7 @@
     --chart-axis: #44474e;
     --chart-wash: rgba(227, 228, 232, 0.06);
     --chart-past: rgba(227, 228, 232, 0.035);
+    --chart-ahead: rgba(79, 195, 247, 0.04);
     --chart-now: #e3e4e8;
     --then-band: #172431;
     --then-ink: #9ec3e6;

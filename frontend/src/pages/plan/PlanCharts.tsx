@@ -10,6 +10,7 @@ import {
   type ChartOverlay,
   type ChartSeries,
   type ChartSession,
+  type ChartSplit,
   type ChartTick,
 } from '../../components/charts/TimeChart'
 import { Lamp } from '../../components/Lamp'
@@ -49,7 +50,6 @@ import {
   mergePrices,
   pastAndFuture,
   pastEnd,
-  pastShade,
   plannedAtTheTime,
   timeGrid,
   viewRange,
@@ -102,6 +102,11 @@ const charging = (w: number) => (w >= IDLE_W ? 'charging' : w <= -IDLE_W ? 'disc
 const importing = (w: number) => (w >= IDLE_W ? 'importing' : w <= -IDLE_W ? 'exporting' : 'no flow')
 
 const DASHED = { width: 1.5, dash: [4, 4] as number[] }
+
+// right of now the plan is drawn fainter than what was measured: its areas, its lines, its grid
+const PLAN_AREA = { fill: 0.2 / 0.45 }
+const PLAN_LINE = { line: 0.6 }
+const PLAN_SOC = { line: 0.5 }
 
 /** Measured left of now and planned right of it, per quarter-hour, for the Power chart (W; the battery in EMHASS's
  *  sign, + discharge). */
@@ -172,7 +177,8 @@ export function PlanCharts({
   const past = useMemo(() => history?.slots ?? [], [history])
   const pastEndS = pastEnd(past, nowS)
   const x = useMemo(() => timeGrid(past, rows), [past, rows])
-  const shade = useMemo(() => pastShade(x, pastEndS), [x, pastEndS])
+  // the plan right of the now line: fainter, on a light wash
+  const ahead = useMemo<ChartSplit>(() => ({ at: nowS, side: 'after', wash: '--chart-ahead' }), [nowS])
   const first = x[0]
   const last = x[x.length - 1]
   const bounds = useMemo<[number, number] | null>(
@@ -212,6 +218,7 @@ export function PlanCharts({
       step: false,
       values: pastAndFuture(x, past, 'soc', rows, firstSoc, pastEndS, 100, false),
       format: fmt,
+      fade: PLAN_SOC,
     })
     if (plannedSoc) {
       series.push({
@@ -231,6 +238,7 @@ export function PlanCharts({
         step: false,
         values: pastAndFuture(x, past, null, rows, column, pastEndS, 100, false),
         format: fmt,
+        fade: PLAN_SOC,
       })
     })
     if (previous.length > 0) {
@@ -271,8 +279,8 @@ export function PlanCharts({
       const origin = origins.get(t)
       return origin ? { text: originLabel(origin), tone: isForecast(origin) ? ('blue' as const) : ('neutral' as const) } : null
     }
-    return { x: px, series, bands: forecastBands(slots), shade: pastShade(px, pastEndS), tag, heat }
-  }, [history, data.prices, pastEndS])
+    return { x: px, series, bands: forecastBands(slots), tag, heat }
+  }, [history, data.prices])
 
   // the overview's sessions: the same commands the Power chart reads (one query)
   const since = first !== undefined ? new Date(Math.floor(first / 3600) * 3600 * 1000).toISOString() : null
@@ -323,7 +331,7 @@ export function PlanCharts({
         zoom={shown}
         following={zoom === null}
         onZoom={zoomTo}
-        shade={shade}
+        split={ahead}
         nowS={nowS}
         pastEndS={pastEndS}
         timeZone={data.timezone}
@@ -343,7 +351,7 @@ export function PlanCharts({
             fit={SOC_FIT}
             xRange={shown}
             onZoom={zoomTo}
-            shade={shade}
+            split={ahead}
             now={nowS}
             timeZone={data.timezone}
             height={190}
@@ -366,7 +374,6 @@ export function PlanCharts({
             xRange={shown}
             onZoom={zoomTo}
             bands={prices.bands}
-            shade={prices.shade}
             now={nowS}
             timeZone={data.timezone}
             height={200}
@@ -378,7 +385,7 @@ export function PlanCharts({
           )}
         </section>
       )}
-      <MpcRunStrip x={x} zoom={shown} onZoom={zoomTo} shade={shade} nowS={nowS} timeZone={data.timezone} />
+      <MpcRunStrip x={x} zoom={shown} onZoom={zoomTo} nowS={nowS} timeZone={data.timezone} />
       {bounds && shown && (
         <section className="chart-block">
           <h3>
@@ -404,14 +411,12 @@ function MpcRunStrip({
   x,
   zoom,
   onZoom,
-  shade,
   nowS,
   timeZone,
 }: {
   x: number[]
   zoom: [number, number] | null
   onZoom: (range: [number, number] | null) => void
-  shade: [number, number][]
   nowS: number
   timeZone: string
 }) {
@@ -445,7 +450,6 @@ function MpcRunStrip({
         yRange={[0, 1]}
         xRange={zoom}
         onZoom={onZoom}
-        shade={shade}
         now={nowS}
         timeZone={timeZone}
         height={78}
@@ -471,7 +475,7 @@ function PowerChart({
   zoom,
   following,
   onZoom,
-  shade,
+  split,
   nowS,
   pastEndS,
   timeZone,
@@ -483,7 +487,7 @@ function PowerChart({
   zoom: [number, number] | null
   following: boolean
   onZoom: (range: [number, number] | null) => void
-  shade: [number, number][]
+  split: ChartSplit
   nowS: number
   pastEndS: number
   timeZone: string
@@ -542,6 +546,7 @@ function PowerChart({
         format: battery ? formatSignedPower : formatPower,
         describe: battery ? charging : undefined,
         helper: layer.key === 'charge',
+        fade: PLAN_AREA,
       })
     }
     if (flows.grid && !hidden.has('grid')) {
@@ -559,6 +564,7 @@ function PowerChart({
         format: formatSignedPower,
         describe: importing,
         lead: true,
+        fade: PLAN_LINE,
       })
       if (flows.gridThen) {
         out.push({
@@ -584,7 +590,9 @@ function PowerChart({
   // the measured grid's line on top of the bold commanded one, so both show where they agree
   const overlays = useMemo<ChartOverlay[]>(
     () => [
-      ...(tail ? [{ label: 'Grid', color: '--q-grid', width: 2, base: 'none' as const, spans: tail }] : []),
+      ...(tail
+        ? [{ label: 'Grid', color: '--q-grid', width: 2, base: 'none' as const, spans: tail, fade: PLAN_LINE.line }]
+        : []),
       ...(showPower ? [marketOverlay(spans, nowS)] : []),
       ...(gridData && gridData.points.length > 0 ? [gridOverlay(gridData)] : []),
     ],
@@ -675,7 +683,7 @@ function PowerChart({
         fit={POWER_FIT}
         xRange={zoom}
         onZoom={onZoom}
-        shade={shade}
+        split={split}
         now={nowS}
         timeZone={timeZone}
         height={bands.length > 0 ? 356 : 330}

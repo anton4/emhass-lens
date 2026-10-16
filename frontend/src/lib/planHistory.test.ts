@@ -6,7 +6,6 @@ import {
   mergePrices,
   pastAndFuture,
   pastEnd,
-  pastShade,
   plannedAtTheTime,
   savePref,
   timeGrid,
@@ -76,11 +75,6 @@ describe('plan history series', () => {
       [at(1), 0.2],
       [at(2), 0.3],
     ])
-  })
-
-  it('shades the past from the first point to where the past ends', () => {
-    expect(pastShade([t0, t0 + 900, t0 + 1800], t0 + 1800)).toEqual([[t0, t0 + 1800]])
-    expect(pastShade([t0 + 1800], t0 + 1800)).toEqual([])
   })
 
   it('labels windows in hours or days', () => {

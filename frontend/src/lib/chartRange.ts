@@ -32,6 +32,8 @@ export interface ChartOverlay {
   offScale?: (value: number) => string
   /** `lo` and `hi`: the lowest and highest reading behind a span's mean; the line is drawn through them. */
   spans: { from: number; to: number; value: number; lo?: number; hi?: number }[]
+  /** Drawn at this share of its opacity on the chart's split side (the plan right of now). */
+  fade?: number
 }
 
 /** The area between two values over stretches of time, hatched in a colour: where the grid delivered less than a
@@ -40,6 +42,8 @@ export interface ChartGap {
   /** CSS custom property or colour. */
   color: string
   spans: { from: number; to: number; a: number; b: number }[]
+  /** Drawn at this share of its opacity on the chart's split side. */
+  fade?: number
 }
 
 /** The overlay's lines as [time, value] points: each run of back-to-back spans (less than a second apart) steps

@@ -178,12 +178,6 @@ export function mergePrices(past: PlanPrice[], future: PlanPrice[]): PlanPrice[]
   return [...byStart.values()].sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
 }
 
-/** The past region to shade: from the first point of the grid to where the past ends. */
-export function pastShade(x: number[], pastEndS: number): [number, number][] {
-  const first = x[0]
-  return first !== undefined && first < pastEndS ? [[first, pastEndS]] : []
-}
-
 /** Does any history slot carry a measured value for this quantity? */
 export function hasMeasured(history: HistorySlot[], key: ActualKey): boolean {
   return history.some((s) => s.actual[key] !== null && s.actual[key] !== undefined)
