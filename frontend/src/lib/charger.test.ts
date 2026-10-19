@@ -91,6 +91,10 @@ describe('parseChargerSummary', () => {
       action: 'the car is unplugged',
       facts: 'was 0 A',
     })
+    // since 0.5.3 the facts start with the charge mode and the charging state
+    expect(
+      parseChargerSummary("Did 'EMHASS: start charging' (emhass_start): press start, limit 8 A · mode EMHASS, plugged in, was 0 A, plan 5.5 kW"),
+    ).toMatchObject({ rule: 'emhass_start', facts: 'mode EMHASS, plugged in, was 0 A, plan 5.5 kW' })
   })
 })
 

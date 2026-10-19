@@ -276,11 +276,26 @@ def _kw(watts: float) -> str:
     return f"{watts / 1000:.1f} kW"
 
 
+def state_text(state_raw: int) -> str:
+    """The charger's raw state in words: unplugged (0), charging (4), plugged in (1, 2 or 5), "state unknown" when it
+    can't be read, else "state 3"."""
+    if state_raw < 0:
+        return "state unknown"
+    if state_raw == 0:
+        return "unplugged"
+    if state_raw == CHARGING:
+        return "charging"
+    if state_raw in PLUGGED:
+        return "plugged in"
+    return f"state {state_raw}"
+
+
 def numbers(decision: ChargerDecision, i: ChargerInputs) -> str:
-    """The values behind a decision, for the decision list: the current before, and the PV, house load and
-    surplus (Excess Solar), the plan's EV power (EMHASS) or the car's SoC and target (SoC stop)."""
+    """The values behind a decision, for the decision list: the charge mode, the charging state and the current
+    before, then the PV, house load and surplus (Excess Solar), the plan's EV power (EMHASS) or the car's SoC and target
+    (SoC stop)."""
     d = decision.derived
-    parts = [f"was {i.current_limit_a:g} A"]
+    parts = [f"mode {i.charge_mode or 'unknown'}", state_text(i.state_raw), f"was {i.current_limit_a:g} A"]
     if decision.rule.startswith("solar_"):
         age = ""
         if d.pv_age_s >= 9999:

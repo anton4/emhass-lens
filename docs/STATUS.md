@@ -18,13 +18,13 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D4 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D5.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D5 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D6.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
   - ~~**D4** (backend) the market's summaries say why nothing was written~~ (done).
-  - **D5** (backend) the charger's decisions name the charge mode and the charging state (`state_text`).
+  - ~~**D5** (backend) the charger's decisions name the charge mode and the charging state~~ (done).
   - **D6** (backend) inverter slot names carry the plan's battery power (`describe` appends " · P_batt {p} W";
     the frontend parses it into `amount`).
   - **D7** `feat: step the day strips through past days`: backend `SofarWriter.writes_between`/`presses_between`
@@ -173,8 +173,14 @@ These come from docs/PLAN.md §10:
     (held: deadband, 200 W off)") in place of the bare command and " (no write: cooldown)".
   - The frontend's parsing is unchanged (the command, and a write only without "Would: "); D11 reads the holds.
   - The mock writes the new forms.
-  - Tests: `test_a_summary_says_what_was_written_or_why_it_was_held`, and the service tests' summaries. Backend 476
+  - Tests: `test_a_summary_says_what_was_written_or_why_it_was_held`, and the service tests' summaries. Backend 475
     tests.
+- **D5, the charger's decisions name the charge mode and the charging state** (backend):
+  - `domain/charger.state_text`: unplugged (0), charging (4), plugged in (1, 2, 5), "state unknown", "state 3".
+  - `numbers` (the facts after " · ") now starts with them: "Would 'EMHASS: start charging' (emhass_start): press
+    start, limit 8 A · mode EMHASS, plugged in, was 0 A, plan 5.5 kW". D10 reads them for the EV strip.
+  - The frontend's `parseChargerSummary` takes the new facts as they are (test added); the mock writes them.
+  - Backend 475 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
