@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AGREE_TONES } from '../../lib/dayStrip'
+import { AGREE_TONES, type WriteTick } from '../../lib/dayStrip'
 
 /** What a day strip's fills mean, with how many slots or decisions each today; `children` add more (button presses). */
 export function StripKey({
@@ -22,19 +22,28 @@ export function StripKey({
   )
 }
 
-/** What the rows under the marks mean: the Automation row's agreed and differed, with how many slots or decisions
- *  each today, then `children` (the other rows' keys). Nothing when there is nothing to say. */
+/** What the rows under the marks mean: the "Lens wrote" row's ticks (`writes`, each with its text and how many today),
+ *  the Automation row's agreed and differed, then `children`. Nothing when there is nothing to say. */
 export function StripFooterKey({
+  writes = [],
   agree,
   children,
 }: {
+  writes?: { kind: WriteTick['kind']; text: string; count: number }[]
   agree: { same: number; differs: number } | null
   children?: ReactNode
 }) {
+  const ticks = writes.filter((w) => w.count > 0)
   const parts = (['same', 'differs'] as const).filter((state) => (agree?.[state] ?? 0) > 0)
-  if (parts.length === 0 && !children) return null
+  if (ticks.length === 0 && parts.length === 0 && !children) return null
   return (
     <div className="day-strip-footer">
+      {ticks.map((w) => (
+        <span key={w.kind} className="day-strip-key-item">
+          <span className="day-strip-write-swatch" data-kind={w.kind} />
+          {w.text} <span className="num">{w.count}</span>
+        </span>
+      ))}
       {parts.map((state) => (
         <span key={state} className="day-strip-key-item">
           <span className="day-strip-swatch wide" style={{ background: AGREE_TONES[state].fill }} />

@@ -10,6 +10,7 @@ import {
   formatAgreement,
   inverterLegend,
   inverterStrip,
+  inverterTicks,
   marketFill,
   mergeBySlot,
   modeTone,
@@ -302,6 +303,41 @@ describe('compareDiffs', () => {
       feedin_max_w: '—',
     })
     expect(compareDiffs('The automation did the same')).toEqual({})
+  })
+})
+
+describe('inverterTicks', () => {
+  const at = (hhmm: string) => `2026-10-10T${hhmm}:05Z`
+  const s = (iso: string) => Date.parse(iso) / 1000
+
+  it('ticks where a dry run would write (the settings changed) and where it was held, not where nothing changed', () => {
+    const decides = [
+      run(1, 'inverter.decide', at('00:00'), 'dry_run', `Would set ${SELF}`),
+      run(3, 'inverter.decide', at('00:15'), 'dry_run', `Would set ${FC}`),
+      run(5, 'inverter.decide', at('00:30'), 'dry_run', `Would set ${FC}`),
+      run(7, 'inverter.decide', at('00:45'), 'noop', `Not in control (x is 'off'); would: ${SELF}`),
+      run(9, 'inverter.decide', at('01:00'), 'dry_run', `Would set ${SELF}`),
+      run(11, 'inverter.decide', at('01:15'), 'noop', 'Nothing to decide: no plan row for this slot'),
+    ]
+    const ticks = inverterTicks(inverterStrip(mergeBySlot(decides, [])))
+    expect(ticks).toEqual([
+      { t: s(at('00:15')), kind: 'would' },
+      { t: s(at('00:45')), kind: 'held' },
+      { t: s(at('01:00')), kind: 'would' },
+    ])
+  })
+
+  it('ticks every write when live, the plan\'s and the market\'s', () => {
+    const decides = [run(1, 'inverter.decide', at('00:00'), 'ok', `Set ${FC}`)]
+    const writes: InverterWrite[] = [
+      { at: '2026-10-10T00:00:06Z', owner: 'plan', group: 'passive', run_id: 1, ok: true, grid_w: 5600 },
+      { at: '2026-10-10T00:07:30Z', owner: 'market', group: 'feedin', run_id: 2, ok: true, feedin_w: 0 },
+    ]
+    const ticks = inverterTicks(inverterStrip(mergeBySlot(decides, []), [], writes))
+    expect(ticks).toEqual([
+      { t: s('2026-10-10T00:00:06Z'), kind: 'wrote' },
+      { t: s('2026-10-10T00:07:30Z'), kind: 'wrote' },
+    ])
   })
 })
 

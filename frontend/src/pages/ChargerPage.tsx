@@ -15,7 +15,7 @@ import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { todayKey } from '../lib/days'
-import { holdStretches, keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
+import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
 import {
   CHARGER_FIELD_LABELS,
   CHARGER_KEYS,
@@ -70,7 +70,7 @@ export function ChargerPage() {
   const todayCompares = useRuns(runFilters('charger.compare', today, tz, 0))
   // each decision filled by what it did; the line under it says whether the automation did the same (dry run) or the
   // decision wrote to the charger (live)
-  const { strip, key } = useMemo(() => {
+  const { strip, key, wrote } = useMemo(() => {
     const rows = pairCompares(todayDecides.data ?? [], todayCompares.data ?? [])
     const marks = rows.map((row) => chargerMark(row.decide?.summary))
     const inputs = rows.map((row, i) => {
@@ -86,7 +86,7 @@ export function ChargerPage() {
         wrote: mark?.wrote,
       }
     })
-    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS) }
+    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS), wrote: wroteTicks(inputs) }
   }, [todayDecides.data, todayCompares.data])
 
   return (
@@ -208,6 +208,7 @@ export function ChargerPage() {
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
         tally={stretchTally}
         differText={stretchDiffers}
+        writes={{ ticks: wrote, target: 'charger', held: 'held: not in control' }}
       />
 
       <div className="two-col">

@@ -15,6 +15,9 @@ import {
   stripItems,
   stripRuns,
   stripSegments,
+  writeCounts,
+  writesText,
+  wroteTicks,
 } from './dayStrip'
 
 const DAY = Date.parse('2026-10-09T21:00:00Z') / 1000 // Sat 10 Oct 00:00 in Tallinn
@@ -310,6 +313,24 @@ describe('formatSpan', () => {
     const tz = 'Europe/Tallinn'
     expect(formatSpan(DAY + 5 * 3600, DAY + 5.25 * 3600, tz)).toBe('05:00–05:15 · 15 min')
     expect(formatSpan(DAY + 21 * 3600, END, tz)).toBe('21:00–24:00 · 3 h')
+  })
+})
+
+describe('write ticks', () => {
+  it('ticks the decisions that wrote and counts the ticks of the day by kind', () => {
+    const ticks = wroteTicks([{ t: DAY + 60, wrote: true }, { t: DAY + 120 }, { t: END + 60, wrote: true }])
+    expect(ticks).toEqual([
+      { t: DAY + 60, kind: 'wrote' },
+      { t: END + 60, kind: 'wrote' },
+    ])
+    expect(writeCounts([...ticks, { t: DAY, kind: 'held' }], DAY, END)).toEqual({ wrote: 1, would: 0, held: 1, noop: 0 })
+  })
+
+  it('says how many writes and holds in the head', () => {
+    expect(writesText({ wrote: 9, would: 0, held: 2, noop: 4 })).toBe('9 writes, 2 held')
+    expect(writesText({ wrote: 1, would: 0, held: 0, noop: 0 })).toBe('1 write')
+    expect(writesText({ wrote: 0, would: 12, held: 0, noop: 0 })).toBe('12 would write')
+    expect(writesText({ wrote: 0, would: 0, held: 0, noop: 3 })).toBeNull()
   })
 })
 

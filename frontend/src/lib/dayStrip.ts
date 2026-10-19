@@ -42,6 +42,38 @@ export interface StripItem<D = unknown> {
   detail?: D
 }
 
+/** A moment on the "Lens wrote" row: a write (live), one a dry run would have made, a decision held back (not in
+ *  control, or the deadband or the cooldown), or one with nothing to do. */
+export interface WriteTick {
+  /** Unix seconds. */
+  t: number
+  kind: 'wrote' | 'would' | 'held' | 'noop'
+}
+
+export type WriteCounts = Record<WriteTick['kind'], number>
+
+/** How many ticks of each kind fall in [start, end). */
+export function writeCounts(ticks: WriteTick[], start: number, end: number): WriteCounts {
+  const counts: WriteCounts = { wrote: 0, would: 0, held: 0, noop: 0 }
+  for (const tick of ticks) if (tick.t >= start && tick.t < end) counts[tick.kind]++
+  return counts
+}
+
+/** The writes in the strip's head: "9 writes, 2 held", "12 would write"; null when there are none. */
+export function writesText(counts: WriteCounts): string | null {
+  const parts = [
+    counts.wrote > 0 && `${counts.wrote} write${counts.wrote === 1 ? '' : 's'}`,
+    counts.would > 0 && `${counts.would} would write`,
+    counts.held > 0 && `${counts.held} held`,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : null
+}
+
+/** One tick at each decision that wrote (live). */
+export function wroteTicks(inputs: Pick<StripInput, 't' | 'wrote'>[]): WriteTick[] {
+  return inputs.filter((i) => i.wrote).map((i) => ({ t: i.t, kind: 'wrote' as const }))
+}
+
 /** A moment marked over the strip's marks (e.g. a button press). */
 export interface StripTick {
   /** Unix seconds. */

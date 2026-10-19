@@ -3,7 +3,7 @@
 
 import type { LampColor } from '../components/Lamp'
 import type { Agreement, ButtonPress, InverterSettings, InverterWrite, MarketSession, RunSummary } from '../api/types'
-import type { StripInput } from './dayStrip'
+import type { StripInput, WriteTick } from './dayStrip'
 
 export interface InverterTargets {
   state: string
@@ -343,6 +343,7 @@ export function sessionsBySlot(sessions: readonly MarketSession[], now: number):
 /** One slot of the inverter's day strip, for its popup. */
 export interface SlotDetail {
   slot: number // ms, the start of the quarter-hour
+  at?: number | null // ms, when the decide run started
   targets: DecisionTargets | null
   action: DecisionAction | null
   summary: string | null // the decide run's, shown when there are no settings
@@ -398,6 +399,7 @@ export function inverterStrip(
     }
     const detail: SlotDetail = {
       slot: row.slot,
+      at: row.decide ? Date.parse(row.decide.started_at) : null,
       targets,
       action,
       summary,
@@ -445,6 +447,21 @@ export function inverterStrip(
     })
   }
   return out
+}
+
+/** The inverter's "Lens wrote" row: every write (live, the plan's and the market's), each slot whose settings a dry
+ *  run would have written (they changed since the slot before), and each slot held while EMHASS Lens wasn't in
+ *  control (outside its own market sessions). A slot with nothing to write gets no tick. */
+export function inverterTicks(inputs: StripInput<SlotDetail>[]): WriteTick[] {
+  const ticks: WriteTick[] = []
+  for (const { detail } of inputs) {
+    if (!detail) continue
+    for (const w of detail.writes ?? []) ticks.push({ t: w.at / 1000, kind: 'wrote' })
+    const at = (detail.at ?? detail.slot) / 1000
+    if (detail.action?.kind === 'blocked' && !detail.market) ticks.push({ t: at, kind: 'held' })
+    else if (detail.action?.kind === 'would' && detail.changed.length > 0) ticks.push({ t: at, kind: 'would' })
+  }
+  return ticks.sort((a, b) => a.t - b.t)
 }
 
 /** The strip's key: each passive state seen (in MODE_TONES order, unknown ones after), then the slots not in control

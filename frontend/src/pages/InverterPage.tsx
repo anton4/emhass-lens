@@ -38,6 +38,7 @@ import {
   decideChip,
   inverterLegend,
   inverterStrip,
+  inverterTicks,
   mergeBySlot,
   parseDecisionSummary,
   type InverterComparison,
@@ -99,7 +100,9 @@ export function InverterPage() {
       ),
     [todayDecides.data, todayCompares.data, sessions.data, writes, presses, now],
   )
-  const ticks = useMemo(() => pressTicks(presses ?? []), [presses])
+  const writeTicks = useMemo(() => inverterTicks(strip), [strip])
+  // EMHASS Lens's own presses are its writes, on the row of their own; a press from outside stands out on the marks
+  const ticks = useMemo(() => pressTicks((presses ?? []).filter(pressedOutside)), [presses])
   const pressesToday = pressCounts(presses ?? [], bounds.since, bounds.until)
 
   return (
@@ -194,6 +197,7 @@ export function InverterPage() {
         }
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
         differText={slotDiffers}
+        writes={{ ticks: writeTicks, target: 'inverter', held: 'held: not in control' }}
         ticks={ticks}
       />
 
@@ -375,23 +379,14 @@ function InverterHistory({ timeZone }: { timeZone?: string }) {
   )
 }
 
-/** The strip key's button presses: outside EMHASS Lens and by it, where there were any. */
-function PressKey({ presses }: { presses: { outside: number; lens: number } }) {
+/** The strip key's button presses from outside EMHASS Lens, where there were any (its own are on the writes row). */
+function PressKey({ presses }: { presses: { outside: number } }) {
+  if (presses.outside === 0) return null
   return (
-    <>
-      {presses.outside > 0 && (
-        <span className="day-strip-key-item">
-          <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.outside }} />
-          Pressed outside EMHASS Lens <span className="num">{presses.outside}</span>
-        </span>
-      )}
-      {presses.lens > 0 && (
-        <span className="day-strip-key-item">
-          <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.lens }} />
-          Pressed by EMHASS Lens <span className="num">{presses.lens}</span>
-        </span>
-      )}
-    </>
+    <span className="day-strip-key-item">
+      <span className="day-strip-swatch dot" style={{ background: PRESS_COLOR.outside }} />
+      Pressed outside EMHASS Lens <span className="num">{presses.outside}</span>
+    </span>
   )
 }
 

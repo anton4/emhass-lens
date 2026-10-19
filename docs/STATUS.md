@@ -18,12 +18,11 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1 and D2 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D3.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D3 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D4.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
-  - **D3** `feat: a "Lens wrote" row on the Inverter page`: `WriteTick`, `writeCounts`, `inverterTicks`,
-    "· N writes, M held" in the head. Lens's own press dots go; outside presses stay red.
+  - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
   - **D4** (backend) the market's summaries say why nothing was written (deadband or cooldown = held).
   - **D5** (backend) the charger's decisions name the charge mode and the charging state (`state_text`).
   - **D6** (backend) inverter slot names carry the plan's battery power (`describe` appends " · P_batt {p} W";
@@ -147,6 +146,23 @@ These come from docs/PLAN.md §10:
   - **Until D3** the strips don't show the writes (live): they were on that line.
   - Checked in Chrome: dry run and live (no Automation row), the popups, 390 px dark.
   - Frontend: 437 tests.
+- **D3, the "Lens wrote" row:**
+  - `lib/dayStrip.ts`: `WriteTick` (wrote, would, held, noop), `writeCounts`, `writesText` ("9 writes, 2 held",
+    "12 would write"), `wroteTicks` (a tick at each decision that wrote).
+  - `lib/inverter.ts` `inverterTicks`:
+    - every write, the plan's and the market's, live;
+    - hollow "would write" ticks where a dry run's settings changed since the slot before;
+    - amber "held" where EMHASS Lens wasn't in control, outside its own market sessions;
+    - nothing where nothing changed.
+    - `SlotDetail.at` is when the decide run started.
+  - **`DayStrip`:** a 22 px "Lens wrote" row between the marks and the Automation row, shown when the day has ticks.
+    The counts follow the subtitle ("… · 18 writes"), and the footer key names each kind ("held: not in control",
+    on the Market "held: inside the deadband or the cooldown").
+  - **The Inverter's press dots:** only presses from outside EMHASS Lens stay (red); its own are its writes.
+  - **The EV charger and the Market** get a tick for each decision that wrote (live) until D10 and D11 build their
+    rows properly.
+  - Checked in Chrome, dry run and live.
+  - Frontend: 441 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

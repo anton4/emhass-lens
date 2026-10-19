@@ -5031,6 +5031,55 @@ button.icon-button {
   pointer-events: none;
 }
 
+/* the "Lens wrote" row: a tick per write, hollow for one a dry run would make, amber where held */
+.day-strip-writes {
+  position: relative;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--surface-sunk);
+}
+
+.day-strip-write,
+.day-strip-write-swatch {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.day-strip-write {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  margin-left: -1.5px;
+}
+
+.day-strip-write-swatch {
+  flex: none;
+  height: 14px;
+}
+
+.day-strip-write[data-kind='would'],
+.day-strip-write-swatch[data-kind='would'] {
+  width: 4px;
+  margin-left: -2px;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+}
+
+.day-strip-write-swatch[data-kind='would'] {
+  margin-left: 0;
+}
+
+.day-strip-write[data-kind='held'],
+.day-strip-write-swatch[data-kind='held'] {
+  background: var(--lamp-amber);
+}
+
+.day-strip-write[data-kind='noop'],
+.day-strip-write-swatch[data-kind='noop'] {
+  background: var(--ink-faint);
+}
+
 /* the Automation row: where the automation agreed and where it differed */
 .day-strip-agree {
   position: relative;

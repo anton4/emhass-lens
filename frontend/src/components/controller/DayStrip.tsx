@@ -25,10 +25,13 @@ import {
   stripItems,
   stripRuns,
   stripSegments,
+  writeCounts,
+  writesText,
   type StripInput,
   type StripItem,
   type StripState,
   type StripTick,
+  type WriteTick,
 } from '../../lib/dayStrip'
 import { formatClock } from '../../lib/format'
 import { Lamp } from '../Lamp'
@@ -183,10 +186,10 @@ function PopupFoot({
 /** Today's decisions on the day's axis (23 or 25 hours on a DST day), in a row named `rowLabel`: green where the
  *  automation did the same, amber where it differed, grey where nothing was compared, or the page's own fills. Each
  *  stretch of one rule carries its name inside when it fits, and a click opens the decision. With `detail`, pointing
- *  at a mark (or focusing or tapping it) opens a popup with what it did. Under it, when anything was compared, the
- *  Automation row: the stretches where the automation agreed and where it differed, each with a popup (`differText`
- *  says what differed in a mark; `tally` counts a mark's decisions). `ticks` mark moments over the marks (e.g. button
- *  presses). */
+ *  at a mark (or focusing or tapping it) opens a popup with what it did. Under it, the "Lens wrote" row of `writes`
+ *  (counted in the head), and when anything was compared, the Automation row: the stretches where the automation
+ *  agreed and where it differed, each with a popup (`differText` says what differed in a mark; `tally` counts a mark's
+ *  decisions). `ticks` mark moments over the marks (e.g. button presses). */
 export function DayStrip<D = unknown>({
   inputs,
   span,
@@ -200,6 +203,7 @@ export function DayStrip<D = unknown>({
   detail,
   differText,
   tally,
+  writes,
   ticks,
 }: {
   inputs: StripInput<D>[]
@@ -223,6 +227,9 @@ export function DayStrip<D = unknown>({
   differText?: (item: StripItem<D>) => string | null
   /** How many of a mark's decisions the automation agreed and differed on (one per mark by default). */
   tally?: (item: StripItem<D>) => { same: number; differs: number }
+  /** The "Lens wrote" row: its ticks, what was written to (the footer key's "EMHASS Lens wrote to the inverter") and
+   *  what "held" means there. */
+  writes?: { ticks: WriteTick[]; target: string; held: string }
   /** Moments marked over the strip; the page says what they are (in the legend and the popup). */
   ticks?: StripTick[]
 }) {
@@ -247,6 +254,9 @@ export function DayStrip<D = unknown>({
     same: 0,
     differs: 0,
   })
+  const wrote = useMemo(() => writes?.ticks.filter((t) => t.t >= start && t.t < end) ?? [], [writes, start, end])
+  const written = writeCounts(wrote, start, end)
+  const head = [subtitle, writesText(written)].filter(Boolean).join(' · ')
   const at = (x: number) => start + x * (end - start)
   const pos = (t: number) => `${((t - start) / (end - start)) * 100}%`
   const nowX = Math.min(1, Math.max(0, (now.getTime() / 1000 - start) / (end - start)))
@@ -294,7 +304,7 @@ export function DayStrip<D = unknown>({
           <h2>
             Today, {what} by {what}
           </h2>
-          {subtitle && <span className="day-strip-sub">{subtitle}</span>}
+          {head && <span className="day-strip-sub">{head}</span>}
         </div>
         {legend ? (
           <div className="day-strip-key">{legend}</div>
@@ -387,6 +397,24 @@ export function DayStrip<D = unknown>({
                   </StripPopup>
                 )}
               </div>
+              {wrote.length > 0 && (
+                <>
+                  <span className="day-strip-label" aria-hidden="true">
+                    Lens wrote
+                  </span>
+                  <div className="day-strip-writes" aria-hidden="true">
+                    {wrote.map((tick, i) => (
+                      <span
+                        key={`${tick.t}-${i}`}
+                        className="day-strip-write"
+                        data-kind={tick.kind}
+                        style={{ left: pos(tick.t) }}
+                      />
+                    ))}
+                    {nowLine}
+                  </div>
+                </>
+              )}
               {agree.length > 0 && (
                 <>
                   <span className="day-strip-label" aria-hidden="true">
@@ -471,7 +499,17 @@ export function DayStrip<D = unknown>({
                 )}
               </div>
             </div>
-            <StripFooterKey agree={agree.length > 0 ? agreed : null}>{footer}</StripFooterKey>
+            <StripFooterKey
+              writes={[
+                { kind: 'wrote', text: `EMHASS Lens wrote to the ${writes?.target}`, count: written.wrote },
+                { kind: 'would', text: 'would write (dry run)', count: written.would },
+                { kind: 'held', text: writes?.held ?? 'held', count: written.held },
+                { kind: 'noop', text: 'nothing to do', count: written.noop },
+              ]}
+              agree={agree.length > 0 ? agreed : null}
+            >
+              {footer}
+            </StripFooterKey>
           </>
         )}
       </div>

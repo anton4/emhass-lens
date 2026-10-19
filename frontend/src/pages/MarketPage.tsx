@@ -17,7 +17,7 @@ import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds, todayKey } from '../lib/days'
-import { holdStretches, keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
+import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
@@ -69,7 +69,7 @@ export function MarketPage() {
   const todayCompares = useRuns(runFilters('market.compare', today, tz, 0))
   // each decision filled by what it did, as the Inverter strip fills its slots; the line under it says whether the
   // automation did the same (shadow) or the decision wrote to the inverter (live)
-  const { strip, key } = useMemo(() => {
+  const { strip, key, wrote } = useMemo(() => {
     const rows = pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? [])
     const marks = rows.map((row) => marketMark(row.reconcile?.summary))
     const inputs = rows.map((row, i) => {
@@ -84,7 +84,7 @@ export function MarketPage() {
         wrote: mark?.wrote,
       }
     })
-    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS) }
+    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS), wrote: wroteTicks(inputs) }
   }, [todayReconciles.data, todayCompares.data])
 
   return (
@@ -180,6 +180,7 @@ export function MarketPage() {
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
         tally={stretchTally}
         differText={stretchDiffers}
+        writes={{ ticks: wrote, target: 'inverter', held: 'held: inside the deadband or the cooldown' }}
       />
 
       <section className="panel">
