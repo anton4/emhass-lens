@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.3
+
+The controller pages' day strips, redrawn after the same design.
+- Inverter, EV charger, Market: each day strip is a set of named rows on the day's own axis (23 or 25 hours when the clocks change): the marks with their names inside, **Lens wrote** (what EMHASS Lens wrote, what a dry run would have written, what was held) and **Automation** (where the Home Assistant automation agreed or differed, with a popup). A name on stripes or hatching sits on a small chip, and every name reads at 4.5:1 or better in both themes.
+- Inverter, EV charger, Market: a switch in the strip's head steps through the last week; the Inverter and EV charger pages offer tomorrow once the plan reaches it.
+- Inverter: the rest of today is the plan, hatched: the mode the rules give each planned slot, with a **Planned** popup. A force charge or discharge is named with the plan's battery power ("Force charge · 3.0 kW"). Only presses from outside EMHASS Lens stay as dots; its own are on the Lens wrote row.
+- EV charger: decisions are named by what the charger was doing (charging from the plan or from excess solar, paused, plugged in, unplugged), and the rest of today shows where the plan charges the car, with "next plan: Sat 03:00–05:30" between.
+- Market: the strip shows Qilowatt's sessions and the time between, each with what it asked, what the grid delivered from its baseline, and the baseline; "no session announced yet" for the rest of today.
+- Market: a decision that writes nothing says why ("registers unchanged (held: cooldown)", "(held: deadband, 200 W off)"), and shadow says what it would write.
+- EV charger: a decision names the charge mode and the charger's state ("· mode EMHASS, plugged in, was 0 A"); an inverter decision ends with the plan's battery power ("· P_batt -3000 W").
+
 ## 0.5.2
 
 The Inputs page's charts, redrawn after the same design.

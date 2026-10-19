@@ -10,43 +10,28 @@ cd ../frontend && npm ci && npm test               # needs Node ≥ 22.12
 ```
 Then open Claude Code in the repo and say something like "continue EMHASS Lens from docs/STATUS.md". CLAUDE.md has the commands and conventions, and docs/PLAN.md has the approved plan.
 
-## Hand-off (2026-10-16): finishing design variant A, Phase 4 left
+## Hand-off (2026-10-19): design variant A is built; 0.5.3 is ready to push
 Variant A ("Flight deck") of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
-boards A1–A5 and X). The approved plan is `~/.claude/plans/is-there-any-design-snoopy-horizon.md` on the owner's Mac;
-what it still needs is copied below.
-- **Done and committed locally:** Phase 0 (G1–G8), the Plan timeline (P1–P11, release 0.5.0), the phone (M1–M2,
-  0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
-- **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
-  Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D11 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D12, the release.
-  - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
-  - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
-  - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
-  - ~~**D4** (backend) the market's summaries say why nothing was written~~ (done).
-  - ~~**D5** (backend) the charger's decisions name the charge mode and the charging state~~ (done).
-  - ~~**D6** inverter slot names carry the plan's battery power~~ (done).
-  - ~~**D7** `feat: step the day strips through past days`~~ (done).
-  - ~~**D8** `feat: the rest of the day as plan, not yet done`~~ (done).
-  - ~~**D9** `feat: the inverter's planned modes for the rest of the day`~~ (done).
-  - ~~**D10** `feat: the EV charger strip by charging state, with the next plan`~~ (done).
-  - ~~**D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`~~ (done).
-  - **D12** `chore: release 0.5.3` (DOCS.md, STATUS.md, CHANGELOG.md, version).
-- **Phase 4 defaults (the owner accepted them with the plan):** tomorrow's chip only on Inverter and EV, and only
-  when the plan reaches it. "Held" means not in control (inverter, EV), or the deadband or cooldown (market).
-  Nothing-to-do ticks are hidden on the inverter, and Dry run/Shadow show hollow "would write" ticks. The 0.4.42
-  colours stay, with plug states added. "Earned" and the EV's energy and price are dropped (no data). No per-strip
-  "exp" chip, and the inverter popups stay one per slot.
-- **Rules:** commit each step locally with a STATUS entry (Conventional Commits, bullet body, no Co-Authored-By;
-  identity anton4 noreply). Run the e2e stack after D7 and D9 (`cd e2e && ./up.sh && ./check.sh && ./down.sh`;
-  stop any Lens on 18101 first).
+boards A1–A5 and X) is built in full: Phase 0 (G1–G8), the Plan timeline (P1–P11, 0.5.0), the phone (M1–M2, 0.5.1),
+Inputs and the price breakdown (I1–I10, 0.5.2), and the controller day strips (D1–D12, 0.5.3). Each step has a log
+entry below.
+- **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including four version bumps
+  (0.5.0–0.5.3). Pushing builds and publishes the image, so ask the owner first.
+- **Still needs the owner:**
+  - new README screenshots from the real App (`uv run scripts/readme_screenshots.py --base <the App's direct
+    port>`), which now include the new day strips;
+  - real touch, pinch and two-finger pan through Ingress;
+  - one real market session for the baseline and delivered numbers (Plan page and the Market strip);
+  - the 8-day grid warm-up against the real recorder;
+  - a day of real controller data on the strips: the new summaries (D4–D6) start with 0.5.3, so earlier days read
+    the old forms (the EV strip says "nothing to do" where it can't tell the plug state).
+- **e2e:** 28/28 after D9. One run failed the cost-function check once ("EMHASS answered, but its last run is older
+  than this request"); the rerun passed. Watch for it.
 - **UI checks:** a mock at `frontend/node_modules/.cache/mock/vite.mock.config.mjs` (not committed): `npx vite
-  --config node_modules/.cache/mock/vite.mock.config.mjs` from `frontend/` serves http://localhost:5174. It proxies
-  everything it doesn't mock to a Lens on 127.0.0.1:18101 (`EMHASS_LENS_DATA_DIR=<dir> EMHASS_LENS_PORT=18101
-  TZ=Europe/Tallinn uv run python -m emhass_lens`). Check 1440, 900 and 390 px, light and dark.
-- **Still needs the owner:** new README screenshots from the real App (`uv run scripts/readme_screenshots.py --base
-  <the App's direct port>`); real touch, pinch and two-finger pan through Ingress; one real market session for the
-  baseline numbers; the 8-day grid warm-up against the real recorder.
+  --config node_modules/.cache/mock/vite.mock.config.mjs` from `frontend/` serves http://localhost:5174 (restart it
+  after an edit: Vite doesn't watch a config under `node_modules`). It mocks the Plan, Inputs and controller
+  endpoints (`/mock/set?ctl=1` for live) and proxies the rest to a Lens on 127.0.0.1:18101 (`EMHASS_LENS_DATA_DIR=<dir>
+  EMHASS_LENS_PORT=18101 TZ=Europe/Tallinn uv run python -m emhass_lens`). Its "now" is fixed when it starts.
 
 ## Phase overview
 | Phase | State |
@@ -277,6 +262,9 @@ These come from docs/PLAN.md §10:
   - If the commands can't be read, the strip says so.
   - Checked in Chrome: dry run, a session popup, 390 px dark.
   - Frontend 457 tests.
+- **D12, release 0.5.3:** config.yaml, CHANGELOG.md, DOCS.md (the Inverter page's strip, the EV charger and
+  Market strips, the press dots) and this hand-off. Backend 479 tests, frontend 457, e2e 28/28 (after D9). Not
+  pushed.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
