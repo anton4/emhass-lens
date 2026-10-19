@@ -92,6 +92,12 @@ async def publish_and_catch_event(token: str, http: httpx.Client) -> tuple[dict[
             return None, run
 
 
+def lens_notes(token: str) -> list[dict[str, Any]]:
+    """EMHASS Lens's own persistent notifications in Home Assistant (HA raises its own too, e.g. failing updates)."""
+    notes = asyncio.run(ha_ws(token, [{"type": "persistent_notification/get"}]))[0] or []
+    return [n for n in notes if n.get("notification_id") == "emhass_lens_problems"]
+
+
 def main() -> int:
     token = json.loads((RUNTIME / "ha_token.json").read_text())["token"]
     legacy = (RUNTIME / "ha" / "custom_components" / "nordpool_ee_scraper").is_dir()
@@ -513,14 +519,14 @@ def main() -> int:
                 "e2e: break SOC",
             )
             run_job(http, "health.evaluate")
-            notes = wait_for(lambda: asyncio.run(ha_ws(token, [{"type": "persistent_notification/get"}]))[0], 10)
+            notes = wait_for(lambda: lens_notes(token), 10)
             check(
                 "raises a Home Assistant notification for an error",
                 bool(notes),
                 notes[0]["message"].splitlines()[0] if notes else notes,
             )
             patch(http, {"inputs": {"soc_init": {"entity": "sensor.ev6_battery_soc"}}}, "e2e: fix SOC")
-            cleared = wait_for(lambda: not asyncio.run(ha_ws(token, [{"type": "persistent_notification/get"}]))[0], 10)
+            cleared = wait_for(lambda: not lens_notes(token), 10)
             check("dismisses the notification when the problem is gone", cleared is True)
     finally:
         proc.terminate()
