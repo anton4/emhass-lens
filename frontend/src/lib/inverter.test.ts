@@ -253,7 +253,10 @@ describe('parseDecisionTargets', () => {
       battery_max_w: 20000,
       feedin_max_w: null,
       feedin_before_w: null,
+      p_batt_w: null, // before 0.5.3
     })
+    expect(parseDecisionTargets(`Would set ${FC} · P_batt -3000 W`)?.p_batt_w).toBe(-3000)
+    expect(parseDecisionTargets(`Set ${PVX} (was 0 W) · P_batt 0 W`)).toMatchObject({ feedin_before_w: 0, p_batt_w: 0 })
     expect(parseDecisionTargets(`Set ${PVX}`)?.feedin_max_w).toBe(15500)
     expect(parseDecisionTargets(`Set ${PVX}`)?.feedin_before_w).toBeNull() // before 0.4.40
     expect(parseDecisionTargets(`Set ${PVX} (kept)`)).toMatchObject({ feedin_max_w: 15500, feedin_before_w: 15500 })
@@ -303,6 +306,19 @@ describe('compareDiffs', () => {
       feedin_max_w: '—',
     })
     expect(compareDiffs('The automation did the same')).toEqual({})
+  })
+})
+
+describe('the amount on the strip', () => {
+  it('names a force charge or discharge with the plan\'s battery power, and nothing else', () => {
+    const at = (hhmm: string) => `2026-10-10T${hhmm}:05Z`
+    const decides = [
+      run(1, 'inverter.decide', at('00:00'), 'dry_run', `Would set ${FC} · P_batt -3000 W`),
+      run(3, 'inverter.decide', at('00:15'), 'dry_run', `Would set ${SELF} · P_batt 1200 W`),
+      run(5, 'inverter.decide', at('00:30'), 'noop', `Not in control (x is 'off'); would: ${FC} · P_batt -3000 W`),
+      run(7, 'inverter.decide', at('00:45'), 'dry_run', `Would set ${FC}`), // before 0.5.3
+    ]
+    expect(inverterStrip(mergeBySlot(decides, [])).map((s) => s.amount)).toEqual([3000, null, null, null])
   })
 })
 

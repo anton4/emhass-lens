@@ -24,6 +24,8 @@ export interface StripInput<D = unknown> {
   ink?: string | null
   /** EMHASS Lens wrote to the device for this decision (live). */
   wrote?: boolean
+  /** A power the stretch's name carries when it fits ("Force charge · 3.0 kW"), in W. */
+  amount?: number | null
   /** What the mark's popup shows. */
   detail?: D
 }
@@ -39,6 +41,7 @@ export interface StripItem<D = unknown> {
   fill: string | null
   ink: string | null
   wrote: boolean
+  amount: number | null
   detail?: D
 }
 
@@ -98,6 +101,7 @@ export function stripItems<D>(inputs: StripInput<D>[], dayStart: number, dayEnd:
       fill: i.fill ?? null,
       ink: i.ink ?? null,
       wrote: i.wrote ?? false,
+      amount: i.amount ?? null,
       detail: i.detail,
     }))
 }
@@ -238,9 +242,13 @@ export interface StripSegment {
 
 const touches = (a: StripItem, b: StripItem) => Math.abs(a.x + a.w - b.x) < 1e-6
 
-/** The stretches of touching items with the same label and fill, in order; items without a label have no name. */
+const kw = (w: number) => (w / 1000).toFixed(1)
+
+/** The stretches of touching items with the same label and fill, in order; items without a label have no name. A
+ *  stretch whose items carry an amount is named with it first ("Force charge · 3.0 kW", "· 2.5–3.0 kW" when it
+ *  varies), then plainly. */
 export function stripSegments(items: StripItem[]): StripSegment[] {
-  const out: StripSegment[] = []
+  const out: (StripSegment & { amounts: number[] })[] = []
   items.forEach((item, i) => {
     if (!item.label) return
     const last = out.at(-1)
@@ -250,10 +258,16 @@ export function stripSegments(items: StripItem[]): StripSegment[] {
       last.w = item.x + item.w - last.x
       last.to = i
     } else {
-      out.push({ x: item.x, w: item.w, names: [item.label], ink: item.ink, from: i, to: i })
+      out.push({ x: item.x, w: item.w, names: [item.label], ink: item.ink, from: i, to: i, amounts: [] })
     }
+    if (item.amount !== null) out.at(-1)!.amounts.push(item.amount)
   })
-  return out
+  return out.map(({ amounts, ...seg }) => {
+    if (amounts.length === 0) return seg
+    const [lo, hi] = [Math.min(...amounts), Math.max(...amounts)]
+    const power = kw(lo) === kw(hi) ? `${kw(hi)} kW` : `${kw(lo)}–${kw(hi)} kW`
+    return { ...seg, names: [`${seg.names[0]} · ${power}`, ...seg.names] }
+  })
 }
 
 // A name inside the strip is 12 px Geist at weight 600 (about 7 px a character) with 8 px padding each side; on a

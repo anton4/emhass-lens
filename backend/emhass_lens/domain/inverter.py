@@ -90,6 +90,7 @@ class Decision:
     branch: str = ""  # which of the rules matched (BRANCHES); two of them end in the mode self_use
     feedin_floor_w: int | None = None  # export allowed: any limit from here up to the ceiling serves the slot
     feedin_ceiling_w: int | None = None
+    p_batt_w: float | None = None  # the plan's battery power the decision was made from (+ discharge)
 
     @property
     def feedin_target(self) -> int | None:
@@ -284,6 +285,7 @@ def decide(
         branch,
         feedin_floor_w=floor,
         feedin_ceiling_w=ceiling,
+        p_batt_w=b,
     )
 
 

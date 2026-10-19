@@ -49,6 +49,11 @@ def set_mode(client: TestClient, world: World, mode: str) -> None:
     prime(client, world)
 
 
+def settings(summary: str) -> str:
+    """A decide run's summary without the plan's battery power at its end."""
+    return summary.split(" · P_batt")[0]
+
+
 def test_dry_run_decides_and_compares_with_the_automation(tmp_path: Path, world: World) -> None:
     clock = FakeClock(START)
     client = live_client(tmp_path, world, clock)
@@ -163,7 +168,7 @@ def test_live_leaves_the_feedin_limit_alone_when_nothing_can_reach_the_grid(tmp_
         set_mode(client, world, "live")
         run = run_job(client, "inverter.decide")
         assert run["outcome"] == "ok", run
-        assert run["summary"].endswith("feed-in unchanged"), run["summary"]
+        assert settings(run["summary"]).endswith("feed-in unchanged"), run["summary"]
         decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
         assert decision["feedin_max_w"] == 0 and decision["feedin_needed"] is False
         touched = [s[1].get("entity_id") for s in world.ha_services]
@@ -185,7 +190,7 @@ def test_live_writes_the_feedin_limit_when_the_plan_curtails_pv(tmp_path: Path, 
         set_mode(client, world, "live")
         run = run_job(client, "inverter.decide")
         assert run["outcome"] == "ok", run
-        assert run["summary"].endswith("feed-in 0 W (was 15500 W)"), run["summary"]
+        assert settings(run["summary"]).endswith("feed-in 0 W (was 15500 W)"), run["summary"]
         touched = [s[1].get("entity_id") for s in world.ha_services]
         assert FEEDIN in touched and FEEDIN_BUTTON in touched
         assert float(world.ha_states[FEEDIN]["state"]) == 0
@@ -207,6 +212,12 @@ def test_the_summary_says_whether_the_feedin_limit_is_kept() -> None:
     assert describe(decision) == head + "feed-in 15500 W"
     left = Decision("self_use", "Self-use", "why", targets, 0, "left as it is", feedin_needed=False)
     assert describe(left, seen(15500.0)).endswith("feed-in unchanged")
+
+
+def test_the_summary_ends_with_the_plans_battery_power() -> None:
+    targets = Targets("Force charge", 5600, 20000, -3000)
+    decision = Decision("force_charge", "Force charge", "why", targets, 0, "no export", p_batt_w=-3000.4)
+    assert describe(decision).endswith("feed-in 0 W · P_batt -3000 W")
 
 
 def test_live_refuses_with_a_stale_plan(tmp_path: Path, world: World) -> None:
@@ -312,7 +323,7 @@ def test_a_feedin_limit_left_by_a_sell_session_is_kept_while_it_covers_the_plan(
         prime(client, world)
         run = run_job(client, "inverter.decide")
         assert run["outcome"] == "ok", run
-        assert run["summary"].endswith("feed-in 3000 W (kept)"), run["summary"]  # no feed-in written
+        assert settings(run["summary"]).endswith("feed-in 3000 W (kept)"), run["summary"]  # no feed-in written
         decision = client.get(f"/api/runs/{run['id']}/artifacts/decision").json()["decision"]
         assert decision["feedin_floor_w"] == 2800 and "kept: 3000 W" in decision["feedin_why"]
         touched = [s[1].get("entity_id") for s in world.ha_services]
@@ -333,7 +344,7 @@ def test_a_feedin_limit_left_by_a_sell_session_is_kept_while_it_covers_the_plan(
             run_job(client, "inverter.verify")
         [fixed] = drift_runs(client)
         assert fixed["summary"].startswith("Drift: feed-in limit 2000 W, expected 3000 W; set back"), fixed
-        assert fixed["summary"].endswith("feed-in 15500 W (was 2000 W)"), fixed
+        assert settings(fixed["summary"]).endswith("feed-in 15500 W (was 2000 W)"), fixed
         assert float(world.ha_states[FEEDIN]["state"]) == 15500
     finally:
         client.__exit__(None, None, None)

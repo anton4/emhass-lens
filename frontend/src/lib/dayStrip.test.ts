@@ -93,6 +93,29 @@ describe('stripSegments', () => {
   })
 })
 
+describe('stripSegments with amounts', () => {
+  it('puts the power first in the names, as a range when it varies', () => {
+    const fc = { label: 'Force charge', fill: 'blue' }
+    const items = stripItems(
+      [
+        { t: DAY, ...fc, amount: 3000 },
+        { t: DAY + 900, ...fc, amount: 3040 },
+        { t: DAY + 1800, label: 'Self-use', fill: 'lilac' },
+        { t: DAY + 2700, ...fc, amount: 2500 },
+        { t: DAY + 3600, ...fc, amount: 3000 },
+      ],
+      DAY,
+      END,
+      900,
+    )
+    expect(stripSegments(items).map((s) => s.names)).toEqual([
+      ['Force charge · 3.0 kW', 'Force charge'],
+      ['Self-use'],
+      ['Force charge · 2.5–3.0 kW', 'Force charge'],
+    ])
+  })
+})
+
 describe('labelFits and segmentText', () => {
   it('fits a name of 7 px a character with 16 px of padding, 12 more on a chip', () => {
     expect(labelFits('Self-use', 72)).toBe(true) // 8 × 7 + 16

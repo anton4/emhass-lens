@@ -324,17 +324,19 @@ class InverterService:
 
 def describe(decision: Decision, before: Observed | None = None) -> str:
     """The decision in one line. `before` (what the registers showed) says whether the feed-in limit is kept or
-    changes: "feed-in 15500 W (kept)", "feed-in 15500 W (was 0 W)"; the UI marks a changed limit from it."""
+    changes: "feed-in 15500 W (kept)", "feed-in 15500 W (was 0 W)"; the UI marks a changed limit from it. The plan's
+    battery power ends it (" · P_batt -3000 W"), for the day strip's names."""
     t = decision.targets
     feed = f"feed-in {decision.feedin_max_w} W" if decision.feedin_needed else "feed-in unchanged"
     held = before.feedin_max_w if before is not None else None
     if decision.feedin_needed and held is not None:
         feed += " (kept)" if abs(held - decision.feedin_max_w) < 0.5 else f" (was {held:.0f} W)"
+    batt = f" · P_batt {decision.p_batt_w:.0f} W" if decision.p_batt_w is not None else ""
     if t is None:
-        return f"no passive-mode change ({decision.why}); {feed}"
+        return f"no passive-mode change ({decision.why}); {feed}{batt}"
     return (
         f"'{t.state}' (rule {decision.rule}): grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W, "
-        f"{feed}"
+        f"{feed}{batt}"
     )
 
 

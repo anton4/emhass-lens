@@ -18,15 +18,14 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D5 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D6.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D6 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D7.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
   - ~~**D4** (backend) the market's summaries say why nothing was written~~ (done).
   - ~~**D5** (backend) the charger's decisions name the charge mode and the charging state~~ (done).
-  - **D6** (backend) inverter slot names carry the plan's battery power (`describe` appends " · P_batt {p} W";
-    the frontend parses it into `amount`).
+  - ~~**D6** inverter slot names carry the plan's battery power~~ (done).
   - **D7** `feat: step the day strips through past days`: backend `SofarWriter.writes_between`/`presses_between`
     and `GET /api/inverter/activity?since&until` (at most 8 d); frontend `DayChips`, `?day=`, `stripDays`,
     `clampDay`; up to 7 days back; every page queries the chosen day.
@@ -181,6 +180,15 @@ These come from docs/PLAN.md §10:
     start, limit 8 A · mode EMHASS, plugged in, was 0 A, plan 5.5 kW". D10 reads them for the EV strip.
   - The frontend's `parseChargerSummary` takes the new facts as they are (test added); the mock writes them.
   - Backend 475 tests.
+- **D6, the plan's battery power on the Inverter strip:**
+  - Backend: `Decision.p_batt_w` (the plan's P_batt it was decided from), and `describe` ends with " · P_batt -3000
+    W". Tests that read a summary's end use `settings()` (the part before it).
+  - Frontend:
+    - `parseDecisionTargets` reads it into `p_batt_w` (null before 0.5.3).
+    - `inverterStrip` sets `amount` (|P_batt|) on Force charge and Force discharge slots, not when held.
+    - `stripSegments` names a stretch with amounts "Force charge · 3.0 kW" ("· 2.5–3.0 kW" when it varies) before
+      the plain name, so the power shows where there is room.
+  - Backend 476 tests, frontend 445.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

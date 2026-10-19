@@ -134,6 +134,7 @@ export interface DecisionTargets {
   battery_max_w: number
   feedin_max_w: number | null // null: the limit was left as it is
   feedin_before_w: number | null // what the register showed before the run; null: not known (or left as it is)
+  p_batt_w: number | null // the plan's battery power it was decided from (+ discharge); null before 0.5.3
 }
 
 const TARGETS = new RegExp(
@@ -142,12 +143,14 @@ const TARGETS = new RegExp(
 )
 
 /** The settings from a decide run's summary, e.g. "Would set 'Force charge' (rule force_charge): grid 5600 W,
- * battery -3000…20000 W, feed-in 0 W (was 15500 W)" ("(kept)" when the register already held the limit, "feed-in
- * unchanged" when the limit is left as it is; runs made before 0.4.40 don't say what the register held). Null for
- * runs without settings (nothing to decide, refused) and for runs made before the summary named them. */
+ * battery -3000…20000 W, feed-in 0 W (was 15500 W) · P_batt -3000 W" ("(kept)" when the register already held the
+ * limit, "feed-in unchanged" when the limit is left as it is; runs made before 0.4.40 don't say what the register
+ * held, and before 0.5.3 not the plan's battery power). Null for runs without settings (nothing to decide, refused)
+ * and for runs made before the summary named them. */
 export function parseDecisionTargets(summary: string | null | undefined): DecisionTargets | null {
   const m = summary ? TARGETS.exec(summary) : null
   if (!m) return null
+  const batt = / · P_batt (-?\d+) W/.exec(summary ?? '')
   return {
     state: m[1]!,
     rule: m[2]!,
@@ -156,6 +159,7 @@ export function parseDecisionTargets(summary: string | null | undefined): Decisi
     battery_max_w: Number(m[5]),
     feedin_max_w: m[6] === undefined ? null : Number(m[6]),
     feedin_before_w: m[7] !== undefined ? Number(m[6]) : m[8] !== undefined ? Number(m[8]) : null,
+    p_batt_w: batt ? Number(batt[1]) : null,
   }
 }
 
@@ -248,6 +252,9 @@ export const MODE_TONES: ModeTone[] = [
     ink: 'var(--on-mode-force-discharge)',
   },
 ]
+
+/** The states whose name on the strip carries the plan's battery power ("Force charge · 3.0 kW"). */
+const AMOUNT_STATES = ['Force charge', 'Force discharge']
 
 export const NOT_IN_CONTROL_FILL = 'var(--mode-blocked)'
 export const NO_SETTINGS_FILL = 'var(--line-neutral)'
@@ -419,6 +426,8 @@ export function inverterStrip(
       }
     }
     const tone = targets ? modeTone(targets.state) : null
+    // a force charge or discharge is named with the plan's battery power
+    const forced = targets !== null && !blocked && AMOUNT_STATES.includes(targets.state)
     const compare = detail.compare
     const market = detail.market
     if (market) {
@@ -442,6 +451,7 @@ export function inverterStrip(
       runId: row.decide?.id ?? row.compare?.id,
       fill: blocked ? NOT_IN_CONTROL_FILL : (tone?.fill ?? NO_SETTINGS_FILL),
       ink: blocked ? null : (tone?.ink ?? NO_SETTINGS_INK),
+      amount: forced && targets.p_batt_w !== null ? Math.abs(targets.p_batt_w) : null,
       wrote: action?.kind === 'set',
       detail,
     })
