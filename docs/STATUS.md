@@ -18,8 +18,8 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D9 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D10.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D10 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D11.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
@@ -29,8 +29,7 @@ what it still needs is copied below.
   - ~~**D7** `feat: step the day strips through past days`~~ (done).
   - ~~**D8** `feat: the rest of the day as plan, not yet done`~~ (done).
   - ~~**D9** `feat: the inverter's planned modes for the rest of the day`~~ (done).
-  - **D10** `feat: the EV charger strip by charging state, with the next plan`: `chargerFacts`, marks for
-    unplugged, charging and plugged in, `chargerTicks`, `chargerAhead` ("next plan: Sat 03:00–05:30").
+  - ~~**D10** `feat: the EV charger strip by charging state, with the next plan`~~ (done).
   - **D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`: `sessionInputs`,
     `sessionRows` (P9's baseline, P10's 8 days), `marketTicks`, "no session announced yet".
   - **D12** `chore: release 0.5.3` (DOCS.md, STATUS.md, CHANGELOG.md, version).
@@ -243,6 +242,24 @@ These come from docs/PLAN.md §10:
   - **e2e 28/28.** The first run failed the cost-function check once: EMHASS's last run was "older than this
     request" for all three. The Docker clock agreed with the host afterwards, and the rerun passed; it is worth
     watching.
+- **D10, the EV charger strip by charging state:**
+  - `lib/charger.ts`:
+    - `chargerFacts` reads D5's "mode EMHASS, plugged in, was 0 A, plan 5.5 kW".
+    - `chargerMark` names a decision by what the charger was doing: "charging · plan" (the plan's power as
+      `amount`), "charging · excess solar", "paused · plan", "plugged in · waiting", "plugged in · done",
+      "unplugged" (`--plug-unplugged`, a faint hatch, so a chip), "target SoC reached". A decision with nothing to do
+      takes the state it saw; summaries from before 0.5.3 read "nothing to do". Keys: Plugged in and Unplugged added.
+    - `chargerTicks`: writes, "would write" (a dry run's start, adjust, pause or stop), held (not in control), and
+      "nothing to do" where the charging state changed (the car came or went).
+    - `chargerAhead` from the plan in force (`P_deferrable0`): "charging · plan" where EMHASS charges the car, and
+      between "next plan: Sat 03:00–05:30" (the weekday only on another day) or "nothing planned". Their popups
+      (`Stretch.planned`, a "Planned" chip in `StretchPopup`) say which plan.
+  - `holdStretches` carries a stretch's largest amount.
+  - **EV charger page:** the planned rest of today (not with control off), tomorrow's chip once the plan reaches it,
+    and the key only when it has entries. `DayStrip` lost the comparison counts it showed in the head without a key
+    (`stripCounts`, `.day-strip-legend`): every page has its key under the strip now.
+  - Checked in Chrome: today (dry run) and tomorrow.
+  - Frontend 453 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

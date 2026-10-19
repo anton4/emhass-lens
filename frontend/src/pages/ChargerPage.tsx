@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useChargeMode, useChargerDecide } from '../api/actions'
-import { useCharger, useRuns, useSettings, useStatus } from '../api/queries'
+import { useCharger, usePlan, useRuns, useSettings, useStatus } from '../api/queries'
 import { ChargerDecisionView, ChargerRulesExplainer, SolarFacts } from '../components/ChargerViews'
 import { AgreeHeadline, CompareTable } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
@@ -16,12 +16,15 @@ import { useStripDay } from '../components/controller/useStripDay'
 import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
+import { holdStretches, keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
+import { dayBounds, shiftDay, todayKey } from '../lib/days'
 import {
   CHARGER_FIELD_LABELS,
   CHARGER_KEYS,
+  chargerAhead,
   chargerFieldValue,
   chargerMark,
+  chargerTicks,
   chargerModeSpec,
   pairCompares,
   parseChargerSummary,
@@ -66,12 +69,19 @@ export function ChargerPage() {
   const soc = data?.soc as SocClock | undefined
   const limits = settings.data?.settings.charger.limits
 
-  // the strip's day: today, or one up to a week back (?day=)
-  const { day, days, today, setDay } = useStripDay(tz, now)
+  // where the plan charges the car next; tomorrow can be shown once the plan reaches it
+  const plan = usePlan()
+  const zone = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+  const nowS = Math.floor(now.getTime() / 1000)
+  const ahead = useMemo(() => chargerAhead(plan.data, nowS, zone), [plan.data, nowS, zone])
+  const tomorrow = Date.parse(dayBounds(shiftDay(todayKey(tz, now), 1), tz).since) / 1000
+  const reachesTomorrow = ahead.some((a) => a.t + (a.span ?? 0) > tomorrow)
+  // the strip's day: today, one up to a week back, or tomorrow (?day=)
+  const { day, days, today, setDay } = useStripDay(tz, now, reachesTomorrow ? 1 : 0)
   const dayDecides = useRuns(runFilters('charger.decide', day, tz, 0))
   const dayCompares = useRuns(runFilters('charger.compare', day, tz, 0))
-  // each decision filled by what it did; the line under it says whether the automation did the same (dry run) or the
-  // decision wrote to the charger (live)
+  // each decision named and filled by what the charger was doing; the rows under it say what EMHASS Lens wrote and
+  // whether the automation did the same (dry run)
   const { strip, key, wrote } = useMemo(() => {
     const rows = pairCompares(dayDecides.data ?? [], dayCompares.data ?? [])
     const marks = rows.map((row) => chargerMark(row.decide?.summary))
@@ -85,10 +95,12 @@ export function ChargerPage() {
         detail: mark?.title,
         fill: mark?.fill ?? null,
         ink: mark?.ink ?? null,
+        amount: mark?.amount,
         wrote: mark?.wrote,
       }
     })
-    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS), wrote: wroteTicks(inputs) }
+    const ticks = chargerTicks(rows.map((row) => ({ t: Date.parse(row.at) / 1000, summary: row.decide?.summary })))
+    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS), wrote: ticks }
   }, [dayDecides.data, dayCompares.data])
 
   return (
@@ -210,11 +222,12 @@ export function ChargerPage() {
               ? 'Nothing decided: EV charger control is off.'
               : 'No decisions yet today.'
         }
-        legend={<StripKey items={key} />}
+        legend={key.length > 0 ? <StripKey items={key} /> : undefined}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
         tally={stretchTally}
         differText={stretchDiffers}
         writes={{ ticks: wrote, target: 'charger', held: 'held: not in control' }}
+        ahead={data?.mode === 'off' ? undefined : ahead}
       />
 
       <div className="two-col">

@@ -143,6 +143,8 @@ export interface Stretch {
   differs: number
   /** The mark's fill, for the popup's swatch. */
   fill?: string | null
+  /** A stretch still to come: what the plan says, in place of the comparison. */
+  planned?: string
 }
 
 // a quarter-hour tick that starts a second late still continues the stretch
@@ -152,7 +154,7 @@ const STRETCH_SLACK = 60
  *  one mark, which holds until the next mark, at most `max` seconds after its last decision and at least `min` in all.
  *  A label change, a missing label or a gap of more than `max` starts a new mark. A mark differs if any of its
  *  decisions did, and opens the first that differed (else its first). Each input's detail is the popup's title. A
- *  mark takes its first decision's fill and ink, and wrote if any of its decisions did. */
+ *  mark takes its first decision's fill and ink, the largest amount, and wrote if any of its decisions did. */
 export function holdStretches(inputs: StripInput<string>[], max: number, min = 60): StripInput<Stretch>[] {
   const sorted = [...inputs].sort((a, b) => a.t - b.t)
   const groups: StripInput<string>[][] = []
@@ -174,6 +176,7 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
     const same = group.filter((g) => g.compare === 'ok').length
     const differs = group.filter((g) => g.compare === 'mismatch').length
     const fill = first.fill ?? null
+    const amounts = group.flatMap((g) => (g.amount != null ? [g.amount] : []))
     return {
       t: first.t,
       span: Math.max(min, until - first.t),
@@ -183,6 +186,7 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
       fill,
       ink: first.ink ?? null,
       wrote: group.some((g) => g.wrote),
+      amount: amounts.length > 0 ? Math.max(...amounts) : null,
       detail: {
         from: first.t,
         last: last.t,
@@ -437,11 +441,4 @@ export function stripRuns(items: StripItem[]): StripRun[] {
   const key = (i: StripItem) => `${i.fill ?? i.state}${i.ahead ? ' ahead' : ''}`
   const joins = (a: StripItem | undefined, b: StripItem | undefined) => !!a && !!b && key(a) === key(b) && touches(a, b)
   return items.map((item, i) => ({ start: !joins(items[i - 1], item), end: !joins(item, items[i + 1]) }))
-}
-
-/** How many of the day's compared decisions were the same as the automation. */
-export function stripCounts(items: StripItem[]): { same: number; differs: number; none: number } {
-  const counts = { same: 0, differs: 0, none: 0 }
-  for (const item of items) counts[item.state]++
-  return counts
 }

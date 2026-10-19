@@ -2,11 +2,12 @@
 // decisions, comparisons and the rules. See backend/emhass_lens/domain/charger.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { ChargerSettings, RunSummary } from '../api/types'
-import { formatTime } from './format'
+import type { ChargerSettings, PlanResponse, RunSummary } from '../api/types'
+import { dayTimeLabel } from './chartTime'
+import { dayKey, formatTime } from './format'
 import type { CompareField, RuleText } from './inverter'
 import { NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
-import type { StripMark } from './dayStrip'
+import type { Stretch, StripInput, StripMark, WriteTick } from './dayStrip'
 
 export interface ChargerDerived {
   pv_power_w: number
@@ -163,19 +164,19 @@ export function parseChargerSummary(summary: string | null | undefined): ParsedC
 // a pause in its mode's colour, light
 const paused = (color: string) => `color-mix(in srgb, var(${color}) 35%, var(--surface))`
 
-/** The EV charger strip's fill, the ink of a name on it and the key entry per rule: the plan's charging in the EV
- *  colour, excess solar in PV's, a pause in a light shade of its mode's, the target-SoC stop in the state of
- *  charge's. */
-const CHARGER_TONES: Record<string, { key: string; fill: string; ink: string }> = {
-  emhass_start: { key: 'EMHASS: charging', fill: 'var(--q-ev)', ink: 'var(--on-q-ev)' },
-  emhass_adjust: { key: 'EMHASS: charging', fill: 'var(--q-ev)', ink: 'var(--on-q-ev)' },
-  emhass_pause: { key: 'EMHASS: paused', fill: paused('--q-ev'), ink: 'var(--ink)' },
-  solar_start: { key: 'Excess solar: charging', fill: 'var(--q-pv)', ink: 'var(--on-q-pv)' },
-  solar_adjust: { key: 'Excess solar: charging', fill: 'var(--q-pv)', ink: 'var(--on-q-pv)' },
-  solar_pause: { key: 'Excess solar: paused', fill: paused('--q-pv'), ink: 'var(--ink)' },
-  soc_limit: { key: 'Target SoC: stop', fill: 'var(--q-soc)', ink: 'var(--on-q-soc)' },
+/** The EV charger strip's tones: the plan's charging in the EV colour, excess solar in PV's, a pause in a light shade
+ *  of its mode's, the target-SoC stop in the state of charge's, plugged in neutral, unplugged hatched faintly (its
+ *  name on a chip). */
+const CHARGER_TONES = {
+  plan: { key: 'EMHASS: charging', fill: 'var(--q-ev)', ink: 'var(--on-q-ev)' },
+  planPaused: { key: 'EMHASS: paused', fill: paused('--q-ev'), ink: 'var(--ink)' },
+  solar: { key: 'Excess solar: charging', fill: 'var(--q-pv)', ink: 'var(--on-q-pv)' },
+  solarPaused: { key: 'Excess solar: paused', fill: paused('--q-pv'), ink: 'var(--ink)' },
+  soc: { key: 'Target SoC: stop', fill: 'var(--q-soc)', ink: 'var(--on-q-soc)' },
+  plugged: { key: 'Plugged in', fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK },
+  unplugged: { key: 'Unplugged', fill: 'var(--plug-unplugged)', ink: null },
   none: { key: 'Nothing to do', fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK },
-}
+} satisfies Record<string, { key: string; fill: string; ink: string | null }>
 
 /** The EV charger strip's key entries, in order. */
 export const CHARGER_KEYS = [
@@ -184,23 +185,160 @@ export const CHARGER_KEYS = [
   'Excess solar: charging',
   'Excess solar: paused',
   'Target SoC: stop',
+  'Plugged in',
+  'Unplugged',
   'Nothing to do',
   'Not in control',
 ]
 
-/** A charger decision on the EV charger page's day strip: named by its rule, filled by what it does, `title` for its
- *  popup, and whether it wrote to the charger (live: "Did …"). Null for summaries without a rule. */
-export function chargerMark(summary: string | null | undefined): (StripMark & { title: string }) | null {
+/** What a charger decision was made from (its facts since 0.5.3): the charge mode, the charging state ("unplugged",
+ *  "charging", "plugged in", "state 3") and the plan's EV power in W. Null where the summary doesn't say. */
+export interface ChargerFacts {
+  mode: string | null
+  state: string | null
+  planW: number | null
+}
+
+const FACTS = /(?:^|· )mode ([^,]+), (unplugged|charging|plugged in|state [^,]+), was /
+
+export function chargerFacts(summary: string | null | undefined): ChargerFacts {
+  const s = summary ?? ''
+  const m = FACTS.exec(s)
+  const plan = /, plan (-?\d+(?:\.\d+)?) kW/.exec(s)
+  return {
+    mode: m && m[1] !== 'unknown' ? m[1]! : null,
+    state: m ? m[2]! : null,
+    planW: plan ? Number(plan[1]) * 1000 : null,
+  }
+}
+
+const RULE_MARK: Record<string, { label: string; tone: keyof typeof CHARGER_TONES }> = {
+  emhass_start: { label: 'charging · plan', tone: 'plan' },
+  emhass_adjust: { label: 'charging · plan', tone: 'plan' },
+  emhass_pause: { label: 'paused · plan', tone: 'planPaused' },
+  solar_start: { label: 'charging · excess solar', tone: 'solar' },
+  solar_adjust: { label: 'charging · excess solar', tone: 'solar' },
+  solar_pause: { label: 'paused · excess solar', tone: 'solarPaused' },
+  soc_limit: { label: 'target SoC reached', tone: 'soc' },
+}
+
+/** A charger decision on the EV charger page's day strip, named by what the charger was doing: "charging · plan" (with
+ *  the plan's power as `amount`), "charging · excess solar", "paused · plan", "plugged in · waiting", "plugged in ·
+ *  done", "unplugged", "target SoC reached"; a decision with nothing to do takes the charging state it saw.
+ *  `title` heads its popup; `wrote`: it wrote to the charger (live: "Did …"); `would`: a dry run would have. Null for
+ *  summaries without a rule. */
+export function chargerMark(
+  summary: string | null | undefined,
+): (StripMark & { title: string; amount: number | null; would: boolean }) | null {
   if (!summary) return null
   const parsed = parseChargerSummary(summary)
   if (summary.startsWith('Not in control')) {
     const title = parsed ? `Not in control; would: ${parsed.label}` : 'Not in control'
-    return { label: 'not in control', key: 'Not in control', fill: NOT_IN_CONTROL_FILL, ink: null, wrote: false, title }
+    const blocked = { label: 'not in control', key: 'Not in control', fill: NOT_IN_CONTROL_FILL, ink: null }
+    return { ...blocked, wrote: false, would: false, title, amount: null }
   }
   if (!parsed) return null
-  const tone = CHARGER_TONES[parsed.rule] ?? { key: parsed.label, fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK }
+  const facts = chargerFacts(summary)
+  const solarMode = /solar/i.test(facts.mode ?? '')
+  const ruled = RULE_MARK[parsed.rule]
+  const [label, tone] = ruled
+    ? [ruled.label, ruled.tone]
+    : facts.state === 'charging'
+      ? solarMode
+        ? ['charging · excess solar', 'solar' as const]
+        : ['charging · plan', 'plan' as const]
+      : facts.state === 'plugged in'
+        ? [/at the target/.test(parsed.action ?? '') ? 'plugged in · done' : 'plugged in · waiting', 'plugged' as const]
+        : facts.state === 'unplugged'
+          ? ['unplugged', 'unplugged' as const]
+          : ['nothing to do', 'none' as const]
+  const t = CHARGER_TONES[tone]
   const wrote = /(^|· )Did /.test(summary)
-  return { label: parsed.rule, key: tone.key, fill: tone.fill, ink: tone.ink, wrote, title: parsed.label }
+  const would = parsed.rule !== 'none' && summary.startsWith('Would ')
+  const amount = tone === 'plan' && facts.planW !== null && facts.planW > 0 ? facts.planW : null
+  return { label, key: t.key, fill: t.fill, ink: t.ink, wrote, would, title: parsed.label, amount }
+}
+
+/** The EV charger's "Lens wrote" row from its decisions: each write (live), each change a dry run would have made,
+ *  each decision held while EMHASS Lens wasn't in control, and a "nothing to do" where the charging state changed
+ *  (the car plugged in or left). */
+export function chargerTicks(decisions: { t: number; summary: string | null | undefined }[]): WriteTick[] {
+  const ticks: WriteTick[] = []
+  let state: string | null = null
+  for (const d of [...decisions].sort((a, b) => a.t - b.t)) {
+    const mark = chargerMark(d.summary)
+    if (!mark) continue
+    const seen = chargerFacts(d.summary).state
+    if (mark.wrote) ticks.push({ t: d.t, kind: 'wrote' })
+    else if (mark.key === 'Not in control') ticks.push({ t: d.t, kind: 'held' })
+    else if (mark.would) ticks.push({ t: d.t, kind: 'would' })
+    else if (seen !== null && state !== null && seen !== state) ticks.push({ t: d.t, kind: 'noop' })
+    state = seen ?? state
+  }
+  return ticks
+}
+
+/** The EV charger's rest of the day from the plan in force: where EMHASS plans to charge the car (P_deferrable0, its
+ *  power as `amount`) and, between, "next plan: Sat 03:00–05:30" (or "nothing planned" after the last charge). From
+ *  the slot that ends after `now` to the end of the plan; nothing when the plan has no EV load. */
+export function chargerAhead(
+  plan: PlanResponse | null | undefined,
+  now: number,
+  timeZone: string,
+): StripInput<Stretch>[] {
+  const snap = plan?.current
+  if (!snap || !snap.rows.some((r) => 'P_deferrable0' in r)) return []
+  const runs: { from: number; until: number; charging: boolean; w: number }[] = []
+  const slots = snap.rows
+    .map((r) => ({ t: Date.parse(String(r.timestamp)) / 1000, w: Number(r.P_deferrable0 ?? 0) || 0 }))
+    .filter((s) => Number.isFinite(s.t) && s.t + 900 > now)
+    .sort((a, b) => a.t - b.t)
+  for (const s of slots) {
+    const charging = s.w > 1
+    const last = runs.at(-1)
+    if (last && last.charging === charging && last.until === s.t) {
+      last.until += 900
+      last.w = Math.max(last.w, s.w)
+    } else {
+      runs.push({ from: s.t, until: s.t + 900, charging, w: s.w })
+    }
+  }
+  const today = dayKey(new Date(now * 1000), timeZone)
+  const clock = (t: number) => dayTimeLabel(t, timeZone).slice(-5)
+  // "03:00–05:30" today, "Sat 03:00–05:30" on another day
+  const when = (r: { from: number; until: number }) => {
+    const start = dayKey(new Date(r.from * 1000), timeZone) === today ? clock(r.from) : dayTimeLabel(r.from, timeZone)
+    return `${start}–${clock(r.until)}`
+  }
+  const made = snap.run_id ? ` (the plan of run ${snap.run_id})` : ''
+  return runs.map((r, i) => {
+    const stretch = { from: r.from, last: r.until, decisions: 0, same: 0, differs: 0 }
+    if (r.charging) {
+      const kw = `${(r.w / 1000).toFixed(1)} kW`
+      const fill = CHARGER_TONES.plan.fill
+      return {
+        t: r.from,
+        span: r.until - r.from,
+        label: 'charging · plan',
+        fill,
+        amount: r.w,
+        detail: { ...stretch, title: 'Charging planned', fill, planned: `EMHASS plans up to ${kw} for the car${made}.` },
+      }
+    }
+    const next = runs.slice(i + 1).find((n) => n.charging)
+    return {
+      t: r.from,
+      span: r.until - r.from,
+      label: next ? `next plan: ${when(next)}` : 'nothing planned',
+      fill: NO_SETTINGS_FILL,
+      detail: {
+        ...stretch,
+        title: next ? `Next charge planned ${when(next)}` : 'No charging in the plan',
+        fill: NO_SETTINGS_FILL,
+        planned: `Nothing for the car until then${made}.`,
+      },
+    }
+  })
 }
 
 /** The decision id a compare run's summary refers to ("Decision #12: …"). */

@@ -12,7 +12,6 @@ import {
   stretchDiffers,
   stretchTally,
   stretchText,
-  stripCounts,
   stripItems,
   stripRuns,
   stripSegments,
@@ -214,18 +213,6 @@ describe('stripRuns', () => {
       { start: true, end: false },
       { start: false, end: true },
     ])
-  })
-})
-
-describe('stripCounts', () => {
-  it('counts the states', () => {
-    const items = stripItems(
-      [{ t: DAY, compare: 'ok' }, { t: DAY + 900, compare: 'ok' }, { t: DAY + 1800 }],
-      DAY,
-      END,
-      900,
-    )
-    expect(stripCounts(items)).toEqual({ same: 2, differs: 0, none: 1 })
   })
 })
 

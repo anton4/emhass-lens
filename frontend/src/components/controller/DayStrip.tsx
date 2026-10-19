@@ -23,7 +23,6 @@ import {
   formatSpan,
   labelFits,
   segmentText,
-  stripCounts,
   stripItems,
   stripRuns,
   stripSegments,
@@ -36,7 +35,6 @@ import {
   type WriteTick,
 } from '../../lib/dayStrip'
 import { formatClock } from '../../lib/format'
-import { Lamp } from '../Lamp'
 import { useNow } from '../useNow'
 import { AgreePopup } from './AgreePopup'
 import { StripFooterKey } from './StripKey'
@@ -227,7 +225,7 @@ export function DayStrip<D = unknown>({
   subtitle?: string
   /** Shown when nothing was decided that day. */
   empty: string
-  /** What the fills mean, under the strip; without it the head counts the comparisons. */
+  /** What the fills mean, under the strip. */
   legend?: ReactNode
   /** More of the key under the strip, after the Automation row's. */
   footer?: ReactNode
@@ -270,7 +268,6 @@ export function DayStrip<D = unknown>({
   const segments = useMemo(() => stripSegments(items), [items])
   const agree = useMemo(() => agreeRuns(items, tally), [items, tally])
   const hours = useMemo(() => dayHours(day, timeZone), [day, timeZone])
-  const counts = stripCounts(items)
   const agreed = agree.reduce((n, r) => ({ same: n.same + r.same, differs: n.differs + r.differs }), {
     same: 0,
     differs: 0,
@@ -336,21 +333,6 @@ export function DayStrip<D = unknown>({
           {head && <span className="day-strip-sub">{head}</span>}
         </div>
         {chips}
-        {!legend && (
-          <span className="day-strip-legend">
-            <span className="labelled-lamp">
-              <Lamp color="green" /> {counts.same} same as the automation
-            </span>
-            <span className="labelled-lamp">
-              <Lamp color="amber" /> {counts.differs} differ
-            </span>
-            {counts.none > 0 && (
-              <span className="labelled-lamp">
-                <Lamp color="neutral" lit={false} /> {counts.none} not compared
-              </span>
-            )}
-          </span>
-        )}
       </div>
       <div className="panel-body">
         <p className="day-strip-intro">
@@ -373,12 +355,7 @@ export function DayStrip<D = unknown>({
                   className="day-strip-track"
                   ref={track}
                   role="group"
-                  aria-label={
-                    legend
-                      ? `Today, ${what} by ${what}: use the arrow keys to move between ${what}s`
-                      : `Today: ${counts.same} ${what}s the same as the automation, ${counts.differs} different, ` +
-                        `${counts.none} not compared`
-                  }
+                  aria-label={`${title}, ${what} by ${what}: use the arrow keys to move between ${what}s`}
                 >
                   {items.map((item, i) => (
                     <button

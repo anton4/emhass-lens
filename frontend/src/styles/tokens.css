@@ -119,6 +119,8 @@
   --market-stripe: rgba(255, 255, 255, 0.5);
   /* the hatch over the rest of the day on a day strip: planned, not yet done */
   --plan-hatch: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0 2px, transparent 2px 6px);
+  /* the EV charger strip: the car unplugged, a faint hatch on the track's own colour */
+  --plug-unplugged: repeating-linear-gradient(135deg, var(--chart-hatch) 0 2px, transparent 2px 7px), var(--surface-sunk);
   /* A name written on a day strip's fill, at least 4.5:1 against it (styles/stripInk.test.ts checks every pair in both
      themes). Textured fills have none: their names sit on a chip. */
   --on-mode-force-charge: #000000;
