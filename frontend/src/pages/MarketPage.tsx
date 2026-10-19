@@ -80,7 +80,7 @@ export function MarketPage() {
         label: mark?.label ?? null,
         runId: row.reconcile?.id ?? row.compare?.id,
         fill: mark?.fill ?? null,
-        quiet: mark?.quiet,
+        ink: mark?.ink ?? null,
         band: mark?.wrote ? STRIP_BAND.wrote : null,
       }
     })
@@ -169,6 +169,8 @@ export function MarketPage() {
         span={900}
         timeZone={tz}
         what="decision"
+        rowLabel="Session"
+        subtitle="Qilowatt commands and what EMHASS Lens did with the inverter"
         empty={
           data?.mode === 'off'
             ? 'Nothing decided: market control is off.'

@@ -25,7 +25,7 @@ import {
   watchdogText,
   type MarketDecision,
 } from './market'
-import { marketFill, NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
+import { marketFill, NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
   return { id, job, trigger: 'event', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
@@ -34,14 +34,19 @@ function run(id: number, job: string, startedAt: string, summary: string | null 
 describe('marketMark', () => {
   it('fills a session like the Inverter strip, striped in the state it sets, and says whether it wrote', () => {
     const live = marketMark("Kratt sell 7000W: set 'Force discharge', grid -7000 W, battery -20000…20000 W; feed-in 7000 W")
-    expect(live).toEqual({ label: 'Kratt sell 7000W', key: 'Market sell', fill: marketFill('sell'), quiet: false, wrote: true })
+    // striped: the name goes on a chip, so no ink
+    expect(live).toEqual({ label: 'Kratt sell 7000W', key: 'Market sell', fill: marketFill('sell'), ink: null, wrote: true })
     expect(marketMark('Kratt buy 5000W: feed-in 0 W')).toMatchObject({ key: 'Market buy', fill: marketFill('buy'), wrote: true })
     expect(marketMark('Kratt sell 7000W: registers unchanged')?.wrote).toBe(false)
     expect(marketMark('Would: Kratt sell 5000W')).toMatchObject({ key: 'Market sell', wrote: false })
   })
 
   it('names and fills the decisions without a session', () => {
-    expect(marketMark('No action: no command')).toMatchObject({ label: 'no action', fill: NO_SETTINGS_FILL, quiet: true })
+    expect(marketMark('No action: no command')).toMatchObject({
+      label: 'no action',
+      fill: NO_SETTINGS_FILL,
+      ink: NO_SETTINGS_INK,
+    })
     expect(marketMark("Not in control (input_boolean.qilowatt_automation is 'off'); would: Kratt sell 5000W")).toMatchObject({
       label: 'not in control',
       fill: NOT_IN_CONTROL_FILL,

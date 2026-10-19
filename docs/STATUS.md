@@ -18,12 +18,9 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** First open the
-  Inverter, EV charger and Market pages on `main` in a browser: their strips were never checked after 44d8fe1.
-  The mock needs inverter, charger and market endpoints added.
-  - **D1** `feat: draw the day strips as labelled rows with names inside`: `stripSegments`, `segmentText`,
-    `labelFits`, `dayHours` (23 or 25 h on DST days); `ink` tokens per fill (4.5:1); a 104 px gutter (Mode /
-    Charger / Session), a 52 px row and subtitles. The label row above the strip goes.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1 is done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D2.
+  - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - **D2** `feat: an Automation row of agreed and differed stretches`: `agreeRuns`/`agreeText`, `formatSpan`,
     `AgreePopup` (a second tab stop); `StripFooterKey` replaces `StripLine` and the old band.
   - **D3** `feat: a "Lens wrote" row on the Inverter page`: `WriteTick`, `writeCounts`, `inverterTicks`,
@@ -85,6 +82,52 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-19: Phase 4, the controller day strips (variant A, board A3)
+- **Step 0, the three pages on `main` before D1** (they were never opened after 44d8fe1):
+  - The strips rendered. Each slot of a run had a 1 px seam, so a run read as a barcode.
+  - Names sat in a monospace row above the strip; on the EV charger they were the rule ids ("none",
+    "emhass_start").
+  - At 390 px the now tag covered the 06:00 label.
+  - On the Market strip the hourly "no action" decisions are separate 15-minute grey marks, and each power change
+    of a session starts a new mark. D11 replaces this strip.
+- **The mock** (`frontend/node_modules/.cache/mock/vite.mock.config.mjs`, not committed) now covers the controllers:
+  - 8 days of `inverter.decide`/`compare`, `charger.decide`/`compare` and `market.reconcile`/`compare` runs, with
+    the backend's summary forms;
+  - `/api/inverter`, `/api/charger` and `/api/market`: the local backend's answer with the controller's parts
+    replaced (mode, agreement, wear, writes, presses);
+  - `/api/market/sessions` (live only);
+  - `/mock/set?ctl=1` for live (dry run and shadow otherwise);
+  - a 2 h 15 min aFRR sell early today, so a session's name fits.
+  - Vite doesn't watch a config under `node_modules`: restart it after an edit.
+- **D1, the strips as labelled rows with names inside:**
+  - `lib/dayStrip.ts`:
+    - `ink` on `StripInput`, `StripItem` and `StripMark` (a stretch takes its first decision's);
+    - `stripSegments` (touching marks with one name and fill);
+    - `labelFits` (7 px a character plus 16 px, 12 more on a chip) and `segmentText` (the first name that fits);
+    - `dayHours` (25 marks, 26 on 2026-10-25 with 03:00 twice, 24 on 2026-03-29).
+    - `stripLabels` and the `quiet` flag are gone with the label row.
+  - **Inks:** `--on-mode-*`, `--on-q-ev`/`-pv`/`-soc` and `--on-lamp-amber`, light and dark.
+    - The design's white on force charge is 4.42:1 (light) and 3.64:1 (dark), so those inks are near-black.
+    - Textured fills put their name on a surface chip: restrict export's dots, charge + export, the market's
+      stripes and the not-in-control hatch.
+    - `styles/stripInk.test.ts` resolves every fill and ink the strips use from tokens.css and asserts 4.5:1 in
+      both themes. Vitest's `css.include` now lets tokens.css through (other CSS still comes back empty). Checked
+      that the test fails with white on force charge.
+  - **`DayStrip`:**
+    - `rowLabel` in a 104 px gutter (above the strip below 640 px) and `subtitle` beside the title; the key moved
+      into the head.
+    - A 52 px track with each stretch's name inside.
+    - The axis from `dayHours`, labelled by local hour and kept 48 px clear of the now tag.
+    - A run of equal marks is one stretch: each mark overlaps the next by 1 px, so no seam shows. The popup and
+      its caret moved down with the track.
+  - **Pages:** Mode ("Sofar mode per slot, market sessions striped"), Charger ("Combined EMHASS plan and excess
+    solar"), Session ("Qilowatt commands and what EMHASS Lens did with the inverter").
+  - Checked in Chrome at 1440, 900 and 390 px, light and dark, dry run and live: hover and arrow-key popups, the
+    chips, the press dots, no side scroll.
+  - **Still to come:** the EV charger's names are rule ids until D10, and the market's short marks have no room for
+    a name until D11.
+  - Frontend: 429 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

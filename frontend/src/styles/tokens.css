@@ -117,6 +117,17 @@
   --mode-blocked: repeating-linear-gradient(135deg, var(--ink-faint) 0 1px, transparent 1px 5px), var(--surface-sunk);
   /* the stripe over a state a market session set (marketFill in lib/inverter.ts) */
   --market-stripe: rgba(255, 255, 255, 0.5);
+  /* A name written on a day strip's fill, at least 4.5:1 against it (styles/stripInk.test.ts checks every pair in both
+     themes). Textured fills have none: their names sit on a chip. */
+  --on-mode-force-charge: #000000;
+  --on-mode-grid-only: #ffffff;
+  --on-mode-self-use: #1b1c1f;
+  --on-mode-pv-export: #0b2e22;
+  --on-mode-force-discharge: #1b1c1f;
+  --on-q-ev: #0b2e22;
+  --on-q-pv: #1b1c1f;
+  --on-q-soc: #000000;
+  --on-lamp-amber: #1b1c1f;
   --chart-grid: #eceef2;
   --chart-axis: #c4c7cf;
   --chart-wash: rgba(27, 28, 31, 0.045);
@@ -254,6 +265,15 @@
     --mode-pv-export: #199e70;
     --mode-force-discharge: #d95926;
     --market-stripe: rgba(16, 17, 20, 0.45);
+    --on-mode-force-charge: #0a1220;
+    --on-mode-grid-only: #1b1c1f;
+    --on-mode-self-use: #ffffff;
+    --on-mode-pv-export: #041a13;
+    --on-mode-force-discharge: #111214;
+    --on-q-ev: #041a13;
+    --on-q-pv: #1b1c1f;
+    --on-q-soc: #1b1c1f;
+    --on-lamp-amber: #1b1c1f;
     --chart-grid: #26282d;
     --chart-axis: #44474e;
     --chart-wash: rgba(227, 228, 232, 0.06);

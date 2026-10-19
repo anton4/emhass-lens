@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RunSummary } from '../api/types'
 import { chargerFieldValue, chargerMark, chargerRules, decisionRef, pairCompares, parseChargerSummary } from './charger'
-import { NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
+import { NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
 
 function run(id: number, job: string, startedAt: string, summary: string | null = null, outcome = 'ok'): RunSummary {
   return { id, job, trigger: 'manual', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
@@ -13,18 +13,26 @@ describe('chargerMark', () => {
       label: 'emhass_start',
       key: 'EMHASS: charging',
       fill: 'var(--q-ev)',
-      quiet: false,
+      ink: 'var(--on-q-ev)',
       wrote: false,
       title: 'EMHASS: start charging',
     })
     expect(chargerMark("Did 'Excess solar: adjust the current' (solar_adjust): limit 13 A · was 10 A")).toMatchObject({
       key: 'Excess solar: charging',
       fill: 'var(--q-pv)',
+      ink: 'var(--on-q-pv)',
       wrote: true,
     })
-    expect(chargerMark("Would 'EMHASS: pause charging' (emhass_pause): press pause")?.fill).toContain('--q-ev')
+    expect(chargerMark("Would 'EMHASS: pause charging' (emhass_pause): press pause")).toMatchObject({
+      fill: expect.stringContaining('--q-ev') as string,
+      ink: 'var(--ink)',
+    })
     expect(chargerMark("Did 'Target SoC reached: stop charging' (soc_limit): press stop, limit 0 A")?.key).toBe('Target SoC: stop')
-    expect(chargerMark('Nothing to do: charge mode is Manual')).toMatchObject({ fill: NO_SETTINGS_FILL, quiet: true, wrote: false })
+    expect(chargerMark('Nothing to do: charge mode is Manual')).toMatchObject({
+      fill: NO_SETTINGS_FILL,
+      ink: NO_SETTINGS_INK,
+      wrote: false,
+    })
   })
 
   it('marks a decision set back by the drift check as written, and one not in control hatched', () => {
@@ -34,7 +42,7 @@ describe('chargerMark', () => {
       label: 'not in control',
       key: 'Not in control',
       fill: NOT_IN_CONTROL_FILL,
-      quiet: false,
+      ink: null,
       wrote: false,
       title: 'Not in control; would: EMHASS: start charging',
     })

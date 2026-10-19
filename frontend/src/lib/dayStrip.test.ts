@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { holdStretches, keyCounts, STRIP_BAND, stretchText, stripCounts, stripItems, stripLabels, stripRuns } from './dayStrip'
+import {
+  dayHours,
+  holdStretches,
+  keyCounts,
+  labelFits,
+  segmentText,
+  STRIP_BAND,
+  stretchText,
+  stripCounts,
+  stripItems,
+  stripRuns,
+  stripSegments,
+} from './dayStrip'
 
 const DAY = Date.parse('2026-10-09T21:00:00Z') / 1000 // Sat 10 Oct 00:00 in Tallinn
 const END = DAY + 86400
@@ -22,20 +34,20 @@ describe('stripItems', () => {
     expect(items[0]?.runId).toBe(1)
   })
 
-  it('carries the fill, the line, the quiet flag and the detail', () => {
+  it('carries the fill, the ink, the line and the detail', () => {
     const [item] = stripItems(
-      [{ t: DAY, fill: 'var(--mode-force-charge)', band: 'var(--line-green)', quiet: true, detail: { run: 7 } }],
+      [{ t: DAY, fill: 'var(--mode-force-charge)', ink: 'black', band: 'var(--line-green)', detail: { run: 7 } }],
       DAY,
       END,
       900,
     )
     expect(item).toMatchObject({
       fill: 'var(--mode-force-charge)',
+      ink: 'black',
       band: 'var(--line-green)',
-      quiet: true,
       detail: { run: 7 },
     })
-    expect(stripItems([{ t: DAY }], DAY, END, 900)[0]).toMatchObject({ fill: null, band: null, quiet: false })
+    expect(stripItems([{ t: DAY }], DAY, END, 900)[0]).toMatchObject({ fill: null, ink: null, band: null })
   })
 
   it('leaves out decisions of other days and trims the last slot at midnight', () => {
@@ -45,40 +57,70 @@ describe('stripItems', () => {
   })
 })
 
-describe('stripLabels', () => {
-  it('names a rule where it changes and skips names that would overlap', () => {
+describe('stripSegments', () => {
+  it('joins touching marks with the same name and fill into one stretch, and leaves unnamed ones out', () => {
     const items = stripItems(
       [
-        { t: DAY, label: 'force_charge' },
-        { t: DAY + 900, label: 'force_charge' },
-        { t: DAY + 1800, label: 'self_use' }, // too close to the first name
-        { t: DAY + 6 * 3600, label: 'charge_export' },
-        { t: DAY + 18 * 3600, label: 'force_discharge' },
+        { t: DAY, label: 'Self-use', fill: 'lilac', ink: 'black' },
+        { t: DAY + 900, label: 'Self-use', fill: 'lilac', ink: 'black' },
+        { t: DAY + 1800, label: 'Force charge', fill: 'blue', ink: 'white' },
+        { t: DAY + 2700 }, // no name
+        { t: DAY + 3600, label: 'Force charge', fill: 'blue', ink: 'white' },
+        { t: DAY + 4500, label: 'Force charge', fill: 'stripes' }, // same name, another fill
+        { t: DAY + 7200, label: 'Force charge', fill: 'stripes' }, // a slot missing before it
       ],
       DAY,
       END,
       900,
     )
-    expect(stripLabels(items).map((l) => l.text)).toEqual(['force_charge', 'charge_export', 'force_discharge'])
+    const segments = stripSegments(items)
+    expect(segments.map((s) => [s.names, s.from, s.to, s.ink])).toEqual([
+      [['Self-use'], 0, 1, 'black'],
+      [['Force charge'], 2, 2, 'white'],
+      [['Force charge'], 4, 4, 'white'],
+      [['Force charge'], 5, 5, null],
+      [['Force charge'], 6, 6, null],
+    ])
+    expect(segments[0]?.x).toBe(0)
+    expect(segments[0]?.w).toBeCloseTo(1800 / 86400)
+  })
+})
+
+describe('labelFits and segmentText', () => {
+  it('fits a name of 7 px a character with 16 px of padding, 12 more on a chip', () => {
+    expect(labelFits('Self-use', 72)).toBe(true) // 8 × 7 + 16
+    expect(labelFits('Self-use', 71)).toBe(false)
+    expect(labelFits('Self-use', 72, true)).toBe(false)
+    expect(labelFits('Self-use', 84, true)).toBe(true)
   })
 
-  it('lets quiet names give way and hangs a name at the end of the day to the left', () => {
-    const items = stripItems(
-      [
-        { t: DAY, label: 'Self-use', quiet: true },
-        { t: DAY + 1800, label: 'Force charge' }, // overlaps the quiet name before it, which gives way
-        { t: DAY + 6 * 3600, label: 'Self-use', quiet: true },
-        { t: END - 900, label: 'Force discharge' },
-      ],
-      DAY,
-      END,
-      900,
-    )
-    const labels = stripLabels(items, 1000)
-    expect(labels.map((l) => l.text)).toEqual(['Force charge', 'Self-use', 'Force discharge'])
-    expect(labels.map((l) => l.end)).toEqual([false, false, true])
-    // on a wide strip there is room for all of them
-    expect(stripLabels(items, 4000)).toHaveLength(4)
+  it('takes the first name that fits, longest first', () => {
+    const names = ['Force charge · 3.0 kW', 'Force charge']
+    expect(segmentText(names, 400)).toBe('Force charge · 3.0 kW')
+    expect(segmentText(names, 120)).toBe('Force charge')
+    expect(segmentText(names, 60)).toBeNull()
+  })
+})
+
+describe('dayHours', () => {
+  const tz = 'Europe/Tallinn'
+  it('marks the 24 hours of a day and its end', () => {
+    const hours = dayHours('2026-10-10', tz)
+    expect(hours).toHaveLength(25)
+    expect(hours[0]).toEqual({ t: DAY, label: '00:00', hour: 0 })
+    expect(hours[3]).toEqual({ t: DAY + 3 * 3600, label: '03:00', hour: 3 })
+    expect(hours.at(-1)).toEqual({ t: END, label: '24:00', hour: 24 })
+  })
+
+  it('has 03:00 twice on the day the clocks go back, and no 03:00 on the day they go forward', () => {
+    const back = dayHours('2026-10-25', tz)
+    expect(back).toHaveLength(26)
+    expect(back.map((h) => h.label).slice(2, 6)).toEqual(['02:00', '03:00', '03:00', '04:00'])
+    expect(back.at(-1)!.t - back[0]!.t).toBe(25 * 3600)
+    const forward = dayHours('2026-03-29', tz)
+    expect(forward).toHaveLength(24)
+    expect(forward.map((h) => h.label).slice(2, 4)).toEqual(['02:00', '04:00'])
+    expect(forward.at(-1)!.t - forward[0]!.t).toBe(23 * 3600)
   })
 })
 
@@ -186,20 +228,20 @@ describe('holdStretches', () => {
     expect(unknown).toMatchObject({ compare: null, detail: { title: 'Charge from the plan' } })
   })
 
-  it("takes a filled mark's fill from its first decision, the comparison or a write on the line under it", () => {
+  it("takes a filled mark's fill and ink from its first decision, the comparison or a write on the line under it", () => {
     const sell = 'orange'
     const [shadow, live, plain] = holdStretches(
       [
         { t: DAY, label: 'Kratt sell 3000W', fill: sell, compare: 'ok' },
         { t: DAY + 60, label: 'Kratt sell 3000W', fill: sell, compare: 'mismatch' },
-        { t: DAY + 120, label: 'no action', fill: 'grey', quiet: true },
-        { t: DAY + 180, label: 'no action', fill: 'grey', quiet: true, band: STRIP_BAND.wrote },
+        { t: DAY + 120, label: 'no action', fill: 'grey', ink: 'black' },
+        { t: DAY + 180, label: 'no action', fill: 'grey', ink: 'white', band: STRIP_BAND.wrote },
         { t: DAY + 240, label: 'x', compare: 'ok' },
       ],
       900,
     )
-    expect(shadow).toMatchObject({ fill: sell, band: STRIP_BAND.differs, quiet: false, detail: { fill: sell } })
-    expect(live).toMatchObject({ fill: 'grey', band: STRIP_BAND.wrote, quiet: true })
+    expect(shadow).toMatchObject({ fill: sell, ink: null, band: STRIP_BAND.differs, detail: { fill: sell } })
+    expect(live).toMatchObject({ fill: 'grey', ink: 'black', band: STRIP_BAND.wrote })
     // without a fill the mark itself shows the comparison, and no line
     expect(plain).toMatchObject({ fill: null, band: null, compare: 'ok' })
   })

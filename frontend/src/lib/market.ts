@@ -10,7 +10,7 @@ import { gridAt } from './gridDetail'
 import { formatPower, formatSignedPower } from './units'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
-import { marketFill, NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
+import { marketFill, NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
 import type { StripMark } from './dayStrip'
 
 export interface MarketThrottle {
@@ -133,34 +133,36 @@ export function parseReconcileSummary(summary: string | null | undefined): Parse
 export const MARKET_KEYS = ['Market sell', 'Market buy', 'No action', 'Session end', 'Not in control', 'Ignored', 'Other']
 
 /** A reconcile decision on the Market page's day strip: named by its command ("Kratt sell 7000W") or what it did, a
- *  session striped in the colour of the passive state it sets (as on the Inverter strip), and whether it wrote to the
- *  inverter (live: it set the passive registers or the feed-in limit). Null for runs without a summary. */
+ *  session striped in the colour of the passive state it sets (as on the Inverter strip; a striped or hatched mark's
+ *  name gets a chip), and
+ *  whether it wrote to the inverter (live: it set the passive registers or the feed-in limit). Null for runs without a
+ *  summary. */
 export function marketMark(summary: string | null | undefined): StripMark | null {
   const parsed = parseReconcileSummary(summary)
   if (!parsed || !summary) return null
-  const mark = (label: string | null, key: string, fill: string, quiet = false) => ({
+  const mark = (label: string | null, key: string, fill: string, ink: string | null) => ({
     label,
     key,
     fill,
-    quiet,
+    ink,
     wrote: false,
   })
   switch (parsed.kind) {
     case 'command': {
       const direction = /\b(buy|sell)\b/.exec(parsed.text)?.[1] ?? 'sell'
       const wrote = !summary.startsWith('Would: ') && /: (set '|feed-in )/.test(summary)
-      return { ...mark(parsed.text, `Market ${direction}`, marketFill(direction)), wrote }
+      return { ...mark(parsed.text, `Market ${direction}`, marketFill(direction), null), wrote }
     }
     case 'none':
-      return mark('no action', 'No action', NO_SETTINGS_FILL, true)
+      return mark('no action', 'No action', NO_SETTINGS_FILL, NO_SETTINGS_INK)
     case 'end':
-      return mark('session end', 'Session end', 'var(--ink-faint)')
+      return mark('session end', 'Session end', 'var(--ink-faint)', 'var(--surface)')
     case 'blocked':
-      return mark('not in control', 'Not in control', NOT_IN_CONTROL_FILL)
+      return mark('not in control', 'Not in control', NOT_IN_CONTROL_FILL, null)
     case 'ignored':
-      return mark('ignored', 'Ignored', 'var(--lamp-amber)')
+      return mark('ignored', 'Ignored', 'var(--lamp-amber)', 'var(--on-lamp-amber)')
     default:
-      return mark(null, 'Other', NO_SETTINGS_FILL)
+      return mark(null, 'Other', NO_SETTINGS_FILL, NO_SETTINGS_INK)
   }
 }
 

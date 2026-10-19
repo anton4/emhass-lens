@@ -5,7 +5,7 @@ import type { LampColor } from '../components/Lamp'
 import type { ChargerSettings, RunSummary } from '../api/types'
 import { formatTime } from './format'
 import type { CompareField, RuleText } from './inverter'
-import { NO_SETTINGS_FILL, NOT_IN_CONTROL_FILL } from './inverter'
+import { NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
 import type { StripMark } from './dayStrip'
 
 export interface ChargerDerived {
@@ -163,17 +163,18 @@ export function parseChargerSummary(summary: string | null | undefined): ParsedC
 // a pause in its mode's colour, light
 const paused = (color: string) => `color-mix(in srgb, var(${color}) 35%, var(--surface))`
 
-/** The EV charger strip's fill and key entry per rule: the plan's charging in the EV colour, excess solar in PV's,
- *  a pause in a light shade of its mode's, the target-SoC stop in the state of charge's. */
-const CHARGER_TONES: Record<string, { key: string; fill: string }> = {
-  emhass_start: { key: 'EMHASS: charging', fill: 'var(--q-ev)' },
-  emhass_adjust: { key: 'EMHASS: charging', fill: 'var(--q-ev)' },
-  emhass_pause: { key: 'EMHASS: paused', fill: paused('--q-ev') },
-  solar_start: { key: 'Excess solar: charging', fill: 'var(--q-pv)' },
-  solar_adjust: { key: 'Excess solar: charging', fill: 'var(--q-pv)' },
-  solar_pause: { key: 'Excess solar: paused', fill: paused('--q-pv') },
-  soc_limit: { key: 'Target SoC: stop', fill: 'var(--q-soc)' },
-  none: { key: 'Nothing to do', fill: NO_SETTINGS_FILL },
+/** The EV charger strip's fill, the ink of a name on it and the key entry per rule: the plan's charging in the EV
+ *  colour, excess solar in PV's, a pause in a light shade of its mode's, the target-SoC stop in the state of
+ *  charge's. */
+const CHARGER_TONES: Record<string, { key: string; fill: string; ink: string }> = {
+  emhass_start: { key: 'EMHASS: charging', fill: 'var(--q-ev)', ink: 'var(--on-q-ev)' },
+  emhass_adjust: { key: 'EMHASS: charging', fill: 'var(--q-ev)', ink: 'var(--on-q-ev)' },
+  emhass_pause: { key: 'EMHASS: paused', fill: paused('--q-ev'), ink: 'var(--ink)' },
+  solar_start: { key: 'Excess solar: charging', fill: 'var(--q-pv)', ink: 'var(--on-q-pv)' },
+  solar_adjust: { key: 'Excess solar: charging', fill: 'var(--q-pv)', ink: 'var(--on-q-pv)' },
+  solar_pause: { key: 'Excess solar: paused', fill: paused('--q-pv'), ink: 'var(--ink)' },
+  soc_limit: { key: 'Target SoC: stop', fill: 'var(--q-soc)', ink: 'var(--on-q-soc)' },
+  none: { key: 'Nothing to do', fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK },
 }
 
 /** The EV charger strip's key entries, in order. */
@@ -194,12 +195,12 @@ export function chargerMark(summary: string | null | undefined): (StripMark & { 
   const parsed = parseChargerSummary(summary)
   if (summary.startsWith('Not in control')) {
     const title = parsed ? `Not in control; would: ${parsed.label}` : 'Not in control'
-    return { label: 'not in control', key: 'Not in control', fill: NOT_IN_CONTROL_FILL, quiet: false, wrote: false, title }
+    return { label: 'not in control', key: 'Not in control', fill: NOT_IN_CONTROL_FILL, ink: null, wrote: false, title }
   }
   if (!parsed) return null
-  const tone = CHARGER_TONES[parsed.rule] ?? { key: parsed.label, fill: NO_SETTINGS_FILL }
+  const tone = CHARGER_TONES[parsed.rule] ?? { key: parsed.label, fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK }
   const wrote = /(^|· )Did /.test(summary)
-  return { label: parsed.rule, key: tone.key, fill: tone.fill, quiet: parsed.rule === 'none', wrote, title: parsed.label }
+  return { label: parsed.rule, key: tone.key, fill: tone.fill, ink: tone.ink, wrote, title: parsed.label }
 }
 
 /** The decision id a compare run's summary refers to ("Decision #12: …"). */

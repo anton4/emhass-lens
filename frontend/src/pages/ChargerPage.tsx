@@ -82,7 +82,7 @@ export function ChargerPage() {
         runId: row.decide?.id ?? row.compare?.id,
         detail: mark?.title,
         fill: mark?.fill ?? null,
-        quiet: mark?.quiet,
+        ink: mark?.ink ?? null,
         band: mark?.wrote ? STRIP_BAND.wrote : null,
       }
     })
@@ -197,6 +197,8 @@ export function ChargerPage() {
         span={900}
         timeZone={tz}
         what="decision"
+        rowLabel="Charger"
+        subtitle="Combined EMHASS plan and excess solar"
         empty={
           data?.mode === 'off'
             ? 'Nothing decided: EV charger control is off.'

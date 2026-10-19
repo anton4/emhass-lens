@@ -15,6 +15,7 @@ import {
   modeTone,
   NOT_IN_CONTROL_FILL,
   NO_SETTINGS_FILL,
+  NO_SETTINGS_INK,
   parseDecisionSummary,
   parseDecisionTargets,
   RULE_GROUPS,
@@ -330,7 +331,14 @@ describe('inverterStrip', () => {
       NO_SETTINGS_FILL,
     ])
     expect(strip.map((s) => s.label)).toEqual(['Self-use', 'Force charge', 'Not in control', 'PV export', 'Self-use', null])
-    expect(strip.map((s) => s.quiet)).toEqual([true, false, false, false, true, false])
+    expect(strip.map((s) => s.ink)).toEqual([
+      'var(--on-mode-self-use)',
+      'var(--on-mode-force-charge)',
+      null, // hatched: the name gets a chip
+      'var(--on-mode-pv-export)',
+      'var(--on-mode-self-use)',
+      NO_SETTINGS_INK,
+    ])
     expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.same, STRIP_BAND.differs, null, null, null, null])
     expect(strip.map((s) => s.runId)).toEqual([1, 3, 5, 7, 9, 11])
 

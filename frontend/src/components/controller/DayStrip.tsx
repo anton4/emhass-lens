@@ -12,10 +12,12 @@ import {
 import { Link, useNavigate } from 'react-router'
 import { shiftDay, todayKey, zonedTime } from '../../lib/days'
 import {
+  dayHours,
+  segmentText,
   stripCounts,
   stripItems,
-  stripLabels,
   stripRuns,
+  stripSegments,
   type StripInput,
   type StripItem,
   type StripState,
@@ -31,8 +33,8 @@ const FILL: Record<StripState, string> = {
   none: 'var(--line-neutral)',
 }
 
-// the axis's hourly ticks
-const HOURS = Array.from({ length: 25 }, (_, h) => h)
+// how far an hour's label stays from the now tag (half of each, and a gap)
+const NOW_CLEAR_PX = 48
 
 const STATE_TEXT: Record<StripState, string> = {
   same: 'same as the automation',
@@ -40,15 +42,18 @@ const STATE_TEXT: Record<StripState, string> = {
   none: 'not compared',
 }
 
-/** Today's decisions on a 00–24 axis: green where the automation did the same, amber where it differed, grey where
- *  nothing was compared (or the page's own fills, with the comparison on a line under them); the rule is named where
- *  it changes, and a click opens the decision. With `detail`, pointing at a mark (or focusing or tapping it) opens a
- *  popup with what it did. `ticks` mark moments over the marks (e.g. button presses). */
+/** Today's decisions on the day's axis (23 or 25 hours on a DST day), in a row named `rowLabel`: green where the
+ *  automation did the same, amber where it differed, grey where nothing was compared (or the page's own fills, with
+ *  the comparison on a line under them); each stretch of one rule carries its name inside when it fits, and a click
+ *  opens the decision. With `detail`, pointing at a mark (or focusing or tapping it) opens a popup with what it did.
+ *  `ticks` mark moments over the marks (e.g. button presses). */
 export function DayStrip<D = unknown>({
   inputs,
   span,
   timeZone,
   what = 'slot',
+  rowLabel,
+  subtitle,
   empty,
   legend,
   footer,
@@ -60,9 +65,13 @@ export function DayStrip<D = unknown>({
   span: number
   timeZone?: string
   what?: 'slot' | 'decision'
+  /** The row's name in the gutter: what its marks are ("Mode", "Charger", "Session"). */
+  rowLabel: string
+  /** What the strip shows, beside its title. */
+  subtitle?: string
   /** Shown when nothing was decided today. */
   empty: string
-  /** What the fills mean, above the strip, in place of the comparison counts in the head. */
+  /** What the fills mean, in the head in place of the comparison counts. */
   legend?: ReactNode
   /** Under the strip, e.g. what its line means. */
   footer?: ReactNode
@@ -86,7 +95,8 @@ export function DayStrip<D = unknown>({
   const end = zonedTime(shiftDay(day, 1), 0, 0, timeZone).getTime() / 1000
   const items = useMemo(() => stripItems(inputs, start, end, span), [inputs, start, end, span])
   const runs = useMemo(() => stripRuns(items), [items])
-  const labels = stripLabels(items, width)
+  const segments = useMemo(() => stripSegments(items), [items])
+  const hours = useMemo(() => dayHours(day, timeZone), [day, timeZone])
   const counts = stripCounts(items)
   const hasBand = items.some((i) => i.band)
   const nowX = Math.min(1, Math.max(0, (now.getTime() / 1000 - start) / (end - start)))
@@ -157,8 +167,9 @@ export function DayStrip<D = unknown>({
     const r = (on: boolean | undefined) => (on ? '3px' : '0')
     return {
       left: `${item.x * 100}%`,
-      // 1 px between marks, 2 px where the fill changes
-      width: `max(2px, calc(${item.w * 100}% - ${run?.end ? 2 : 1}px))`,
+      // a run of equal marks reads as one stretch (each overlaps the next by a hair, so no seam shows at fractional
+      // pixels); 2 px where the fill changes
+      width: `max(2px, calc(${item.w * 100}% ${run?.end ? '- 2px' : '+ 1px'}))`,
       borderRadius: `${r(run?.start)} ${r(run?.end)} ${r(run?.end)} ${r(run?.start)}`,
     }
   }
@@ -166,10 +177,15 @@ export function DayStrip<D = unknown>({
   return (
     <section className="panel day-strip">
       <div className="panel-head">
-        <h2>
-          Today, {what} by {what}
-        </h2>
-        {!legend && (
+        <div className="day-strip-title">
+          <h2>
+            Today, {what} by {what}
+          </h2>
+          {subtitle && <span className="day-strip-sub">{subtitle}</span>}
+        </div>
+        {legend ? (
+          <div className="day-strip-key">{legend}</div>
+        ) : (
           <span className="day-strip-legend">
             <span className="labelled-lamp">
               <Lamp color="green" /> {counts.same} same as the automation
@@ -192,18 +208,9 @@ export function DayStrip<D = unknown>({
           </p>
         ) : (
           <>
-            {legend && <div className="day-strip-key">{legend}</div>}
             <div className="day-strip-chart">
-              <div className="day-strip-labels" aria-hidden="true">
-                {labels.map((l) => (
-                  <span
-                    key={`${l.x}-${l.text}`}
-                    className={l.end ? 'day-strip-label-end' : undefined}
-                    style={l.end ? { right: `${(1 - l.x) * 100}%` } : { left: `${l.x * 100}%` }}
-                  >
-                    {l.text}
-                  </span>
-                ))}
+              <div className="day-strip-gutter" aria-hidden="true">
+                <span>{rowLabel}</span>
               </div>
               <div className="day-strip-plot" ref={plot} onPointerLeave={() => setHover(null)}>
                 <div
@@ -247,6 +254,23 @@ export function DayStrip<D = unknown>({
                       }}
                     />
                   ))}
+                  {segments.map((seg) => {
+                    const chip = seg.ink === null
+                    const text = segmentText(seg.names, seg.w * width, chip)
+                    return (
+                      text && (
+                        <span
+                          key={seg.from}
+                          className="day-strip-name"
+                          data-chip={chip || undefined}
+                          style={{ left: `${seg.x * 100}%`, width: `${seg.w * 100}%`, color: seg.ink ?? undefined }}
+                          aria-hidden="true"
+                        >
+                          <span>{text}</span>
+                        </span>
+                      )
+                    )
+                  })}
                   {ticks
                     ?.filter((tick) => tick.t >= start && tick.t < end)
                     .map((tick, i) => (
@@ -269,24 +293,29 @@ export function DayStrip<D = unknown>({
                   </div>
                 )}
                 <div className="day-strip-axis" aria-hidden="true">
-                  {HOURS.map((h) => (
+                  {hours.map((h) => (
                     <span
-                      key={`tick-${h}`}
+                      key={`tick-${h.t}`}
                       className="day-strip-hour"
-                      data-major={h % labelEvery === 0 || undefined}
-                      style={{ left: `${(h / 24) * 100}%` }}
+                      data-major={h.hour % labelEvery === 0 || undefined}
+                      style={{ left: `${((h.t - start) / (end - start)) * 100}%` }}
                     />
                   ))}
-                  {HOURS.filter((h) => h % labelEvery === 0 && Math.abs(h / 24 - nowX) * width > 34).map((h) => (
-                    <span
-                      key={`label-${h}`}
-                      className="day-strip-hour-label"
-                      data-edge={h === 0 ? 'start' : h === 24 ? 'end' : undefined}
-                      style={{ left: `${(h / 24) * 100}%` }}
-                    >
-                      {h === 24 ? '24:00' : clock(h / 24)}
-                    </span>
-                  ))}
+                  {hours
+                    .filter(
+                      (h) =>
+                        h.hour % labelEvery === 0 && Math.abs((h.t - start) / (end - start) - nowX) * width > NOW_CLEAR_PX,
+                    )
+                    .map((h) => (
+                      <span
+                        key={`label-${h.t}`}
+                        className="day-strip-hour-label"
+                        data-edge={h.t === start ? 'start' : h.t === end ? 'end' : undefined}
+                        style={{ left: `${((h.t - start) / (end - start)) * 100}%` }}
+                      >
+                        {h.label}
+                      </span>
+                    ))}
                   {nowX > 0 && nowX < 1 && (
                     <span className="day-strip-now-tag" style={{ left: `${nowX * 100}%` }}>
                       {formatClock(now.toISOString(), timeZone).slice(0, 5)}

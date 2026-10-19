@@ -204,31 +204,58 @@ export interface ModeTone {
   state: string // the passive state, the automation's input_select option
   short: string
   fill: string // CSS background
+  ink: string | null // CSS colour of its name on the fill; null for a texture (the name gets a chip)
 }
 
 /** The passive states from importing to exporting, as the day strip shows them. The colours are the --mode-* tokens,
  * checked together for colour-vision deficiency in both themes. */
 export const MODE_TONES: ModeTone[] = [
-  { state: 'Force charge', short: 'Force charge', fill: 'var(--mode-force-charge)' },
-  { state: 'Use only grid power', short: 'Grid only', fill: 'var(--mode-grid-only)' },
-  { state: 'Self-use battery or PV', short: 'Self-use', fill: 'var(--mode-self-use)' },
+  {
+    state: 'Force charge',
+    short: 'Force charge',
+    fill: 'var(--mode-force-charge)',
+    ink: 'var(--on-mode-force-charge)',
+  },
+  {
+    state: 'Use only grid power',
+    short: 'Grid only',
+    fill: 'var(--mode-grid-only)',
+    ink: 'var(--on-mode-grid-only)',
+  },
+  { state: 'Self-use battery or PV', short: 'Self-use', fill: 'var(--mode-self-use)', ink: 'var(--on-mode-self-use)' },
   {
     state: 'Self-use battery or PV, restrict export to grid',
     short: 'Restrict export',
     fill: 'var(--mode-restrict-export)',
+    ink: null,
   },
-  { state: 'Charge battery and export some to grid', short: 'Charge + export', fill: 'var(--mode-charge-export)' },
-  { state: 'Self-use PV and export excess to grid', short: 'PV export', fill: 'var(--mode-pv-export)' },
-  { state: 'Force discharge', short: 'Force discharge', fill: 'var(--mode-force-discharge)' },
+  {
+    state: 'Charge battery and export some to grid',
+    short: 'Charge + export',
+    fill: 'var(--mode-charge-export)',
+    ink: null,
+  },
+  {
+    state: 'Self-use PV and export excess to grid',
+    short: 'PV export',
+    fill: 'var(--mode-pv-export)',
+    ink: 'var(--on-mode-pv-export)',
+  },
+  {
+    state: 'Force discharge',
+    short: 'Force discharge',
+    fill: 'var(--mode-force-discharge)',
+    ink: 'var(--on-mode-force-discharge)',
+  },
 ]
 
-/** The state most slots are in: its name gives way to the others on the strip. */
-export const EVERYDAY_STATE = 'Self-use battery or PV'
 export const NOT_IN_CONTROL_FILL = 'var(--mode-blocked)'
 export const NO_SETTINGS_FILL = 'var(--line-neutral)'
+export const NO_SETTINGS_INK = 'var(--ink-2)'
 
 export function modeTone(state: string): ModeTone {
-  return MODE_TONES.find((m) => m.state === state) ?? { state, short: state, fill: NO_SETTINGS_FILL }
+  const fallback = { state, short: state, fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK }
+  return MODE_TONES.find((m) => m.state === state) ?? fallback
 }
 
 /** The passive state a market session sets (domain/market.py STATES). */
@@ -400,6 +427,7 @@ export function inverterStrip(
         label: `Market ${market.direction}`,
         runId: ours.at(-1)?.runId ?? market.runId ?? row.decide?.id,
         fill: marketFill(market.direction),
+        ink: null,
         band: ours.length > 0 ? STRIP_BAND.wrote : null,
         detail,
       })
@@ -409,9 +437,9 @@ export function inverterStrip(
       t: row.slot / 1000,
       compare,
       label: blocked ? 'Not in control' : (tone?.short ?? null),
-      quiet: targets?.state === EVERYDAY_STATE && !blocked,
       runId: row.decide?.id ?? row.compare?.id,
       fill: blocked ? NOT_IN_CONTROL_FILL : (tone?.fill ?? NO_SETTINGS_FILL),
+      ink: blocked ? null : (tone?.ink ?? NO_SETTINGS_INK),
       band:
         compare === 'ok'
           ? STRIP_BAND.same

@@ -170,6 +170,8 @@ export function InverterPage() {
         inputs={strip}
         span={900}
         timeZone={tz}
+        rowLabel="Mode"
+        subtitle="Sofar mode per slot, market sessions striped"
         empty={
           data?.mode === 'off'
             ? 'Nothing decided: inverter control is off.'
