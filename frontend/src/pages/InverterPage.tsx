@@ -1,21 +1,23 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useInverterDecide } from '../api/actions'
-import { useInverter, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
+import { useInverter, useInverterActivity, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
 import { AgreeHeadline, CompareTable, DecisionView, RulesExplainer } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
 import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
+import { DayChips } from '../components/controller/DayChips'
 import { DayStrip } from '../components/controller/DayStrip'
 import { StripKey } from '../components/controller/StripKey'
 import { InverterSlotPopup } from '../components/controller/InverterSlotPopup'
+import { useStripDay } from '../components/controller/useStripDay'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import type { StripItem } from '../lib/dayStrip'
-import { dayBounds, todayKey } from '../lib/days'
+import { dayBounds } from '../lib/days'
 import { driftText } from '../lib/drift'
 import { formatDateTime, formatSlotDate } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -76,20 +78,22 @@ export function InverterPage() {
   const last = (data?.last ?? null) as InverterLast | null
   const lastCompare = (data?.last_compare ?? null) as InverterComparison | null
   const limits = settings.data?.settings.inverter.limits
-  const presses = data?.presses
 
-  const today = todayKey(tz, now)
-  const todayDecides = useRuns(runFilters('inverter.decide', today, tz, 0))
-  const todayCompares = useRuns(runFilters('inverter.compare', today, tz, 0))
-  const bounds = dayBounds(today, tz)
-  // the market's own sessions: one started yesterday can still hold the inverter today
+  // the strip's day: today, or one up to a week back (?day=)
+  const { day, days, today, setDay } = useStripDay(tz, now)
+  const dayDecides = useRuns(runFilters('inverter.decide', day, tz, 0))
+  const dayCompares = useRuns(runFilters('inverter.compare', day, tz, 0))
+  const bounds = dayBounds(day, tz)
+  const activity = useInverterActivity(bounds)
+  const presses = activity.data?.presses
+  const writes = activity.data?.writes
+  // the market's own sessions: one started the day before can still hold the inverter
   const sessionsSince = new Date(Date.parse(bounds.since) - 86_400_000).toISOString()
   const sessions = useMarketSessions({ since: sessionsSince, until: bounds.until })
-  const writes = data?.writes
   const strip = useMemo(
     () =>
       inverterStrip(
-        mergeBySlot(todayDecides.data ?? [], todayCompares.data ?? []),
+        mergeBySlot(dayDecides.data ?? [], dayCompares.data ?? []),
         sessions.data ?? [],
         writes ?? [],
         now.getTime(),
@@ -98,12 +102,12 @@ export function InverterPage() {
           ? { ...input, detail: { ...input.detail, presses: pressesInSlot(presses ?? [], input.detail.slot) } }
           : input,
       ),
-    [todayDecides.data, todayCompares.data, sessions.data, writes, presses, now],
+    [dayDecides.data, dayCompares.data, sessions.data, writes, presses, now],
   )
   const writeTicks = useMemo(() => inverterTicks(strip), [strip])
   // EMHASS Lens's own presses are its writes, on the row of their own; a press from outside stands out on the marks
   const ticks = useMemo(() => pressTicks((presses ?? []).filter(pressedOutside)), [presses])
-  const pressesToday = pressCounts(presses ?? [], bounds.since, bounds.until)
+  const pressesOfDay = pressCounts(presses ?? [], bounds.since, bounds.until)
 
   return (
     <>
@@ -180,19 +184,23 @@ export function InverterPage() {
       <ErrorNotice error={inverter.error ?? decide.error} />
 
       <DayStrip
+        day={day}
+        chips={<DayChips day={day} days={days} today={today} onChange={setDay} />}
         inputs={strip}
         span={900}
         timeZone={tz}
         rowLabel="Mode"
         subtitle="Sofar mode per slot, market sessions striped"
         empty={
-          data?.mode === 'off'
-            ? 'Nothing decided: inverter control is off.'
-            : 'No decisions yet today.'
+          day !== today
+            ? 'No decisions that day.'
+            : data?.mode === 'off'
+              ? 'Nothing decided: inverter control is off.'
+              : 'No decisions yet today.'
         }
         legend={
           <StripKey items={inverterLegend(strip)}>
-            <PressKey presses={pressesToday} />
+            <PressKey presses={pressesOfDay} />
           </StripKey>
         }
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
@@ -274,7 +282,7 @@ export function InverterPage() {
       />
 
       <InverterHistory timeZone={tz} />
-      <PressHistory presses={presses} timeZone={tz} />
+      <PressHistory presses={data?.presses} timeZone={tz} />
     </>
   )
 }

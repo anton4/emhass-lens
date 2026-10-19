@@ -10,13 +10,15 @@ import { OutcomeChip } from '../components/Outcome'
 import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
+import { DayChips } from '../components/controller/DayChips'
 import { DayStrip } from '../components/controller/DayStrip'
 import { StretchPopup } from '../components/controller/StretchPopup'
 import { StripKey } from '../components/controller/StripKey'
+import { useStripDay } from '../components/controller/useStripDay'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { dayBounds, todayKey } from '../lib/days'
+import { dayBounds } from '../lib/days'
 import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -64,13 +66,14 @@ export function MarketPage() {
   const sensors = data?.sensors as MarketSensors | undefined
   const thresholds = settings.data?.settings.market.thresholds
 
-  const today = todayKey(tz, now)
-  const todayReconciles = useRuns(runFilters('market.reconcile', today, tz, 0))
-  const todayCompares = useRuns(runFilters('market.compare', today, tz, 0))
+  // the strip's day: today, or one up to a week back (?day=)
+  const { day, days, today, setDay } = useStripDay(tz, now)
+  const dayReconciles = useRuns(runFilters('market.reconcile', day, tz, 0))
+  const dayCompares = useRuns(runFilters('market.compare', day, tz, 0))
   // each decision filled by what it did, as the Inverter strip fills its slots; the line under it says whether the
   // automation did the same (shadow) or the decision wrote to the inverter (live)
   const { strip, key, wrote } = useMemo(() => {
-    const rows = pairMarketCompares(todayReconciles.data ?? [], todayCompares.data ?? [])
+    const rows = pairMarketCompares(dayReconciles.data ?? [], dayCompares.data ?? [])
     const marks = rows.map((row) => marketMark(row.reconcile?.summary))
     const inputs = rows.map((row, i) => {
       const mark = marks[i]
@@ -85,7 +88,7 @@ export function MarketPage() {
       }
     })
     return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS), wrote: wroteTicks(inputs) }
-  }, [todayReconciles.data, todayCompares.data])
+  }, [dayReconciles.data, dayCompares.data])
 
   return (
     <>
@@ -165,6 +168,8 @@ export function MarketPage() {
       )}
 
       <DayStrip
+        day={day}
+        chips={<DayChips day={day} days={days} today={today} onChange={setDay} />}
         inputs={strip}
         span={900}
         timeZone={tz}
@@ -172,9 +177,11 @@ export function MarketPage() {
         rowLabel="Session"
         subtitle="Qilowatt commands and what EMHASS Lens did with the inverter"
         empty={
-          data?.mode === 'off'
-            ? 'Nothing decided: market control is off.'
-            : 'No decisions yet today.'
+          day !== today
+            ? 'No decisions that day.'
+            : data?.mode === 'off'
+              ? 'Nothing decided: market control is off.'
+              : 'No decisions yet today.'
         }
         legend={<StripKey items={key} />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}

@@ -319,27 +319,33 @@ class SofarWriter:
         }
 
     async def presses(self, hours: int, limit: int = 200) -> list[dict[str, Any]]:
-        """The presses of the last `hours`, newest first: when, which button (apply, feedin; None for a button no
-        longer configured), who pressed (lens, automation, user, unknown) and, for ours, the run."""
+        """The presses of the last `hours`, newest first (see presses_between)."""
+        return await self.presses_between(self.c.clock.now() - timedelta(hours=hours), None, limit)
+
+    async def presses_between(self, since: datetime, until: datetime | None, limit: int = 1000) -> list[dict[str, Any]]:
+        """The presses in [since, until) (until: no end), newest first: when, which button (apply, feedin; None for a
+        button no longer configured), who pressed (lens, automation, user, unknown) and, for ours, the run."""
         e = self._e()
-        since = iso(self.c.clock.now() - timedelta(hours=hours))
         rows = await self.c.app_db.aquery(
             "SELECT at, entity_id, source, run_id,"
             " (SELECT owner FROM sofar_commit c WHERE c.run_id = p.run_id LIMIT 1) AS owner"
-            " FROM sofar_press p WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?",
-            (since, limit),
+            " FROM sofar_press p WHERE at >= ? AND (? IS NULL OR at < ?) ORDER BY at DESC, id DESC LIMIT ?",
+            (iso(since), iso(until), iso(until), limit),
         )
         buttons = {e.apply_button: "apply", e.feedin_button: "feedin"}
         return [{**row, "button": buttons.get(row["entity_id"])} for row in rows]
 
     async def writes(self, hours: int, limit: int = 500) -> list[dict[str, Any]]:
-        """What EMHASS Lens wrote to the inverter in the last `hours`, newest first: the passive settings or the
-        feed-in limit, for the plan or for a market session, with the run."""
-        since = iso(self.c.clock.now() - timedelta(hours=hours))
+        """What EMHASS Lens wrote to the inverter in the last `hours`, newest first (see writes_between)."""
+        return await self.writes_between(self.c.clock.now() - timedelta(hours=hours), None, limit)
+
+    async def writes_between(self, since: datetime, until: datetime | None, limit: int = 2000) -> list[dict[str, Any]]:
+        """What EMHASS Lens wrote to the inverter in [since, until) (until: no end), newest first: the passive
+        settings or the feed-in limit, for the plan or for a market session, with the run."""
         rows = await self.c.app_db.aquery(
             "SELECT at, owner, register_group AS 'group', grid_w, battery_max_w, battery_min_w, feedin_w, run_id, ok"
-            " FROM sofar_commit WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?",
-            (since, limit),
+            " FROM sofar_commit WHERE at >= ? AND (? IS NULL OR at < ?) ORDER BY at DESC, id DESC LIMIT ?",
+            (iso(since), iso(until), iso(until), limit),
         )
         return [{**row, "ok": bool(row["ok"])} for row in rows]
 

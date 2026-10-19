@@ -13,7 +13,7 @@ import {
   type RefObject,
 } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { shiftDay, todayKey, zonedTime } from '../../lib/days'
+import { dayLabel, shiftDay, todayKey, zonedTime } from '../../lib/days'
 import {
   AGREE_TONES,
   agreeRuns,
@@ -183,7 +183,8 @@ function PopupFoot({
   )
 }
 
-/** Today's decisions on the day's axis (23 or 25 hours on a DST day), in a row named `rowLabel`: green where the
+/** A day's decisions (`day`, today or a past one) on its axis (23 or 25 hours on a DST day), in a row named
+ *  `rowLabel`, with `chips` (the day switch) in the head: green where the
  *  automation did the same, amber where it differed, grey where nothing was compared, or the page's own fills. Each
  *  stretch of one rule carries its name inside when it fits, and a click opens the decision. With `detail`, pointing
  *  at a mark (or focusing or tapping it) opens a popup with what it did. Under it, the "Lens wrote" row of `writes`
@@ -191,6 +192,8 @@ function PopupFoot({
  *  agreed and where it differed, each with a popup (`differText` says what differed in a mark; `tally` counts a mark's
  *  decisions). `ticks` mark moments over the marks (e.g. button presses). */
 export function DayStrip<D = unknown>({
+  day,
+  chips,
   inputs,
   span,
   timeZone,
@@ -206,6 +209,10 @@ export function DayStrip<D = unknown>({
   writes,
   ticks,
 }: {
+  /** The calendar day shown, "2026-10-19". */
+  day: string
+  /** In the head: the day switch. */
+  chips?: ReactNode
   inputs: StripInput<D>[]
   /** How long one decision holds, in seconds (a slot: 900). */
   span: number
@@ -215,9 +222,9 @@ export function DayStrip<D = unknown>({
   rowLabel: string
   /** What the strip shows, beside its title. */
   subtitle?: string
-  /** Shown when nothing was decided today. */
+  /** Shown when nothing was decided that day. */
   empty: string
-  /** What the fills mean, in the head in place of the comparison counts. */
+  /** What the fills mean, under the strip; without it the head counts the comparisons. */
   legend?: ReactNode
   /** More of the key under the strip, after the Automation row's. */
   footer?: ReactNode
@@ -241,7 +248,7 @@ export function DayStrip<D = unknown>({
   const agreeRow = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(1000)
-  const day = todayKey(timeZone, now)
+  const isToday = day === todayKey(timeZone, now)
   const start = zonedTime(day, 0, 0, timeZone).getTime() / 1000
   const end = zonedTime(shiftDay(day, 1), 0, 0, timeZone).getTime() / 1000
   const items = useMemo(() => stripItems(inputs, start, end, span), [inputs, start, end, span])
@@ -295,20 +302,21 @@ export function DayStrip<D = unknown>({
     }
   }
 
-  const nowLine = <span className="day-strip-now" style={{ left: `${nowX * 100}%` }} aria-hidden="true" />
+  const nowLine = isToday && <span className="day-strip-now" style={{ left: `${nowX * 100}%` }} aria-hidden="true" />
+  const hoursLong = Math.round((end - start) / 3600)
+  const title = isToday ? 'Today' : dayLabel(day)
 
   return (
     <section className="panel day-strip">
       <div className="panel-head">
         <div className="day-strip-title">
           <h2>
-            Today, {what} by {what}
+            {title}, {what} by {what}
           </h2>
           {head && <span className="day-strip-sub">{head}</span>}
         </div>
-        {legend ? (
-          <div className="day-strip-key">{legend}</div>
-        ) : (
+        {chips}
+        {!legend && (
           <span className="day-strip-legend">
             <span className="labelled-lamp">
               <Lamp color="green" /> {counts.same} same as the automation
@@ -325,6 +333,11 @@ export function DayStrip<D = unknown>({
         )}
       </div>
       <div className="panel-body">
+        <p className="day-strip-intro">
+          {dayLabel(day)}, 00:00 to 24:00
+          {hoursLong !== 24 && ` (${hoursLong} hours: the clocks go ${hoursLong > 24 ? 'back' : 'forward'})`}.
+          {hasItems && ' Point at a stretch, or tab to it, for the details.'}
+        </p>
         {!hasItems ? (
           <p className="muted" style={{ margin: 0 }}>
             {empty}
@@ -480,7 +493,8 @@ export function DayStrip<D = unknown>({
                 {hours
                   .filter(
                     (h) =>
-                      h.hour % labelEvery === 0 && Math.abs((h.t - start) / (end - start) - nowX) * width > NOW_CLEAR_PX,
+                      h.hour % labelEvery === 0 &&
+                      (!isToday || Math.abs((h.t - start) / (end - start) - nowX) * width > NOW_CLEAR_PX),
                   )
                   .map((h) => (
                     <span
@@ -492,7 +506,7 @@ export function DayStrip<D = unknown>({
                       {h.label}
                     </span>
                   ))}
-                {nowX > 0 && nowX < 1 && (
+                {isToday && nowX > 0 && nowX < 1 && (
                   <span className="day-strip-now-tag" style={{ left: `${nowX * 100}%` }}>
                     {formatClock(now.toISOString(), timeZone).slice(0, 5)}
                   </span>
@@ -500,6 +514,7 @@ export function DayStrip<D = unknown>({
               </div>
             </div>
             <StripFooterKey
+              legend={legend}
               writes={[
                 { kind: 'wrote', text: `EMHASS Lens wrote to the ${writes?.target}`, count: written.wrote },
                 { kind: 'would', text: 'would write (dry run)', count: written.would },

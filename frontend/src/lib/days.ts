@@ -61,3 +61,26 @@ export function isClosedRange(until: string | undefined, now: number = Date.now(
   const end = Date.parse(until)
   return Number.isFinite(end) && end < now - marginMs
 }
+
+/** The days a day strip can show, oldest first: `back` days before `today`, today, and `ahead` days after. */
+export function stripDays(today: string, back = 7, ahead = 0): string[] {
+  return Array.from({ length: back + 1 + ahead }, (_, i) => shiftDay(today, i - back))
+}
+
+/** `day` when it is one of `days`, else `today` (a stale or mistyped `?day=` falls back). */
+export function clampDay(day: string | null | undefined, days: string[], today: string): string {
+  return day && days.includes(day) ? day : today
+}
+
+const chipFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' })
+const dateFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+/** A calendar day as a chip names it: "Thu 15". */
+export function dayChipLabel(day: string): string {
+  return chipFormat.format(new Date(`${day}T12:00:00Z`))
+}
+
+/** A calendar day in full: "Thu 15 Oct". */
+export function dayLabel(day: string): string {
+  return dateFormat.format(new Date(`${day}T12:00:00Z`))
+}

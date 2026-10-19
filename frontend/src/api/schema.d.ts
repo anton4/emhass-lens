@@ -302,6 +302,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inverter/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inverter Activity
+         * @description Every Sofar button press and every write EMHASS Lens made to the inverter in [since, until) (until: now),
+         *     newest first; at most 8 days, for the day strip of a past day.
+         */
+        get: operations["inverter_activity_api_inverter_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/inverter/decide": {
         parameters: {
             query?: never;
@@ -2632,6 +2653,16 @@ export interface components {
              * @enum {string}
              */
             mode: "off" | "dry_run" | "live";
+        };
+        /**
+         * InverterActivity
+         * @description Every Sofar button press and every write EMHASS Lens made in a window, newest first.
+         */
+        InverterActivity: {
+            /** Presses */
+            presses: components["schemas"]["ButtonPress"][];
+            /** Writes */
+            writes: components["schemas"]["InverterWrite"][];
         };
         /** InverterEntities */
         InverterEntities: {
@@ -5692,6 +5723,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InverterStatus"];
+                };
+            };
+        };
+    };
+    inverter_activity_api_inverter_activity_get: {
+        parameters: {
+            query: {
+                since: string;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InverterActivity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

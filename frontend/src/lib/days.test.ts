@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { dayBounds, isClosedRange, localInputToIso, shiftDay, todayKey, zonedTime } from './days'
+import {
+  clampDay,
+  dayBounds,
+  dayChipLabel,
+  dayLabel,
+  isClosedRange,
+  localInputToIso,
+  shiftDay,
+  stripDays,
+  todayKey,
+  zonedTime,
+} from './days'
 
 const tz = 'Europe/Tallinn'
 const hours = (b: { since: string; until: string }) => (Date.parse(b.until) - Date.parse(b.since)) / 3_600_000
@@ -59,5 +70,25 @@ describe('isClosedRange', () => {
     expect(isClosedRange(undefined, now)).toBe(false)
     expect(isClosedRange('2026-10-11T21:00:00.000Z', now)).toBe(false)
     expect(isClosedRange('garbage', now)).toBe(false)
+  })
+})
+
+describe('stripDays and clampDay', () => {
+  it('lists a week back and today, with tomorrow when asked', () => {
+    const days = stripDays('2026-10-19')
+    expect(days).toHaveLength(8)
+    expect([days[0], days.at(-1)]).toEqual(['2026-10-12', '2026-10-19'])
+    expect(stripDays('2026-10-31', 1, 1)).toEqual(['2026-10-30', '2026-10-31', '2026-11-01'])
+  })
+  it('keeps a day within them, else today', () => {
+    const days = stripDays('2026-10-19')
+    expect(clampDay('2026-10-15', days, '2026-10-19')).toBe('2026-10-15')
+    expect(clampDay('2026-10-01', days, '2026-10-19')).toBe('2026-10-19')
+    expect(clampDay('nonsense', days, '2026-10-19')).toBe('2026-10-19')
+    expect(clampDay(null, days, '2026-10-19')).toBe('2026-10-19')
+  })
+  it('names a day short and in full, whatever the browser time zone', () => {
+    expect(dayChipLabel('2026-10-15')).toBe('Thu 15')
+    expect(dayLabel('2026-10-25')).toBe('Sun 25 Oct')
   })
 })

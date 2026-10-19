@@ -1041,6 +1041,13 @@ class InverterWrite(BaseModel):
     ok: bool
 
 
+class InverterActivity(BaseModel):
+    """Every Sofar button press and every write EMHASS Lens made in a window, newest first."""
+
+    presses: list[ButtonPress]
+    writes: list[InverterWrite]
+
+
 class InverterStatus(BaseModel):
     drift: DriftStatus | None = None
     mode: str

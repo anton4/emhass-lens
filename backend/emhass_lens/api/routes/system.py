@@ -9,13 +9,16 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
 from emhass_lens.api.routes.runs import utc_bound
 from emhass_lens.api.schemas import (
+    ButtonPress,
     ChargeModeRequest,
     ChargerStatus,
     DriverRequest,
     DriverResult,
     EmhassStatusOut,
     EntityOption,
+    InverterActivity,
     InverterStatus,
+    InverterWrite,
     JobInfo,
     MarketCommands,
     MarketCommandSpan,
@@ -167,6 +170,24 @@ async def inverter_status(c: ContainerDep) -> InverterStatus:
     """Inverter control (experimental): the last decision, the last comparison with the automation, agreement, and
     every press of the Sofar buttons (ours and anyone else's)."""
     return InverterStatus(**await c.extras["inverter"].status())
+
+
+ACTIVITY_MAX = timedelta(days=8)
+
+
+@router.get("/inverter/activity")
+async def inverter_activity(c: ContainerDep, since: str, until: str | None = None) -> InverterActivity:
+    """Every Sofar button press and every write EMHASS Lens made to the inverter in [since, until) (until: now),
+    newest first; at most 8 days, for the day strip of a past day."""
+    start = parse_iso(utc_bound(since, "since"))
+    end = parse_iso(utc_bound(until, "until")) or c.clock.now()
+    if start is None or end <= start or end - start > ACTIVITY_MAX:
+        raise HTTPException(400, "since must be before until, and the window at most 8 days")
+    writer = c.extras["sofar"]
+    return InverterActivity(
+        presses=[ButtonPress(**p) for p in await writer.presses_between(start, end)],
+        writes=[InverterWrite(**w) for w in await writer.writes_between(start, end)],
+    )
 
 
 @router.post("/inverter/decide", dependencies=[Writable], status_code=202)

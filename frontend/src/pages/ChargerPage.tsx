@@ -9,12 +9,13 @@ import { OutcomeChip } from '../components/Outcome'
 import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
+import { DayChips } from '../components/controller/DayChips'
 import { DayStrip } from '../components/controller/DayStrip'
 import { StripKey } from '../components/controller/StripKey'
+import { useStripDay } from '../components/controller/useStripDay'
 import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
-import { todayKey } from '../lib/days'
 import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
 import {
   CHARGER_FIELD_LABELS,
@@ -65,13 +66,14 @@ export function ChargerPage() {
   const soc = data?.soc as SocClock | undefined
   const limits = settings.data?.settings.charger.limits
 
-  const today = todayKey(tz, now)
-  const todayDecides = useRuns(runFilters('charger.decide', today, tz, 0))
-  const todayCompares = useRuns(runFilters('charger.compare', today, tz, 0))
+  // the strip's day: today, or one up to a week back (?day=)
+  const { day, days, today, setDay } = useStripDay(tz, now)
+  const dayDecides = useRuns(runFilters('charger.decide', day, tz, 0))
+  const dayCompares = useRuns(runFilters('charger.compare', day, tz, 0))
   // each decision filled by what it did; the line under it says whether the automation did the same (dry run) or the
   // decision wrote to the charger (live)
   const { strip, key, wrote } = useMemo(() => {
-    const rows = pairCompares(todayDecides.data ?? [], todayCompares.data ?? [])
+    const rows = pairCompares(dayDecides.data ?? [], dayCompares.data ?? [])
     const marks = rows.map((row) => chargerMark(row.decide?.summary))
     const inputs = rows.map((row, i) => {
       const mark = marks[i]
@@ -87,7 +89,7 @@ export function ChargerPage() {
       }
     })
     return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS), wrote: wroteTicks(inputs) }
-  }, [todayDecides.data, todayCompares.data])
+  }, [dayDecides.data, dayCompares.data])
 
   return (
     <>
@@ -193,6 +195,8 @@ export function ChargerPage() {
       <ErrorNotice error={charger.error ?? decide.error ?? chargeMode.error} />
 
       <DayStrip
+        day={day}
+        chips={<DayChips day={day} days={days} today={today} onChange={setDay} />}
         inputs={strip}
         span={900}
         timeZone={tz}
@@ -200,9 +204,11 @@ export function ChargerPage() {
         rowLabel="Charger"
         subtitle="Combined EMHASS plan and excess solar"
         empty={
-          data?.mode === 'off'
-            ? 'Nothing decided: EV charger control is off.'
-            : 'No decisions yet today.'
+          day !== today
+            ? 'No decisions that day.'
+            : data?.mode === 'off'
+              ? 'Nothing decided: EV charger control is off.'
+              : 'No decisions yet today.'
         }
         legend={<StripKey items={key} />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}

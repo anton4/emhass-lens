@@ -7,6 +7,7 @@ import type {
   EntityOption,
   GridDetail,
   InputsResponse,
+  InverterActivity,
   InverterStatus,
   JobInfo,
   MarketCommands,
@@ -251,6 +252,18 @@ export function useOutputs() {
 /** Inverter control: mode, preconditions, the last decision and comparison, agreement. */
 export function useInverter() {
   return useQuery({ queryKey: keys.inverter, queryFn: () => api.get<InverterStatus>('/api/inverter'), refetchInterval: 30_000 })
+}
+
+/** Every Sofar button press and every write EMHASS Lens made in [since, until): a day of the Inverter page's strip.
+ * A past day stops polling. */
+export function useInverterActivity(range: { since: string; until: string }) {
+  const closed = isClosedRange(range.until)
+  return useQuery({
+    queryKey: [...keys.inverter, 'activity', range],
+    queryFn: () => api.get<InverterActivity>(`/api/inverter/activity${query(range)}`),
+    refetchInterval: closed ? false : 30_000,
+    ...(closed ? { staleTime: Infinity } : {}),
+  })
 }
 
 /** EV charger control: mode, preconditions, the last decision, comparison and minute check, agreement. */

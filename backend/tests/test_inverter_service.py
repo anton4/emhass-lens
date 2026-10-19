@@ -506,6 +506,37 @@ def test_a_press_by_emhass_lens_names_its_run(tmp_path: Path, world: World) -> N
         client.__exit__(None, None, None)
 
 
+def test_the_activity_of_a_window_has_its_presses_and_writes(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = live_client(tmp_path, world, clock)
+    try:
+        assert run_job(client, "emhass.mpc")["outcome"] == "ok"
+        set_mode(client, world, "live")
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T09:00:00+00:00")  # as first seen: not a press
+        run = run_job(client, "inverter.decide")
+        assert run["outcome"] == "ok", run
+        pressed = world.ha_states[APPLY_BUTTON]["state"]
+        push_button(client, world, APPLY_BUTTON, pressed, {"id": "c", "parent_id": None, "user_id": "supervisor"})
+        push_button(client, world, APPLY_BUTTON, "2026-10-09T11:14:00+00:00", BY_USER)
+        day = {"since": "2026-10-08T21:00:00Z", "until": "2026-10-09T21:00:00Z"}
+        activity = client.get("/api/inverter/activity", params=day).json()
+        assert [w["run_id"] for w in activity["writes"]] == [run["id"]]
+        assert [p["source"] for p in activity["presses"]] == ["user", "lens"]  # newest first
+        # a window that ends before them has none; until defaults to now
+        before = client.get("/api/inverter/activity", params={"since": day["since"], "until": "2026-10-09T10:00:00Z"})
+        assert before.json() == {"presses": [], "writes": []}
+        clock.advance(seconds=120)
+        since = client.get("/api/inverter/activity", params={"since": "2026-10-09T11:13:30Z"}).json()
+        assert ([p["source"] for p in since["presses"]], since["writes"]) == (["user"], [])
+        # at most 8 days, and since before until
+        long = client.get("/api/inverter/activity", params={"since": "2026-09-30T00:00:00Z", "until": day["until"]})
+        assert long.status_code == 400
+        backwards = client.get("/api/inverter/activity", params={"since": day["until"], "until": day["since"]})
+        assert backwards.status_code == 400
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_presses_recorded_before_the_source_was_kept_are_ours_next_to_a_commit(app_db) -> None:
     app_db.execute("ALTER TABLE sofar_press DROP COLUMN source")
     app_db.execute("ALTER TABLE sofar_press DROP COLUMN run_id")

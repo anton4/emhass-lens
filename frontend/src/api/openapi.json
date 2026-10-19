@@ -3826,6 +3826,31 @@
         "title": "Inverter",
         "type": "object"
       },
+      "InverterActivity": {
+        "description": "Every Sofar button press and every write EMHASS Lens made in a window, newest first.",
+        "properties": {
+          "presses": {
+            "items": {
+              "$ref": "#/components/schemas/ButtonPress"
+            },
+            "title": "Presses",
+            "type": "array"
+          },
+          "writes": {
+            "items": {
+              "$ref": "#/components/schemas/InverterWrite"
+            },
+            "title": "Writes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "presses",
+          "writes"
+        ],
+        "title": "InverterActivity",
+        "type": "object"
+      },
       "InverterEntities": {
         "additionalProperties": false,
         "properties": {
@@ -11098,6 +11123,65 @@
           }
         },
         "summary": "Inverter Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/inverter/activity": {
+      "get": {
+        "description": "Every Sofar button press and every write EMHASS Lens made to the inverter in [since, until) (until: now),\nnewest first; at most 8 days, for the day strip of a past day.",
+        "operationId": "inverter_activity_api_inverter_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InverterActivity"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inverter Activity",
         "tags": [
           "system"
         ]

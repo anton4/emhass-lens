@@ -22,20 +22,42 @@ export function StripKey({
   )
 }
 
-/** What the rows under the marks mean: the "Lens wrote" row's ticks (`writes`, each with its text and how many today),
- *  the Automation row's agreed and differed, then `children`. Nothing when there is nothing to say. */
+/** The key under a strip: what the fills mean (`legend`), then what the rows under the marks mean: the "Lens wrote"
+ *  row's ticks (`writes`, each with its text and how many that day), the Automation row's agreed and differed, and
+ *  `children`. Nothing when there is nothing to say. */
 export function StripFooterKey({
+  legend,
   writes = [],
   agree,
   children,
 }: {
+  legend?: ReactNode
   writes?: { kind: WriteTick['kind']; text: string; count: number }[]
   agree: { same: number; differs: number } | null
   children?: ReactNode
 }) {
   const ticks = writes.filter((w) => w.count > 0)
   const parts = (['same', 'differs'] as const).filter((state) => (agree?.[state] ?? 0) > 0)
-  if (ticks.length === 0 && parts.length === 0 && !children) return null
+  const rows = ticks.length > 0 || parts.length > 0 || !!children
+  return (
+    <>
+      {legend && <div className="day-strip-footer">{legend}</div>}
+      {rows && <RowsKey ticks={ticks} parts={parts} agree={agree}>{children}</RowsKey>}
+    </>
+  )
+}
+
+function RowsKey({
+  ticks,
+  parts,
+  agree,
+  children,
+}: {
+  ticks: { kind: WriteTick['kind']; text: string; count: number }[]
+  parts: ('same' | 'differs')[]
+  agree: { same: number; differs: number } | null
+  children?: ReactNode
+}) {
   return (
     <div className="day-strip-footer">
       {ticks.map((w) => (

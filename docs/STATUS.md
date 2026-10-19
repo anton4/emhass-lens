@@ -18,17 +18,15 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D6 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D7.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D7 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D8.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
   - ~~**D4** (backend) the market's summaries say why nothing was written~~ (done).
   - ~~**D5** (backend) the charger's decisions name the charge mode and the charging state~~ (done).
   - ~~**D6** inverter slot names carry the plan's battery power~~ (done).
-  - **D7** `feat: step the day strips through past days`: backend `SofarWriter.writes_between`/`presses_between`
-    and `GET /api/inverter/activity?since&until` (at most 8 d); frontend `DayChips`, `?day=`, `stripDays`,
-    `clampDay`; up to 7 days back; every page queries the chosen day.
+  - ~~**D7** `feat: step the day strips through past days`~~ (done).
   - **D8** `feat: the rest of the day as plan, not yet done`: `aheadItems`, an `ahead` prop, `--plan-hatch`.
   - **D9** `feat: the inverter's planned modes for the rest of the day`: backend `domain/plan_now.row_decision`,
     `InverterService.ahead`, `GET /api/inverter/ahead`; frontend `inverterAhead` and a planned slot popup.
@@ -188,7 +186,29 @@ These come from docs/PLAN.md §10:
     - `inverterStrip` sets `amount` (|P_batt|) on Force charge and Force discharge slots, not when held.
     - `stripSegments` names a stretch with amounts "Force charge · 3.0 kW" ("· 2.5–3.0 kW" when it varies) before
       the plain name, so the power shows where there is room.
-  - Backend 476 tests, frontend 445.
+  - Backend 476 tests, frontend 443.
+- **D7, past days on the strips:**
+  - **Backend:**
+    - `SofarWriter.presses_between`/`writes_between` (a window; `presses`/`writes` of the last hours use them).
+    - `GET /api/inverter/activity?since&until` (`InverterActivity`: presses and writes, newest first; at most 8
+      days, until defaults to now).
+    - Test `test_the_activity_of_a_window_has_its_presses_and_writes`.
+  - **Frontend:**
+    - `lib/days.ts`: `stripDays` (a week back, `ahead` days after), `clampDay` (a stale `?day=` falls back to
+      today), `dayChipLabel` ("Thu 15"), `dayLabel` ("Thu 15 Oct").
+    - `useStripDay` (`?day=`, today kept out of the URL) and `DayChips` (‹ the day before · the day shown, "· today",
+      a click goes back to today · the day after ›) in the strip's head.
+    - `DayStrip` takes `day`: "Sun 18 Oct, slot by slot", a line naming the day and its hours ("(25 hours: the clocks
+      go back)"), the now line and tag only today, every hour label on a past day. The fill key moved under the strip
+      (`StripFooterKey legend`), so the day switch fits in the head.
+    - The pages query the chosen day: the runs, the market's sessions, and on the Inverter page
+      `useInverterActivity` for that day's presses and writes (the press history under it keeps its 7 days).
+    - The mock serves `/api/inverter/activity`.
+  - Checked in Chrome: today and yesterday at 1440 px, a past day at 390 px.
+  - Backend 477 tests, frontend 446.
+  - **e2e 28/28**, after a `chore` commit: the notification checks now look at EMHASS Lens's own notification only.
+    Home Assistant's own "The following updates are failing" notification had made the "raises" check pass by
+    accident and the "dismisses" check fail.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
