@@ -10,13 +10,13 @@ cd ../frontend && npm ci && npm test               # needs Node ≥ 22.12
 ```
 Then open Claude Code in the repo and say something like "continue EMHASS Lens from docs/STATUS.md". CLAUDE.md has the commands and conventions, and docs/PLAN.md has the approved plan.
 
-## Hand-off (2026-10-19): design variant A is built; 0.5.3 is ready to push
+## Hand-off (2026-10-19): design variant A is built; 0.5.3 is pushed and published
 Variant A ("Flight deck") of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,
 boards A1–A5 and X) is built in full: Phase 0 (G1–G8), the Plan timeline (P1–P11, 0.5.0), the phone (M1–M2, 0.5.1),
 Inputs and the price breakdown (I1–I10, 0.5.2), and the controller day strips (D1–D12, 0.5.3). Each step has a log
 entry below.
-- **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including four version bumps
-  (0.5.0–0.5.3). Pushing builds and publishes the image, so ask the owner first.
+- **Pushed** with the owner's go-ahead: 44d8fe1..266ce30, the 45 commits of 0.5.0–0.5.3. CI passed, and the
+  0.5.3 image is on ghcr for amd64 and aarch64. Ask the owner before each later push of a release.
 - **Still needs the owner:**
   - new README screenshots from the real App (`uv run scripts/readme_screenshots.py --base <the App's direct
     port>`), which now include the new day strips;
@@ -59,6 +59,13 @@ These come from docs/PLAN.md §10:
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-19: 0.5.0–0.5.3 pushed
+- Checked locally first, as CI runs them: backend 479 tests, ruff, pyright and an up-to-date `openapi.json`;
+  frontend 457 tests, typecheck, lint, build and an up-to-date `schema.d.ts`; `package-lock.json` only on
+  registry.npmjs.org.
+- Pushed 44d8fe1..266ce30. CI (backend, frontend, addon lint) and App image (amd64, aarch64) passed; anonymous pulls
+  of `ghcr.io/anton4/emhass-lens-{amd64,aarch64}:0.5.3` resolve.
 
 ### 2026-10-19: Phase 4, the controller day strips (variant A, board A3)
 - **Step 0, the three pages on `main` before D1** (they were never opened after 44d8fe1):
