@@ -9,6 +9,7 @@ import {
   fieldValue,
   formatAgreement,
   inverterLegend,
+  inverterAhead,
   inverterStrip,
   inverterTicks,
   marketFill,
@@ -319,6 +320,41 @@ describe('the amount on the strip', () => {
       run(7, 'inverter.decide', at('00:45'), 'dry_run', `Would set ${FC}`), // before 0.5.3
     ]
     expect(inverterStrip(mergeBySlot(decides, [])).map((s) => s.amount)).toEqual([3000, null, null, null])
+  })
+})
+
+describe('inverterAhead', () => {
+  it('makes a planned mark per slot, named with the battery power where it forces the battery', () => {
+    const slot = (at: string, state: string, rule: string, p: number) => ({
+      slot: at,
+      state,
+      rule,
+      grid_power_w: 0,
+      battery_min_w: -20000,
+      battery_max_w: 20000,
+      feedin_max_w: null,
+      p_batt_w: p,
+    })
+    const ahead = {
+      generated_at: '2026-10-10T00:11:00.000+00:00',
+      run_id: 4554,
+      slots: [
+        slot('2026-10-10T00:15:00.000+00:00', 'Force charge', 'force_charge', -3000),
+        slot('2026-10-10T00:30:00.000+00:00', 'Self-use battery or PV', 'self_use', 800),
+      ],
+    }
+    const marks = inverterAhead(ahead)
+    expect(marks.map((m) => [m.t, m.label, m.fill, m.amount, m.runId])).toEqual([
+      [Date.parse('2026-10-10T00:15:00Z') / 1000, 'Force charge', 'var(--mode-force-charge)', 3000, 4554],
+      [Date.parse('2026-10-10T00:30:00Z') / 1000, 'Self-use', 'var(--mode-self-use)', null, 4554],
+    ])
+    expect(marks[0]?.detail).toMatchObject({
+      planned: { generatedAt: ahead.generated_at, runId: 4554 },
+      targets: { state: 'Force charge', rule: 'force_charge', p_batt_w: -3000, feedin_max_w: null },
+      action: null,
+      changed: [],
+    })
+    expect(inverterAhead(undefined)).toEqual([])
   })
 })
 

@@ -18,8 +18,8 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D8 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D9.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D9 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D10.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
@@ -28,8 +28,7 @@ what it still needs is copied below.
   - ~~**D6** inverter slot names carry the plan's battery power~~ (done).
   - ~~**D7** `feat: step the day strips through past days`~~ (done).
   - ~~**D8** `feat: the rest of the day as plan, not yet done`~~ (done).
-  - **D9** `feat: the inverter's planned modes for the rest of the day`: backend `domain/plan_now.row_decision`,
-    `InverterService.ahead`, `GET /api/inverter/ahead`; frontend `inverterAhead` and a planned slot popup.
+  - ~~**D9** `feat: the inverter's planned modes for the rest of the day`~~ (done).
   - **D10** `feat: the EV charger strip by charging state, with the next plan`: `chargerFacts`, marks for
     unplugged, charging and plugged in, `chargerTicks`, `chargerAhead` ("next plan: Sat 03:00–05:30").
   - **D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`: `sessionInputs`,
@@ -220,6 +219,30 @@ These come from docs/PLAN.md §10:
     The Inverter (D9) and the EV charger (D10) get their planned rest of the day next.
   - Checked in Chrome, light and dark.
   - Frontend 448 tests.
+- **D9, the inverter's planned modes:**
+  - **Backend:**
+    - `domain/plan_now.row_decision` (the rules' decision for a plan row; `row_targets` uses it) and
+      `planned_slots` (each row after the slot in force: the slot, state, rule, settings, feed-in limit, P_batt).
+    - `InverterService.ahead` reads the newest stored plan, whatever its age.
+    - `GET /api/inverter/ahead` (`InverterAhead`: generated_at, run_id, `PlannedSlot`s).
+    - Decided without the registers that will be held then, so a planned slot's state is right but its caps can
+      differ; the popup says so.
+    - Tests: `test_the_planned_modes_follow_the_plan_rows_after_the_slot_in_force`,
+      `test_the_planned_modes_come_from_the_newest_plan`.
+  - **Frontend:**
+    - `useInverterAhead`; `inverterAhead` makes a mark per planned slot (named with the battery power where it
+      forces the battery; a click opens the plan's run) with `SlotDetail.planned`.
+    - `InverterSlotPopup` shows a planned slot with a "Planned" chip and "What the rules give the plan of run 4554
+      (09:41). Written at the start of the slot if the plan still says so; the battery's limits can differ…".
+    - The Inverter strip draws them for the rest of today (not with control off). Tomorrow's chip appears when the
+      plan reaches tomorrow, and that day is all plan, its key counting the planned slots. `DayStrip` draws `ahead`
+      on a day to come from its start.
+    - The mock serves `/api/inverter/ahead` (30 h of plan).
+  - Checked in Chrome: today's planned rest, a planned popup, tomorrow.
+  - Backend 479 tests, frontend 449.
+  - **e2e 28/28.** The first run failed the cost-function check once: EMHASS's last run was "older than this
+    request" for all three. The Docker clock agreed with the host afterwards, and the rerun passed; it is worth
+    watching.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

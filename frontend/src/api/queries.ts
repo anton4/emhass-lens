@@ -8,6 +8,7 @@ import type {
   GridDetail,
   InputsResponse,
   InverterActivity,
+  InverterAhead,
   InverterStatus,
   JobInfo,
   MarketCommands,
@@ -263,6 +264,15 @@ export function useInverterActivity(range: { since: string; until: string }) {
     queryFn: () => api.get<InverterActivity>(`/api/inverter/activity${query(range)}`),
     refetchInterval: closed ? false : 30_000,
     ...(closed ? { staleTime: Infinity } : {}),
+  })
+}
+
+/** The inverter's planned modes after the slot in force, from the newest plan. */
+export function useInverterAhead() {
+  return useQuery({
+    queryKey: [...keys.inverter, 'ahead'],
+    queryFn: () => api.get<InverterAhead>('/api/inverter/ahead'),
+    refetchInterval: 60_000,
   })
 }
 

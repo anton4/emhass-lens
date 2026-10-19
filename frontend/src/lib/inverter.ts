@@ -2,7 +2,15 @@
 // show decisions, comparisons and agreement. See backend/emhass_lens/domain/inverter.py.
 
 import type { LampColor } from '../components/Lamp'
-import type { Agreement, ButtonPress, InverterSettings, InverterWrite, MarketSession, RunSummary } from '../api/types'
+import type {
+  Agreement,
+  ButtonPress,
+  InverterAhead,
+  InverterSettings,
+  InverterWrite,
+  MarketSession,
+  RunSummary,
+} from '../api/types'
 import type { StripInput, WriteTick } from './dayStrip'
 
 export interface InverterTargets {
@@ -369,6 +377,8 @@ export interface SlotDetail {
   market?: SlotMarket | null
   /** What EMHASS Lens wrote to the inverter in the slot, oldest first, for the plan or for the market. */
   writes?: SlotWrite[]
+  /** A slot still to come: the mode the rules give the plan's row, from the plan EMHASS made then. */
+  planned?: { generatedAt: string | null; runId: number | null }
 }
 
 const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
@@ -457,6 +467,48 @@ export function inverterStrip(
     })
   }
   return out
+}
+
+/** The rest of the day on the Inverter strip: each planned slot's mode (from `GET /api/inverter/ahead`) as a mark with
+ *  a planned popup, named with the plan's battery power where it forces the battery. A click opens the plan's run. */
+export function inverterAhead(ahead: InverterAhead | null | undefined): StripInput<SlotDetail>[] {
+  if (!ahead) return []
+  const planned = { generatedAt: ahead.generated_at ?? null, runId: ahead.run_id ?? null }
+  return ahead.slots.map((s) => {
+    const slot = Date.parse(s.slot)
+    const tone = modeTone(s.state)
+    const p = s.p_batt_w ?? null
+    const targets: DecisionTargets = {
+      rule: s.rule,
+      state: s.state,
+      grid_power_w: s.grid_power_w,
+      battery_min_w: s.battery_min_w,
+      battery_max_w: s.battery_max_w,
+      feedin_max_w: s.feedin_max_w ?? null,
+      feedin_before_w: null,
+      p_batt_w: p,
+    }
+    return {
+      t: slot / 1000,
+      label: tone.short,
+      fill: tone.fill,
+      ink: tone.ink,
+      runId: ahead.run_id ?? null,
+      amount: p !== null && AMOUNT_STATES.includes(s.state) ? Math.abs(p) : null,
+      detail: {
+        slot,
+        at: null,
+        targets,
+        action: null,
+        summary: null,
+        changed: [],
+        feedinBefore: null,
+        differs: {},
+        compare: null,
+        planned,
+      },
+    }
+  })
 }
 
 /** The inverter's "Lens wrote" row: every write (live, the plan's and the market's), each slot whose settings a dry

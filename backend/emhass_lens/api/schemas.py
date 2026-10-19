@@ -1048,6 +1048,28 @@ class InverterActivity(BaseModel):
     writes: list[InverterWrite]
 
 
+class PlannedSlot(BaseModel):
+    """The inverter's mode the rules give a plan row, for a slot still to come. Decided without the registers that
+    will be held then: the state is what will be set, the caps can still differ."""
+
+    slot: str
+    state: str
+    rule: str
+    grid_power_w: int
+    battery_min_w: int
+    battery_max_w: int
+    feedin_max_w: int | None = None  # None: left as it is
+    p_batt_w: float | None = None  # the plan's battery power (+ discharge)
+
+
+class InverterAhead(BaseModel):
+    """The inverter's planned modes after the slot in force, from the newest plan."""
+
+    generated_at: str | None
+    run_id: int | None
+    slots: list[PlannedSlot]
+
+
 class InverterStatus(BaseModel):
     drift: DriftStatus | None = None
     mode: str

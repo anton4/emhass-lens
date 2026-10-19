@@ -17,6 +17,7 @@ from emhass_lens.api.schemas import (
     EmhassStatusOut,
     EntityOption,
     InverterActivity,
+    InverterAhead,
     InverterStatus,
     InverterWrite,
     JobInfo,
@@ -188,6 +189,12 @@ async def inverter_activity(c: ContainerDep, since: str, until: str | None = Non
         presses=[ButtonPress(**p) for p in await writer.presses_between(start, end)],
         writes=[InverterWrite(**w) for w in await writer.writes_between(start, end)],
     )
+
+
+@router.get("/inverter/ahead")
+async def inverter_ahead(c: ContainerDep) -> InverterAhead:
+    """The inverter's planned modes after the slot in force: what the rules give each row of the newest plan."""
+    return InverterAhead(**await c.extras["inverter"].ahead())
 
 
 @router.post("/inverter/decide", dependencies=[Writable], status_code=202)

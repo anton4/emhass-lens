@@ -323,6 +323,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inverter/ahead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inverter Ahead
+         * @description The inverter's planned modes after the slot in force: what the rules give each row of the newest plan.
+         */
+        get: operations["inverter_ahead_api_inverter_ahead_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/inverter/decide": {
         parameters: {
             query?: never;
@@ -2664,6 +2684,18 @@ export interface components {
             /** Writes */
             writes: components["schemas"]["InverterWrite"][];
         };
+        /**
+         * InverterAhead
+         * @description The inverter's planned modes after the slot in force, from the newest plan.
+         */
+        InverterAhead: {
+            /** Generated At */
+            generated_at: string | null;
+            /** Run Id */
+            run_id: number | null;
+            /** Slots */
+            slots: components["schemas"]["PlannedSlot"][];
+        };
         /** InverterEntities */
         InverterEntities: {
             /**
@@ -3866,6 +3898,29 @@ export interface components {
             }[];
             /** Run Id */
             run_id?: number | null;
+        };
+        /**
+         * PlannedSlot
+         * @description The inverter's mode the rules give a plan row, for a slot still to come. Decided without the registers that
+         *     will be held then: the state is what will be set, the caps can still differ.
+         */
+        PlannedSlot: {
+            /** Battery Max W */
+            battery_max_w: number;
+            /** Battery Min W */
+            battery_min_w: number;
+            /** Feedin Max W */
+            feedin_max_w?: number | null;
+            /** Grid Power W */
+            grid_power_w: number;
+            /** P Batt W */
+            p_batt_w?: number | null;
+            /** Rule */
+            rule: string;
+            /** Slot */
+            slot: string;
+            /** State */
+            state: string;
         };
         /**
          * PlannedValues
@@ -5755,6 +5810,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inverter_ahead_api_inverter_ahead_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InverterAhead"];
                 };
             };
         };

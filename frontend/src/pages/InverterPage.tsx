@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useInverterDecide } from '../api/actions'
-import { useInverter, useInverterActivity, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
+import {
+  useInverter,
+  useInverterActivity,
+  useInverterAhead,
+  useMarketSessions,
+  useRuns,
+  useSettings,
+  useStatus,
+} from '../api/queries'
 import { AgreeHeadline, CompareTable, DecisionView, RulesExplainer } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
 import { OutcomeChip } from '../components/Outcome'
@@ -17,7 +25,7 @@ import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import type { StripItem } from '../lib/dayStrip'
-import { dayBounds } from '../lib/days'
+import { dayBounds, shiftDay, todayKey } from '../lib/days'
 import { driftText } from '../lib/drift'
 import { formatDateTime, formatSlotDate } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -39,6 +47,7 @@ import {
   inverterModeSpec,
   decideChip,
   inverterLegend,
+  inverterAhead,
   inverterStrip,
   inverterTicks,
   mergeBySlot,
@@ -79,8 +88,13 @@ export function InverterPage() {
   const lastCompare = (data?.last_compare ?? null) as InverterComparison | null
   const limits = settings.data?.settings.inverter.limits
 
-  // the strip's day: today, or one up to a week back (?day=)
-  const { day, days, today, setDay } = useStripDay(tz, now)
+  // the planned modes after the slot in force; tomorrow can be shown once the plan reaches it
+  const aheadQuery = useInverterAhead()
+  const planned = useMemo(() => inverterAhead(aheadQuery.data), [aheadQuery.data])
+  const tomorrow = Date.parse(dayBounds(shiftDay(todayKey(tz, now), 1), tz).since) / 1000
+  const reachesTomorrow = planned.some((p) => p.t >= tomorrow)
+  // the strip's day: today, one up to a week back, or tomorrow (?day=)
+  const { day, days, today, setDay } = useStripDay(tz, now, reachesTomorrow ? 1 : 0)
   const dayDecides = useRuns(runFilters('inverter.decide', day, tz, 0))
   const dayCompares = useRuns(runFilters('inverter.compare', day, tz, 0))
   const bounds = dayBounds(day, tz)
@@ -105,6 +119,9 @@ export function InverterPage() {
     [dayDecides.data, dayCompares.data, sessions.data, writes, presses, now],
   )
   const writeTicks = useMemo(() => inverterTicks(strip), [strip])
+  // a day to come is all plan: its key counts the planned slots
+  const [dayFrom, dayUntil] = [Date.parse(bounds.since) / 1000, Date.parse(bounds.until) / 1000]
+  const plannedOfDay = planned.filter((p) => p.t >= dayFrom && p.t < dayUntil)
   // EMHASS Lens's own presses are its writes, on the row of their own; a press from outside stands out on the marks
   const ticks = useMemo(() => pressTicks((presses ?? []).filter(pressedOutside)), [presses])
   const pressesOfDay = pressCounts(presses ?? [], bounds.since, bounds.until)
@@ -199,13 +216,14 @@ export function InverterPage() {
               : 'No decisions yet today.'
         }
         legend={
-          <StripKey items={inverterLegend(strip)}>
+          <StripKey items={inverterLegend(day > today ? plannedOfDay : strip)}>
             <PressKey presses={pressesOfDay} />
           </StripKey>
         }
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
         differText={slotDiffers}
         writes={{ ticks: writeTicks, target: 'inverter', held: 'held: not in control' }}
+        ahead={data?.mode === 'off' ? undefined : planned}
         ticks={ticks}
       />
 

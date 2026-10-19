@@ -11,6 +11,7 @@ from emhass_lens.domain.plan_now import (
     compare,
     inverter_expected,
     net_demand,
+    planned_slots,
     power_differs,
     row_for,
     row_targets,
@@ -163,6 +164,26 @@ def test_the_rules_give_a_plan_row_its_passive_settings() -> None:
     assert targets is not None
     assert (targets.grid_power_w, targets.battery_max_w, targets.battery_min_w) == (0, 0, limits.battery_min_w)
     assert row_targets({"P_PV": 100.0}, limits, None) is None
+
+
+def test_the_planned_modes_follow_the_plan_rows_after_the_slot_in_force() -> None:
+    limits = InverterLimits()
+    at = lambda hhmm: f"2026-10-09T{hhmm}:00+00:00"  # noqa: E731
+    charge = {"P_batt": -3000.0, "P_grid": 5600.0, "P_PV": 0.0, "unit_prod_price": 0.02}
+    rows = [
+        {**charge, "timestamp": at("11:00")},  # the slot in force: left out
+        {**PV_EXPORT_ROW, "timestamp": at("11:30")},
+        {**charge, "timestamp": at("11:15")},
+        {"P_PV": 100.0, "timestamp": at("11:45")},  # no P_batt or P_grid
+        {**charge},  # no timestamp
+    ]
+    slots = planned_slots(rows, datetime(2026, 10, 9, 11, 0, tzinfo=UTC), limits, 0.04)
+    assert [(s["slot"], s["state"], s["rule"]) for s in slots] == [
+        ("2026-10-09T11:15:00.000+00:00", "Force charge", "force_charge"),
+        ("2026-10-09T11:30:00.000+00:00", "Self-use PV and export excess to grid", "self_use_pv_export"),
+    ]
+    assert slots[0]["p_batt_w"] == -3000.0 and slots[0]["grid_power_w"] == 18800  # force charge holds the import max
+    assert slots[1]["feedin_max_w"] is not None  # export allowed: the limit is part of the plan
 
 
 def test_the_endpoint_shows_the_slot_in_force_with_measured_and_inverter_values(

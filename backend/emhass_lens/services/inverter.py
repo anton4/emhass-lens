@@ -18,7 +18,7 @@ from emhass_lens.core.slots import slot_floor
 from emhass_lens.domain.drift import DriftTracker, assess
 from emhass_lens.domain.drift import describe as describe_drift
 from emhass_lens.domain.inverter import Decision, Observed, PlanValues, compare, compare_targets, decide
-from emhass_lens.domain.plan_now import soc_of
+from emhass_lens.domain.plan_now import planned_slots, soc_of
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
 from emhass_lens.services.ha_values import num as _num
@@ -304,6 +304,19 @@ class InverterService:
                 else None
             ),
         }
+
+    async def ahead(self) -> dict[str, Any]:
+        """The inverter's planned modes after the slot in force, from the newest stored plan, whatever its age (the
+        UI says how old it is)."""
+        plans = await self.c.extras["emhass"].plans(1)
+        if not plans:
+            return {"generated_at": None, "run_id": None, "slots": []}
+        settings = self.c.settings.current
+        slot = slot_floor(self.c.clock.now())
+        slots = planned_slots(
+            plans[0]["plan"], slot, settings.inverter.limits, settings.emhass.mpc.no_export_at_or_below
+        )
+        return {"generated_at": plans[0]["generated_at"], "run_id": plans[0]["run_id"], "slots": slots}
 
     async def status(self) -> dict[str, Any]:
         writer = self.c.extras["sofar"]

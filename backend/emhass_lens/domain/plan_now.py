@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from emhass_lens.core.clock import parse_iso
+from emhass_lens.core.clock import iso, parse_iso
 from emhass_lens.core.slots import slot_floor
-from emhass_lens.domain.inverter import PlanValues, Targets, decide
+from emhass_lens.domain.inverter import Decision, PlanValues, Targets, decide
 from emhass_lens.settings.model import InverterLimits
 
 POWER_W = 300.0  # a power differs when it is this far off ...
@@ -132,8 +132,10 @@ def inverter_expected(
     return battery, demand - battery
 
 
-def row_targets(row: dict[str, Any], limits: InverterLimits, no_export_at_or_below: float | None) -> Targets | None:
-    """The passive settings the inverter rules give a plan row (what the automation and EMHASS Lens set for it)."""
+def row_decision(row: dict[str, Any], limits: InverterLimits, no_export_at_or_below: float | None) -> Decision | None:
+    """What the inverter rules decide for a plan row (what the automation and EMHASS Lens set for it), without the
+    registers that will be held then: its state is what will be set, its caps can still differ. None without P_batt
+    or P_grid."""
     batt, grid = _num(row.get(COLUMNS["batt"])), _num(row.get(COLUMNS["grid"]))
     if batt is None or grid is None:
         return None
@@ -145,7 +147,43 @@ def row_targets(row: dict[str, Any], limits: InverterLimits, no_export_at_or_bel
         export_price=_num(row.get("unit_prod_price")),
         soc=soc_of(row),
     )
-    return decide(values, limits, no_export_at_or_below).targets
+    return decide(values, limits, no_export_at_or_below)
+
+
+def row_targets(row: dict[str, Any], limits: InverterLimits, no_export_at_or_below: float | None) -> Targets | None:
+    """The passive settings the inverter rules give a plan row (what the automation and EMHASS Lens set for it)."""
+    decision = row_decision(row, limits, no_export_at_or_below)
+    return decision.targets if decision is not None else None
+
+
+def planned_slots(
+    rows: list[dict[str, Any]], after: datetime, limits: InverterLimits, no_export_at_or_below: float | None
+) -> list[dict[str, Any]]:
+    """The inverter's planned mode for each plan row whose slot starts after `after` (the slot in force), in order:
+    the slot, the passive state and rule, the settings, the feed-in limit (None: left as it is) and the plan's battery
+    power. Rows without a timestamp or without P_batt and P_grid are left out."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        stamp = parse_iso(str(row.get("timestamp"))) if row.get("timestamp") else None
+        if stamp is None or slot_floor(stamp) <= after:
+            continue
+        decision = row_decision(row, limits, no_export_at_or_below)
+        if decision is None or decision.targets is None:
+            continue
+        t = decision.targets
+        out.append(
+            {
+                "slot": iso(slot_floor(stamp)),
+                "state": t.state,
+                "rule": decision.rule,
+                "grid_power_w": t.grid_power_w,
+                "battery_min_w": t.battery_min_w,
+                "battery_max_w": t.battery_max_w,
+                "feedin_max_w": decision.feedin_target,
+                "p_batt_w": decision.p_batt_w,
+            }
+        )
+    return sorted(out, key=lambda s: s["slot"])
 
 
 def compare(

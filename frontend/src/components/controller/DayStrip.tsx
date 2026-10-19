@@ -242,7 +242,7 @@ export function DayStrip<D = unknown>({
   writes?: { ticks: WriteTick[]; target: string; held: string }
   /** Moments marked over the strip; the page says what they are (in the legend and the popup). */
   ticks?: StripTick[]
-  /** The rest of today as planned, drawn hatched after the decisions so far (not on a past day). */
+  /** The rest of today as planned, drawn hatched after the decisions so far, and a day to come (not a past day). */
   ahead?: StripInput<D>[]
 }) {
   const navigate = useNavigate()
@@ -253,18 +253,19 @@ export function DayStrip<D = unknown>({
   const agreeRow = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(1000)
-  const isToday = day === todayKey(timeZone, now)
+  const todayDay = todayKey(timeZone, now)
+  const isToday = day === todayDay
   const start = zonedTime(day, 0, 0, timeZone).getTime() / 1000
   const end = zonedTime(shiftDay(day, 1), 0, 0, timeZone).getTime() / 1000
   const nowS = Math.floor(now.getTime() / 1000)
   const items = useMemo(() => {
     const done = stripItems(inputs, start, end, span)
-    if (!isToday || !ahead?.length) return done
-    // the plan picks up where the last decision's mark ends, or now
+    if (day < todayDay || !ahead?.length) return done
+    // the plan picks up where the last decision's mark ends, or now; a day to come is all plan
     const last = done.at(-1)
-    const from = Math.max(nowS, last ? start + (last.x + last.w) * (end - start) : start)
+    const from = isToday ? Math.max(nowS, last ? start + (last.x + last.w) * (end - start) : start) : start
     return [...done, ...aheadItems(ahead, from, start, end, span)]
-  }, [inputs, ahead, isToday, nowS, start, end, span])
+  }, [inputs, ahead, day, todayDay, isToday, nowS, start, end, span])
   const runs = useMemo(() => stripRuns(items), [items])
   const segments = useMemo(() => stripSegments(items), [items])
   const agree = useMemo(() => agreeRuns(items, tally), [items, tally])

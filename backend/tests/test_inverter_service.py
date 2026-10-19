@@ -117,6 +117,24 @@ def test_live_applies_and_reads_back(tmp_path: Path, world: World) -> None:
         client.__exit__(None, None, None)
 
 
+def test_the_planned_modes_come_from_the_newest_plan(tmp_path: Path, world: World) -> None:
+    client = live_client(tmp_path, world, FakeClock(START))
+    try:
+        assert client.get("/api/inverter/ahead").json() == {"generated_at": None, "run_id": None, "slots": []}
+        mpc = run_job(client, "emhass.mpc")
+        assert mpc["outcome"] == "ok"
+        ahead = client.get("/api/inverter/ahead").json()
+        assert ahead["run_id"] == mpc["id"] and ahead["generated_at"]
+        slots = ahead["slots"]
+        assert slots, ahead
+        # after the slot in force (11:00), in order, each with a passive state
+        assert slots[0]["slot"] > "2026-10-09T11:00:00.000+00:00"
+        assert [s["slot"] for s in slots] == sorted(s["slot"] for s in slots)
+        assert all(s["state"] and s["rule"] for s in slots)
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_back_to_back_force_charge_slots_write_nothing(tmp_path: Path, world: World) -> None:
     """Runs 2791 and 2803: the second slot's smaller P_grid used to lower the grid target and press apply again."""
     clock = FakeClock(START)

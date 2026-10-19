@@ -23,6 +23,7 @@ const ACTION_CHIP: Record<DecisionAction['kind'], { text: string; color: LampCol
   already: { text: 'Already set', color: 'neutral' },
   blocked: { text: 'Not in control', color: 'amber' },
 }
+const PLANNED_CHIP: { text: string; color: LampColor } = { text: 'Planned', color: 'blue' }
 
 /** One slot of the inverter's day strip: the market session that held the inverter, if one did; every write EMHASS
  *  Lens made in it, for the plan or for the market; the five Sofar settings the plan set (or would set), which
@@ -30,9 +31,9 @@ const ACTION_CHIP: Record<DecisionAction['kind'], { text: string; color: LampCol
 export function InverterSlotPopup({ detail, timeZone }: { detail: SlotDetail; timeZone?: string }) {
   const clock = (ms: number) => formatClock(new Date(ms).toISOString(), timeZone).slice(0, 5)
   const t = detail.targets
-  const chip = detail.action ? ACTION_CHIP[detail.action.kind] : null
+  const chip = detail.planned ? PLANNED_CHIP : detail.action ? ACTION_CHIP[detail.action.kind] : null
   const blocked = detail.action?.kind === 'blocked'
-  const note = slotNote(detail)
+  const note = slotNote(detail, clock)
   const market = detail.market
   return (
     <div className="slot-pop">
@@ -95,7 +96,7 @@ export function InverterSlotPopup({ detail, timeZone }: { detail: SlotDetail; ti
                       {value === null ? 'unchanged' : fieldValue(f, value)}
                     </span>
                     {detail.changed.includes(f) && <span className="slot-pop-changed">changed</span>}
-                    {value === null && (
+                    {value === null && !detail.planned && (
                       <span className="slot-pop-sub">
                         {detail.feedinBefore
                           ? `${fieldValue(f, detail.feedinBefore.value)} since ${detail.feedinBefore.held ? 'before ' : ''}` +
@@ -150,7 +151,15 @@ function writeText(w: SlotWrite): string {
   return `${who} ${w.ok ? 'wrote' : 'failed to write'} ${parts.join(', ')}${w.runId !== null ? ` · run ${w.runId}` : ''}`
 }
 
-function slotNote(d: SlotDetail): string | null {
+function slotNote(d: SlotDetail, clock: (ms: number) => string): string | null {
+  if (d.planned) {
+    const made = d.planned.generatedAt ? ` (${clock(Date.parse(d.planned.generatedAt))})` : ''
+    const plan = d.planned.runId !== null ? `the plan of run ${d.planned.runId}${made}` : `the plan${made}`
+    return (
+      `What the rules give ${plan}. Written at the start of the slot if the plan still says so; the battery's ` +
+      'limits can differ with what the inverter holds then.'
+    )
+  }
   if (!d.targets) return null
   const differs = Object.keys(d.differs).map((f) => (FIELD_LABELS[f] ?? f).toLowerCase())
   const automation =

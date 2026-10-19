@@ -3851,6 +3851,47 @@
         "title": "InverterActivity",
         "type": "object"
       },
+      "InverterAhead": {
+        "description": "The inverter's planned modes after the slot in force, from the newest plan.",
+        "properties": {
+          "generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedSlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "run_id",
+          "slots"
+        ],
+        "title": "InverterAhead",
+        "type": "object"
+      },
       "InverterEntities": {
         "additionalProperties": false,
         "properties": {
@@ -7005,6 +7046,67 @@
           "rows"
         ],
         "title": "PlanSnapshotOut",
+        "type": "object"
+      },
+      "PlannedSlot": {
+        "description": "The inverter's mode the rules give a plan row, for a slot still to come. Decided without the registers that\nwill be held then: the state is what will be set, the caps can still differ.",
+        "properties": {
+          "battery_max_w": {
+            "title": "Battery Max W",
+            "type": "integer"
+          },
+          "battery_min_w": {
+            "title": "Battery Min W",
+            "type": "integer"
+          },
+          "feedin_max_w": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedin Max W"
+          },
+          "grid_power_w": {
+            "title": "Grid Power W",
+            "type": "integer"
+          },
+          "p_batt_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Batt W"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "state",
+          "rule",
+          "grid_power_w",
+          "battery_min_w",
+          "battery_max_w"
+        ],
+        "title": "PlannedSlot",
         "type": "object"
       },
       "PlannedValues": {
@@ -11182,6 +11284,28 @@
           }
         },
         "summary": "Inverter Activity",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/inverter/ahead": {
+      "get": {
+        "description": "The inverter's planned modes after the slot in force: what the rules give each row of the newest plan.",
+        "operationId": "inverter_ahead_api_inverter_ahead_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InverterAhead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Inverter Ahead",
         "tags": [
           "system"
         ]
