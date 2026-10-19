@@ -4994,6 +4994,12 @@ button.icon-button {
   cursor: pointer;
 }
 
+/* the rest of the day as planned: hatched and lighter */
+.day-strip-mark[data-ahead],
+.day-strip-swatch[data-ahead] {
+  opacity: 0.75;
+}
+
 .day-strip-mark:hover,
 .day-strip-mark[data-active] {
   z-index: 1;

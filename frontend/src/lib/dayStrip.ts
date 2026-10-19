@@ -42,6 +42,8 @@ export interface StripItem<D = unknown> {
   ink: string | null
   wrote: boolean
   amount: number | null
+  /** The rest of the day as planned, not yet done. */
+  ahead: boolean
   detail?: D
 }
 
@@ -102,8 +104,30 @@ export function stripItems<D>(inputs: StripInput<D>[], dayStart: number, dayEnd:
       ink: i.ink ?? null,
       wrote: i.wrote ?? false,
       amount: i.amount ?? null,
+      ahead: false,
       detail: i.detail,
     }))
+}
+
+/** The hatch over a mark of the rest of the day: planned, not yet done. */
+export const PLAN_HATCH = 'var(--plan-hatch)'
+
+/** Marks for the rest of the day as planned: `inputs` from `from` (now, or where the last decision's mark ends) to the
+ *  day's end, one that starts earlier cut at `from`. They are hatched, never compared, and their names sit on a chip
+ *  (the hatch is a texture). */
+export function aheadItems<D>(
+  inputs: StripInput<D>[],
+  from: number,
+  dayStart: number,
+  dayEnd: number,
+  span: number,
+): StripItem<D>[] {
+  const clipped = inputs.flatMap((i) => {
+    const t = Math.max(i.t, from)
+    const until = Math.min(i.t + (i.span ?? span), dayEnd)
+    return until > t ? [{ ...i, t, span: until - t, compare: null, wrote: false }] : []
+  })
+  return stripItems(clipped, dayStart, dayEnd, span).map((item) => ({ ...item, ahead: true, ink: null }))
 }
 
 /** A run of consecutive decisions with the same name: what the strip's popup shows. */
@@ -253,7 +277,11 @@ export function stripSegments(items: StripItem[]): StripSegment[] {
     if (!item.label) return
     const last = out.at(-1)
     const previous = items[i - 1]
-    const joins = previous?.label === item.label && previous.fill === item.fill && touches(previous, item)
+    const joins =
+      previous?.label === item.label &&
+      previous.fill === item.fill &&
+      previous.ahead === item.ahead &&
+      touches(previous, item)
     if (last && last.to === i - 1 && joins) {
       last.w = item.x + item.w - last.x
       last.to = i
@@ -406,7 +434,7 @@ export interface StripRun {
 
 /** Where each run of equal, touching marks starts and ends, so the strip can round and separate them. */
 export function stripRuns(items: StripItem[]): StripRun[] {
-  const key = (i: StripItem) => i.fill ?? i.state
+  const key = (i: StripItem) => `${i.fill ?? i.state}${i.ahead ? ' ahead' : ''}`
   const joins = (a: StripItem | undefined, b: StripItem | undefined) => !!a && !!b && key(a) === key(b) && touches(a, b)
   return items.map((item, i) => ({ start: !joins(items[i - 1], item), end: !joins(item, items[i + 1]) }))
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AGREE_TONES, type WriteTick } from '../../lib/dayStrip'
+import { AGREE_TONES, PLAN_HATCH, type WriteTick } from '../../lib/dayStrip'
 
 /** What a day strip's fills mean, with how many slots or decisions each today; `children` add more (button presses). */
 export function StripKey({
@@ -22,6 +22,8 @@ export function StripKey({
   )
 }
 
+const PLAN_SWATCH = `${PLAN_HATCH}, var(--ink-faint)`
+
 /** The key under a strip: what the fills mean (`legend`), then what the rows under the marks mean: the "Lens wrote"
  *  row's ticks (`writes`, each with its text and how many that day), the Automation row's agreed and differed, and
  *  `children`. Nothing when there is nothing to say. */
@@ -29,20 +31,33 @@ export function StripFooterKey({
   legend,
   writes = [],
   agree,
+  planned = false,
   children,
 }: {
   legend?: ReactNode
   writes?: { kind: WriteTick['kind']; text: string; count: number }[]
   agree: { same: number; differs: number } | null
+  /** The strip shows the rest of the day as planned. */
+  planned?: boolean
   children?: ReactNode
 }) {
   const ticks = writes.filter((w) => w.count > 0)
   const parts = (['same', 'differs'] as const).filter((state) => (agree?.[state] ?? 0) > 0)
-  const rows = ticks.length > 0 || parts.length > 0 || !!children
+  const rows = ticks.length > 0 || parts.length > 0 || planned || !!children
   return (
     <>
       {legend && <div className="day-strip-footer">{legend}</div>}
-      {rows && <RowsKey ticks={ticks} parts={parts} agree={agree}>{children}</RowsKey>}
+      {rows && (
+        <RowsKey ticks={ticks} parts={parts} agree={agree}>
+          {planned && (
+            <span className="day-strip-key-item">
+              <span className="day-strip-swatch wide" data-ahead style={{ background: PLAN_SWATCH }} />
+              plan, not yet done
+            </span>
+          )}
+          {children}
+        </RowsKey>
+      )}
     </>
   )
 }

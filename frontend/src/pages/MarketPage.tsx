@@ -19,6 +19,7 @@ import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds } from '../lib/days'
+import { NO_SETTINGS_FILL } from '../lib/inverter'
 import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
@@ -46,6 +47,10 @@ const MODES = [
   { id: 'shadow', text: 'Shadow' },
   { id: 'live', text: 'Live' },
 ]
+
+// the rest of today while no session is open (sessions arrive from Qilowatt minutes ahead, so none is planned): from
+// whenever the strip starts it, to the end of the day
+const NO_SESSION_AHEAD = [{ t: 0, span: Infinity, label: 'no session announced yet', fill: NO_SETTINGS_FILL }]
 
 /** Qilowatt market control (experimental): the current command and session, what EMHASS Lens decides, whether the
  * Home Assistant automation did the same, and how often the inverter gets written. */
@@ -188,6 +193,7 @@ export function MarketPage() {
         tally={stretchTally}
         differText={stretchDiffers}
         writes={{ ticks: wrote, target: 'inverter', held: 'held: inside the deadband or the cooldown' }}
+        ahead={data && data.mode !== 'off' && !data.session ? NO_SESSION_AHEAD : undefined}
       />
 
       <section className="panel">

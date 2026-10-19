@@ -16,7 +16,9 @@ import { Link, useNavigate } from 'react-router'
 import { dayLabel, shiftDay, todayKey, zonedTime } from '../../lib/days'
 import {
   AGREE_TONES,
+  aheadItems,
   agreeRuns,
+  PLAN_HATCH,
   dayHours,
   formatSpan,
   labelFits,
@@ -207,6 +209,7 @@ export function DayStrip<D = unknown>({
   differText,
   tally,
   writes,
+  ahead,
   ticks,
 }: {
   /** The calendar day shown, "2026-10-19". */
@@ -239,6 +242,8 @@ export function DayStrip<D = unknown>({
   writes?: { ticks: WriteTick[]; target: string; held: string }
   /** Moments marked over the strip; the page says what they are (in the legend and the popup). */
   ticks?: StripTick[]
+  /** The rest of today as planned, drawn hatched after the decisions so far (not on a past day). */
+  ahead?: StripInput<D>[]
 }) {
   const navigate = useNavigate()
   const now = useNow(60_000)
@@ -251,7 +256,15 @@ export function DayStrip<D = unknown>({
   const isToday = day === todayKey(timeZone, now)
   const start = zonedTime(day, 0, 0, timeZone).getTime() / 1000
   const end = zonedTime(shiftDay(day, 1), 0, 0, timeZone).getTime() / 1000
-  const items = useMemo(() => stripItems(inputs, start, end, span), [inputs, start, end, span])
+  const nowS = Math.floor(now.getTime() / 1000)
+  const items = useMemo(() => {
+    const done = stripItems(inputs, start, end, span)
+    if (!isToday || !ahead?.length) return done
+    // the plan picks up where the last decision's mark ends, or now
+    const last = done.at(-1)
+    const from = Math.max(nowS, last ? start + (last.x + last.w) * (end - start) : start)
+    return [...done, ...aheadItems(ahead, from, start, end, span)]
+  }, [inputs, ahead, isToday, nowS, start, end, span])
   const runs = useMemo(() => stripRuns(items), [items])
   const segments = useMemo(() => stripSegments(items), [items])
   const agree = useMemo(() => agreeRuns(items, tally), [items, tally])
@@ -273,6 +286,7 @@ export function DayStrip<D = unknown>({
   const main = useMarks(items.length, mainRow, !!detail)
   const auto = useMarks(agree.length, agreeRow, true)
   const shownItem = main.shown === null ? undefined : items[main.shown]
+  const shownDetail = shownItem && detail ? detail(shownItem) : null
   const shownRun = auto.shown === null ? undefined : agree[auto.shown]
   const hasItems = items.length > 0
   // the run a click on an Automation stretch opens: the first mark that differed
@@ -288,7 +302,12 @@ export function DayStrip<D = unknown>({
   }, [hasItems])
 
   const markText = (item: StripItem<D>) =>
-    `${clock(item.x)}${item.label ? ` · ${item.label}` : ''}${item.fill ? '' : ` · ${STATE_TEXT[item.state]}`}`
+    `${item.ahead ? 'Planned, ' : ''}${clock(item.x)}${item.label ? ` · ${item.label}` : ''}` +
+    (item.fill || item.ahead ? '' : ` · ${STATE_TEXT[item.state]}`)
+  const fillOf = (item: StripItem<D>) => {
+    const fill = item.fill ?? FILL[item.state]
+    return item.ahead ? `${PLAN_HATCH}, ${fill}` : fill
+  }
 
   const geometry = (item: StripItem<D>, i: number): CSSProperties => {
     const run = runs[i]
@@ -365,7 +384,8 @@ export function DayStrip<D = unknown>({
                       key={item.x}
                       type="button"
                       className="day-strip-mark"
-                      style={{ ...geometry(item, i), background: item.fill ?? FILL[item.state] }}
+                      data-ahead={item.ahead || undefined}
+                      style={{ ...geometry(item, i), background: fillOf(item) }}
                       aria-label={markText(item)}
                       aria-describedby={i === main.shown ? mainId : undefined}
                       title={detail ? undefined : markText(item)}
@@ -403,9 +423,9 @@ export function DayStrip<D = unknown>({
                     ))}
                   {nowLine}
                 </div>
-                {detail && shownItem && (
+                {shownItem && shownDetail && (
                   <StripPopup id={mainId} at={shownItem.x + shownItem.w / 2}>
-                    {detail(shownItem)}
+                    {shownDetail}
                     <PopupFoot marks={main} runId={shownItem.runId} noun={what} />
                   </StripPopup>
                 )}
@@ -522,6 +542,7 @@ export function DayStrip<D = unknown>({
                 { kind: 'noop', text: 'nothing to do', count: written.noop },
               ]}
               agree={agree.length > 0 ? agreed : null}
+              planned={items.some((i) => i.ahead)}
             >
               {footer}
             </StripFooterKey>

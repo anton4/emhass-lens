@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aheadItems,
   agreeRuns,
   agreeText,
   dayHours,
@@ -112,6 +113,38 @@ describe('stripSegments with amounts', () => {
       ['Force charge · 3.0 kW', 'Force charge'],
       ['Self-use'],
       ['Force charge · 2.5–3.0 kW', 'Force charge'],
+    ])
+  })
+})
+
+describe('aheadItems', () => {
+  it('draws the plan from where the decisions end to the end of the day, hatched and never compared', () => {
+    const plan = [
+      { t: DAY + 3600, span: 3600, label: 'Self-use', fill: 'lilac', ink: 'black', compare: 'ok' },
+      { t: DAY + 7200, span: 1800, label: 'Force charge', fill: 'blue', amount: 3000 },
+      { t: END - 900, span: 3600, label: 'Self-use', fill: 'lilac' }, // runs past midnight
+      { t: DAY, span: 900, label: 'gone' }, // over before the plan starts
+    ]
+    const items = aheadItems(plan, DAY + 5400, DAY, END, 900)
+    expect(items.map((i) => [i.label, i.x * 86400, i.w * 86400, i.ahead, i.state, i.ink])).toEqual([
+      ['Self-use', 5400, 1800, true, 'none', null],
+      ['Force charge', 7200, 1800, true, 'none', null],
+      ['Self-use', 86400 - 900, 900, true, 'none', null],
+    ])
+    expect(items[1]?.amount).toBe(3000)
+    // one stretch to the end of the day, from wherever it starts
+    const rest = aheadItems([{ t: 0, span: Infinity, label: 'no session announced yet' }], DAY + 600, DAY, END, 900)
+    expect(rest.map((i) => [i.x * 86400, i.w * 86400])).toEqual([[600, 86400 - 600]])
+  })
+
+  it('keeps a planned stretch apart from a decided one of the same name', () => {
+    const done = stripItems([{ t: DAY, label: 'Self-use', fill: 'lilac' }], DAY, END, 900)
+    const plan = aheadItems([{ t: DAY + 900, label: 'Self-use', fill: 'lilac' }], DAY + 900, DAY, END, 900)
+    const items = [...done, ...plan]
+    expect(stripSegments(items)).toHaveLength(2)
+    expect(stripRuns(items)).toEqual([
+      { start: true, end: true },
+      { start: true, end: true },
     ])
   })
 })
