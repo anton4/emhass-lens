@@ -12,12 +12,12 @@ import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
 import { StretchPopup } from '../components/controller/StretchPopup'
-import { StripKey, StripLine } from '../components/controller/StripKey'
+import { StripKey } from '../components/controller/StripKey'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds, todayKey } from '../lib/days'
-import { holdStretches, keyCounts, STRIP_BAND } from '../lib/dayStrip'
+import { holdStretches, keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
@@ -81,7 +81,7 @@ export function MarketPage() {
         runId: row.reconcile?.id ?? row.compare?.id,
         fill: mark?.fill ?? null,
         ink: mark?.ink ?? null,
-        band: mark?.wrote ? STRIP_BAND.wrote : null,
+        wrote: mark?.wrote,
       }
     })
     return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS) }
@@ -177,8 +177,9 @@ export function MarketPage() {
             : 'No decisions yet today.'
         }
         legend={<StripKey items={key} />}
-        footer={<StripLine strip={strip} target="inverter" />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
+        tally={stretchTally}
+        differText={stretchDiffers}
       />
 
       <section className="panel">

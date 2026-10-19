@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { chargerMark } from '../lib/charger'
+import { AGREE_TONES } from '../lib/dayStrip'
 import { MODE_TONES, NO_SETTINGS_FILL, NO_SETTINGS_INK } from '../lib/inverter'
 import { marketMark } from '../lib/market'
 import tokens from './tokens.css?raw'
@@ -92,6 +93,7 @@ const marks = (summaries: string[], mark: (s: string) => { fill: string; ink: st
 const PAIRS = [
   ...MODE_TONES.flatMap((t) => (t.ink ? [{ name: t.short, fill: t.fill, ink: t.ink }] : [])),
   { name: 'No settings', fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK },
+  ...Object.values(AGREE_TONES).map((t) => ({ name: t.title, fill: t.fill, ink: t.ink })),
   ...marks(CHARGER, chargerMark),
   ...marks(MARKET, marketMark),
 ]

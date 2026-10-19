@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { STRIP_BAND, type StripInput } from '../../lib/dayStrip'
+import { AGREE_TONES } from '../../lib/dayStrip'
 
 /** What a day strip's fills mean, with how many slots or decisions each today; `children` add more (button presses). */
 export function StripKey({
@@ -22,26 +22,26 @@ export function StripKey({
   )
 }
 
-/** What the line under a filled strip means: the comparison (dry run, shadow) and the writes (live) to `target`. */
-export function StripLine({ strip, target }: { strip: StripInput<unknown>[]; target: string }) {
-  const count = (band: string) => strip.filter((s) => s.band === band).length
-  const parts = [
-    { band: STRIP_BAND.same, text: 'same as the automation' },
-    { band: STRIP_BAND.differs, text: 'the automation differed' },
-    { band: STRIP_BAND.wrote, text: `wrote to the ${target}` },
-  ]
-    .map((p) => ({ ...p, n: count(p.band) }))
-    .filter((p) => p.n > 0)
-  if (parts.length === 0) return null
+/** What the rows under the marks mean: the Automation row's agreed and differed, with how many slots or decisions
+ *  each today, then `children` (the other rows' keys). Nothing when there is nothing to say. */
+export function StripFooterKey({
+  agree,
+  children,
+}: {
+  agree: { same: number; differs: number } | null
+  children?: ReactNode
+}) {
+  const parts = (['same', 'differs'] as const).filter((state) => (agree?.[state] ?? 0) > 0)
+  if (parts.length === 0 && !children) return null
   return (
-    <>
-      <span>Line under the strip:</span>
-      {parts.map((p) => (
-        <span key={p.band} className="day-strip-key-item">
-          <span className="day-strip-swatch line" style={{ background: p.band }} />
-          <span className="num">{p.n}</span> {p.text}
+    <div className="day-strip-footer">
+      {parts.map((state) => (
+        <span key={state} className="day-strip-key-item">
+          <span className="day-strip-swatch wide" style={{ background: AGREE_TONES[state].fill }} />
+          automation {AGREE_TONES[state].text} <span className="num">{agree?.[state]}</span>
         </span>
       ))}
-    </>
+      {children}
+    </div>
   )
 }

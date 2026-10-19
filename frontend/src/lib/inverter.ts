@@ -3,7 +3,7 @@
 
 import type { LampColor } from '../components/Lamp'
 import type { Agreement, ButtonPress, InverterSettings, InverterWrite, MarketSession, RunSummary } from '../api/types'
-import { STRIP_BAND, type StripInput } from './dayStrip'
+import type { StripInput } from './dayStrip'
 
 export interface InverterTargets {
   state: string
@@ -366,8 +366,8 @@ export interface SlotDetail {
 const SETTINGS = ['state', 'grid_power_w', 'battery_min_w', 'battery_max_w'] as const
 
 /** The inverter's day strip from mergeBySlot rows: each slot coloured by its passive state (hatched where EMHASS Lens
- * wasn't in control, striped where a market session held it), and the line under it showing the comparison (dry run)
- * or a write (live). `sessions` and `writes` add the market's sessions and every write, the plan's and the market's;
+ * wasn't in control, striped where a market session held it), with its comparison (dry run) and whether EMHASS Lens
+ * wrote in it (live). `sessions` and `writes` add the market's sessions and every write, the plan's and the market's;
  * `now` (ms) ends a session that is still open. */
 export function inverterStrip(
   rows: HistoryRow[],
@@ -428,7 +428,7 @@ export function inverterStrip(
         runId: ours.at(-1)?.runId ?? market.runId ?? row.decide?.id,
         fill: marketFill(market.direction),
         ink: null,
-        band: ours.length > 0 ? STRIP_BAND.wrote : null,
+        wrote: ours.length > 0,
         detail,
       })
       continue
@@ -440,14 +440,7 @@ export function inverterStrip(
       runId: row.decide?.id ?? row.compare?.id,
       fill: blocked ? NOT_IN_CONTROL_FILL : (tone?.fill ?? NO_SETTINGS_FILL),
       ink: blocked ? null : (tone?.ink ?? NO_SETTINGS_INK),
-      band:
-        compare === 'ok'
-          ? STRIP_BAND.same
-          : compare === 'mismatch'
-            ? STRIP_BAND.differs
-            : action?.kind === 'set'
-              ? STRIP_BAND.wrote
-              : null,
+      wrote: action?.kind === 'set',
       detail,
     })
   }

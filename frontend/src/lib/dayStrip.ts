@@ -1,13 +1,11 @@
+import { spanLabel } from './chartTime'
 import { shiftDay, zonedTime } from './days'
 
 // "Today, slot by slot" on the controller pages: each decision of a day as a mark on the day's axis, coloured by
 // whether the Home Assistant automation did the same (or by what the page passes as the fill), with the rule (branch,
-// action, state) named inside each stretch it holds.
+// action, state) named inside each stretch it holds, and an Automation row of the stretches it agreed and differed.
 
 export type StripState = 'same' | 'differs' | 'none'
-
-/** The line under a filled strip: the automation did the same, it differed, or EMHASS Lens wrote (live). */
-export const STRIP_BAND = { same: 'var(--line-green)', differs: 'var(--lamp-amber)', wrote: 'var(--ink-2)' }
 
 export interface StripInput<D = unknown> {
   /** When the decision applies (unix seconds): the slot start, or the moment it was made. */
@@ -24,8 +22,8 @@ export interface StripInput<D = unknown> {
   fill?: string | null
   /** CSS colour of the name on that fill (at least 4.5:1); none for a texture, whose name sits on a chip. */
   ink?: string | null
-  /** CSS colour of the line under the mark; no line without it. */
-  band?: string | null
+  /** EMHASS Lens wrote to the device for this decision (live). */
+  wrote?: boolean
   /** What the mark's popup shows. */
   detail?: D
 }
@@ -40,7 +38,7 @@ export interface StripItem<D = unknown> {
   runId: number | null
   fill: string | null
   ink: string | null
-  band: string | null
+  wrote: boolean
   detail?: D
 }
 
@@ -67,7 +65,7 @@ export function stripItems<D>(inputs: StripInput<D>[], dayStart: number, dayEnd:
       runId: i.runId ?? null,
       fill: i.fill ?? null,
       ink: i.ink ?? null,
-      band: i.band ?? null,
+      wrote: i.wrote ?? false,
       detail: i.detail,
     }))
 }
@@ -94,8 +92,7 @@ const STRETCH_SLACK = 60
  *  one mark, which holds until the next mark, at most `max` seconds after its last decision and at least `min` in all.
  *  A label change, a missing label or a gap of more than `max` starts a new mark. A mark differs if any of its
  *  decisions did, and opens the first that differed (else its first). Each input's detail is the popup's title. A
- *  mark takes its first decision's fill and ink; a filled mark's line is the comparison (differed if any did, else the
- *  same if any was), else any decision's own line (a write). */
+ *  mark takes its first decision's fill and ink, and wrote if any of its decisions did. */
 export function holdStretches(inputs: StripInput<string>[], max: number, min = 60): StripInput<Stretch>[] {
   const sorted = [...inputs].sort((a, b) => a.t - b.t)
   const groups: StripInput<string>[][] = []
@@ -117,7 +114,6 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
     const same = group.filter((g) => g.compare === 'ok').length
     const differs = group.filter((g) => g.compare === 'mismatch').length
     const fill = first.fill ?? null
-    const own = group.find((g) => g.band)?.band ?? null
     return {
       t: first.t,
       span: Math.max(min, until - first.t),
@@ -126,7 +122,7 @@ export function holdStretches(inputs: StripInput<string>[], max: number, min = 6
       runId: (differing ?? first).runId ?? null,
       fill,
       ink: first.ink ?? null,
-      band: fill === null ? own : differs > 0 ? STRIP_BAND.differs : same > 0 ? STRIP_BAND.same : own,
+      wrote: group.some((g) => g.wrote),
       detail: {
         from: first.t,
         last: last.t,
@@ -165,6 +161,17 @@ export function keyCounts(
   }
   const rank = (key: string) => (order.includes(key) ? order.indexOf(key) : order.length)
   return [...seen.values()].sort((x, y) => rank(x.text) - rank(y.text))
+}
+
+/** How many of a stretch's decisions the automation agreed and differed on, for the Automation row. */
+export function stretchTally(item: Pick<StripItem<Stretch>, 'detail'>): { same: number; differs: number } {
+  return { same: item.detail?.same ?? 0, differs: item.detail?.differs ?? 0 }
+}
+
+/** Where a stretch of several decisions differed, for the Automation row's popup; null for a single decision. */
+export function stretchDiffers(item: Pick<StripItem<Stretch>, 'detail'>): string | null {
+  const s = item.detail
+  return s && s.decisions > 1 ? `${s.differs} of ${s.decisions} decisions differed` : null
 }
 
 /** How a stretch compared with the automation, in words. */
@@ -263,6 +270,85 @@ export function dayHours(day: string, timeZone?: string): DayHour[] {
   }
   out.push({ t: end, label: '24:00', hour: 24 })
   return out
+}
+
+/** How the Automation row draws and names its two outcomes. */
+export const AGREE_TONES = {
+  same: { fill: 'var(--line-green)', ink: 'var(--on-green)', text: 'agreed', title: 'Automation agreed' },
+  differs: { fill: 'var(--line-amber)', ink: 'var(--on-amber)', text: 'differed', title: 'Automation differed' },
+} as const
+
+/** A stretch of the Automation row: consecutive compared marks with the same outcome. */
+export interface AgreeRun {
+  state: 'same' | 'differs'
+  /** Where it starts and how wide it is, as shares of the day. */
+  x: number
+  w: number
+  /** The marks it covers (indices into the strip's items). */
+  items: number[]
+  /** How many decisions in it were the same as the automation, and how many differed. */
+  same: number
+  differs: number
+}
+
+/** The Automation row: runs of consecutive compared marks that all agreed with the automation (or all differed),
+ *  bridging the time between them; a mark that wasn't compared ends a run. `tally` counts a mark's decisions (a
+ *  stretch can hold several); one per mark by default. */
+export function agreeRuns<D>(
+  items: StripItem<D>[],
+  tally: (item: StripItem<D>) => { same: number; differs: number } = (i) => ({
+    same: i.state === 'same' ? 1 : 0,
+    differs: i.state === 'differs' ? 1 : 0,
+  }),
+): AgreeRun[] {
+  const out: AgreeRun[] = []
+  let joins = false // the last run is still open: no mark without a comparison came since
+  for (const [i, item] of items.entries()) {
+    if (item.state === 'none') {
+      joins = false
+      continue
+    }
+    const t = tally(item)
+    const last = out.at(-1)
+    if (joins && last?.state === item.state) {
+      last.w = item.x + item.w - last.x
+      last.items.push(i)
+      last.same += t.same
+      last.differs += t.differs
+    } else {
+      out.push({ state: item.state, x: item.x, w: item.w, items: [i], same: t.same, differs: t.differs })
+    }
+    joins = true
+  }
+  return out
+}
+
+/** What an Automation run says, counting `what`s (slots or decisions). */
+export function agreeText(run: Pick<AgreeRun, 'state' | 'same' | 'differs'>, what: string): string {
+  const total = run.same + run.differs
+  const n = (k: number) => `${k} ${what}${k === 1 ? '' : 's'}`
+  if (run.state === 'same') {
+    return total <= 1 ? 'The automation did the same.' : `The automation did the same in all ${n(total)}.`
+  }
+  if (total <= 1) return 'The automation did something else.'
+  return run.differs === total
+    ? `The automation did something else in all ${n(total)}.`
+    : `The automation did something else in ${run.differs} of ${n(total)}.`
+}
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>()
+
+/** "05:00–05:15 · 15 min" for unix seconds [a, b); an end at the next midnight reads 24:00. */
+export function formatSpan(a: number, b: number, timeZone?: string): string {
+  const key = timeZone ?? ''
+  let fmt = clockFormats.get(key)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
+    clockFormats.set(key, fmt)
+  }
+  const from = fmt.format(new Date(a * 1000))
+  const to = fmt.format(new Date(b * 1000))
+  return `${from}–${to === '00:00' && b > a ? '24:00' : to} · ${spanLabel(b - a)}`
 }
 
 export interface StripRun {

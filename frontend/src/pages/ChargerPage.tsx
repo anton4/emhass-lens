@@ -10,12 +10,12 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
-import { StripKey, StripLine } from '../components/controller/StripKey'
+import { StripKey } from '../components/controller/StripKey'
 import { StretchPopup } from '../components/controller/StretchPopup'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { todayKey } from '../lib/days'
-import { holdStretches, keyCounts, STRIP_BAND } from '../lib/dayStrip'
+import { holdStretches, keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
 import {
   CHARGER_FIELD_LABELS,
   CHARGER_KEYS,
@@ -83,7 +83,7 @@ export function ChargerPage() {
         detail: mark?.title,
         fill: mark?.fill ?? null,
         ink: mark?.ink ?? null,
-        band: mark?.wrote ? STRIP_BAND.wrote : null,
+        wrote: mark?.wrote,
       }
     })
     return { strip: holdStretches(inputs, 900), key: keyCounts(marks, CHARGER_KEYS) }
@@ -205,8 +205,9 @@ export function ChargerPage() {
             : 'No decisions yet today.'
         }
         legend={<StripKey items={key} />}
-        footer={<StripLine strip={strip} target="charger" />}
         detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
+        tally={stretchTally}
+        differText={stretchDiffers}
       />
 
       <div className="two-col">

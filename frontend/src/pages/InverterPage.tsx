@@ -9,11 +9,12 @@ import { AgreementFact } from '../components/controller/AgreementFact'
 import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayStrip } from '../components/controller/DayStrip'
-import { StripKey, StripLine } from '../components/controller/StripKey'
+import { StripKey } from '../components/controller/StripKey'
 import { InverterSlotPopup } from '../components/controller/InverterSlotPopup'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
+import type { StripItem } from '../lib/dayStrip'
 import { dayBounds, todayKey } from '../lib/days'
 import { driftText } from '../lib/drift'
 import { formatDateTime, formatSlotDate } from '../lib/format'
@@ -32,6 +33,7 @@ import { matchesSearch, nextSort, sortRows } from '../lib/sort'
 import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
 import {
+  FIELD_LABELS,
   inverterModeSpec,
   decideChip,
   inverterLegend,
@@ -40,8 +42,16 @@ import {
   parseDecisionSummary,
   type InverterComparison,
   type InverterLast,
+  type SlotDetail,
 } from '../lib/inverter'
 import type { ButtonPress, RunSummary } from '../api/types'
+
+/** What the automation set differently in a slot, for the Automation row's popup. */
+function slotDiffers(item: StripItem<SlotDetail>): string | null {
+  const fields = Object.entries(item.detail?.differs ?? {})
+  if (fields.length === 0) return null
+  return fields.map(([field, value]) => `${FIELD_LABELS[field] ?? field}: the automation set ${value}`).join('; ')
+}
 
 const MODES = [
   { id: 'off', text: 'Off' },
@@ -182,8 +192,8 @@ export function InverterPage() {
             <PressKey presses={pressesToday} />
           </StripKey>
         }
-        footer={<StripLine strip={strip} target="inverter" />}
         detail={(item) => item.detail && <InverterSlotPopup detail={item.detail} timeZone={tz} />}
+        differText={slotDiffers}
         ticks={ticks}
       />
 

@@ -22,7 +22,6 @@ import {
   rules,
   runSlot,
 } from './inverter'
-import { STRIP_BAND } from './dayStrip'
 
 function run(id: number, job: string, startedAt: string, outcome = 'ok', summary: string | null = null): RunSummary {
   return { id, job, trigger: 'schedule', started_at: startedAt, scheduled_at: null, outcome, summary, pinned: 0 }
@@ -339,7 +338,8 @@ describe('inverterStrip', () => {
       'var(--on-mode-self-use)',
       NO_SETTINGS_INK,
     ])
-    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.same, STRIP_BAND.differs, null, null, null, null])
+    expect(strip.map((s) => s.compare)).toEqual(['ok', 'mismatch', null, null, null, null])
+    expect(strip.map((s) => s.wrote)).toEqual([false, false, false, false, false, false])
     expect(strip.map((s) => s.runId)).toEqual([1, 3, 5, 7, 9, 11])
 
     const [first, fc, blocked, pvx, self] = strip.map((s) => s.detail!)
@@ -401,7 +401,7 @@ describe('inverterStrip', () => {
         [],
       ),
     )
-    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.wrote, null])
+    expect(strip.map((s) => s.wrote)).toEqual([true, false])
   })
 
   it('shows the slots a market session held, with every write in them, the plan\'s and the market\'s', () => {
@@ -456,7 +456,7 @@ describe('inverterStrip', () => {
     const selfUse = modeTone('Self-use battery or PV').fill
     expect(strip.map((s) => s.fill)).toEqual([marketFill('sell'), marketFill('sell'), selfUse])
     // the market wrote in the first slot only; the second opens the session's own run
-    expect(strip.map((s) => s.band)).toEqual([STRIP_BAND.wrote, null, null])
+    expect(strip.map((s) => s.wrote)).toEqual([true, false, false])
     expect(strip.map((s) => s.runId)).toEqual([5630, 5630, 5667])
     const [first, second] = strip.map((s) => s.detail!)
     expect(first?.writes?.map((w) => [w.owner, w.runId, w.grid_w, w.feedin_w])).toEqual([

@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agreeRuns,
+  agreeText,
   dayHours,
+  formatSpan,
   holdStretches,
   keyCounts,
   labelFits,
   segmentText,
-  STRIP_BAND,
+  stretchDiffers,
+  stretchTally,
   stretchText,
   stripCounts,
   stripItems,
@@ -34,9 +38,9 @@ describe('stripItems', () => {
     expect(items[0]?.runId).toBe(1)
   })
 
-  it('carries the fill, the ink, the line and the detail', () => {
+  it('carries the fill, the ink, the write and the detail', () => {
     const [item] = stripItems(
-      [{ t: DAY, fill: 'var(--mode-force-charge)', ink: 'black', band: 'var(--line-green)', detail: { run: 7 } }],
+      [{ t: DAY, fill: 'var(--mode-force-charge)', ink: 'black', wrote: true, detail: { run: 7 } }],
       DAY,
       END,
       900,
@@ -44,10 +48,10 @@ describe('stripItems', () => {
     expect(item).toMatchObject({
       fill: 'var(--mode-force-charge)',
       ink: 'black',
-      band: 'var(--line-green)',
+      wrote: true,
       detail: { run: 7 },
     })
-    expect(stripItems([{ t: DAY }], DAY, END, 900)[0]).toMatchObject({ fill: null, ink: null, band: null })
+    expect(stripItems([{ t: DAY }], DAY, END, 900)[0]).toMatchObject({ fill: null, ink: null, wrote: false })
   })
 
   it('leaves out decisions of other days and trims the last slot at midnight', () => {
@@ -228,22 +232,84 @@ describe('holdStretches', () => {
     expect(unknown).toMatchObject({ compare: null, detail: { title: 'Charge from the plan' } })
   })
 
-  it("takes a filled mark's fill and ink from its first decision, the comparison or a write on the line under it", () => {
+  it("takes a mark's fill and ink from its first decision, and wrote if any of them did", () => {
     const sell = 'orange'
-    const [shadow, live, plain] = holdStretches(
+    const [shadow, live] = holdStretches(
       [
         { t: DAY, label: 'Kratt sell 3000W', fill: sell, compare: 'ok' },
         { t: DAY + 60, label: 'Kratt sell 3000W', fill: sell, compare: 'mismatch' },
         { t: DAY + 120, label: 'no action', fill: 'grey', ink: 'black' },
-        { t: DAY + 180, label: 'no action', fill: 'grey', ink: 'white', band: STRIP_BAND.wrote },
-        { t: DAY + 240, label: 'x', compare: 'ok' },
+        { t: DAY + 180, label: 'no action', fill: 'grey', ink: 'white', wrote: true },
       ],
       900,
     )
-    expect(shadow).toMatchObject({ fill: sell, ink: null, band: STRIP_BAND.differs, detail: { fill: sell } })
-    expect(live).toMatchObject({ fill: 'grey', ink: 'black', band: STRIP_BAND.wrote })
-    // without a fill the mark itself shows the comparison, and no line
-    expect(plain).toMatchObject({ fill: null, band: null, compare: 'ok' })
+    expect(shadow).toMatchObject({ fill: sell, ink: null, wrote: false, compare: 'mismatch', detail: { fill: sell } })
+    expect(live).toMatchObject({ fill: 'grey', ink: 'black', wrote: true })
+  })
+})
+
+describe('agreeRuns', () => {
+  it('joins compared marks with one outcome across the time between them, and breaks at a mark not compared', () => {
+    const items = stripItems(
+      [
+        { t: DAY, compare: 'ok' },
+        { t: DAY + 900, compare: 'ok' },
+        { t: DAY + 3600, compare: 'ok' }, // after a gap: still the same run
+        { t: DAY + 4500, compare: 'mismatch' },
+        { t: DAY + 5400, compare: 'mismatch' },
+        { t: DAY + 6300, compare: 'ok' },
+        { t: DAY + 7200 }, // not compared
+        { t: DAY + 8100, compare: 'ok' },
+      ],
+      DAY,
+      END,
+      900,
+    )
+    const runs = agreeRuns(items)
+    expect(runs.map((r) => [r.state, r.items, r.same, r.differs])).toEqual([
+      ['same', [0, 1, 2], 3, 0],
+      ['differs', [3, 4], 0, 2],
+      ['same', [5], 1, 0],
+      ['same', [7], 1, 0],
+    ])
+    expect(runs[0]?.x).toBe(0)
+    expect(runs[0]?.w).toBeCloseTo(4500 / 86400)
+  })
+
+  it('counts the decisions in each mark when told how', () => {
+    const held = holdStretches(
+      [
+        { t: DAY, label: 'a', compare: 'ok' },
+        { t: DAY + 60, label: 'a', compare: 'mismatch' },
+      ],
+      900,
+    )
+    const items = stripItems(held, DAY, END, 900)
+    const [run] = agreeRuns(items, stretchTally)
+    expect(run).toMatchObject({ state: 'differs', same: 1, differs: 1 })
+    expect(stretchDiffers(items[0]!)).toBe('1 of 2 decisions differed')
+  })
+})
+
+describe('agreeText', () => {
+  it('says how many slots or decisions agreed or differed', () => {
+    expect(agreeText({ state: 'same', same: 1, differs: 0 }, 'slot')).toBe('The automation did the same.')
+    expect(agreeText({ state: 'same', same: 34, differs: 0 }, 'slot')).toBe('The automation did the same in all 34 slots.')
+    expect(agreeText({ state: 'differs', same: 0, differs: 1 }, 'slot')).toBe('The automation did something else.')
+    expect(agreeText({ state: 'differs', same: 0, differs: 2 }, 'slot')).toBe(
+      'The automation did something else in all 2 slots.',
+    )
+    expect(agreeText({ state: 'differs', same: 3, differs: 1 }, 'decision')).toBe(
+      'The automation did something else in 1 of 4 decisions.',
+    )
+  })
+})
+
+describe('formatSpan', () => {
+  it('reads a stretch of the day with its length, the next midnight as 24:00', () => {
+    const tz = 'Europe/Tallinn'
+    expect(formatSpan(DAY + 5 * 3600, DAY + 5.25 * 3600, tz)).toBe('05:00–05:15 · 15 min')
+    expect(formatSpan(DAY + 21 * 3600, END, tz)).toBe('21:00–24:00 · 3 h')
   })
 })
 

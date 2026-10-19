@@ -18,11 +18,10 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1 is done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D2.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1 and D2 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D3.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
-  - **D2** `feat: an Automation row of agreed and differed stretches`: `agreeRuns`/`agreeText`, `formatSpan`,
-    `AgreePopup` (a second tab stop); `StripFooterKey` replaces `StripLine` and the old band.
+  - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - **D3** `feat: a "Lens wrote" row on the Inverter page`: `WriteTick`, `writeCounts`, `inverterTicks`,
     "· N writes, M held" in the head. Lens's own press dots go; outside presses stay red.
   - **D4** (backend) the market's summaries say why nothing was written (deadband or cooldown = held).
@@ -128,6 +127,26 @@ These come from docs/PLAN.md §10:
   - **Still to come:** the EV charger's names are rule ids until D10, and the market's short marks have no room for
     a name until D11.
   - Frontend: 429 tests.
+- **D2, the Automation row:**
+  - `lib/dayStrip.ts`:
+    - `agreeRuns`: consecutive compared marks with one outcome make a run across the time between them; a mark
+      that wasn't compared ends it. `tally` counts a mark's decisions (`stretchTally` for the charger's and the
+      market's stretches).
+    - `agreeText` ("The automation did something else in 1 of 4 decisions."), `formatSpan` ("05:00–05:15 · 15 min",
+      an end at midnight reads 24:00), `stretchDiffers`, and `AGREE_TONES` (`--line-green`/`--on-green`,
+      `--line-amber`/`--on-amber`, in the contrast test).
+    - The `band` colour on a mark is replaced by a `wrote` flag (a stretch wrote if any of its decisions did).
+  - **`DayStrip`:**
+    - Rows on a grid: a name, then the row with its own popup, so on a phone each name sits over its row.
+    - Each row is one tab stop (`useMarks`: hover, focus, tap to pin, arrow keys).
+    - The Automation row (20 px) shows only when something was compared today. "agreed"/"differed" fit inside, and
+      `AgreePopup` gives the span, the count and each differing mark with what differed (`differText`; on the
+      Inverter page the fields the automation set otherwise). A click on a differed stretch opens its first run.
+  - `StripFooterKey` ("automation agreed 33 · automation differed 2") replaces `StripLine` and the line under the
+    strip.
+  - **Until D3** the strips don't show the writes (live): they were on that line.
+  - Checked in Chrome: dry run and live (no Automation row), the popups, 390 px dark.
+  - Frontend: 437 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

@@ -4931,24 +4931,24 @@ button.icon-button {
   color: var(--ink-muted);
 }
 
-/* the row's name in a gutter, then the plot: the marks, the line under them and the hours */
+/* rows, each named in a gutter: the marks, the Automation row, the hours */
 .day-strip-chart {
-  position: relative;
   display: grid;
   grid-template-columns: 104px minmax(0, 1fr);
+  row-gap: 4px;
 }
 
-.day-strip-gutter > span {
+.day-strip-label {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 52px;
   padding-right: 10px;
   font-size: 12.5px;
   color: var(--ink-muted);
 }
 
-.day-strip-plot {
+/* a row and its popup */
+.day-strip-row {
   position: relative;
 }
 
@@ -5031,27 +5031,75 @@ button.icon-button {
   pointer-events: none;
 }
 
-/* the comparison or the writes, a row of their own under the marks they belong to */
-.day-strip-band {
+/* the Automation row: where the automation agreed and where it differed */
+.day-strip-agree {
   position: relative;
-  height: 12px;
-  margin-top: 4px;
-  border-radius: 4px;
+  height: 20px;
+  border-radius: 5px;
   background: var(--surface-sunk);
 }
 
-.day-strip-band > span {
+.day-strip-agree-run {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.day-strip-agree-run[data-state='same'] {
+  background: var(--line-green);
+  color: var(--on-green);
+}
+
+.day-strip-agree-run[data-state='differs'] {
+  background: var(--line-amber);
+  color: var(--on-amber);
+}
+
+.day-strip-agree-run:hover,
+.day-strip-agree-run[data-active] {
+  z-index: 1;
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.day-strip-agree-run:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.agree-pop-differs {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--frame);
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.agree-pop-differs .num {
+  font-family: var(--font-code);
+  font-size: 12px;
 }
 
 /* an hourly tick, a label every three hours, and now's time */
 .day-strip-axis {
   position: relative;
   height: 26px;
-  margin-top: 2px;
   font-family: var(--font-code);
   font-size: 12px;
   color: var(--ink-muted);
@@ -5221,10 +5269,9 @@ button.icon-button {
   border-radius: 3px;
 }
 
-.day-strip-swatch.line {
-  width: 16px;
-  height: 4px;
-  border-radius: 1px;
+.day-strip-swatch.wide {
+  width: 18px;
+  height: 10px;
 }
 
 .day-strip-swatch.dot {
@@ -5233,10 +5280,10 @@ button.icon-button {
   border-radius: 50%;
 }
 
-/* the popup under a mark: under the strip, kept inside it at the ends */
+/* the popup under a mark: under its row, kept inside it at the ends */
 .day-strip-caret {
   position: absolute;
-  top: 39px;
+  top: calc(100% - 13px);
   z-index: 31;
   width: 10px;
   height: 10px;
@@ -5250,7 +5297,7 @@ button.icon-button {
 
 .day-strip-pop {
   position: absolute;
-  top: 44px;
+  top: calc(100% - 8px);
   left: clamp(0px, calc(var(--x) - min(170px, 50%)), calc(100% - min(340px, 100%)));
   z-index: 30;
   width: min(340px, 100%);
@@ -5286,16 +5333,19 @@ button.icon-button {
   font-weight: 500;
 }
 
-/* on a phone the row's name sits over the strip instead of beside it */
+/* on a phone each row's name sits over it instead of beside it */
 @media (max-width: 640px) {
   .day-strip-chart {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .day-strip-gutter > span {
+  .day-strip-label {
     justify-content: flex-start;
-    height: auto;
-    padding: 0 0 4px;
+    padding: 4px 0 0;
+  }
+
+  .day-strip-label:empty {
+    display: none;
   }
 }
 
