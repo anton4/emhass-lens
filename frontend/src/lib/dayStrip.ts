@@ -228,12 +228,12 @@ export function keyCounts(
 }
 
 /** How many of a stretch's decisions the automation agreed and differed on, for the Automation row. */
-export function stretchTally(item: Pick<StripItem<Stretch>, 'detail'>): { same: number; differs: number } {
+export function stretchTally(item: { detail?: { same: number; differs: number } }): { same: number; differs: number } {
   return { same: item.detail?.same ?? 0, differs: item.detail?.differs ?? 0 }
 }
 
 /** Where a stretch of several decisions differed, for the Automation row's popup; null for a single decision. */
-export function stretchDiffers(item: Pick<StripItem<Stretch>, 'detail'>): string | null {
+export function stretchDiffers(item: { detail?: { decisions: number; differs: number } }): string | null {
   const s = item.detail
   return s && s.decisions > 1 ? `${s.differs} of ${s.decisions} decisions differed` : null
 }

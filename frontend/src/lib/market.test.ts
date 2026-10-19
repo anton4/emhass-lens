@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GridDetail, MarketCommandSpan, MarketSettings, RunSummary } from '../api/types'
+import type { MarketRow } from './market'
 import {
   commandPower,
   commandSessions,
@@ -19,6 +20,11 @@ import {
   parityFeedinText,
   parseReconcileSummary,
   sessionBands,
+  sessionCompared,
+  sessionInputs,
+  sessionName,
+  sessionRows,
+  marketTicks,
   sessionWindow,
   shortfallGap,
   shortfalls,
@@ -457,5 +463,103 @@ describe('the baseline', () => {
     expect(shortfalls([span], detail)).toEqual([])
     // from 1.5 kW exported before the session the same reading is only 6.9 kW delivered: short
     expect(shortfalls([{ ...span, baseline_w: -1500 }], detail)).toHaveLength(1)
+  })
+})
+
+describe('the Market strip by session', () => {
+  const s = (iso: string) => Date.parse(iso) / 1000
+  const DAY = s('2026-10-13T21:00:00Z') // Wed 14 Oct 00:00 in Tallinn
+  const END = DAY + 86400
+  const span = (start: string, end: string, power_w: number, extra: Partial<MarketCommandSpan> = {}) =>
+    ({
+      start,
+      end,
+      direction: 'sell',
+      source: 'kratt',
+      mode: 'mfrrup',
+      power_w,
+      open: false,
+      measured_w: null,
+      measured_coverage: null,
+      baseline_w: -1910,
+      ...extra,
+    }) as MarketCommandSpan
+  const sell = [
+    span('2026-10-14T10:14:22Z', '2026-10-14T10:20:00Z', 9400, { measured_w: -11100 }),
+    span('2026-10-14T10:20:00Z', '2026-10-14T10:31:05Z', 11000, { measured_w: -12500 }),
+  ]
+  const row = (at: string, outcome?: string, id = 1) =>
+    ({
+      at,
+      reconcile: { id, job: 'market.reconcile', started_at: at, outcome: 'dry_run', summary: '', trigger: 'event' },
+      compare: outcome ? { id: id + 1, job: 'market.compare', started_at: at, outcome, summary: '' } : undefined,
+    }) as unknown as MarketRow
+
+  it('makes a stretch per session and idle between, each compared through its decisions', () => {
+    const rows = [
+      row('2026-10-14T06:00:15Z', 'ok', 1),
+      row('2026-10-14T10:14:25Z', 'ok', 3),
+      row('2026-10-14T10:20:03Z', 'mismatch', 5),
+    ]
+    const inputs = sessionInputs(sell, rows, DAY, END, s('2026-10-14T12:00:00Z'))
+    expect(inputs.map((i) => [i.label, i.t, i.span, i.compare, i.amount ?? null, i.runId ?? null])).toEqual([
+      ['idle', DAY, s('2026-10-14T10:14:22Z') - DAY, 'ok', null, null],
+      ['↑ SELL · mFRR', s('2026-10-14T10:14:22Z'), 1003, 'mismatch', 11000, 3],
+      ['idle', s('2026-10-14T10:31:05Z'), s('2026-10-14T12:00:00Z') - s('2026-10-14T10:31:05Z'), null, null, null],
+    ])
+    expect(inputs[1]?.detail).toMatchObject({ decisions: 2, same: 1, differs: 1 })
+    expect(inputs[1]?.ink).toBeNull() // striped: a chip
+    // a past day runs to its end; nothing before the day starts
+    expect(sessionInputs([], [], DAY, END, END + 3600).map((i) => i.span)).toEqual([86400])
+    expect(sessionInputs(sell, rows, DAY, END, DAY - 60)).toEqual([])
+  })
+
+  it('starts a session that overlaps the one before where that one ends', () => {
+    const buy = span('2026-10-14T10:25:00Z', '2026-10-14T10:40:00Z', 5000, { direction: 'buy' })
+    const inputs = sessionInputs([...sell, buy], [], DAY, END, s('2026-10-14T11:00:00Z'))
+    expect(inputs.map((i) => [i.label, i.t])).toEqual([
+      ['idle', DAY],
+      ['↑ SELL · mFRR', s('2026-10-14T10:14:22Z')],
+      ['↓ BUY · mFRR', s('2026-10-14T10:31:05Z')],
+      ['idle', s('2026-10-14T10:40:00Z')],
+    ])
+  })
+
+  it('says what the session asked, what the grid delivered from its baseline, and how it compared', () => {
+    const [session] = commandSessions(sell)
+    expect(sessionName(session!)).toBe('↑ SELL · mFRR · kratt')
+    // delivered: 9.19 kW for 338 s and 10.59 kW for 665 s from the baseline of −1.91 kW
+    const got = 9190 * 338 + 10590 * 665
+    const share = Math.round((got / (9400 * 338 + 11000 * 665)) * 100)
+    expect(sessionRows(session!)).toEqual([
+      { k: 'Requested', v: '9.40–11.00 kW' },
+      { k: 'Delivered', v: `${(got / 1003 / 1000).toFixed(2)} kW (${share} %)` },
+      { k: 'Baseline', v: '−1.91 kW' },
+      { k: 'Commands', v: '2' },
+    ])
+    expect(sessionCompared({ decisions: 0, same: 0, differs: 0 })).toBeNull()
+    expect(sessionCompared({ decisions: 3, same: 3, differs: 0 })).toBe(
+      'The automation did the same in all 3 decisions.',
+    )
+    expect(sessionCompared({ decisions: 3, same: 2, differs: 1 })).toBe('1 of 3 decisions differed from the automation.')
+    expect(sessionCompared({ decisions: 2, same: 0, differs: 0 })).toBe('2 decisions, not compared.')
+  })
+
+  it('ticks the writes, what shadow would write, and the holds, old and new', () => {
+    const t = (m: number) => DAY + m * 60
+    const ticks = marketTicks([
+      { t: t(3), summary: "Kratt sell 7000W: set 'Force discharge', grid -7000 W; feed-in 7000 W" },
+      { t: t(1), summary: "Would: Kratt sell 5000W: set 'Force discharge', grid -5000 W, battery -20000…20000 W" },
+      { t: t(2), summary: 'Kratt sell 5200W: registers unchanged (held: deadband, 200 W off)' },
+      { t: t(4), summary: 'Would: Kratt sell 8800W (no write: cooldown)' }, // before 0.5.3
+      { t: t(5), summary: 'Kratt sell 5200W: registers unchanged' },
+      { t: t(6), summary: 'No action: kratt none 0 W, session none → none' },
+    ])
+    expect(ticks.map((k) => [(k.t - DAY) / 60, k.kind])).toEqual([
+      [1, 'would'],
+      [2, 'held'],
+      [3, 'wrote'],
+      [4, 'held'],
+    ])
   })
 })

@@ -18,8 +18,8 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D10 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D11.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D11 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D12, the release.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
@@ -30,8 +30,7 @@ what it still needs is copied below.
   - ~~**D8** `feat: the rest of the day as plan, not yet done`~~ (done).
   - ~~**D9** `feat: the inverter's planned modes for the rest of the day`~~ (done).
   - ~~**D10** `feat: the EV charger strip by charging state, with the next plan`~~ (done).
-  - **D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`: `sessionInputs`,
-    `sessionRows` (P9's baseline, P10's 8 days), `marketTicks`, "no session announced yet".
+  - ~~**D11** `feat: the Market strip by Qilowatt session, with requested, delivered and baseline`~~ (done).
   - **D12** `chore: release 0.5.3` (DOCS.md, STATUS.md, CHANGELOG.md, version).
 - **Phase 4 defaults (the owner accepted them with the plan):** tomorrow's chip only on Inverter and EV, and only
   when the plan reaches it. "Held" means not in control (inverter, EV), or the deadband or cooldown (market).
@@ -260,6 +259,24 @@ These come from docs/PLAN.md §10:
     (`stripCounts`, `.day-strip-legend`): every page has its key under the strip now.
   - Checked in Chrome: today (dry run) and tomorrow.
   - Frontend 453 tests.
+- **D11, the Market strip by Qilowatt session:**
+  - The marks are Qilowatt's sessions that day (`/api/market/commands` from the recorder, `commandSessions`), not
+    the reconcile decisions: `lib/market.ts` `sessionInputs` makes a stretch per session ("↑ SELL · mFRR", its
+    largest power as `amount`, striped, so a chip) and "idle" between, up to now (a past day to its end). A session
+    that starts before the last one ended starts where it ended.
+  - Each stretch is compared through the reconcile decisions in it (the Automation row, `stretchTally`/
+    `stretchDiffers`, now generic) and opens its first decision.
+  - `MarketSessionPopup`: the span, "↑ SELL · aFRR · kratt", Requested, Delivered (from the baseline, with its share),
+    Baseline, Commands (`sessionRows`), and how its decisions compared (`sessionCompared`). The time between says
+    "The plan in force drives the inverter."
+  - `marketTicks` from D4's summaries: writes, what shadow would write, and holds (deadband or cooldown; also the old
+    "(no write: cooldown)"). "No action" decisions get no tick.
+  - "no session announced yet" (D8) only while no session is open, from Lens or from Qilowatt.
+  - `useMarketCommands` takes an `until` (a past day stops polling). The key counts sell sessions, buy sessions and
+    the time between; `MARKET_KEYS` is gone. The popups' hint says "stretch" on the charger and market strips.
+  - If the commands can't be read, the strip says so.
+  - Checked in Chrome: dry run, a session popup, 390 px dark.
+  - Frontend 457 tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

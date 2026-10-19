@@ -11,7 +11,7 @@ import { formatPower, formatSignedPower } from './units'
 import type { CompareField } from './inverter'
 import type { InverterTargets } from './inverter'
 import { marketFill, NO_SETTINGS_FILL, NO_SETTINGS_INK, NOT_IN_CONTROL_FILL } from './inverter'
-import type { StripMark } from './dayStrip'
+import type { StripInput, StripMark, WriteTick } from './dayStrip'
 
 export interface MarketThrottle {
   grid_delta_w: number
@@ -128,9 +128,6 @@ export function parseReconcileSummary(summary: string | null | undefined): Parse
   if (command) return { kind: 'command', text: command[1]! }
   return { kind: 'other', text: summary }
 }
-
-/** The Market strip's key entries, in order. */
-export const MARKET_KEYS = ['Market sell', 'Market buy', 'No action', 'Session end', 'Not in control', 'Ignored', 'Other']
 
 /** A reconcile decision on the Market page's day strip: named by its command ("Kratt sell 7000W") or what it did, a
  *  session striped in the colour of the passive state it sets (as on the Inverter strip; a striped or hatched mark's
@@ -652,4 +649,123 @@ export function marketLead(o: { spans: MarketCommandSpan[]; time: number; nowS?:
     rows.push({ name: 'baseline, before the session', value: formatSignedPower(span.baseline_w), color: '--ink-faint', swatch: 'none' })
   }
   return rows
+}
+
+/** A stretch of the Market strip: one Qilowatt session, or the time between them; with how the reconcile decisions in
+ *  it compared with the automation. */
+export interface SessionStretch {
+  from: number
+  to: number
+  session: CommandSession | null
+  decisions: number
+  same: number
+  differs: number
+}
+
+/** The Market strip's stretches for [dayStart, dayEnd) up to `nowS`: each of Qilowatt's sessions (striped in the state
+ *  it sets, named "↑ SELL · mFRR · 9.4–11.0 kW" where it fits) and "idle" between them, each compared through the
+ *  reconcile decisions in it (`rows`); a click opens the session's first decision. */
+export function sessionInputs(
+  spans: MarketCommandSpan[],
+  rows: MarketRow[],
+  dayStart: number,
+  dayEnd: number,
+  nowS: number,
+): StripInput<SessionStretch>[] {
+  const end = Math.min(dayEnd, nowS)
+  if (!(end > dayStart)) return []
+  const sessions = commandSessions(spans, nowS).filter((s) => s.to > dayStart && s.from < end)
+  const decided = rows
+    .map((r) => ({ t: unix(r.at), outcome: r.compare?.outcome ?? null, runId: r.reconcile?.id ?? null }))
+    .sort((a, b) => a.t - b.t)
+  const stretch = (from: number, to: number, session: CommandSession | null): StripInput<SessionStretch> => {
+    const inside = decided.filter((d) => d.t >= from && d.t < to)
+    const same = inside.filter((d) => d.outcome === 'ok').length
+    const differs = inside.filter((d) => d.outcome === 'mismatch').length
+    const detail = { from, to, session, decisions: inside.length, same, differs }
+    const base = { t: from, span: to - from, compare: differs > 0 ? 'mismatch' : same > 0 ? 'ok' : null, detail }
+    if (!session) return { ...base, label: 'idle', fill: NO_SETTINGS_FILL, ink: NO_SETTINGS_INK }
+    const sell = session.direction === 'sell'
+    const product = sessionProduct(session)
+    return {
+      ...base,
+      label: product ? `${head(sell)} · ${product}` : head(sell),
+      fill: marketFill(session.direction),
+      ink: null,
+      amount: session.maxW,
+      runId: inside.find((d) => d.runId !== null)?.runId ?? null,
+    }
+  }
+  const out: StripInput<SessionStretch>[] = []
+  let cursor = dayStart
+  for (const s of sessions) {
+    // a session that starts before the last one ended (only ever in made-up data) starts where it ended
+    const from = Math.max(s.from, dayStart, cursor)
+    const to = Math.min(s.to, end)
+    if (to <= from) continue
+    if (from > cursor) out.push(stretch(cursor, from, null))
+    out.push(stretch(from, to, s))
+    cursor = to
+  }
+  if (end > cursor) out.push(stretch(cursor, end, null))
+  return out
+}
+
+/** The rows of a session's popup: what was asked, what the grid delivered of it from its baseline, the baseline, and
+ *  the commands. */
+export function sessionRows(s: CommandSession, nowS?: number): { k: string; v: string }[] {
+  const requested = s.minW === s.maxW ? `${kw2(s.maxW)} kW` : `${kw2(s.minW)}–${kw2(s.maxW)} kW`
+  let asked = 0
+  let got = 0
+  let seconds = 0
+  for (const x of s.spans) {
+    const w = deliveredW(x)
+    if (w === null) continue
+    const t = spanEnd(x, nowS) - unix(x.start)
+    asked += x.power_w * t
+    got += w * t
+    seconds += t
+  }
+  const delivered =
+    seconds > 0 ? `${kw2(got / seconds)} kW (${Math.round((got / asked) * 100)} %)` : 'not measured'
+  const base = s.spans[0]?.baseline_w
+  const rows = [
+    { k: 'Requested', v: requested },
+    { k: 'Delivered', v: delivered },
+    { k: 'Baseline', v: base === null || base === undefined ? 'not known' : formatSignedPower(base) },
+    { k: 'Commands', v: String(s.spans.length) },
+  ]
+  return rows
+}
+
+const kw2 = (w: number) => (w / 1000).toFixed(2)
+
+/** A session in words: "↑ SELL · mFRR · kratt". */
+export function sessionName(s: CommandSession): string {
+  return [head(s.direction === 'sell'), sessionProduct(s), s.spans[0]?.source].filter(Boolean).join(' · ')
+}
+
+/** The Market strip's "Lens wrote" row from the reconcile decisions: each write (live), each write shadow would have
+ *  made, and each one held by the deadband or the cooldown (since 0.5.3; "(no write: cooldown)" before). */
+export function marketTicks(decisions: { t: number; summary: string | null | undefined }[]): WriteTick[] {
+  const ticks: WriteTick[] = []
+  for (const d of decisions) {
+    const s = d.summary ?? ''
+    if (/\((held|no write): (cooldown|deadband)/.test(s)) ticks.push({ t: d.t, kind: 'held' })
+    else if (marketMark(s)?.wrote) ticks.push({ t: d.t, kind: 'wrote' })
+    else if (s.startsWith('Would: ') && /: (set '|feed-in )/.test(s)) ticks.push({ t: d.t, kind: 'would' })
+  }
+  return ticks.sort((a, b) => a.t - b.t)
+}
+
+/** How the decisions in a stretch compared with the automation, in words; null without decisions. */
+export function sessionCompared(d: Pick<SessionStretch, 'decisions' | 'same' | 'differs'>): string | null {
+  const n = d.decisions
+  const decisions = (k: number) => `${k} decision${k === 1 ? '' : 's'}`
+  if (n === 0) return null
+  if (d.differs > 0) return `${d.differs} of ${decisions(n)} differed from the automation.`
+  if (d.same === n && n === 1) return 'The automation did the same.'
+  if (d.same === n) return `The automation did the same in all ${decisions(n)}.`
+  if (d.same > 0) return `The automation did the same in ${d.same} of ${decisions(n)}; the rest weren't compared.`
+  return `${decisions(n)}, not compared.`
 }

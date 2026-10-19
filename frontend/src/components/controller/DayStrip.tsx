@@ -404,7 +404,7 @@ export function DayStrip<D = unknown>({
                 {shownItem && shownDetail && (
                   <StripPopup id={mainId} at={shownItem.x + shownItem.w / 2}>
                     {shownDetail}
-                    <PopupFoot marks={main} runId={shownItem.runId} noun={what} />
+                    <PopupFoot marks={main} runId={shownItem.runId} noun={what === 'slot' ? 'slot' : 'stretch'} />
                   </StripPopup>
                 )}
               </div>

@@ -316,12 +316,15 @@ export function useGridDetail(req: DetailRequest | null, enabled: boolean) {
 }
 
 /** Qilowatt's commands since `since` (round it, so the key stays put), read from the Home Assistant recorder. */
-export function useMarketCommands(since: string | null) {
+/** Qilowatt's commands from `since` to `until` (now when left out); a past window stops polling. */
+export function useMarketCommands(since: string | null, until?: string) {
+  const closed = isClosedRange(until)
   return useQuery({
-    queryKey: [...keys.marketCommands, since],
-    queryFn: () => api.get<MarketCommands>(`/api/market/commands${query({ since: since ?? undefined })}`),
+    queryKey: [...keys.marketCommands, since, until],
+    queryFn: () => api.get<MarketCommands>(`/api/market/commands${query({ since: since ?? undefined, until })}`),
     enabled: since !== null,
-    refetchInterval: 60_000,
+    refetchInterval: closed ? false : 60_000,
+    ...(closed ? { staleTime: Infinity } : {}),
   })
 }
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMarketReconcile } from '../api/actions'
-import { useMarket, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
+import { useMarket, useMarketCommands, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AgreeHeadline, CompareTable } from '../components/InverterViews'
 import { Lamp, LabelledLamp } from '../components/Lamp'
@@ -12,15 +12,15 @@ import { CompareChip } from '../components/controller/CompareChip'
 import { ControllerHead } from '../components/controller/ControllerHead'
 import { DayChips } from '../components/controller/DayChips'
 import { DayStrip } from '../components/controller/DayStrip'
-import { StretchPopup } from '../components/controller/StretchPopup'
+import { MarketSessionPopup } from '../components/controller/MarketSessionPopup'
 import { StripKey } from '../components/controller/StripKey'
 import { useStripDay } from '../components/controller/useStripDay'
 import { WearFacts } from '../components/controller/WearFacts'
 import { Empty, ErrorNotice } from '../components/PageHead'
 import { useNow } from '../components/useNow'
 import { dayBounds } from '../lib/days'
-import { NO_SETTINGS_FILL } from '../lib/inverter'
-import { holdStretches, keyCounts, stretchDiffers, stretchTally, wroteTicks } from '../lib/dayStrip'
+import { marketFill, NO_SETTINGS_FILL } from '../lib/inverter'
+import { keyCounts, stretchDiffers, stretchTally } from '../lib/dayStrip'
 import { formatDateTime, formatTime } from '../lib/format'
 import { runFilters, useListParams } from '../lib/listParams'
 import { matchesSearch, nextSort, sortRows } from '../lib/sort'
@@ -28,12 +28,12 @@ import { ListControls } from '../components/ListControls'
 import { SortableTh } from '../components/SortableTh'
 import {
   MARKET_FIELD_LABELS,
-  MARKET_KEYS,
   marketFieldValue,
-  marketMark,
   marketModeSpec,
+  marketTicks,
   pairMarketCompares,
   parseReconcileSummary,
+  sessionInputs,
   sessionText,
   type MarketComparison,
   type MarketLast,
@@ -75,25 +75,29 @@ export function MarketPage() {
   const { day, days, today, setDay } = useStripDay(tz, now)
   const dayReconciles = useRuns(runFilters('market.reconcile', day, tz, 0))
   const dayCompares = useRuns(runFilters('market.compare', day, tz, 0))
-  // each decision filled by what it did, as the Inverter strip fills its slots; the line under it says whether the
-  // automation did the same (shadow) or the decision wrote to the inverter (live)
-  const { strip, key, wrote } = useMemo(() => {
+  // Qilowatt's sessions that day (from Home Assistant's recorder), and idle between them
+  const bounds = dayBounds(day, tz)
+  const commands = useMarketCommands(bounds.since, day === today ? undefined : bounds.until)
+  const nowS = Math.floor(now.getTime() / 1000)
+  const { strip, key, wrote, open } = useMemo(() => {
     const rows = pairMarketCompares(dayReconciles.data ?? [], dayCompares.data ?? [])
-    const marks = rows.map((row) => marketMark(row.reconcile?.summary))
-    const inputs = rows.map((row, i) => {
-      const mark = marks[i]
-      return {
-        t: Date.parse(row.at) / 1000,
-        compare: row.compare?.outcome,
-        label: mark?.label ?? null,
-        runId: row.reconcile?.id ?? row.compare?.id,
-        fill: mark?.fill ?? null,
-        ink: mark?.ink ?? null,
-        wrote: mark?.wrote,
-      }
+    const spans = commands.data?.spans ?? []
+    const [from, until] = [Date.parse(bounds.since) / 1000, Date.parse(bounds.until) / 1000]
+    const stretches = commands.data && !commands.data.error ? sessionInputs(spans, rows, from, until, nowS) : []
+    const marks = stretches.map((s) => {
+      const session = s.detail?.session
+      if (!session) return { key: 'No session', fill: NO_SETTINGS_FILL }
+      return { key: session.direction === 'sell' ? 'Sell session' : 'Buy session', fill: marketFill(session.direction) }
     })
-    return { strip: holdStretches(inputs, 900), key: keyCounts(marks, MARKET_KEYS), wrote: wroteTicks(inputs) }
-  }, [dayReconciles.data, dayCompares.data])
+    const ticks = marketTicks(rows.map((row) => ({ t: Date.parse(row.at) / 1000, summary: row.reconcile?.summary })))
+    return {
+      strip: stretches,
+      key: keyCounts(marks, ['Sell session', 'Buy session', 'No session']),
+      wrote: ticks,
+      open: stretches.some((s) => s.detail?.session?.open),
+    }
+  }, [dayReconciles.data, dayCompares.data, commands.data, bounds.since, bounds.until, nowS])
+  const commandsError = commands.data?.error ?? (commands.error ? String(commands.error) : null)
 
   return (
     <>
@@ -175,25 +179,25 @@ export function MarketPage() {
       <DayStrip
         day={day}
         chips={<DayChips day={day} days={days} today={today} onChange={setDay} />}
-        inputs={strip}
+        inputs={data?.mode === 'off' ? [] : strip}
         span={900}
         timeZone={tz}
         what="decision"
         rowLabel="Session"
-        subtitle="Qilowatt commands and what EMHASS Lens did with the inverter"
+        subtitle="Qilowatt sessions and what EMHASS Lens did with the inverter"
         empty={
-          day !== today
-            ? 'No decisions that day.'
-            : data?.mode === 'off'
-              ? 'Nothing decided: market control is off.'
-              : 'No decisions yet today.'
+          data?.mode === 'off'
+            ? 'Nothing decided: market control is off.'
+            : commandsError
+              ? `Qilowatt's commands can't be read: ${commandsError}`
+              : "Reading Qilowatt's commands…"
         }
-        legend={<StripKey items={key} />}
-        detail={(item) => item.detail && <StretchPopup stretch={item.detail} timeZone={tz} />}
+        legend={key.length > 0 ? <StripKey items={key} /> : undefined}
+        detail={(item) => item.detail && <MarketSessionPopup stretch={item.detail} timeZone={tz} nowS={nowS} />}
         tally={stretchTally}
         differText={stretchDiffers}
         writes={{ ticks: wrote, target: 'inverter', held: 'held: inside the deadband or the cooldown' }}
-        ahead={data && data.mode !== 'off' && !data.session ? NO_SESSION_AHEAD : undefined}
+        ahead={data && data.mode !== 'off' && !data.session && !open ? NO_SESSION_AHEAD : undefined}
       />
 
       <section className="panel">
