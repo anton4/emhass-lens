@@ -117,6 +117,11 @@ def wait_for_run(client: TestClient, job: str, after_id: int, trigger: str = "ev
     raise AssertionError(f"no new {job} run")
 
 
+RAILS = "battery -20000…20000 W"
+# what shadow would write at a session's start
+WOULD_START_5000 = f"Would: Kratt sell 5000W: set 'Force discharge', grid -5000 W, {RAILS}; feed-in 15500 W"
+
+
 def newest_id(client: TestClient, job: str) -> int:
     runs = client.get("/api/runs", params={"job": job}).json()
     return runs[0]["id"] if runs else 0
@@ -139,7 +144,7 @@ def test_shadow_decides_and_compares_with_the_automation(tmp_path: Path, world: 
         push(client, world, MODE, "mfrrup")
         decided = wait_for_run(client, "market.reconcile", before)
         assert decided["outcome"] == "dry_run", decided
-        assert decided["summary"] == "Would: Kratt sell 5000W"
+        assert decided["summary"] == WOULD_START_5000
         assert not [c for c in calls(world) if c[0].startswith(("number", "button", "input_"))]
         artifact = client.get(f"/api/runs/{decided['id']}/artifacts/market_decision").json()
         assert "session start" in artifact["decision"]["throttle"]["bypass_reasons"]
@@ -156,7 +161,7 @@ def test_shadow_decides_and_compares_with_the_automation(tmp_path: Path, world: 
         # ... but ignores a bigger command (shadow follows the automation's session select: continuing)
         push(client, world, POWER, 7000)
         bigger = wait_for_run(client, "market.reconcile", decided["id"])
-        assert bigger["summary"] == "Would: Kratt sell 7000W"
+        assert bigger["summary"] == "Would: Kratt sell 7000W: set 'Force discharge', grid -7000 W, " + RAILS
         differs = run_job(client, "market.compare")
         assert differs["outcome"] == "mismatch"
         assert "grid_power_w: expected -7000.0, HA shows -5000.0" in differs["summary"]
@@ -204,10 +209,10 @@ def test_live_runs_a_session_throttles_writes_and_hands_the_inverter_back_to_the
         # within the deadband: nothing written; a big change is blocked by the cooldown ...
         push(client, world, POWER, 5200)
         inside = wait_for_run(client, "market.reconcile", started["id"])
-        assert inside["summary"] == "Kratt sell 5200W: registers unchanged"
+        assert inside["summary"] == "Kratt sell 5200W: registers unchanged (held: deadband, 200 W off)"
         push(client, world, POWER, 7000)
         cooled = wait_for_run(client, "market.reconcile", inside["id"])
-        assert cooled["summary"] == "Kratt sell 7000W: registers unchanged"
+        assert cooled["summary"] == "Kratt sell 7000W: registers unchanged (held: cooldown)"
         assert presses(world, APPLY, n) == 1
         # ... until the cooldown passed
         clock.advance(seconds=181)
@@ -299,7 +304,8 @@ def test_a_restart_keeps_the_session_and_the_cooldown(tmp_path: Path, world: Wor
         n = len(world.ha_services)
         push(client, world, POWER, 7000)
         blocked = wait_for_run(client, "market.reconcile", 0)
-        assert blocked["summary"] == "Kratt sell 7000W: registers unchanged"  # the cooldown came back from app.db
+        # the cooldown came back from app.db
+        assert blocked["summary"] == "Kratt sell 7000W: registers unchanged (held: cooldown)"
         assert presses(world, APPLY, n) == 0
         push(client, world, MODE, "none")
         ended = wait_for_run(client, "market.reconcile", blocked["id"])
@@ -379,7 +385,7 @@ def test_a_burst_settles_into_one_reconcile(tmp_path: Path, world: World) -> Non
         assert newest_id(client, "market.reconcile") == before  # still settling
         clock.advance(seconds=2)
         decided = wait_for_run(client, "market.reconcile", before)
-        assert decided["summary"] == "Would: Kratt sell 5000W"
+        assert decided["summary"] == WOULD_START_5000
         time.sleep(0.05)
         runs = [r for r in client.get("/api/runs", params={"job": "market.reconcile"}).json() if r["id"] > before]
         assert len(runs) == 1
@@ -429,7 +435,7 @@ def test_a_live_gap_inside_the_deadband_is_written_once_it_holds_for_the_cooldow
         clock.advance(seconds=200)
         push(client, world, POWER, 10600)
         fresh = wait_for_run(client, "market.reconcile", started["id"])
-        assert fresh["summary"] == "Kratt sell 10600W: registers unchanged"
+        assert fresh["summary"] == "Kratt sell 10600W: registers unchanged (held: deadband, 1200 W off)"
         clock.advance(seconds=181)
         push(client, world, POWER, 10600)
         held = wait_for_run(client, "market.reconcile", fresh["id"])
@@ -440,7 +446,7 @@ def test_a_live_gap_inside_the_deadband_is_written_once_it_holds_for_the_cooldow
         clock.advance(seconds=200)
         push(client, world, POWER, 9500)  # a new gap starts its own clock
         again = wait_for_run(client, "market.reconcile", held["id"])
-        assert again["summary"] == "Kratt sell 9500W: registers unchanged"
+        assert again["summary"] == "Kratt sell 9500W: registers unchanged (held: deadband, 1100 W off)"
         assert container(client).extras["market"].last["decision"]["throttle"]["gap_for_s"] is None
     finally:
         client.__exit__(None, None, None)

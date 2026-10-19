@@ -18,12 +18,12 @@ what it still needs is copied below.
   0.5.1), Inputs and the price breakdown (I1–I10, 0.5.2). Each step has a log entry below.
 - **Nothing is pushed.** `main` is ahead of `origin` by every commit since 44d8fe1, including three version bumps.
   Pushing builds and publishes the image, so ask the owner first.
-- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D3 are done
-  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D4.
+- **Left: Phase 4, the controller day strips (A3, the DayStrips board), then release 0.5.3.** D1–D4 are done
+  (2026-10-19, log entry below); the mock now serves the controllers too. Next: D5.
   - ~~**D1** `feat: draw the day strips as labelled rows with names inside`~~ (done).
   - ~~**D2** `feat: an Automation row of agreed and differed stretches`~~ (done).
   - ~~**D3** `feat: a "Lens wrote" row on the Inverter page`~~ (done).
-  - **D4** (backend) the market's summaries say why nothing was written (deadband or cooldown = held).
+  - ~~**D4** (backend) the market's summaries say why nothing was written~~ (done).
   - **D5** (backend) the charger's decisions name the charge mode and the charging state (`state_text`).
   - **D6** (backend) inverter slot names carry the plan's battery power (`describe` appends " · P_batt {p} W";
     the frontend parses it into `amount`).
@@ -163,6 +163,18 @@ These come from docs/PLAN.md §10:
     rows properly.
   - Checked in Chrome, dry run and live.
   - Frontend: 441 tests.
+- **D4, the market's summaries say what was written or why it was held** (backend):
+  - `domain/market.held_reason`: "deadband, 200 W off" for a gap too small to write (in the cooldown or not),
+    "cooldown" for a bigger change too soon after the last write, None when it writes or the registers already
+    match. `write_summary` builds the summary from it.
+  - **Live:** "Kratt sell 7000W: set 'Force discharge', grid -7000 W, battery …; feed-in 7000 W", or "…: registers
+    unchanged (held: cooldown)".
+  - **Shadow** says the same after "Would: " ("Would: Kratt sell 5000W: set …", "Would: …: registers unchanged
+    (held: deadband, 200 W off)") in place of the bare command and " (no write: cooldown)".
+  - The frontend's parsing is unchanged (the command, and a write only without "Would: "); D11 reads the holds.
+  - The mock writes the new forms.
+  - Tests: `test_a_summary_says_what_was_written_or_why_it_was_held`, and the service tests' summaries. Backend 476
+    tests.
 
 ### 2026-10-16 (afternoon): the rest of variant A, step by step (Plan page released in 0.5.0)
 - **Why:** the owner asked what of the "EMHASS Lens charts" canvas (https://claude.ai/artifact/4nt7QFTBrbE5bjbHnkoHw6,

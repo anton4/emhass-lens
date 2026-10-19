@@ -12,6 +12,8 @@ from emhass_lens.domain.market import (
     compare_expected,
     decide,
     expected_after,
+    held_reason,
+    write_summary,
 )
 from emhass_lens.settings.model import InverterLimits, MarketThresholds
 from tests.fixtures.loader import load_json
@@ -128,6 +130,27 @@ def test_a_gap_the_deadband_hides_is_written_once_it_holds_for_the_cooldown() ->
     # beyond the proportional deadband both write at once, held or not
     big = decide(inp(**{**morning, "powerlimit_w": 12000}), T, L)
     assert big.needs_update and big.parity_needs_update and big.throttle.gap_held is False
+
+
+def test_a_summary_says_what_was_written_or_why_it_was_held() -> None:
+    start = decide(sell(cur_feedin_w=0), T, L)
+    assert write_summary(start, True, True) == (
+        "Kratt sell 5000W: set 'Force discharge', grid -5000 W, battery -20000…20000 W; feed-in 15500 W"
+    )
+    assert write_summary(start, False, True) == "Kratt sell 5000W: feed-in 15500 W"
+    # a bigger change in the cooldown, a gap inside the deadband (in the cooldown or not), registers that already match
+    running = {"session": "sell", "cur_grid_w": -1200, "mode": "mfrrup", "powerlimit_w": 2000}
+    cooling = decide(inp(**running, since_commit_s=60), T, L)
+    assert held_reason(cooling) == "cooldown"
+    assert write_summary(cooling, False, False) == "Kratt sell 2000W: registers unchanged (held: cooldown)"
+    inside = {"session": "sell", "cur_grid_w": -5000, "mode": "mfrrup", "powerlimit_w": 5200}
+    for since in (60, 999):
+        assert held_reason(decide(inp(**inside, since_commit_s=since), T, L)) == "deadband, 200 W off"
+    matching = decide(inp(session="sell", cur_grid_w=-5000, mode="mfrrup", powerlimit_w=5000, since_commit_s=60), T, L)
+    assert held_reason(matching) is None
+    assert write_summary(matching, False, False) == "Kratt sell 5000W: registers unchanged"
+    # a write, or no session at all, is never held
+    assert held_reason(start) is None and held_reason(decide(inp(), T, L)) is None
 
 
 def test_the_cooldown_bypasses() -> None:

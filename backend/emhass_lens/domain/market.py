@@ -375,6 +375,34 @@ def decide(
     )
 
 
+def held_reason(d: MarketDecision) -> str | None:
+    """Why a buy or sell leaves the passive registers as they are although they are off its target: "deadband, 200 W
+    off" (a gap too small to write, cooldown or not) or "cooldown" (a bigger change, too soon after the last write).
+    None when it writes them, or when they already match."""
+    t = d.throttle
+    if d.action not in ("buy", "sell") or d.needs_update or (t.grid_delta_w == 0 and not t.rails_wrong):
+        return None
+    if t.cooldown_block and (t.rails_wrong or t.grid_delta_w > t.effective_deadband_w):
+        return "cooldown"
+    return f"deadband, {t.grid_delta_w:.0f} W off"
+
+
+def write_summary(d: MarketDecision, passive: bool, feedin: bool) -> str:
+    """A buy or sell and what it did to the inverter (`passive`, `feedin`: what was written): "Kratt sell 5000W: set
+    'Force discharge', grid -5000 W, battery -20000…20000 W; feed-in 5000 W", or "…: registers unchanged", with why
+    when it was held ("(held: cooldown)", "(held: deadband, 200 W off)")."""
+    parts: list[str] = []
+    if passive and d.targets is not None:
+        t = d.targets
+        parts.append(f"set '{t.state}', grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W")
+    if feedin:
+        parts.append(f"feed-in {d.feedin_w} W")
+    if parts:
+        return f"{d.message}: " + "; ".join(parts)
+    held = held_reason(d)
+    return f"{d.message}: registers unchanged" + (f" (held: {held})" if held else "")
+
+
 # --- shadow mode: what Home Assistant should show after the automation handled the same inputs -----------------
 
 

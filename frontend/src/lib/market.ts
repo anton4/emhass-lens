@@ -112,8 +112,8 @@ export interface ParsedSummary {
   text: string
 }
 
-/** The gist of a reconcile run's summary: "Would: Kratt sell 5000W", "Kratt sell 7000W: registers unchanged",
- * "Qilowatt safeguard: session ended (mode_cleared) …", "No action: …", "Not in control …". */
+/** The gist of a reconcile run's summary: "Would: Kratt sell 5000W: set …", "Kratt sell 7000W: registers unchanged
+ * (held: cooldown)", "Qilowatt safeguard: session ended (mode_cleared) …", "No action: …", "Not in control …". */
 export function parseReconcileSummary(summary: string | null | undefined): ParsedSummary | null {
   if (!summary) return null
   const s = summary.replace(/^Would: /, '')

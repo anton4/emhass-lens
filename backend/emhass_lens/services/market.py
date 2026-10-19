@@ -33,6 +33,7 @@ from emhass_lens.domain.market import (
     decide,
     expected_after,
     session_starts,
+    write_summary,
 )
 from emhass_lens.runs.recorder import RunRefused
 from emhass_lens.scheduler.core import JobContext
@@ -349,8 +350,8 @@ class MarketService:
             ctx.run.outcome, ctx.run.summary = "noop", f"No action: {decision.why}"
             return
         if not live:
-            held = " (no write: cooldown)" if decision.throttle.cooldown_block else ""
-            ctx.run.outcome, ctx.run.summary = "dry_run", f"Would: {decision.message}{held}"
+            would = write_summary(decision, decision.needs_update, decision.feedin_write)
+            ctx.run.outcome, ctx.run.summary = "dry_run", f"Would: {would}"
             if self.mode == "shadow":
                 delay = timedelta(seconds=self.c.settings.current.market.compare_delay_s)
                 self.expect = {
@@ -488,13 +489,7 @@ class MarketService:
         )
         if not result.ok:
             ctx.run.outcome, ctx.run.error = "error", result.error
-        parts = []
-        if result.wrote_passive and decision.targets is not None:
-            t = decision.targets
-            parts.append(f"set '{t.state}', grid {t.grid_power_w} W, battery {t.battery_min_w}…{t.battery_max_w} W")
-        if result.wrote_feedin:
-            parts.append(f"feed-in {decision.feedin_w} W")
-        ctx.run.summary = f"{decision.message}: " + ("; ".join(parts) if parts else "registers unchanged")
+        ctx.run.summary = write_summary(decision, result.wrote_passive, result.wrote_feedin)
 
     def _handback_calls(self) -> list[dict[str, Any]]:
         """The session select back to none and the EMHASS switch back on, where they differ."""

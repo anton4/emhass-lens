@@ -39,6 +39,13 @@ describe('marketMark', () => {
     expect(marketMark('Kratt buy 5000W: feed-in 0 W')).toMatchObject({ key: 'Market buy', fill: marketFill('buy'), wrote: true })
     expect(marketMark('Kratt sell 7000W: registers unchanged')?.wrote).toBe(false)
     expect(marketMark('Would: Kratt sell 5000W')).toMatchObject({ key: 'Market sell', wrote: false })
+    // since 0.5.3 shadow says what it would write, or why it would hold
+    const would = "Would: Kratt sell 7000W: set 'Force discharge', grid -7000 W, battery -20000…20000 W"
+    expect(marketMark(would)).toMatchObject({ label: 'Kratt sell 7000W', wrote: false })
+    expect(marketMark('Kratt sell 7000W: registers unchanged (held: cooldown)')).toMatchObject({
+      label: 'Kratt sell 7000W',
+      wrote: false,
+    })
   })
 
   it('names and fills the decisions without a session', () => {
