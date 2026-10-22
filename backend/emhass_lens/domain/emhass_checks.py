@@ -10,7 +10,8 @@ from emhass_lens.settings.model import Settings
 
 MIN_VERSION = (0, 17, 9)  # GET /api/v1/plan
 RACE_FIXED_VERSION = (0, 18, 2)
-RECOMMENDED_VERSION = (0, 18, 5)  # DST-safe naive-MPC horizon, Optimal_Inaccurate counts as ok
+RECOMMENDED_VERSION = (0, 18, 6)  # one time grid per request (runtime lists and plan agree across DST)
+PUBLISH_ON_BOUNDARY_VERSION = (0, 18, 6)  # continual_publish wakes at slot boundaries, not every minute
 
 
 @dataclass(frozen=True)
@@ -71,14 +72,16 @@ def run_checks(
                 "version",
                 "EMHASS version",
                 "info",
-                "≥ 0.18.5 recommended",
+                "≥ 0.18.6 recommended",
                 version or "?",
-                "Works. 0.18.5 keeps the MPC horizon and the forecasts right across DST changes and reports "
-                "Optimal_Inaccurate solutions as ok instead of error.",
+                "Works. 0.18.6 reads the clock once per request, so the lists EMHASS Lens sends and the plan "
+                "share one time grid, and keeps forecast values on their instants across DST changes. 0.18.5 "
+                "keeps the MPC horizon right across DST changes and reports Optimal_Inaccurate solutions as ok "
+                "instead of error.",
             )
         )
     else:
-        checks.append(Check("version", "EMHASS version", "ok", "≥ 0.18.5", version or "?", "Supported."))
+        checks.append(Check("version", "EMHASS version", "ok", "≥ 0.18.6", version or "?", "Supported."))
 
     if not config:
         checks.append(
@@ -150,7 +153,11 @@ def run_checks(
             "false",
             continual,
             "EMHASS Lens publishes at the start of each slot. With continual publish on as well, EMHASS also "
-            "republishes every minute (and switches to the next slot about 8 minutes early with 'nearest').",
+            + (
+                "republishes at every slot boundary, racing EMHASS Lens's own publish."
+                if ver is not None and ver >= PUBLISH_ON_BOUNDARY_VERSION
+                else "republishes every minute (and switches to the next slot about 8 minutes early with 'nearest')."
+            ),
             "warning",
         )
     )

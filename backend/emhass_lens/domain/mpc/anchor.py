@@ -81,17 +81,20 @@ def published_row(timestamps: list[datetime], now: datetime, method_ts_round: st
 
     EMHASS zeroes the seconds of now and then picks, among the plan's rows: the nearest one ('nearest'; a tie goes
     to the later row, as in pandas), the last one at or before now ('first'), or the first one at or after now
-    ('last').
+    ('last'). When 'first' or 'last' finds no such row, EMHASS 0.18.6+ takes the nearest one (older versions ended
+    up on the plan's last row).
     """
     if not timestamps:
         return None
     now = now.astimezone(UTC).replace(second=0, microsecond=0)
     if method_ts_round == "first":
         before = [i for i, ts in enumerate(timestamps) if ts <= now]
-        return before[-1] if before else None
-    if method_ts_round == "last":
+        if before:
+            return before[-1]
+    elif method_ts_round == "last":
         after = [i for i, ts in enumerate(timestamps) if ts >= now]
-        return after[0] if after else None
+        if after:
+            return after[0]
     best, best_distance = 0, None
     for i, ts in enumerate(timestamps):
         distance = abs((ts - now).total_seconds())

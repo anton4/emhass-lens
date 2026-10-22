@@ -26,9 +26,20 @@ def test_version_advice_steps_through_the_0_18_releases() -> None:
     assert by_key(run_checks(BASE, "0.18.1", settings, None))["version"].status == "warning"
     older = by_key(run_checks(BASE, "0.18.3", settings, None))["version"]
     assert older.status == "info"
-    assert "0.18.5" in older.expected
-    assert by_key(run_checks(BASE, "v0.18.5", settings, None))["version"].status == "ok"
+    assert "0.18.6" in older.expected
+    assert by_key(run_checks(BASE, "0.18.5", settings, None))["version"].status == "info"
+    assert by_key(run_checks(BASE, "v0.18.6", settings, None))["version"].status == "ok"
     assert worst(run_checks(BASE, "0.18.3", settings, None)) == "ok"  # info never blocks
+
+
+def test_continual_publish_explains_how_the_version_republishes() -> None:
+    settings = Settings.model_validate({"emhass": {"mode": "live", "publish": {"enabled": True}}})
+    cfg = {**BASE, "continual_publish": True}
+    old = by_key(run_checks(cfg, "0.18.5", settings, None))["continual_publish"]
+    new = by_key(run_checks(cfg, "0.18.6", settings, None))["continual_publish"]
+    assert old.status == new.status == "warning"
+    assert "every minute" in old.explanation
+    assert "every slot boundary" in new.explanation
 
 
 def test_more_than_one_battery_is_a_warning() -> None:

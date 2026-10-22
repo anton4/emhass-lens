@@ -414,6 +414,7 @@ class MpcService:
                 f" after a retry with a {mpc.retry_mip_gap * 100:g} % MIP gap (the first solve hit its {retried[0]} s "
                 "limit)"
             )
+        ctx.run.summary += await self._anchor_note(result, ctx.run.id)
         ctx.run.summary += await self._costfun_note(result)
         self.c.bus.publish("plan.updated", {"run_id": ctx.run.id})
         outputs = self.c.extras.get("outputs")
@@ -450,6 +451,23 @@ class MpcService:
         async with job.lock:  # this run still holds the job; MPC runs don't queue a rerun, so wait for it to end
             pass
         self.c.scheduler.run_now("emhass.mpc", {"replan": True}, trigger=trigger)
+
+    async def _anchor_note(self, result: BuildResult, run_id: int) -> str:
+        """Did EMHASS start the plan at the slot the lists were built for? They're positional, so a plan that starts
+        elsewhere has every price and forecast shifted (EMHASS's own advice for positional inputs since 0.18.6)."""
+        plan = await self.c.extras["emhass"].plan_of_run(run_id)
+        rows = (plan or {}).get("plan") or []
+        first = parse_iso(str(rows[0].get("timestamp"))) if rows else None
+        if first is None or first == result.anchor:
+            return ""
+        shift = int((first - result.anchor) / timedelta(minutes=15))
+        tz = self.c.extras["prices"].tz
+        note = (
+            f"EMHASS started the plan at {first.astimezone(tz):%H:%M}, not at {result.anchor.astimezone(tz):%H:%M}: "
+            f"every price and forecast is {abs(shift)} slot(s) {'late' if shift > 0 else 'early'} in it"
+        )
+        log.warning("%s", note)
+        return f"; {note}"
 
     async def _costfun_note(self, result: BuildResult) -> str:
         """Did EMHASS use the cost function the payload asked for? Health warns while it doesn't."""

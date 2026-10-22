@@ -79,6 +79,23 @@ def test_live_mpc_sends_payload_and_verifies_the_plan(tmp_path: Path, world: Wor
         client.__exit__(None, None, None)
 
 
+@pytest.mark.parametrize("shift", [0, 1])
+def test_a_plan_that_starts_off_the_anchor_is_named(tmp_path: Path, world: World, shift: int) -> None:
+    world.emhass_plan_shift = shift
+    client = live_client(tmp_path, world, FakeClock(START))
+    try:
+        run = run_job(client, "emhass.mpc")
+        assert run["outcome"] == "ok", run
+        if shift:
+            # START is 11:13 UTC, so the anchor is 11:15 UTC (14:15 in Tallinn); this EMHASS started at 14:30
+            assert "EMHASS started the plan at 14:30, not at 14:15" in run["summary"]
+            assert "1 slot(s) late" in run["summary"]  # the 14:15 price sits at 14:30
+        else:
+            assert "EMHASS started the plan" not in run["summary"]
+    finally:
+        client.__exit__(None, None, None)
+
+
 def test_double_driver_is_refused(tmp_path: Path, world: World) -> None:
     world.set_state(LEGACY_SWITCH, "on")
     clock = FakeClock(START)

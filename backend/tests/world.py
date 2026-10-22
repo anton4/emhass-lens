@@ -85,6 +85,7 @@ class World:
     # last good plan whose entities EMHASS saved (entity_save), which publish_prefix "all" posts
     emhass_result_ok: bool = True
     emhass_saved_entities: str | None = None
+    emhass_plan_shift: int = 0  # slots EMHASS's plan starts after the anchor EMHASS Lens assumed (clock disagreement)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = request.url
@@ -193,7 +194,7 @@ class World:
                 if self.action_status == "ok":
                     configured = self.emhass_config.get("costfun", "profit")
                     costfun = configured if self.emhass_ignores_costfun else payload.get("costfun") or configured
-                    self.emhass_plan = make_plan(now, payload, costfun=costfun)
+                    self.emhass_plan = make_plan(now, payload, costfun=costfun, shift=self.emhass_plan_shift)
                     if payload.get("entity_save"):
                         self.emhass_saved_entities = self.emhass_plan["generated_at"]
             saved = payload.get("publish_prefix") == "all" and self.emhass_saved_entities
@@ -333,11 +334,12 @@ def short_model_log(steps: int, wanted: int) -> list[str]:
 COSTFUN_COLUMN = {"profit": "cost_fun_profit", "cost": "cost_fun_cost", "self-consumption": "cost_fun_selfcons"}
 
 
-def make_plan(now: datetime, payload: dict[str, Any], costfun: str = "profit") -> dict[str, Any]:
-    """A plan shaped like EMHASS's /api/v1/plan, anchored where EMHASS would anchor it ('nearest'). The cost
-    function shapes the battery a little (cost never discharges into the grid) and names the cost_fun_* column."""
+def make_plan(now: datetime, payload: dict[str, Any], costfun: str = "profit", shift: int = 0) -> dict[str, Any]:
+    """A plan shaped like EMHASS's /api/v1/plan, anchored where EMHASS would anchor it ('nearest'), `shift` slots
+    later. The cost function shapes the battery a little (cost never discharges into the grid) and names the
+    cost_fun_* column."""
     ts = now.astimezone(UTC).timestamp()
-    start = datetime.fromtimestamp(round(ts / 900) * 900, UTC)
+    start = datetime.fromtimestamp(round(ts / 900) * 900, UTC) + timedelta(minutes=15 * shift)
     rows = []
     soc = payload.get("soc_init") or 0.5
     for i, cost in enumerate(payload.get("load_cost_forecast") or []):

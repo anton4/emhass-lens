@@ -194,10 +194,12 @@ def test_published_row_mirrors_emhass() -> None:
     from emhass_lens.domain.mpc.anchor import published_row
 
     rows = [utc(2026, 10, 9, 11, 15) + timedelta(minutes=15 * i) for i in range(4)]
-    # a plan made at :13 starts at :15; publish at :13 shows the :15 row (nearest), nothing with 'first'
-    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "nearest") == 0
-    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "first") is None
-    assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), "last") == 0
+    # a plan made at :13 starts at :15; publish at :13 shows the :15 row (nearest; 'first' falls back to it)
+    for rule in ("nearest", "first", "last"):
+        assert published_row(rows, utc(2026, 10, 9, 11, 13, 40), rule) == 0
+    # past the plan's end 'last' falls back to the nearest row, the last one
+    assert published_row(rows, utc(2026, 10, 9, 12, 20, 0), "last") == 3
+    assert published_row([], utc(2026, 10, 9, 11, 13, 40), "first") is None
     # at the next slot start (+2 s) every rule shows that slot
     for rule in ("nearest", "first", "last"):
         assert published_row(rows, utc(2026, 10, 9, 11, 30, 2), rule) == 1
