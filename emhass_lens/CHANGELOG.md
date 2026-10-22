@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4
+
+Ready for EMHASS 0.18.6, recommended before the DST change on 2026-10-25.
+- Health: EMHASS 0.18.6 is the recommended version. It reads the clock once per request, so the lists EMHASS Lens sends and the plan share one time grid, also across DST changes.
+- MPC: after each live run, EMHASS Lens checks that the plan starts at the slot its lists were built for; if not, the run's summary says by how many slots the prices and forecasts are off.
+- Publish: the plan row shown at publish time follows EMHASS 0.18.6 when 'first' or 'last' rounding finds no row (the nearest row).
+- Health: the continual-publish warning describes what your EMHASS version does (0.18.6 republishes at each slot boundary, older versions every minute).
+- With EMHASS 0.18.6 the `self-consumption` cost function meets the battery's end SOC, so cost-function comparisons from before the update aren't like-for-like.
+
 ## 0.5.3
 
 The controller pages' day strips, redrawn after the same design.
