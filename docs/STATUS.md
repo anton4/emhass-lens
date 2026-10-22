@@ -52,13 +52,35 @@ entry below.
 
 ## Open questions to verify on the real Home Assistant
 These come from docs/PLAN.md §10:
-1. The deployed EMHASS version (need ≥ 0.17.9 for `/api/v1/plan`, ≥ 0.18.2 avoids the grid-boundary waits, 0.18.5 recommended), and the address the App can reach it on.
+1. The deployed EMHASS version (need ≥ 0.17.9 for `/api/v1/plan`, ≥ 0.18.2 avoids the grid-boundary waits, 0.18.6 recommended), and the address the App can reach it on.
 2. Whether Server-Sent Events stream through Ingress without buffering (the status chip's panel says "Live updates" when they do). If they don't, every page keeps its timers and the Logs page polls `/api/logs` every 5 s (since 0.3.20).
 3. Whether Mosquitto is installed (needed for Phase 3).
 4. Your live tariff values: Võrk 4? Is excise 0.21 c or 0.307 c?
 5. The Elektrilevi night window in summer: wall-clock 22–07, or winter-time 23–08?
 
 ## Log
+
+### 2026-10-22: EMHASS 0.18.6 taken in (0.5.4)
+- **Read:** the upstream diff v0.18.5...v0.18.6 (command_line.py, utils.py, forecast.py, optimization.py,
+  web_server.py, associations.csv, docs/passing_data.md) against what the App sends. Safe to update; nothing the App
+  sends changes meaning.
+- **What applies:** EMHASS reads the clock once per request (`utils.get_forecast_start`, `forecast_start` carried into
+  `Forecast`), so the positional lists and the plan share one grid; in 0.18.5 the runtime-list path floored in local
+  time while `Forecast` rounded. `nearest` is unchanged (UTC round, ties to even), which `anchor.anchor_slot` mirrors.
+  Self-consumption now scales the `soc_final` penalty by its 1e3 big-M, so its plans meet the end SOC and the
+  cost-function comparison's self-consumption totals shift. `continual_publish` wakes at slot boundaries, not every
+  minute. `_get_closest_index` falls back to the nearest row when `first`/`last` find none.
+- **What doesn't:** SOC above 1 is now rejected (HTTP 400), but `validate.py` already refuses it; the start-step fix
+  (end ≤ 0) needs `start_timesteps_…`, which the App doesn't send; the sequence-load cache fix needs list-valued
+  nominal powers; the `var_model` fallback only applies when `var_model` is absent, and the App always sends it.
+  Not taken in: the heat-pump DP solver and COP refinement, `max_thermal_power`, dayahead `current_period_peak`,
+  Forecast.Solar and Open-Meteo fixes.
+- **Changes:** `emhass_checks.RECOMMENDED_VERSION` 0.18.6 and a version-aware `continual_publish` text;
+  `anchor.published_row` falls back to the nearest row like 0.18.6; `MpcService._anchor_note` compares the stored
+  plan's first timestamp with the anchor after each live run and names the shift in the summary (`World.emhass_plan_shift`
+  in the tests). e2e default image v0.18.6.
+- **Verified:** 482 backend tests, ruff, pyright. e2e 25/25 on EMHASS 0.18.6 and 25/25 on 0.18.5; the plan's first
+  row equals the anchor on both, and no anchor note was logged.
 
 ### 2026-10-19: 0.5.0–0.5.3 pushed
 - Checked locally first, as CI runs them: backend 479 tests, ruff, pyright and an up-to-date `openapi.json`;
