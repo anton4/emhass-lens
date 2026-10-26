@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.5
+
+Market sessions on the Plan and Market pages, checked against Qilowatt's report.
+- Market, Plan: a command that comes less than the baseline window (60 s) after the previous one ended keeps that session's baseline. On 2026-10-26, Kratt's 13:15 command came 20 s after the 13:00 one ended and showed about 4 kW delivered of 15.5 kW; Qilowatt measured 15.2 kW.
+- Plan, Market: the command history is read once Qilowatt's three sensors settle, so their in-between states no longer show commands that were never sent (a 4.6 kW buy at 12:55, a 14.8 kW sell at 12:50).
+- Plan, Market: Kratt's `frrup`/`frrdown` sessions no longer say aFRR. Qilowatt files them as MFRR, AFRR or both; only `mfrr…`/`afrr…` modes name a product.
+- Plan: a grid meter that reports several times a second no longer reads "every 0-second grid reading".
+
 ## 0.5.4
 
 Ready for EMHASS 0.18.6, recommended before the DST change on 2026-10-25.
