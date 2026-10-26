@@ -381,3 +381,26 @@ def test_back_to_back_commands_of_one_direction_share_their_session_start() -> N
     spans = [span(60, 120), span(0, 60), span(120, 130, "buy"), span(400, 500)]
     assert session_starts(spans) == [t, t, t + timedelta(seconds=120), t + timedelta(seconds=400)]
     assert session_starts([]) == []
+
+
+def test_a_command_soon_after_another_keeps_its_baseline() -> None:
+    from emhass_lens.domain.market import CommandSpan, baseline_starts, session_starts
+
+    t = datetime(2026, 10, 26, 11, 0, tzinfo=UTC)
+
+    def span(a: int, b: int, direction: str = "sell") -> CommandSpan:
+        return CommandSpan(
+            t + timedelta(seconds=a), t + timedelta(seconds=b), direction, "kratt", "frrup", 15500, False
+        )
+
+    # 13:00–13:15:04, then Kratt again from 13:15:24: one baseline, from before 13:00
+    assert baseline_starts([span(924, 1800), span(0, 904)], 60) == [t, t]
+    # a minute or more apart: its own
+    assert baseline_starts([span(0, 904), span(964, 1800)], 60) == [t, t + timedelta(seconds=964)]
+    # a flip 10 s after a sell keeps the sell's baseline
+    assert baseline_starts([span(0, 600), span(610, 700, "buy")], 60) == [t, t]
+    # back to back is one session already
+    assert baseline_starts([span(0, 60), span(60, 120)], 60) == [t, t]
+    spans = [span(0, 60), span(70, 120)]
+    assert baseline_starts(spans, 0) == session_starts(spans) == [t, t + timedelta(seconds=70)]
+    assert baseline_starts([], 60) == []

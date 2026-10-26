@@ -219,3 +219,26 @@ def test_a_session_gets_the_grid_mean_before_it_as_its_baseline(tmp_path: Path, 
         assert commands["spans"][0]["baseline_w"] is None
     finally:
         client.__exit__(None, None, None)
+
+
+def test_a_session_soon_after_another_keeps_its_baseline(tmp_path: Path, market_world: World) -> None:  # noqa: F811
+    """2026-10-26 13:15: Kratt's next command came 20 s after the last one ended, and a baseline over the minute
+    before it measured the market's own export."""
+    world = market_world
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, measurements=GRID)
+    history(world)
+    world.ha_history[MODE] = [
+        (at(6, 0), "none"),
+        (at(8, 45, 12), "mfrrup"),
+        (at(9, 4), "none"),
+        (at(9, 4, 20), "mfrrup"),
+    ]
+    world.ha_history[POWER] = [(at(6, 0), "0"), (at(8, 45, 12), "9420"), (at(9, 6), "0")]
+    try:
+        commands = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
+        first, second = commands["spans"]
+        assert second["start"] == iso(at(9, 4, 20))
+        assert first["baseline_w"] == second["baseline_w"] == 500  # not the export of 09:03:20–09:04:20
+    finally:
+        client.__exit__(None, None, None)

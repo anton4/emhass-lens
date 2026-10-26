@@ -480,6 +480,25 @@ def session_starts(spans: list[CommandSpan]) -> list[datetime]:
     return starts
 
 
+def baseline_starts(spans: list[CommandSpan], window_s: float) -> list[datetime]:
+    """Where each span's baseline window ends: its session start, unless that comes less than `window_s` after the
+    previous command ended (either direction). Then the window would measure the market's own effect, so the span
+    keeps that command's baseline. On 2026-10-26 Kratt's 13:15 command came 20 s after the 13:00 one ended, and a
+    baseline over the 13:00 command's own export showed 4 kW delivered of 15.5 kW; Qilowatt kept one baseline."""
+    if window_s <= 0:
+        return session_starts(spans)
+    starts = session_starts(spans)
+    prev: CommandSpan | None = None
+    base: datetime | None = None
+    for i in sorted(range(len(spans)), key=lambda k: spans[k].start):
+        s = spans[i]
+        if prev is None or base is None or (s.start - prev.end).total_seconds() >= window_s:
+            base = starts[i]
+        starts[i] = base
+        prev = s
+    return starts
+
+
 def _changes(states: list[dict[str, Any]]) -> list[tuple[datetime, Any]]:
     """(when, state) from recorder history items, oldest first; a state holds until the next one."""
     out: list[tuple[datetime, Any]] = []

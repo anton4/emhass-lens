@@ -1294,7 +1294,8 @@ class MarketThresholds(Section):
         title="Baseline: the grid's mean before a session over",
         description="What a session's delivery is judged from on the Plan and Market pages: the grid's mean over "
         "this long before the session's first command, the target being that baseline less a sell's power (plus a "
-        "buy's). 0 judges a command against zero instead. The inverter is always written the command's own target.",
+        "buy's). A session less than this long after the previous one ended keeps that one's baseline. 0 judges a "
+        "command against zero instead. The inverter is always written the command's own target.",
         json_schema_extra=ui(unit="s", advanced=True),
     )
     buy_modes: list[str] = Field(

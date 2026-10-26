@@ -28,11 +28,11 @@ from emhass_lens.domain.market import (
     CommandSpan,
     MarketDecision,
     MarketInputs,
+    baseline_starts,
     command_spans,
     compare_expected,
     decide,
     expected_after,
-    session_starts,
     write_summary,
 )
 from emhass_lens.runs.recorder import RunRefused
@@ -680,9 +680,10 @@ class MarketService:
         measured, measured_error = (
             await grid.delivered(spans) if grid is not None else ([(None, None)] * len(spans), None)
         )
-        # each session's baseline: the grid's mean just before its first command
+        # each session's baseline: the grid's mean just before its first command, or the previous session's when that
+        # ended within the baseline window
         baselines = (
-            await grid.baselines(session_starts(spans), self._t().baseline_s)
+            await grid.baselines(baseline_starts(spans, self._t().baseline_s), self._t().baseline_s)
             if grid is not None
             else [None] * len(spans)
         )
