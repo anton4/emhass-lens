@@ -4,6 +4,7 @@ which EMHASS Lens writes once it holds for the cooldown (the automation's calls 
 
 from datetime import UTC, datetime, timedelta
 
+from emhass_lens.core.clock import iso
 from emhass_lens.domain.market import (
     CommandSpan,
     Expected,
@@ -366,6 +367,40 @@ def test_command_spans_start_with_the_state_in_force() -> None:
     # a source the thresholds don't know isn't a command
     unknown = MarketThresholds(sources=["fusebox"])
     assert command_spans(source, mode, power, unknown, at(5, 0), at(7, 30)) == []
+
+
+def test_command_spans_read_a_burst_of_changes_once_it_settles() -> None:
+    """2026-10-26 12:50 and 12:55 local: Qilowatt's three sensors change a moment apart."""
+
+    def hist(*changes: tuple[float, str]) -> list[dict]:
+        return [{"last_changed": iso(at(10, 49) + timedelta(seconds=s)), "state": v} for s, v in changes]
+
+    # 12:49:44 Qilowatt's own frrdown; 12:50:14 Kratt's sell 9200 W lands source, mode, then power
+    # 12:55:24 back: the mode flips to frrdown before the source and the power follow
+    source = hist((0, "qilowatt"), (90.0, "kratt"), (420.3, "qilowatt"))
+    mode = hist((0, "frrdown"), (90.1, "frrup"), (420.0, "frrdown"))
+    power = hist((0, "14850"), (90.2, "9200"), (420.2, "14850"))
+    spans = command_spans(source, mode, power, T, at(10, 49), at(11, 0))
+    assert spans == [
+        CommandSpan(
+            at(10, 49) + timedelta(seconds=90.2),
+            at(10, 49) + timedelta(seconds=420.3),
+            "sell",
+            "kratt",
+            "frrup",
+            9200,
+            open=False,
+        )
+    ]
+    # read change by change, the in-between states are commands: buys and sells that were never asked
+    raw = command_spans(source, mode, power, MarketThresholds(settle_s=0), at(10, 49), at(11, 0))
+    assert [(s.direction, s.power_w) for s in raw] == [
+        ("buy", 14800),
+        ("sell", 14800),
+        ("sell", 9200),
+        ("buy", 9200),
+        ("buy", 14800),
+    ]
 
 
 def test_back_to_back_commands_of_one_direction_share_their_session_start() -> None:

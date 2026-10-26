@@ -141,8 +141,9 @@ export function gridRangeAt(detail: GridDetail | undefined, time: number): [numb
   return point && point.w !== null && point.lo != null && point.hi != null ? [point.lo, point.hi] : null
 }
 
-/** How often the grid sensor reported (s): the median gap between its readings when the detail has every reading,
- *  or null when it has means per step or too few readings to say. */
+/** How often the grid sensor reported (s): the median gap between its readings when the detail has every reading
+ *  (whole seconds, unrounded below one: some meters report several times a second), or null when it has means per
+ *  step or too few readings to say. */
 export function gridCadence(detail: GridDetail | undefined): number | null {
   if (!detail || detail.step_s !== null) return null
   const times = detail.points.filter((p) => p.w !== null).map((p) => unix(p.t))
@@ -153,7 +154,7 @@ export function gridCadence(detail: GridDetail | undefined): number | null {
     .filter((g) => g > 0)
     .sort((a, b) => a - b)
   const median = gaps[Math.floor(gaps.length / 2)]
-  return median === undefined ? null : Math.round(median)
+  return median === undefined ? null : median < 1 ? median : Math.round(median)
 }
 
 /** The time of the detail's last reading (unix s), or null. */
@@ -175,6 +176,7 @@ export function readingsPhrase(stepS: number | null | undefined, cadenceS: numbe
     return `the grid's readings from Home Assistant as ${step} means, drawn through each one's lowest and highest`
   }
   if (cadenceS === null) return 'every grid reading from Home Assistant'
+  if (cadenceS < 1) return 'every grid reading from Home Assistant (several a second)'
   if (cadenceS < 60) return `every ${cadenceS}-second grid reading from Home Assistant`
   return `every grid reading from Home Assistant (about one every ${Math.round(cadenceS / 60)} min)`
 }

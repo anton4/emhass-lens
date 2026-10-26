@@ -536,9 +536,17 @@ def command_spans(
     """The market commands in [start, end) from the recorder history of the source, mode and power-limit sensors
     (each list's first item may be older than `start`: the state in force then). A command is what `decide` reads
     as one: a known source with a buy or sell mode and a power above zero (rounded to 100 W). A span ends when the
-    direction, source, mode or power changes; whether a session followed (the gates, the SoC floor) isn't judged."""
+    direction, source, mode or power changes; whether a session followed (the gates, the SoC floor) isn't judged.
+
+    The three sensors change a moment apart, so a burst of changes is read once, at its last change, the way `decide`
+    reads it after `settle_s`. On 2026-10-26 the in-between states showed a "kratt frrup 14800 W" at 12:50:14 (the
+    power still Qilowatt's own frrdown) and a "kratt frrdown 4600 W" buy at 12:55:24, neither of them a command."""
     streams = [_changes(source), _changes(mode), _changes(powerlimit)]
-    moments = sorted({start, *(stamp for c in streams for stamp, _ in c if start < stamp < end)})
+    changed = sorted({stamp for c in streams for stamp, _ in c if start < stamp < end})
+    settled = [
+        m for i, m in enumerate(changed) if i + 1 == len(changed) or (changed[i + 1] - m).total_seconds() >= t.settle_s
+    ]
+    moments = [start, *settled]
     src_at, mode_at, power_at = (_Cursor(c) for c in streams)
     spans: list[CommandSpan] = []
     current: tuple[str, str, str, int] | None = None

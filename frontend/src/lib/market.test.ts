@@ -398,18 +398,18 @@ describe('the commands on the Power chart', () => {
 })
 
 describe('marketProduct', () => {
-  it('reads mFRR and aFRR from the mode, nothing from a plain buy or sell', () => {
+  it('reads mFRR and aFRR from the mode, nothing from Kratt\'s frr modes or a plain buy or sell', () => {
     expect(marketProduct('mfrrup')).toBe('mFRR')
     expect(marketProduct('MFRRDOWN')).toBe('mFRR')
-    expect(marketProduct('frrup')).toBe('aFRR')
+    expect(marketProduct('frrup')).toBeNull() // Qilowatt files these as MFRR, AFRR or both
     expect(marketProduct('afrrdown')).toBe('aFRR')
     expect(marketProduct('sell')).toBeNull()
   })
 
   it('names the product of a session only when all its commands share it', () => {
     const span = (mode: string) => ({ mode }) as MarketCommandSpan
-    expect(sessionProduct({ spans: [span('frrup'), span('frrup')] })).toBe('aFRR')
-    expect(sessionProduct({ spans: [span('frrup'), span('mfrrup')] })).toBeNull()
+    expect(sessionProduct({ spans: [span('afrrup'), span('afrrup')] })).toBe('aFRR')
+    expect(sessionProduct({ spans: [span('afrrup'), span('mfrrup')] })).toBeNull()
   })
 })
 

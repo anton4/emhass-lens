@@ -734,7 +734,7 @@ function PowerChart({
       market ? marketBlock({ spans, sessions, runs, detail: gridData, time, nowS, timeZone }) : null
     // what the moment's value is: a reading, or a mean over a step on a long window
     const cadence = gridCadence(gridData)
-    const what = cadence !== null ? ` · ${cadence} s reading` : gridData?.step_s ? ` · mean of ${spanLabel(gridData.step_s)}` : ''
+    const what = cadence !== null ? ` · ${cadence < 1 ? 'sub-second' : `${cadence} s`} reading` : gridData?.step_s ? ` · mean of ${spanLabel(gridData.step_s)}` : ''
     return {
       ...slotTag,
       // left of now the popup is about the pointer's own moment (the grid's reading, a command); the slot heads the rows

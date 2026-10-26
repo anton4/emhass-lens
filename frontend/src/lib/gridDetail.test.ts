@@ -148,6 +148,8 @@ describe('gridCadence and lastReading', () => {
 
   it('is the median gap between readings', () => {
     expect(gridCadence(raw([10, 10, 30, 10, 11]))).toBe(10)
+    // a meter reporting several times a second isn't "every 0-second" (2026-10-26)
+    expect(gridCadence(raw([0.25, 0.25, 6, 0.25, 0.25]))).toBe(0.25)
   })
 
   it('is null for means per step, or too few readings', () => {
@@ -166,6 +168,7 @@ describe('gridCadence and lastReading', () => {
 describe('readingsPhrase', () => {
   it('says what the grid line is made of', () => {
     expect(readingsPhrase(null, 10)).toBe('every 10-second grid reading from Home Assistant')
+    expect(readingsPhrase(null, 0.25)).toBe('every grid reading from Home Assistant (several a second)')
     expect(readingsPhrase(null, 120)).toBe('every grid reading from Home Assistant (about one every 2 min)')
     expect(readingsPhrase(60, null)).toBe(
       "the grid's readings from Home Assistant as 1-minute means, drawn through each one's lowest and highest",

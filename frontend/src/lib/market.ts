@@ -486,12 +486,12 @@ function sessionSources(s: CommandSession): string {
 
 const deliveredText = (s: CommandSession) => (s.delivered === null ? null : `${Math.round(s.delivered * 100)} % delivered`)
 
-/** The balancing product a Qilowatt mode names: "mfrrup" mFRR, "frrup" (or "afrr…") aFRR, or null for a plain
- *  "buy"/"sell". (The owner's reading of the modes, 2026-10-16.) */
+/** The balancing product a Qilowatt mode names: "mfrr…" mFRR, "afrr…" aFRR, or null for one that names none.
+ *  Kratt's "frrup"/"frrdown" don't: Qilowatt's report files them as MFRR, AFRR or both (2026-10-26). */
 export function marketProduct(mode: string): 'mFRR' | 'aFRR' | null {
   const m = mode.toLowerCase()
   if (m.startsWith('mfrr')) return 'mFRR'
-  if (m.startsWith('afrr') || m.startsWith('frr')) return 'aFRR'
+  if (m.startsWith('afrr')) return 'aFRR'
   return null
 }
 
