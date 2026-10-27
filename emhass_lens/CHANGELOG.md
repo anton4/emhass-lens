@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.6
+
+- Market: **Download day**, next to the day switch, saves the day shown as one zip to compare with Qilowatt's reports: Qilowatt's commands with each session's baseline and the grid power measured over them, the sessions, the measured grid power, every market run with what it stored, and the version and market settings.
+
 ## 0.5.5
 
 Market sessions on the Plan and Market pages, checked against Qilowatt's report.
