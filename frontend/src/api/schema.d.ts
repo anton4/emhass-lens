@@ -494,6 +494,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/market/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market Day
+         * @description One market day in a zip, to compare with Qilowatt's reports: Qilowatt's commands, each with its session's
+         *     baseline and the grid power measured over it (commands.json, as /api/market/commands); the sessions
+         *     (sessions.json); the measured grid power (grid.json, as /api/measurements/grid); every market run with its
+         *     artifacts (market-runs.log, as the Runs page downloads them); and the version and market settings
+         *     (about.json). `day` (YYYY-MM-DD) names the file.
+         */
+        get: operations["market_day_api_market_day_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/market/reconcile": {
         parameters: {
             query?: never;
@@ -6042,6 +6066,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketCommands"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    market_day_api_market_day_get: {
+        parameters: {
+            query: {
+                since: string;
+                until: string;
+                day?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

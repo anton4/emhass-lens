@@ -60,6 +60,20 @@ These come from docs/PLAN.md §10:
 
 ## Log
 
+### 2026-10-27: 26.10 checked against Qilowatt; market day download (0.5.6)
+- **Compared** emhass-lens's command spans (baseline, measured), the mFRR Profit Tracker and Qilowatt's revenue and
+  signals reports for 2026-10-26. Qilowatt's regulated energy is (grid − its baseline) split by sign and priced at
+  each row's market price; rebuilt from its signals CSV it lands within ~1.5 %. Lens's baselines (the real grid
+  before each session) agree with Qilowatt's at 11:00 (+150 vs +100 W) but not after 12:50 (Qilowatt −4400, then
+  −2300 W from 13:00 to 19:00), which counted the afternoon's import as ~10 kWh of paid DOWN.
+- **Qilowatt (Discord, 2026-10-27):** Kratt has a bug with baseline changes during a command; revenue will be
+  recalculated. Until corrected reports arrive, don't change the baseline rule or `commandTarget` (Kratt's power
+  reads like an absolute grid setpoint: the controller writes `grid = −power`, the Market page aims at
+  baseline − power). Re-check both against the corrected reports.
+- **Market → Download day:** `GET /api/market/day?since&until&day` zips commands.json, sessions.json, grid.json,
+  market-runs.log and about.json for one day (≤ 25 h, until now), for the next comparison without copying from the
+  console.
+
 ### 2026-10-22: EMHASS 0.18.6 taken in (0.5.4)
 - **Read:** the upstream diff v0.18.5...v0.18.6 (command_line.py, utils.py, forecast.py, optimization.py,
   web_server.py, associations.csv, docs/passing_data.md) against what the App sends. Safe to update; nothing the App

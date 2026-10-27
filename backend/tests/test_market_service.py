@@ -1,6 +1,9 @@
 """Qilowatt market control: shadow decisions compared with the automation, live sessions through the shared Sofar
 writer, the write throttle over time, a session end handed straight back to the plan, restarts and refusals."""
 
+import io
+import json
+import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -514,5 +517,63 @@ def test_the_commands_come_from_the_recorder_whatever_runs_the_sessions(tmp_path
         world.ha_history_status = 404
         broken = client.get("/api/market/commands", params={"since": "2026-10-09T08:00:00Z"}).json()
         assert broken["spans"] == [] and "history integration" in broken["error"]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_market_day_downloads_as_one_zip(tmp_path: Path, world: World) -> None:
+    clock = FakeClock(START)
+    client = client_for(tmp_path, world, clock, "off")
+    at = lambda h, m: datetime(2026, 10, 9, h, m, tzinfo=UTC)  # noqa: E731
+    world.ha_history = {
+        SOURCE: [(at(6, 0), "kratt")],
+        MODE: [(at(6, 0), "none"), (at(8, 45), "mfrrup"), (at(9, 4), "none")],
+        POWER: [(at(6, 0), "0"), (at(8, 45), "9420"), (at(9, 5), "0")],
+    }
+    day = {"since": "2026-10-08T21:00:00Z", "until": "2026-10-09T21:00:00Z", "day": "2026-10-09"}
+    try:
+        c = container(client)
+
+        async def make(job: str, at_: datetime) -> int:
+            clock.set(at_)
+            async with c.recorder.start(job) as run:
+                run.artifact("market_decision", {"why": f"from {job}"})
+                run.summary = f"did {job}"
+                run.outcome = "ok"
+            return run.id
+
+        portal = client.portal
+        assert portal is not None
+        reconcile = portal.call(make, "market.reconcile", at(9, 0))
+        compare = portal.call(make, "market.compare", at(9, 1))
+        other = portal.call(make, "mpc.run", at(9, 2))
+        before = portal.call(make, "market.reconcile", datetime(2026, 10, 8, 20, 0, tzinfo=UTC))
+        clock.set(START)
+
+        got = client.get("/api/market/day", params=day)
+        assert got.status_code == 200, got.text
+        assert got.headers["content-type"] == "application/zip"
+        assert got.headers["content-disposition"] == 'attachment; filename="emhass-lens-market-2026-10-09.zip"'
+        archive = zipfile.ZipFile(io.BytesIO(got.content))
+        assert archive.namelist() == ["about.json", "commands.json", "sessions.json", "grid.json", "market-runs.log"]
+        commands = json.loads(archive.read("commands.json"))
+        assert commands == client.get("/api/market/commands", params={k: day[k] for k in ("since", "until")}).json()
+        assert [s["power_w"] for s in commands["spans"]] == [9400]
+        about = json.loads(archive.read("about.json"))
+        assert about["day"] == "2026-10-09" and about["since"].startswith("2026-10-08T21:00")
+        assert about["market"]["mode"] == "off"
+        log = archive.read("market-runs.log").decode()
+        assert log.index(f"# Run {reconcile} · market.reconcile") < log.index(f"# Run {compare} · market.compare")
+        assert '"why": "from market.reconcile"' in log
+        assert f"# Run {other} " not in log and f"# Run {before} " not in log
+
+        assert client.get("/api/market/day", params={**day, "until": "2026-10-11T21:00:00Z"}).status_code == 400
+        tomorrow = {"since": "2026-10-09T21:00:00Z", "until": "2026-10-10T21:00:00Z"}
+        assert client.get("/api/market/day", params=tomorrow).status_code == 400
+        # today: up to now, the open command included
+        clock.set(at(9, 0))
+        today = zipfile.ZipFile(io.BytesIO(client.get("/api/market/day", params=day).content))
+        assert json.loads(today.read("about.json"))["until"].startswith("2026-10-09T09:00")
+        assert [s["open"] for s in json.loads(today.read("commands.json"))["spans"]] == [True]
     finally:
         client.__exit__(None, None, None)

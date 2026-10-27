@@ -11690,6 +11690,72 @@
         ]
       }
     },
+    "/api/market/day": {
+      "get": {
+        "description": "One market day in a zip, to compare with Qilowatt's reports: Qilowatt's commands, each with its session's\nbaseline and the grid power measured over it (commands.json, as /api/market/commands); the sessions\n(sessions.json); the measured grid power (grid.json, as /api/measurements/grid); every market run with its\nartifacts (market-runs.log, as the Runs page downloads them); and the version and market settings\n(about.json). `day` (YYYY-MM-DD) names the file.",
+        "operationId": "market_day_api_market_day_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": true,
+            "schema": {
+              "title": "Until",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Market Day",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/market/reconcile": {
       "post": {
         "description": "Reconcile now (live: acts; force_end ends the open session whatever the command says).",

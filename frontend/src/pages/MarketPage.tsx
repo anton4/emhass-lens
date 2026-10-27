@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMarketReconcile } from '../api/actions'
+import { apiUrl, query } from '../api/client'
 import { useMarket, useMarketCommands, useMarketSessions, useRuns, useSettings, useStatus } from '../api/queries'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AgreeHeadline, CompareTable } from '../components/InverterViews'
@@ -178,7 +179,19 @@ export function MarketPage() {
 
       <DayStrip
         day={day}
-        chips={<DayChips day={day} days={days} today={today} onChange={setDay} />}
+        chips={
+          <>
+            <DayChips day={day} days={days} today={today} onChange={setDay} />
+            <a
+              className="button"
+              href={apiUrl(`/api/market/day${query({ since: bounds.since, until: bounds.until, day })}`)}
+              download
+              title="This day in one zip, to compare with Qilowatt's reports: its commands with each session's baseline and the grid power measured over them, the sessions, the grid power, and every market run"
+            >
+              Download day
+            </a>
+          </>
+        }
         inputs={data?.mode === 'off' ? [] : strip}
         span={900}
         timeZone={tz}

@@ -1,13 +1,18 @@
 """EMHASS status and discovery, problems, Home Assistant entities, take over / hand back."""
 
+import asyncio
+import io
+import re
 import time
+import zipfile
 from datetime import timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from emhass_lens.api.deps import ContainerDep, Writable, actor, write_block_reason
-from emhass_lens.api.routes.runs import utc_bound
+from emhass_lens.api.routes.runs import artifacts_of, dump, run_log_section, run_logs, utc_bound
 from emhass_lens.api.schemas import (
     ButtonPress,
     ChargeModeRequest,
@@ -269,6 +274,79 @@ async def market_commands(c: ContainerDep, since: str, until: str | None = None)
         spans=[MarketCommandSpan(**s) for s in result["spans"]],
         error=result["error"],
         measured_error=result["measured_error"],
+    )
+
+
+MARKET_DAY_MAX = timedelta(hours=25)  # a local day, the one the clocks go back included
+MARKET_JOBS = ("market.reconcile", "market.compare", "market.watchdog")
+GRID_POINTS = 6000  # a day of grid readings at about 15 s
+
+
+@router.get("/market/day")
+async def market_day(c: ContainerDep, since: str, until: str, day: str | None = None) -> Response:
+    """One market day in a zip, to compare with Qilowatt's reports: Qilowatt's commands, each with its session's
+    baseline and the grid power measured over it (commands.json, as /api/market/commands); the sessions
+    (sessions.json); the measured grid power (grid.json, as /api/measurements/grid); every market run with its
+    artifacts (market-runs.log, as the Runs page downloads them); and the version and market settings
+    (about.json). `day` (YYYY-MM-DD) names the file."""
+    now = c.clock.now()
+    start = parse_iso(utc_bound(since, "since"))
+    end = parse_iso(utc_bound(until, "until"))
+    if start is None or end is None or end <= start or end - start > MARKET_DAY_MAX:
+        raise HTTPException(400, "since must be before until, and the window at most a day")
+    if start >= now:
+        raise HTTPException(400, "The day hasn't started")
+    name = day if day and re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else start.date().isoformat()
+    end = min(end, now)  # today: until now
+
+    commands = await c.extras["market"].commands(start, end)
+    sessions = await c.extras["market"].sessions(500, iso(start), iso(end))
+    grid = await c.extras["grid_detail"].detail(start, end, GRID_POINTS)
+    runs: list[dict[str, Any]] = []
+    while True:
+        page = await c.recorder.list(
+            list(MARKET_JOBS),
+            limit=1000,
+            after=runs[-1]["id"] if runs else None,
+            since=iso(start),
+            until=iso(end),
+            ascending=True,
+        )
+        runs.extend(page)
+        if len(page) < 1000:
+            break
+    sections: list[str] = []
+    for summary in runs:
+        run = await c.recorder.get(summary["id"])
+        if run is None:
+            continue
+        entries, artifacts = await run_logs(c, run["id"]), await artifacts_of(c, run)
+        # Off the event loop: a day holds several hundred runs
+        sections.append(await asyncio.to_thread(run_log_section, run, entries, artifacts))
+    about = {
+        "emhass_lens_version": c.boot.version,
+        "day": name,
+        "since": iso(start),
+        "until": iso(end),
+        "timezone": c.boot.tz,
+        "exported_at": iso(now),
+        "market": c.settings.current.market.model_dump(mode="json"),
+    }
+
+    def build() -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("about.json", dump(about))
+            archive.writestr("commands.json", dump(commands))
+            archive.writestr("sessions.json", dump(sessions))
+            archive.writestr("grid.json", dump(grid))
+            archive.writestr("market-runs.log", "\n\n".join(sections) + "\n" if sections else "")
+        return buffer.getvalue()
+
+    return Response(
+        await asyncio.to_thread(build),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="emhass-lens-market-{name}.zip"'},
     )
 
 
